@@ -83,7 +83,8 @@ describe("session kind + dynamic tool copy", () => {
     const parentTools = createToolRegistry();
     bindSessionThreadTools(parentTools, { runtime, sessionId: parentId });
     const parentMsg = applyToolDynamicSchema(parentTools.get("thread_message")!);
-    expect(parentMsg.description).toContain("another parent session");
+    expect(parentMsg.description).toContain("same lane");
+    expect(parentMsg.description).toContain("wait=true");
     expect(parentMsg.description).not.toContain("Live siblings");
 
     const childTools = createToolRegistry();

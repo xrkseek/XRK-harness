@@ -67,9 +67,11 @@ createMcpClient({
 
 Host 批量接线见 [server-host.md](./server-host.md)（`XRK_MCP_*`；条目可 `command` 或 `url`；空 env 时读 `~/.xrk/host-settings.json` 的 `mcp.servers`）。Face `settings.mutate` 写 desired `servers`（`env` 仅允许代理键 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`）；文件真源时 Host `reconcileMcpToolPlugins` 热挂载（`applies: live`）；`XRK_MCP_SERVERS` / config 非空则仍赢过文件且 mutate 为 `applies: restart`。stdio 未写 `cwd` 时默认 `~/.xrk/mcp-cwd/<serverName>`（避免 `@playwright/mcp` 等在工作区落 `.playwright-mcp`）。Settings 显式 `cwd` 优先生效；若解析后落在 Host 工作区内，设 `cwdAllowWorkspace: true`（设置卡勾选「允许工作区 cwd」），否则连接失败并提示风险。
 
+**工作区叠加**：`{workspace}/.xrk/mcp.json` 可写 `servers` / `mcpServers` 与 `denyGlobal`。**配置**在向阳（奇创）；**使用**看各席 `mcp_mount`（全局 + 会话工作区 + 在席干员家；同名会话赢）。见 [configuration.md](../configuration.md)。
+
 ## 终端用户如何挂能力
 
-产品壳 Agent 可调用 **`settings_get` / `settings_mutate`**（与设置 UI Save 同路径；`ns=mcp` 时本进程 remount/connect，工具结果含失败信息）。也可用 **设置 → 插件 → 插件配置**：粘贴 Trae / Cursor 风格 `{"mcpServers":{…}}`，打开 **允许连接**，Save（Allow 已持久化则 Host 启动后后台重连；否则需开 Allow 并保存；串行挂载时行显示「连接中」）。用斜杠 **`/mcp`** 查看 desired / 挂载状态。行状态反映 connected / park / 失败；policy deny 时保留 desired、不 spawn。密钥不进 `mcp.servers.env`，走 Credentials。分层与选型见 [skills-layers.md](../skills-layers.md)（能力挂载；全局种子 `apps/cli/seeds` → `~/.xrk`）；进程内自有函数仍走 `extensions/` 插件（进程半部经 `syncManagedProcessPlugins` / `reloadIds` 热同步；Settings 支持安装 / 重载 / 更新 / 删除；client 半部可能需刷新页面）。
+产品壳：**`settings_get` / `settings_mutate`**（与 Settings UI 同路径；`ns=mcp` 本进程 remount）。或 **设置 → 插件 → 插件配置**：粘贴 Trae/Cursor JSON，开 **允许连接**，按需改工作区叠加。运行时跟 `mcp_mount`。Allow 已持久化则启动后重连；串行挂载时行显示「连接中」。**`/mcp`** 看状态；deny → park。密钥走 Credentials。分层见 [skills-layers.md](../skills-layers.md)。进程插件仍走 `extensions/`（Settings 可装/重载/更新/删；client 半部可能要刷新）。
 
 ## 不变量（防 bug）
 
@@ -170,9 +172,11 @@ createMcpClient({
 
 Host batch wiring: [server-host.md](./server-host.md) (`XRK_MCP_*`; entries may use `command` or `url`; empty env reads `mcp.servers` from `~/.xrk/host-settings.json`). Face `settings.mutate` writes desired `servers` (`env` allows proxy keys only: `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`); with file source of truth, Host `reconcileMcpToolPlugins` hot-mounts (`applies: live`); non-empty `XRK_MCP_SERVERS` / config still wins over file and mutate is `applies: restart`. When stdio omits `cwd`, Host defaults to `~/.xrk/mcp-cwd/<serverName>` (so `@playwright/mcp` does not drop `.playwright-mcp` into the workspace). An explicit Settings `cwd` wins; if it resolves under the Host workspace, set `cwdAllowWorkspace: true` (Settings checkbox **Allow workspace cwd**) or connect fails with a risk notice.
 
+**Workspace overlay**: `{workspace}/.xrk/mcp.json` may set `servers` / `mcpServers` and `denyGlobal`. **Config** on Xiangyang (奇创); **usage** is each seat’s `mcp_mount` (global + session workspace + seated member home; session wins) — see [configuration.md](../configuration.md).
+
 ## How end users attach capabilities
 
-The product Agent may call **`settings_get` / `settings_mutate`** (same path as Settings UI Save; for `ns=mcp`, remount/connect in-process and surface connect failures in the tool result). Or use **Settings → Plugins → Plugin config**: paste Trae / Cursor-style `{"mcpServers":{…}}`, enable **Allow connect**, then Save (Host start background-reconnects when Allow was already persisted; otherwise enable Allow and Save; rows show Connecting while serial mount runs). Slash **`/mcp`** lists desired / mount status. Row status shows connected / connecting / park / failure; on policy deny the desired list is kept and nothing is spawned. Keep secrets out of `mcp.servers.env`; use Credentials. Layers and routing: [skills-layers.md](../skills-layers.md) (capability attach; global seeds `apps/cli/seeds` → `~/.xrk`). In-repo JS tools still use `extensions/` plugins (process half hot-syncs via `syncManagedProcessPlugins` / `reloadIds`; Settings supports install / reload / update / remove; client half may need a page reload).
+Product shell: **`settings_get` / `settings_mutate`** (same path as Settings UI; `ns=mcp` remounts in-process). Or **Settings → Plugins → Plugin config**: paste Trae/Cursor JSON, enable **Allow connect**, edit overlays. Runtime follows `mcp_mount`. Persisted Allow → reconnect on Host start; rows show Connecting during serial mount. **`/mcp`** for status; deny → park. Secrets → Credentials. Layers: [skills-layers.md](../skills-layers.md). Process plugins still use `extensions/` (Settings install/reload/update/remove; client half may need a reload).
 
 ## Invariants (bug prevention)
 

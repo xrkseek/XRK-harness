@@ -553,6 +553,7 @@ export function TeamRoster({
   const [scope, setScope] = useState<'global' | 'workspace'>('workspace')
   const [inject, setInject] = useState<'minimal' | 'subagent'>('minimal')
   const [brief, setBrief] = useState('')
+  const [basePreset, setBasePreset] = useState('harness')
   const [toolsMode, setToolsMode] = useState<ToolMode>('inherit')
   const [toolsNames, setToolsNames] = useState('')
   const [exportHint, setExportHint] = useState<string | null>(null)
@@ -663,6 +664,10 @@ export function TeamRoster({
     setKitHeld(look.kitHeld)
     setScope(member?.scope === 'global' ? 'global' : 'workspace')
     setInject(member?.inject === 'subagent' ? 'subagent' : 'minimal')
+    setBasePreset(
+      member?.basePreset?.trim()
+      || 'harness',
+    )
     setBrief(member
       ? (catalogMemberBrief(member.id, member.brief, t, seatTitles) ?? '')
       : '')
@@ -797,6 +802,11 @@ export function TeamRoster({
     readonly kitGlasses?: string
     readonly kitHeld?: string
     readonly nickname?: string
+    /** Field overrides so seg clicks persist the new value (not stale state). */
+    readonly scope?: 'global' | 'workspace'
+    readonly inject?: 'minimal' | 'subagent'
+    readonly toolsMode?: ToolMode
+    readonly basePreset?: string
   }
 
   /**
@@ -834,12 +844,16 @@ export function TeamRoster({
     if (isDraftMemberId(selectedId)) return
     if (catalogSeed && !managerSelected && !selected) return
     const nextNick = patch.nickname ?? nickname
+    const nextScope = patch.scope ?? scope
+    const nextInject = patch.inject ?? inject
+    const nextToolsMode = patch.toolsMode ?? toolsMode
+    const nextBasePreset = (patch.basePreset ?? basePreset).trim() || 'harness'
     const names = splitToolNames(toolsNames)
     const tools =
-      toolsMode === 'inherit'
+      nextToolsMode === 'inherit'
         ? (selected?.tools ? null : undefined)
         : names.length > 0
-          ? { mode: toolsMode, names }
+          ? { mode: nextToolsMode, names }
           : null
     const appearance = buildAppearance(patch)
     try {
@@ -859,18 +873,26 @@ export function TeamRoster({
         })
       } else {
         if (name.trim() === '' || playbook.trim() === '') return
+        const priorScope = selected?.scope === 'global' ? 'global' : 'workspace'
         saved = await upsertTeamMember(sessionId, {
           name: name.trim(),
           playbook: playbook.trim(),
           role,
-          scope,
-          inject,
+          scope: nextScope,
+          inject: nextInject,
           brief: brief.trim(),
           nickname: nextNick.trim() || null,
+          basePreset: nextBasePreset,
           ...(tools !== undefined ? { tools } : {}),
           ...(selected ? { id: selected.id } : {}),
           appearance,
         })
+        // Scope promote/demote moves the rail row — refresh both lists.
+        if (priorScope !== nextScope) {
+          await reload()
+          setSelectedId(saved.id)
+          return
+        }
       }
       setMembers((prev) => {
         const index = prev.findIndex((row) => row.id === saved.id)
@@ -984,6 +1006,7 @@ export function TeamRoster({
         inject,
         brief: brief.trim(),
         nickname: nickname.trim() || null,
+        basePreset: basePreset.trim() || 'harness',
         ...(tools !== undefined ? { tools } : {}),
         appearance,
       })
@@ -1471,7 +1494,10 @@ export function TeamRoster({
                           className={scope === 'global' ? css.segOn : css.segOff}
                           aria-pressed={scope === 'global'}
                           disabled={busy}
-                          onClick={() => { setScope('global') }}
+                          onClick={() => {
+                            setScope('global')
+                            scheduleLivePersist({ scope: 'global' })
+                          }}
                         >
                           {t('team.global')}
                         </button>
@@ -1480,7 +1506,10 @@ export function TeamRoster({
                           className={scope === 'workspace' ? css.segOn : css.segOff}
                           aria-pressed={scope === 'workspace'}
                           disabled={busy}
-                          onClick={() => { setScope('workspace') }}
+                          onClick={() => {
+                            setScope('workspace')
+                            scheduleLivePersist({ scope: 'workspace' })
+                          }}
                         >
                           {t('team.workspace')}
                         </button>
@@ -1496,7 +1525,10 @@ export function TeamRoster({
                         className={inject === 'minimal' ? css.segOn : css.segOff}
                         aria-pressed={inject === 'minimal'}
                         disabled={busy}
-                        onClick={() => { setInject('minimal') }}
+                        onClick={() => {
+                          setInject('minimal')
+                          scheduleLivePersist({ inject: 'minimal' })
+                        }}
                       >
                         {t('team.injectMinimal')}
                       </button>
@@ -1505,11 +1537,35 @@ export function TeamRoster({
                         className={inject === 'subagent' ? css.segOn : css.segOff}
                         aria-pressed={inject === 'subagent'}
                         disabled={busy}
-                        onClick={() => { setInject('subagent') }}
+                        onClick={() => {
+                          setInject('subagent')
+                          scheduleLivePersist({ inject: 'subagent' })
+                        }}
                       >
                         {t('team.injectSubagent')}
                       </button>
                     </div>
+                  </div>
+                  <div className={css.field}>
+                    <label className={css.label} htmlFor="team-base-preset">{t('team.basePreset')}</label>
+                    <p className={css.fieldHint}>{t('team.basePresetHint')}</p>
+                    <select
+                      id="team-base-preset"
+                      className={css.select}
+                      disabled={busy || Boolean(catalogSeed)}
+                      value={basePreset}
+                      onChange={(e) => {
+                        const next = e.target.value
+                        setBasePreset(next)
+                        scheduleLivePersist({ basePreset: next })
+                      }}
+                    >
+                      {(['minimal', 'shell', 'frugal', 'shallow', 'harness'] as const).map((id) => (
+                        <option key={id} value={id}>
+                          {t(`team.basePreset.${id}` as WorkspaceKey)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className={css.field}>
                     <span className={css.label} id="team-tools-label">{t('team.tools')}</span>
@@ -1522,7 +1578,10 @@ export function TeamRoster({
                           className={toolsMode === id ? css.segOn : css.segOff}
                           aria-pressed={toolsMode === id}
                           disabled={busy}
-                          onClick={() => { setToolsMode(id) }}
+                          onClick={() => {
+                            setToolsMode(id)
+                            scheduleLivePersist({ toolsMode: id })
+                          }}
                         >
                           {t(`team.tools.${id}` as WorkspaceKey)}
                         </button>

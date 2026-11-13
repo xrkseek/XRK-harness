@@ -33,9 +33,9 @@ describe("formatCollabBoardText", () => {
       ],
     });
     expect(text).toContain("mem_68a69c0a9fdc4b53");
-    expect(text).toContain("Spawn: `subagent`");
+    expect(text).toContain("Spawn: subagent member_id");
     expect(text).toContain("thread_message");
-    expect(text).toContain("经理 coding-light");
+    expect(text).toContain("Roster · peers (经理)");
     expect(text).toContain("th_fresh");
     expect(text).toContain("sess_parent*");
     expect(text).toContain("写 changelog");
@@ -52,7 +52,7 @@ describe("formatCollabBoardText", () => {
     });
     expect(text).toContain("(none)");
     expect(text).toContain("no Agent Team members yet");
-    expect(text).toContain("todo open");
+    expect(text).toContain("todo · 支线 · 主线");
   });
 
   it("lists unpinned parents with who · duty · todo · 支线 · 主线", () => {
@@ -96,9 +96,9 @@ describe("formatCollabBoardText", () => {
       membersCatalog: "- mem_x 发版员",
       threads: [],
     });
-    expect(text).toContain("no subagent tools");
-    expect(text).toContain("Skill-load");
-    expect(text).not.toContain("Spawn: `subagent`");
+    expect(text).toContain("no subagent");
+    expect(text).toContain("skill-load");
+    expect(text).not.toContain("Spawn: subagent");
   });
 
   it("IM surface keeps thread_message and points subagent at coding workspaces", () => {
@@ -120,7 +120,7 @@ describe("formatCollabBoardText", () => {
     expect(text).toContain("thread_message");
     expect(text).toContain("th_x");
     expect(text).toContain("im_send");
-    expect(text).toContain("project lane");
+    expect(text).toContain("Never agent-home");
   });
 
   it("奇创 surface prefers admin tools and peer dispatch", () => {
@@ -131,12 +131,12 @@ describe("formatCollabBoardText", () => {
       membersCatalog: "- mem_y",
       threads: [],
     });
-    expect(text).toContain("workspace_session_prompt");
+    expect(text).toContain("workspace_session_prompt→id");
     expect(text).toContain("thread_message");
     expect(text).toContain("向日葵 admin");
     expect(text).toContain("settings_*");
     expect(text).toContain("workspace_create");
-    expect(text).not.toContain("Spawn: `subagent`");
+    expect(text).not.toContain("Spawn: subagent");
   });
 });
 

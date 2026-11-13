@@ -17,7 +17,8 @@ import {
 describe("session-tool-copy", () => {
   it("thread_message distinguishes parent vs sibling and lists live siblings", () => {
     const parent = threadMessageDescription({ kind: "coding_parent" });
-    expect(parent).toContain("another parent session");
+    expect(parent).toContain("parent peer");
+    expect(parent).toContain("same lane");
     expect(parent).not.toContain("Live siblings");
 
     const child = threadMessageDescription({
@@ -66,7 +67,7 @@ describe("session-tool-copy", () => {
 
   it("followup / team_graph / interrupt / close / wait copy cover morph + auto-peer", () => {
     expect(followupTaskDescription()).toContain("child_gap");
-    expect(teamGraphDescription()).toContain("auto peer-linked");
+    expect(teamGraphDescription()).toContain("auto peer-link");
     expect(interruptAgentDescription()).toContain("close_agent");
     expect(closeAgentDescription()).toContain("snapshot");
     expect(waitAgentDescription()).toContain("idle");

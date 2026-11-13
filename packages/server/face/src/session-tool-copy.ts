@@ -34,10 +34,9 @@ export function threadMessageDescription(input: {
     );
   }
   return (
-    "Message another parent session by session_id (same collab lane only: " +
-    "project↔project or agent-home↔agent-home — never cross). " +
-    "主线 pin is optional — do not thread_switch first. " +
-    "Peer keeps its own chat. Delivery is steer. wait=true (default) returns the next assistant message."
+    "Message a parent peer by session_id (same lane: project↔project or agent-home↔agent-home). " +
+    "主线 pin optional — no thread_switch first. Peer keeps its chat; delivery=steer. " +
+    "wait=true (default) returns the next assistant message."
   );
 }
 
@@ -47,8 +46,8 @@ export function threadMessageDescription(input: {
  */
 export function packShareFlowHint(): string {
   return (
-    "Mint or revise with team_save (playbook craft — skill xrk-delegate). " +
-    "Export with team_export; install a file with team_import; catalog mem_seed_* entries cannot be exported."
+    "Mint/revise: team_save (skill xrk-delegate). " +
+    "Export: team_export · install: team_import · catalog mem_seed_* cannot export."
   );
 }
 
@@ -120,9 +119,9 @@ export function listAgentsDescription(kind: SessionKind): string {
       ? "Only children you spawned (teammates → squad board)."
       : "Your direct children (peers → thread_message).";
   return (
-    `${scope} Header: provider/model, sessions used/max, slots_free, delegated, ` +
-    `lineage_depth, parent_inbox (this session's own queue/steer). ` +
-    `Rows: id, label, mode, running, model, inbox, outcome. Caps: child_gap on capability.`
+    `${scope} Header: provider/model · sessions used/max · slots_free · delegated · ` +
+    `lineage_depth · parent_inbox (this session's queue/steer). ` +
+    `Rows: id · label · mode · running · model · inbox · outcome. Caps: child_gap on capability.`
   );
 }
 
@@ -130,7 +129,7 @@ export function sendMessageDescription(): string {
   return (
     "Parent→child (agent_id). Siblings/peers → thread_message. " +
     "steer = next tool-step; queue = wait idle. New task → followup_task. " +
-    "Optional provider/model/reasoning_effort repins first (refused pin sends nothing). " +
+    "Optional provider/model/reasoning_effort repins first (refused pin → no send). " +
     "Confirms delivery; answer arrives as steer notice."
   );
 }
@@ -139,17 +138,15 @@ export function followupTaskDescription(): string {
   return (
     "New task for a continuable child (agent_id); wakes a steer turn. " +
     "Optional provider/model/reasoning_effort repins first (quota rescue). " +
-    "Stay inside child_gap caps. Confirms delivery only — Host steers the result."
+    "Stay inside child_gap. Confirms delivery only — Host steers the result."
   );
 }
 
 /** Repin an existing child's route (hot switch, next model request). */
 export function setAgentModelDescription(): string {
   return (
-    "Change a child agent's model route or thinking effort (only children you spawned). " +
-    "Ask the user first unless you are rescuing a route that already exhausted its quota. " +
-    "Takes effect on the child's next model request. " +
-    "provider defaults to the child's current route; reasoning_effort alone keeps provider/model. " +
+    "Repin a child you spawned (model / reasoning_effort). Ask first unless rescuing quota. " +
+    "Applies on next model request. provider defaults to current; effort-only keeps provider/model. " +
     "Returns before → after."
   );
 }
@@ -157,43 +154,37 @@ export function setAgentModelDescription(): string {
 /** Compact routable catalog for picking a child's route + effort. */
 export function listModelsDescription(): string {
   return (
-    "Routable model catalog for picking a child route + effort: " +
-    "one `- provider/model` row with efforts, default effort, live session slots (using/max), " +
-    "and `here` = this session's route. Capped at 80 rows. Read-only."
+    "Routable catalog for child route + effort: `- provider/model` rows with efforts, " +
+    "default effort, live slots (using/max), `here` = this session. ≤80 rows. Read-only."
   );
 }
 
 export function teamGraphDescription(): string {
   return (
-    "Collaboration graph for this session: delegates (from spawn) + peer. " +
-    "Same-parent siblings are auto peer-linked (label=sibling) on attach — announce works without manual link. " +
-    "action=view (default) · neighbors · link/unlink · role · remove · announce (fans send_message to peer neighbors)."
+    "Delegates + peer graph. Same-parent siblings auto peer-link (label=sibling) on attach — announce needs no manual link. " +
+    "action=view (default) · neighbors · link/unlink · role · remove · announce (send_message → peer neighbors)."
   );
 }
 
 export function interruptAgentDescription(): string {
   return (
-    "Stop a running child (agent_id). Parent gets a progress notice; later idle completion is suppressed. " +
-    "takeover=true pauses the task board for human ownership. " +
-    "The child session is not deleted — followup_task can resume it. " +
-    "To stop and read the last answer in one call, prefer close_agent."
+    "Stop a running child (agent_id). Progress notice to parent; later idle completion suppressed. " +
+    "Session kept — followup_task can resume. takeover=true pauses the task board. " +
+    "Need the last answer now → close_agent."
   );
 }
 
 export function closeAgentDescription(): string {
   return (
-    "Stop a child and return a snapshot (running/idle + last assistant text). " +
-    "Same interrupt path as interrupt_agent (the child is not deleted — followup_task can resume it); " +
-    "use when you need the salvaged answer now. " +
-    "takeover=true pauses the task board. Codex morph: close_agent."
+    "Stop a child and return snapshot (running/idle + last assistant text). " +
+    "Same interrupt path; session kept for followup_task. takeover=true pauses the task board."
   );
 }
 
 export function waitAgentDescription(): string {
   return (
-    "Block until listed children are idle, then return their last assistant text. " +
-    "Use when this turn's next step needs that answer. " +
-    "After a background handoff with nothing else to do here, end the turn — Host steers completion."
+    "Block until listed children are idle; return last assistant text. " +
+    "Use when this turn needs that answer. Else end the turn — Host steers background completion."
   );
 }
 

@@ -4,7 +4,9 @@ import { readSessionEvents } from "@xrkseek/core-session";
 import {
   FACE_AGENT_PRESETS,
   FACE_AGENT_PRESET_IDS,
+  SHALLOW_MAX_CONCURRENT_MODEL_SESSIONS,
   canonicalAgentPresetId,
+  isPeerCollabBadge,
   resolveAgentPresetProfile,
 } from "../presets-catalog.js";
 import { DEFAULT_MAX_CONCURRENT_MODEL_SESSIONS } from "../model-session-cap.js";
@@ -73,15 +75,21 @@ export const agentPresetRead: FaceHandler = async (_runtime, _rpcId, payload) =>
   const info = FACE_AGENT_PRESETS.find((x) => x.id === id)!;
   const profile = resolveAgentPresetProfile(info.id);
   const toolBits = [
-    profile.composition === "minimal" ? "fs · skill · std" : "fs · skill · std · bash",
+    "fs · session",
+    profile.tools.bash ? "bash" : null,
+    profile.tools.skill ? "skill" : null,
+    profile.tools.pty ? "pty" : null,
     profile.tools.web ? "web" : null,
     profile.tools.lsp ? "lsp" : null,
-    profile.tools.pty ? "pty" : null,
+    profile.tools.office ? "office" : null,
+    isPeerCollabBadge(profile.id) ? "peer" : null,
   ].filter(Boolean);
   const subagentLine =
     profile.subagents.mode === "off"
       ? "subagents: off"
-      : `subagents: on (per-model live session cap, default ${DEFAULT_MAX_CONCURRENT_MODEL_SESSIONS}; routes are independent)`;
+      : profile.id === "shallow"
+        ? `subagents: on (shallow live cap ${SHALLOW_MAX_CONCURRENT_MODEL_SESSIONS} per model)`
+        : `subagents: on (per-model live session cap, default ${DEFAULT_MAX_CONCURRENT_MODEL_SESSIONS}; routes are independent)`;
   const content = [
     `# ${info.displayName}`,
     "",

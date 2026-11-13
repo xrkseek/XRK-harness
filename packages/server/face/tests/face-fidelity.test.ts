@@ -175,7 +175,7 @@ describe("Face adapt / slash / queue / presets", () => {
         "im",
         "qichuang",
       ]);
-      expect(v.presets.find((p) => p.id === "minimal")?.name).toBe("Minimal");
+      expect(v.presets.find((p) => p.id === "minimal")?.name).toBe("PI");
       expect(v).not.toHaveProperty("items");
     }
 
@@ -193,7 +193,7 @@ describe("Face adapt / slash / queue / presets", () => {
       expect(row).toMatchObject({
         agentPreset: "minimal",
         trust: "system",
-        name: "Minimal",
+        name: "PI",
       });
       expect(row.content).toContain("id: minimal");
     }

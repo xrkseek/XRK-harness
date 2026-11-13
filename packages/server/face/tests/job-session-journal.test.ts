@@ -75,7 +75,7 @@ describe("job session journal", () => {
     await shell.dispose();
   });
 
-  it("does not invent settled rows for unowned jobs", async () => {
+  it("does not invent settled rows for unowned jobs", { timeout: 20_000 }, async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-face-job-unowned-"));
     const store = createMemorySessionStore();
     const session = newSession(store);

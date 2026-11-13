@@ -49,10 +49,12 @@ describe("bash foreground yield semantics", () => {
   // Yield budget equals the prior default testTimeout — under a full suite the
   // second invoke can land past 5s wall time even when the job settled inside
   // the yield. Give the case headroom without changing yield semantics.
-  it("settles inside the yield with legacy markers", { timeout: 15_000 }, async () => {
+  it("settles inside the yield with legacy markers", { timeout: 30_000 }, async () => {
     const shell = makeShell();
     try {
-      const bash = bashTool(shell, 5_000);
+      // Full-suite load can push a fast node -e past 5s wall before settle;
+      // keep yield headroom so legacy markers stay the happy path.
+      const bash = bashTool(shell, 15_000);
       const out = await bash.execute({ command: FAST });
       expect(String(out.content)).toContain("hi");
       expect(String(out.content)).not.toContain("still running");

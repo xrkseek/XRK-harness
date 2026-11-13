@@ -18,8 +18,11 @@ export type InjectDocumentLayer = "workspace" | "home" | "session";
 export type InjectDocumentKind =
   | "instruction"
   | "skill-catalog"
+  | "instruction-authority"
   | "session-capability"
   | "session-posture"
+  | "boss-status"
+  | "seat-identity"
   | "collab-board";
 
 /** One inject document row (exists in the live inject set). */

@@ -3533,6 +3533,23 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
     },
 
+    mcpWorkspace: {
+      async get(request) {
+        return err(request, {
+          code: 'internal',
+          message: 'mcp.workspace.get requires the Face Host surface',
+          details: {},
+        })
+      },
+      async set(request) {
+        return err(request, {
+          code: 'internal',
+          message: 'mcp.workspace.set requires the Face Host surface',
+          details: {},
+        })
+      },
+    },
+
     llm: {
       providers(request) {
         const registered = ctx.llm.listProviders()

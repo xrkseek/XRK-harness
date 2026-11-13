@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.21',
+    date: '2026-11-13',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '工作区 `.xrk/mcp.json` 可叠加 MCP；本席 `mcp_mount` 合并全局 + 会话工作区 + 干员家。',
+        en: 'Workspace `.xrk/mcp.json` overlays MCP; this seat’s `mcp_mount` merges global + session workspace + agent-home.',
+      },
+      {
+        zh: '子代理可经父席提问（`ask:` / `answer_ask`）；席位称呼跟 Settings。',
+        en: 'Children can ask via the parent seat (`ask:` / `answer_ask`); seat titles follow Settings.',
+      },
+      {
+        zh: '回合注入一事一处并压短；Inject 目录与 Host 实发片段对齐；手机 guest 说明精简。',
+        en: 'Leaner one-fact-one-place turn-start inject; Inject catalog matches Host fragments; phone guest copy trimmed.',
+      },
+      {
+        zh: '移除 Settings 插件页 SSH Remote 卡（日常远端改走 MCP）。',
+        en: 'Removed the Settings Plugins SSH Remote card (day-to-day remote via MCP).',
+      },
+    ],
+  },
+  {
     version: '0.7.20',
     date: '2026-11-13',
     title: {

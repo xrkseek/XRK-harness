@@ -36,6 +36,13 @@ export interface McpSettings {
   readonly note?: string
 }
 
+/** Project workspace option for the overlay editor. */
+export interface McpWorkspaceOption {
+  readonly workspaceId: string
+  readonly title: string
+  readonly path: string
+}
+
 /** One desired server row persisted to host-settings.json. */
 export interface McpServerDraft {
   readonly serverName: string
@@ -103,6 +110,18 @@ export interface McpCardState extends CardShell {
   readonly cwdNeedsAck: boolean
   /** Show field errors only after a blocked save. */
   readonly showErrors: boolean
+  /** Path-bearing workspaces (project / agent-home; orchestration seats usually pathless). */
+  readonly workspaceOptions: readonly McpWorkspaceOption[]
+  /** Selected project workspace for overlay edit. */
+  readonly selectedWorkspaceId: string
+  /** Staged workspace overlay servers (JSON paste). */
+  readonly workspaceRows: readonly McpServerRow[]
+  /** Global server names denied for the selected workspace. */
+  readonly denyGlobal: readonly string[]
+  readonly workspaceDirty: boolean
+  readonly workspaceSaving: boolean
+  readonly workspaceFailed: boolean
+  readonly workspaceNote: string
 }
 
 /** Result of merging a paste into the staged list. */
@@ -137,6 +156,18 @@ export interface McpCardFace extends CardActions {
   logoutOauth: (serverName: string) => void
   /** Cancel a pending device-code login (alias of logout while pending). */
   cancelOauth: (serverName: string) => void
+  /** Pick which project workspace overlay to edit. */
+  selectWorkspace: (workspaceId: string) => void
+  /** Toggle a global server name in denyGlobal for the selected workspace. */
+  toggleDenyGlobal: (serverName: string) => void
+  /** Merge paste into the workspace overlay server list. */
+  addWorkspaceRow: (paste?: string) => McpPasteResult
+  /** Remove a workspace overlay row. */
+  removeWorkspaceRow: (index: number) => void
+  /** Persist workspace overlay to that project's `.xrk/mcp.json`. */
+  saveWorkspace: () => void
+  /** Reload workspace overlay from Face. */
+  discardWorkspace: () => void
 }
 
 /** Bridges the `mcp` scope onto the card's staged server list. */
@@ -162,17 +193,29 @@ export class McpCardController {
   /** Auto-open verify URI once per pending userCode (Hermes/Codex open-browser). */
   private oauthOpenedVerify = new Set<string>()
 
+  private workspaceOptions: McpWorkspaceOption[] = []
+  private selectedWorkspaceId = ''
+  private workspaceRows: McpServerRow[] = []
+  private denyGlobal: string[] = []
+  private workspaceSeeded = false
+  private workspaceUserStaged = false
+  private workspaceSaving = false
+  private workspaceFailed = false
+  private workspaceNote = ''
+  private workspaceFingerprint = ''
+
   /**
    * @param scope - the bound settings scope for the `mcp` namespace.
-   * @param api - wire face for mcp.oauth.* (optional in unit tests).
+   * @param api - wire face for mcp.oauth.* / mcp.workspace.* / workspace.list.
    */
   constructor(
     private readonly scope: SettingsScope<McpSettings>,
-    private readonly api?: Pick<IApiClient, 'mcpOauth'>,
+    private readonly api?: Pick<IApiClient, 'mcpOauth' | 'mcpWorkspace' | 'workspace'>,
   ) {
     this.store = createSnapshotStore(this.projection())
     scope.subscribe(() => { this.syncFromScope() })
     this.syncFromScope(true)
+    void this.refreshWorkspaceOptions()
   }
 
   private syncFromScope(force = false): void {
@@ -220,7 +263,19 @@ export class McpCardController {
       rows: this.rows.map(row => enrichRowOauth(row, this.oauthByServer, this.oauthBusy)),
       allowConnect: this.allowConnect,
       note: noteOf(snapshot),
+      workspaceOptions: this.workspaceOptions,
+      selectedWorkspaceId: this.selectedWorkspaceId,
+      workspaceRows: this.workspaceRows,
+      denyGlobal: this.denyGlobal,
+      workspaceDirty: this.workspaceDirty(),
+      workspaceSaving: this.workspaceSaving,
+      workspaceFailed: this.workspaceFailed,
+      workspaceNote: this.workspaceNote,
     }
+  }
+
+  private workspaceDirty(): boolean {
+    return this.workspaceSeeded && this.workspaceUserStaged
   }
 
   private contentDiffers(): boolean {
@@ -256,10 +311,179 @@ export class McpCardController {
       loginOauth: (serverName) => { void this.loginOauth(serverName) },
       logoutOauth: (serverName) => { void this.logoutOauth(serverName) },
       cancelOauth: (serverName) => { void this.logoutOauth(serverName) },
+      selectWorkspace: (workspaceId) => { void this.selectWorkspace(workspaceId) },
+      toggleDenyGlobal: (serverName) => { this.toggleDenyGlobal(serverName) },
+      addWorkspaceRow: (paste) => this.addWorkspaceRow(paste),
+      removeWorkspaceRow: (index) => { this.removeWorkspaceRow(index) },
+      saveWorkspace: () => { void this.saveWorkspace() },
+      discardWorkspace: () => { void this.discardWorkspace() },
       edit: () => { /* rows use paste merge */ },
       resetField: () => { /* n/a for MCP list */ },
       save: () => { void this.save() },
       discard: () => { this.discard() },
+    }
+  }
+
+  private async refreshWorkspaceOptions(): Promise<void> {
+    if (!this.api?.workspace) return
+    try {
+      const res = await this.api.workspace.list({})
+      if (!res.result.ok) return
+      const items = res.result.value.items ?? []
+      this.workspaceOptions = items
+        .filter(row => row.workspaceId !== 'ws_default' && row.workspaceId !== 'ws_im')
+        .filter(row => typeof row.path === 'string' && row.path.trim().length > 0)
+        .map(row => ({
+          workspaceId: row.workspaceId,
+          title: row.title?.trim() || row.workspaceId,
+          path: row.path.trim(),
+        }))
+      if (!this.selectedWorkspaceId) {
+        const pick = this.workspaceOptions[0]
+        if (pick) {
+          this.selectedWorkspaceId = pick.workspaceId
+          await this.loadWorkspaceOverlay(pick.workspaceId)
+        }
+      }
+      this.publish()
+    } catch {
+      /* leave options empty */
+    }
+  }
+
+  private async loadWorkspaceOverlay(workspaceId: string): Promise<void> {
+    if (!this.api?.mcpWorkspace || !workspaceId) {
+      this.workspaceRows = []
+      this.denyGlobal = []
+      this.workspaceFingerprint = ''
+      this.workspaceSeeded = true
+      this.workspaceUserStaged = false
+      this.workspaceNote = ''
+      this.publish()
+      return
+    }
+    try {
+      const res = await this.api.mcpWorkspace.get({ workspaceId })
+      if (!res.result.ok) {
+        this.workspaceNote = res.result.error.message
+        this.workspaceFailed = true
+        this.publish()
+        return
+      }
+      const value = res.result.value
+      const snap = this.scope.getSnapshot()
+      const statusSnap = snap.status === 'ready'
+        ? snap
+        : ({
+            status: 'ready' as const,
+            writable: true,
+            value: { allowConnect: true, servers: [] },
+          } as SettingsScopeSnapshot<McpSettings>)
+      this.workspaceRows = value.servers.map(draft => rowToUi(
+        normalizeStoredRow(draft),
+        statusSnap,
+        this.oauthByServer,
+      ))
+      this.denyGlobal = [...value.denyGlobal]
+      this.workspaceFingerprint = value.fingerprint
+      this.workspaceSeeded = true
+      this.workspaceUserStaged = false
+      this.workspaceFailed = false
+      this.workspaceNote = value.path
+      this.publish()
+    } catch (err) {
+      this.workspaceFailed = true
+      this.workspaceNote = err instanceof Error ? err.message : String(err)
+      this.publish()
+    }
+  }
+
+  private async selectWorkspace(workspaceId: string): Promise<void> {
+    const id = workspaceId.trim()
+    if (!id || id === this.selectedWorkspaceId) return
+    this.selectedWorkspaceId = id
+    this.workspaceUserStaged = false
+    await this.loadWorkspaceOverlay(id)
+  }
+
+  private toggleDenyGlobal(serverName: string): void {
+    const name = serverName.trim()
+    if (!name) return
+    if (this.denyGlobal.includes(name)) {
+      this.denyGlobal = this.denyGlobal.filter(n => n !== name)
+    } else {
+      this.denyGlobal = [...this.denyGlobal, name]
+    }
+    this.workspaceUserStaged = true
+    this.publish()
+  }
+
+  private addWorkspaceRow(paste?: string): McpPasteResult {
+    const raw = typeof paste === 'string' ? paste.trim() : ''
+    if (!raw) return 'empty'
+    const imported = rowsFromMcpPaste(raw)
+    if (imported.length === 0) return 'invalid'
+    const snapshot = this.scope.getSnapshot()
+    const statusSnap = snapshot.status === 'ready'
+      ? snapshot
+      : ({
+          status: 'ready' as const,
+          writable: true,
+          value: { allowConnect: true, servers: [] },
+        } as SettingsScopeSnapshot<McpSettings>)
+    this.workspaceRows = mergeRowsByName(this.workspaceRows, imported).map(row =>
+      enrichRowStatus(row, statusSnap, this.oauthByServer))
+    this.workspaceUserStaged = true
+    this.workspaceFailed = false
+    this.publish()
+    return 'ok'
+  }
+
+  private removeWorkspaceRow(index: number): void {
+    if (index < 0 || index >= this.workspaceRows.length) return
+    this.workspaceRows = this.workspaceRows.toSpliced(index, 1)
+    this.workspaceUserStaged = true
+    this.publish()
+  }
+
+  private async saveWorkspace(): Promise<void> {
+    if (!this.api?.mcpWorkspace || !this.selectedWorkspaceId || this.workspaceSaving) return
+    const snap = this.scope.getSnapshot()
+    if (snap.status !== 'ready' || !snap.writable) return
+    this.workspaceSaving = true
+    this.workspaceFailed = false
+    this.publish()
+    try {
+      const setRes = await this.api.mcpWorkspace.set({
+        workspaceId: this.selectedWorkspaceId,
+        servers: this.workspaceRows.map(rowFromUi),
+        denyGlobal: this.denyGlobal,
+      })
+      if (!setRes.result.ok) {
+        this.workspaceFailed = true
+        this.workspaceNote = setRes.result.error.message
+        this.workspaceSaving = false
+        this.publish()
+        return
+      }
+      this.workspaceFingerprint = setRes.result.value.fingerprint
+      this.workspaceUserStaged = false
+      this.workspaceSeeded = true
+      this.workspaceNote = setRes.result.value.path
+    } catch (err) {
+      this.workspaceFailed = true
+      this.workspaceNote = err instanceof Error ? err.message : String(err)
+    }
+    this.workspaceSaving = false
+    this.publish()
+  }
+
+  private async discardWorkspace(): Promise<void> {
+    this.workspaceUserStaged = false
+    if (this.selectedWorkspaceId) {
+      await this.loadWorkspaceOverlay(this.selectedWorkspaceId)
+    } else {
+      this.publish()
     }
   }
 

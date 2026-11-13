@@ -155,7 +155,7 @@ describe('WorkspaceBrowser', () => {
       useSessions: hook(sessions),
       useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s']), workspace('beta', ['beta-s'])])),
     })
-    expect(screen.getByText('工作区')).toBeTruthy()
+    expect(screen.getByText('经理工作区')).toBeTruthy()
     expect(screen.getByText('alpha')).toBeTruthy()
     // Sessions hidden while their group is folded.
     expect(screen.queryByText('alpha-s')).toBeNull()
@@ -182,7 +182,7 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getByRole('menuitem', { name: '手动排序' }).hasAttribute('disabled')).toBe(false)
     fireEvent.click(screen.getByRole('menuitem', { name: '按工作区' }))
     expect(b.store.getSnapshot().groupBy).toBe('workspace')
-    expect(screen.getByText('工作区')).toBeTruthy()
+    expect(screen.getByText('经理工作区')).toBeTruthy()
 
     // Escape closes the menu without picking.
     openViewOptions()
@@ -1351,7 +1351,8 @@ describe('WorkspaceBrowser', () => {
     expect(name.disabled).toBe(false)
   })
 
-  it('opens 添加干员工作区 from the agents pane', async () => {
+  it('opens 添加干员工作区 from the agents pane', async () => { // default seat title 干员
+    // Default seat titleAgent = 干员 → 「添加干员工作区」.
     const listTeam = vi.fn(async () => [{
       id: 'mem_seed_worker',
       name: '施工员',

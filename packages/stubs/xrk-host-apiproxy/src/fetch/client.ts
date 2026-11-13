@@ -75,6 +75,9 @@ import {
 import {
   mcpOauthLoginValueSchema, mcpOauthLogoutValueSchema, mcpOauthStatusValueSchema,
 } from '../api/mcp-oauth.schema.ts'
+import {
+  mcpWorkspaceGetValueSchema, mcpWorkspaceSetValueSchema,
+} from '../api/mcp-workspace.schema.ts'
 import { llmDiscoverModelsValueSchema, llmModelsValueSchema, llmProvidersValueSchema } from '../api/llm.schema.ts'
 import {
   subagentHistoryValueSchema,
@@ -196,6 +199,10 @@ export interface IApiClient {
     login(payload: RequestPayload<'mcp.oauth.login'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'mcp.oauth.login'>>>
     logout(payload: RequestPayload<'mcp.oauth.logout'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'mcp.oauth.logout'>>>
   }
+  mcpWorkspace: {
+    get(payload: RequestPayload<'mcp.workspace.get'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'mcp.workspace.get'>>>
+    set(payload: RequestPayload<'mcp.workspace.set'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'mcp.workspace.set'>>>
+  }
   llm: {
     providers(payload: RequestPayload<'llm.providers'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.providers'>>>
     models(payload: RequestPayload<'llm.models'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.models'>>>
@@ -275,6 +282,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'credentials.set': credentialsSetValueSchema,
   'credentials.unset': credentialsUnsetValueSchema,
   'mcp.oauth.status': mcpOauthStatusValueSchema,
+  'mcp.workspace.get': mcpWorkspaceGetValueSchema,
+  'mcp.workspace.set': mcpWorkspaceSetValueSchema,
   'mcp.oauth.login': mcpOauthLoginValueSchema,
   'mcp.oauth.logout': mcpOauthLogoutValueSchema,
   'llm.providers': llmProvidersValueSchema,
@@ -648,6 +657,11 @@ export abstract class AbstractApiClient implements IApiClient {
     status: (payload, signal) => this.callUnary('mcp.oauth.status', payload, signal),
     login: (payload, signal) => this.callUnary('mcp.oauth.login', payload, signal),
     logout: (payload, signal) => this.callUnary('mcp.oauth.logout', payload, signal),
+  }
+
+  readonly mcpWorkspace: IApiClient['mcpWorkspace'] = {
+    get: (payload, signal) => this.callUnary('mcp.workspace.get', payload, signal),
+    set: (payload, signal) => this.callUnary('mcp.workspace.set', payload, signal),
   }
 
   readonly llm: IApiClient['llm'] = {

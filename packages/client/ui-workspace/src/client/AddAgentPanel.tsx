@@ -232,7 +232,7 @@ export function AddAgentPanel({
       open={open}
       onClose={onClose}
       closeLabel={t('close')}
-      title={t('agent.addWorkspace')}
+      title={t('agent.addWorkspace', { agent: seatTitles.agent })}
       className={css.dialog}
       footer={(
         <>
@@ -247,16 +247,16 @@ export function AddAgentPanel({
         <p className={css.hint}>{t('team.needSession')}</p>
       ) : (
         <div className={css.body}>
-          <p className={css.hint}>{t('agent.pickHint')}</p>
+          <p className={css.hint}>{t('agent.pickHint', { agent: seatTitles.agent })}</p>
           {homeCandidates.length === 0 ? (
             <div className={css.empty}>
-              <p>{t('agent.pickEmpty')}</p>
+              <p>{t('agent.pickEmpty', { agent: seatTitles.agent })}</p>
               <Button variant="outline" size="sm" onClick={() => { onClose(); onOpenTeam() }}>
                 {t('team.title')}
               </Button>
             </div>
           ) : (
-            <div className={css.grid} role="listbox" aria-label={t('agent.addWorkspace')}>
+            <div className={css.grid} role="listbox" aria-label={t('agent.addWorkspace', { agent: seatTitles.agent })}>
               {homeCandidates.map((member) => (
                 <MemberTile
                   key={member.id}

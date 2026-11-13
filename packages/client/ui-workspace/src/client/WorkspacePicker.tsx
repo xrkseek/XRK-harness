@@ -18,6 +18,7 @@ import type {
 } from '@xrkseek/client-runtime/client'
 import type { SnapshotSelectorHook } from '@xrkseek/client-ui-slots'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/slots.ts'
+import { useSeatTitles } from './dressing-scope.ts'
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
@@ -74,6 +75,8 @@ export interface WorkspacePickFlowProps {
    * project trees. `auto` follows the selected row's kind (default project).
    */
   listKind?: 'project' | 'agent-home' | 'auto'
+  /** Live Settings seat title for `{agent}` in add-row copy (default 干员). */
+  seatAgent?: string
 }
 
 /**
@@ -95,6 +98,7 @@ export function WorkspacePickFlow({
   side = 'bottom',
   selectedId,
   listKind = 'auto',
+  seatAgent = '干员',
 }: WorkspacePickFlowProps) {
   const workspaceSnapshot = useWorkspaces(state => state)
   const workspaces = workspaceSnapshot.items
@@ -139,7 +143,9 @@ export function WorkspacePickFlow({
   const addEntries: MenuEntry[] = flowAvailable
     ? [{
       id: ADD_WORKSPACE,
-      label: resolvedKind === 'agent-home' ? t('agent.addWorkspace') : t('menu.addWorkspace'),
+      label: resolvedKind === 'agent-home'
+        ? t('agent.addWorkspace', { agent: seatAgent })
+        : t('menu.addWorkspace'),
       icon: <IconPlusOutlineRegular size={16} />,
       disabled: flowBusy,
     }]
@@ -320,6 +326,7 @@ export function WorkspacePicker({
   renderSlot,
   t,
 }: WorkspacePickerProps) {
+  const seatTitles = useSeatTitles()
   return (
     <WorkspacePickFlow
       t={t}
@@ -331,8 +338,9 @@ export function WorkspacePicker({
       renderDirectoryFlow={owner => renderSlot('conversation.hero.workspace.directoryFlow', owner)}
       selectedId={selectedId}
       // Hero / blank session: follow the active row — project trees never list
-      // 干员 homes, and an agent-home session only offers other agent homes.
+      // agent homes, and an agent-home session only offers other agent homes.
       listKind="auto"
+      seatAgent={seatTitles.agent}
       onPick={onPick}
       onClose={onClose}
     />

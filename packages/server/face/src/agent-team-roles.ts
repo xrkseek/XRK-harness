@@ -59,9 +59,9 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
   worker: {
     id: "worker",
     reminder:
-      "ROLE: worker. Execute the assigned task precisely. Prefer concrete edits and evidence over planning. Ask only when blocked. " +
-      "You are not the only agent editing this codebase: stay inside the scope you were given and never revert another agent's or the user's changes. " +
-      "Nested subagent is allowed when parallel slices help; FINAL still reports to your parent (干员→干员).",
+      "ROLE: worker. Precise edits + evidence; ask only when blocked. " +
+      "Stay in scope — never revert another agent's or the user's changes. " +
+      "Nested subagent ok when parallel helps; FINAL still → parent.",
     // Keep write/shell; allow nested `subagent` (agent-home + L1 children).
     // `ralph` / `team_graph` stay lead/orchestrator-facing.
     deniedTools: ["ralph", "team_graph"],
@@ -69,8 +69,8 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
   researcher: {
     id: "researcher",
     reminder:
-      "ROLE: researcher. Gather facts with read/search/web tools. Prefer citations (paths · symbols · quotes · URLs). Do not make durable edits unless the task explicitly requires them. " +
-      "If a required tool is missing or returns a hard capability error, report that blocker with evidence in your FINAL message to the parent.",
+      "ROLE: researcher. Read/search/web; cite paths · symbols · quotes · URLs. No durable edits unless tasked. " +
+      "Missing/hard tool error → FINAL to parent with evidence.",
     // Read-only by construction: no edits, no shell, no delegation.
     // Browser/MCP stay available when the parent session has them (user may deny via member tools).
     deniedTools: [
@@ -100,7 +100,7 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
   reviewer: {
     id: "reviewer",
     reminder:
-      "ROLE: reviewer. Critique risks, regressions, and missing tests. Prefer findings with severity and file references. Do not implement fixes unless asked.",
+      "ROLE: reviewer. Risks / regressions / missing tests — findings with severity + paths. No fixes unless asked.",
     // Review must never mutate: no writes, no shell, no network (offline
     // evidence only), no delegation, no self-spawn.
     deniedTools: [
@@ -140,7 +140,7 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
   lead: {
     id: "lead",
     reminder:
-      "ROLE: lead. Break work into clear sub-tasks, coordinate teammates, and keep a short status of blockers and next steps. Delegate when a specialist role fits.",
+      "ROLE: lead. Break work, coordinate teammates, track blockers/next. Delegate when a specialist fits.",
   },
 };
 
@@ -255,14 +255,14 @@ export function applySubagentSpawnPreamble(
   const role = input.role && input.role !== "default" ? input.role : "default";
   const modeLine =
     input.mode === "one-shot"
-      ? "one-shot (no later human follow-ups on this session)"
-      : "continuable (parent may send followup_task / send_message)";
+      ? "one-shot (no later human follow-ups)"
+      : "continuable (parent may followup_task / send_message)";
   const inheritLine = input.inheritContext
-    ? "yes — seeded completed parent turns only (the parent's open turn is not included)"
-    : "no — you cannot see the parent transcript. Do not invent parent state.";
+    ? "yes — completed parent turns only (open turn excluded)"
+    : "no — no parent transcript; do not invent parent state";
   const workspaceLine = input.isolatedWorktree
-    ? "isolated git worktree (not the parent's checkout). Follow the worktree note in the task."
-    : "same as the parent session. File tools and git run here.";
+    ? "isolated git worktree (not parent's checkout) — follow the task's worktree note"
+    : "same as the parent session — fs/git here";
   const packLines = briefcasePreambles(input);
   // Identity + delivery only. Live axes (ask, omitted tools, siblings) live in
   // turn-start <session_capability> — do not re-lecture them here.
@@ -289,7 +289,7 @@ export function applySubagentSpawnPreamble(
     `- inherit_context: ${inheritLine}`,
     `- workspace: ${input.cwd} · ${workspaceLine}`,
     ...packLines.map((line) => `- ${line}`),
-    "Delivery: FINAL assistant message is the only thing the parent sees (not reasoning, not intermediate tool output). Lead with the answer, then evidence. Hard tool/capability failures go in that message. Finish in-scope work; do not bounce ordinary steps, do not end with 'let me know', and do not spawn unless the task says so. Home standing (~/.xrk) is skipped — cwd workspace AGENTS.md (member playbook when present) + <seat_identity> are your seat; do not treat a parent-repo root AGENTS.md as identity theater.",
+    "Delivery: FINAL assistant message only reaches parent (not reasoning / mid-tool). Answer→evidence; hard fails there. Finish in-scope — no bounce, no 'let me know'; spawn only if tasked. Seat = cwd AGENTS.md (+ playbook) + <seat_identity>; ~/.xrk standing skipped; parent-repo root AGENTS.md ≠ identity.",
   ].join("\n");
   const tasked = applySpawnRoleReminder(input.prompt, input.role);
   const body = tasked.trim();

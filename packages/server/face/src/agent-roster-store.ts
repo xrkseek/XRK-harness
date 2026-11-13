@@ -13,6 +13,10 @@ import {
   roleDeniedTools,
   type AgentTeamSpawnRole,
 } from "./agent-team-roles.js";
+import {
+  canonicalAgentPresetId,
+  isCodingAgentPresetSettingsId,
+} from "./presets-catalog.js";
 import { tryWriteJsonSidecar } from "./json-sidecar.js";
 import {
   GLASSES_BUILTINS,
@@ -220,6 +224,12 @@ export interface AgentRosterMember {
   readonly brief: string;
   readonly inject: MemberInject;
   readonly tools?: MemberToolPolicy;
+  /**
+   * Coding sample badge that seeds the member tool surface
+   * (`minimal`=PI · shell · frugal · shallow · harness). Absent → harness.
+   * Workspace-locked badges (im / qichuang) are never stored here.
+   */
+  readonly basePreset?: string;
   /** Thin (default) or advanced pack-backed member. */
   readonly kind: MemberKind;
   /**
@@ -231,6 +241,9 @@ export interface AgentRosterMember {
   readonly seed?: true;
   readonly updatedAt: number;
 }
+
+/** Default coding sample when a member omits {@link AgentRosterMember.basePreset}. */
+export const DEFAULT_MEMBER_BASE_PRESET = "harness" as const;
 
 export type ListedRosterMember = AgentRosterMember & {
   readonly scope: RosterScope;
@@ -605,6 +618,64 @@ export function parseMemberInject(raw: unknown, fallback: MemberInject): MemberI
   return raw === "subagent" || raw === "minimal" ? raw : fallback;
 }
 
+/**
+ * Coding sample id for a member surface. Rejects workspace-locked badges.
+ * Empty / invalid → undefined (caller falls back to {@link DEFAULT_MEMBER_BASE_PRESET}).
+ */
+export function parseMemberBasePreset(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const id = raw.trim();
+  if (!id || !isCodingAgentPresetSettingsId(id)) return undefined;
+  return canonicalAgentPresetId(id);
+}
+
+/** Effective coding sample for a roster row (default harness). */
+export function effectiveMemberBasePreset(
+  member: Pick<AgentRosterMember, "basePreset"> | undefined,
+): string {
+  return parseMemberBasePreset(member?.basePreset) ?? DEFAULT_MEMBER_BASE_PRESET;
+}
+
+/** Exact config-mount tool names that `tools.allow` must never strip. */
+const CONFIG_MOUNT_EXACT = new Set(
+  [
+    "tool_search",
+    "text_to_speech",
+    "voice_transcribe",
+    "voice_session",
+    "image_generate",
+    "video_generate",
+    "video_analyze",
+    "computer_use",
+    "memory",
+    "cronjob",
+    "sidebar_open",
+    "terminal_create",
+    "terminal_list",
+    "terminal_send",
+    "terminal_read",
+    "terminal_wait_for",
+    "terminal_resize",
+    "terminal_signal",
+    "terminal_close",
+    "settings_get",
+    "settings_mutate",
+    "im_send",
+    "im_reply",
+    "im_binding",
+  ].map((n) => n.toLowerCase()),
+);
+
+/** Prefix families for config mounts (MCP / A2A / example plugins). */
+const CONFIG_MOUNT_PREFIXES = ["mcp__", "a2a_", "example_"] as const;
+
+/** True when an allow-list strip must keep this tool (config mount). */
+export function isConfigMountToolName(toolName: string): boolean {
+  const key = toolName.toLowerCase();
+  if (CONFIG_MOUNT_EXACT.has(key)) return true;
+  return CONFIG_MOUNT_PREFIXES.some((p) => key.startsWith(p));
+}
+
 function briefOf(name: string, playbook: string, explicit?: string): string {
   const from = explicit?.trim() || playbook.split(/\n/)[0] || name;
   return clip(from, MEMBER_BRIEF_MAX);
@@ -679,6 +750,8 @@ export function applyRosterToolPolicy(
     const keep = new Set(policy.names.map((name) => name.toLowerCase()));
     for (const row of tools.list()) {
       const key = row.name.toLowerCase();
+      // Config mounts stay orthogonal to surface allow-lists.
+      if (isConfigMountToolName(row.name)) continue;
       if (!keep.has(key) || toolNameDenied(key, denied)) {
         tools.unregister(row.name);
       }
@@ -704,6 +777,7 @@ export function rosterPublicFields(row: ListedRosterMember) {
     seed: row.seed === true,
     catalog: row.catalog === true,
     appearance: row.appearance,
+    ...(row.basePreset ? { basePreset: row.basePreset } : {}),
     ...(row.tools ? { tools: row.tools } : {}),
   };
 }
@@ -822,10 +896,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "Workspace lead seat — takes top-seat dispatch and splits work.",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the project mid-tier lead (<seat_identity> titles.manager seat). " +
-        "Own the project session: clarify, break work, spawn via subagent member_id, report to titles.boss only. " +
-        "向日葵 on 向阳空间 is a peer lead (same tier), not your boss. " +
-        "Coordinate over doing every edit. Multi-step → todo_write. Ask only when the deliverable changes — one blocker.",
+        " Project mid-tier (<seat_identity>). Clarify → break → spawn subagent member_id → report titles.boss only. " +
+        "向日葵@向阳 = peer (not boss). Multi-step → todo_write. Ask only on deliverable change — one blocker.",
     },
     {
       id: SUNFLOWER_MEMBER_ID,
@@ -842,11 +914,9 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "Xiangyang lead seat — owns 向阳空间; peer of project 经理.",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are 向日葵 (locked nick xrkseek): mid-tier lead of 向阳空间. " +
-        "You ARE that space's manager. Report only to titles.boss. " +
-        "The catalog / Settings title titles.manager is the *project* peer lead — same tier, not your boss; do not answer 「你的经理是谁」 with the human or that project seat. " +
-        "Dispatch coding peers; stay out of ws_default implementation. Multi-step → todo_write. " +
-        "Ask only when the deliverable changes — one blocker.",
+        " 向日葵 (nick locked xrkseek): mid-tier of 向阳空间 (<seat_identity>). Report titles.boss only. " +
+        "titles.manager = project peer (not boss; never answer 「你的经理是谁」 with human or that seat). " +
+        "Dispatch coding peers; no ws_default impl. Multi-step → todo_write. Ask only on deliverable change — one blocker.",
     },
     {
       id: "mem_seed_researcher",
@@ -858,10 +928,11 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "minimal",
       kind: "thin",
       ready: true,
+      basePreset: "frugal",
       brief: "只读调研，引用路径与原文。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the researcher. Read/search; cite paths. No durable edits unless tasked. " +
+        " Researcher: read/search; cite paths. No durable edits unless tasked. " +
         "Multi-step → todo_write. Ask only on deliverable blockers.",
     },
     {
@@ -874,10 +945,11 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "minimal",
       kind: "thin",
       ready: true,
+      basePreset: "shell",
       brief: "按任务改代码，不扩范围。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the implementer. Precise edits; stay in scope. Multi-step → todo_write. " +
+        " Implementer: precise edits; stay in scope. Multi-step → todo_write. " +
         "Ask only on deliverable blockers.",
     },
     {
@@ -890,10 +962,11 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "minimal",
       kind: "thin",
       ready: true,
+      basePreset: "frugal",
       brief: "只读审稿，先报缺陷。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the reviewer. Read-only unless asked to patch. Defects first. " +
+        " Reviewer: read-only unless asked to patch. Defects first. " +
         "Multi-step → todo_write. Ask only on deliverable blockers.",
     },
     {
@@ -906,10 +979,11 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "minimal",
       kind: "thin",
       ready: true,
+      basePreset: "shallow",
       brief: "拆任务、协调干员。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the lead. Break work, coordinate, spawn specialists via member_id. " +
+        " Lead: break work, coordinate, spawn via member_id. " +
         "Multi-step → todo_write. Ask only on deliverable blockers.",
     },
     {
@@ -922,11 +996,12 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "minimal",
       kind: "thin",
       ready: true,
+      basePreset: "frugal",
       brief: "查网上公开事实，给出链接与日期。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the web scout. Prefer web_search/web_fetch; cite URLs/dates; no repo edits. " +
-        "Tool gaps go in FINAL. Multi-step → todo_write.",
+        " Web scout: prefer web_search/web_fetch; cite URLs/dates; no repo edits. " +
+        "Tool gaps → FINAL. Multi-step → todo_write.",
     },
     {
       id: "mem_seed_docs",
@@ -938,10 +1013,11 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "minimal",
       kind: "thin",
       ready: true,
+      basePreset: "shell",
       brief: "写诚实说明书与发行说明，不编未做能力。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the docs writer. Follow docs/audiences.md; no invented APIs. Multi-step → todo_write.",
+        " Docs: follow docs/audiences.md; no invented APIs. Multi-step → todo_write.",
     },
     {
       id: "mem_seed_fixer",
@@ -953,10 +1029,11 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "minimal",
       kind: "thin",
       ready: true,
+      basePreset: "shell",
       brief: "复现故障、定位、修，并给出证据。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the debugger. Reproduce → isolate → fix with evidence. Multi-step → todo_write.",
+        " Debugger: reproduce → isolate → fix with evidence. Multi-step → todo_write.",
     },
     {
       id: "mem_seed_tester",
@@ -968,10 +1045,11 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "minimal",
       kind: "thin",
       ready: true,
+      basePreset: "shell",
       brief: "跑相关测试，报告失败与最小复现。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the tester. Run tests; report command + output. Multi-step → todo_write.",
+        " Tester: run tests; report command + output. Multi-step → todo_write.",
     },
   ];
   return seats.map((member) => ({
@@ -1000,6 +1078,7 @@ function parseMember(raw: unknown): AgentRosterMember | undefined {
   });
   const tools = parseMemberToolPolicy(o.tools);
   const inject = parseMemberInject(o.inject, "minimal");
+  const basePreset = parseMemberBasePreset(o.basePreset);
   const brief = briefOf(name, playbook, typeof o.brief === "string" ? o.brief : undefined);
   const kind: MemberKind = o.kind === "advanced" ? "advanced" : "thin";
   // Thin always ready; advanced requires explicit ready:true (import starts false).
@@ -1020,6 +1099,7 @@ function parseMember(raw: unknown): AgentRosterMember | undefined {
     ready,
     updatedAt,
     ...(nickname ? { nickname } : {}),
+    ...(basePreset ? { basePreset } : {}),
     ...(tools ? { tools } : {}),
     ...(o.seed === true ? { seed: true as const } : {}),
   };
@@ -1182,6 +1262,8 @@ export class FaceAgentRosterStore {
       readonly nickname?: string | null;
       readonly inject?: MemberInject;
       readonly tools?: MemberToolPolicy | null;
+      /** Coding sample; `null` clears to default harness on next effective read. */
+      readonly basePreset?: string | null;
       readonly kind?: MemberKind;
       readonly ready?: boolean;
     },
@@ -1198,6 +1280,12 @@ export class FaceAgentRosterStore {
     const inject = parseMemberInject(input.inject, "minimal");
     const tools =
       input.tools === null ? undefined : parseMemberToolPolicy(input.tools);
+    const basePresetParsed =
+      input.basePreset === null
+        ? undefined
+        : input.basePreset !== undefined
+          ? parseMemberBasePreset(input.basePreset)
+          : undefined;
     if (rawId && !id) return undefined; // illegal id — callers ask memberIdProblem() first
     if (id && isCatalogSeedMemberId(id)) return undefined;
     if (id) {
@@ -1214,6 +1302,10 @@ export class FaceAgentRosterStore {
         input.tools === undefined
           ? prev?.tools
           : tools;
+      const nextBasePreset =
+        input.basePreset === undefined
+          ? prev?.basePreset
+          : basePresetParsed;
       const kind: MemberKind =
         input.kind ?? prev?.kind ?? "thin";
       const ready =
@@ -1240,6 +1332,7 @@ export class FaceAgentRosterStore {
         ready,
         updatedAt: now,
         ...(nickname ? { nickname } : {}),
+        ...(nextBasePreset ? { basePreset: nextBasePreset } : {}),
         ...(nextTools ? { tools: nextTools } : {}),
       };
       const members =
@@ -1252,6 +1345,8 @@ export class FaceAgentRosterStore {
     const kind: MemberKind = input.kind ?? "thin";
     const ready = kind === "thin" ? true : input.ready === true;
     const nickname = parseMemberNickname(input.nickname);
+    const mintedBase =
+      basePresetParsed ?? DEFAULT_MEMBER_BASE_PRESET;
     const minted: AgentRosterMember = {
       id: mintId(),
       name,
@@ -1263,6 +1358,7 @@ export class FaceAgentRosterStore {
       kind,
       ready,
       updatedAt: now,
+      basePreset: mintedBase,
       ...(nickname ? { nickname } : {}),
       ...(tools ? { tools } : {}),
     };

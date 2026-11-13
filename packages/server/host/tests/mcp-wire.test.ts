@@ -7,11 +7,15 @@ import { MCP_RESOURCES_PLUGIN_ID } from "@xrkseek/mcp";
 import { createPolicyEngine } from "@xrkseek/policy";
 import {
   parseMcpServersEnv,
+  filterPluginsForWorkspaceMcp,
   loadMcpToolPlugins,
   mcpDraftsToSpecs,
   mcpFingerprint,
+  mergeMcpSpecsForWorkspace,
+  mergeWorkspaceMcpOverlays,
   readMcpAllowFromHostSettings,
   readMcpServersFromHostSettings,
+  readWorkspaceMcpJson,
   reconcileMcpToolPlugins,
   resetLastGoodHostMcpWireCaches,
   type McpRegisteredPlugin,
@@ -391,5 +395,92 @@ describe("host mcp-wire", () => {
       "nope",
       "ok",
     ]);
+  });
+
+  it("reads workspace .xrk/mcp.json servers + denyGlobal", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-ws-mcp-"));
+    await mkdir(path.join(dir, ".xrk"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".xrk", "mcp.json"),
+      JSON.stringify({
+        mcpServers: {
+          docs: { command: "npx", args: ["-y", "docs-mcp"] },
+        },
+        denyGlobal: ["playwright", "playwright", "  "],
+      }),
+      "utf8",
+    );
+    const overlay = readWorkspaceMcpJson(dir);
+    expect(overlay.denyGlobal).toEqual(["playwright"]);
+    expect(overlay.servers).toEqual([
+      { serverName: "docs", command: "npx", args: ["-y", "docs-mcp"] },
+    ]);
+    expect(overlay.fingerprint.length).toBeGreaterThan(0);
+    expect(readWorkspaceMcpJson(path.join(dir, "missing")).servers).toEqual([]);
+  });
+
+  it("mergeWorkspaceMcpOverlays: session wins same name; denyGlobal unions", () => {
+    const session = {
+      servers: [
+        { serverName: "docs", command: "session-docs" },
+        { serverName: "only-session", command: "s" },
+      ] as const,
+      denyGlobal: ["playwright"] as const,
+      fingerprint: "sess",
+    };
+    const home = {
+      servers: [
+        { serverName: "docs", command: "home-docs" },
+        { serverName: "only-home", command: "h" },
+      ] as const,
+      denyGlobal: ["browser"] as const,
+      fingerprint: "home",
+    };
+    const merged = mergeWorkspaceMcpOverlays(session, home);
+    expect(merged.servers.map((s) => s.serverName).sort()).toEqual([
+      "docs",
+      "only-home",
+      "only-session",
+    ]);
+    expect(merged.servers.find((s) => s.serverName === "docs")).toEqual({
+      serverName: "docs",
+      command: "session-docs",
+    });
+    expect(merged.denyGlobal).toEqual(["browser", "playwright"]);
+  });
+
+  it("merges workspace overlay over global + filters plugins", () => {
+    const global: McpServerSpec[] = [
+      { serverName: "playwright", command: "npx", args: ["-y", "@playwright/mcp"] },
+      { serverName: "docs", command: "global-docs" },
+      { serverName: "keep", command: "keep-bin" },
+    ];
+    const overlay = {
+      servers: [
+        { serverName: "docs", command: "ws-docs" },
+        { serverName: "extra", command: "extra-bin" },
+      ] as const,
+      denyGlobal: ["playwright"] as const,
+      fingerprint: "t",
+    };
+    const merged = mergeMcpSpecsForWorkspace(global, overlay);
+    expect(merged.map((s) => s.serverName).sort()).toEqual([
+      "docs",
+      "extra",
+      "keep",
+    ]);
+    expect(merged.find((s) => s.serverName === "docs")).toEqual({
+      serverName: "docs",
+      command: "ws-docs",
+    });
+    const plugins: RegisteredPlugin[] = [
+      { id: "mcp:playwright", kind: "tools", tools: [] },
+      { id: "mcp:docs", kind: "tools", tools: [] },
+      { id: "mcp:keep", kind: "tools", tools: [] },
+      { id: "other", kind: "tools", tools: [] },
+    ];
+    const filtered = filterPluginsForWorkspaceMcp(plugins, overlay);
+    expect(filtered.map((p) => p.id).sort()).toEqual(["mcp:keep", "other"]);
   });
 });

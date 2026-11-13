@@ -89,17 +89,17 @@ describe("Face settings U2", () => {
     if (!listBefore.result.ok) return;
     expect(
       (listBefore.result.value as { presets: { id: string; isDefault: boolean }[] })
-        .presets.find((p) => p.id === "minimal")?.isDefault,
+        .presets.find((p) => p.id === "harness")?.isDefault,
     ).toBe(true);
 
     const upd = await dispatchFaceMethod(rt, "settings.update", "u0", {
       ns: "agent-presets",
-      patch: { default: "harness" },
+      patch: { default: "minimal" },
     });
     expect(upd.result.ok).toBe(true);
 
     const yaml = await readFile(path.join(dir, "settings.yaml"), "utf8");
-    expect(yaml).toContain("default: harness");
+    expect(yaml).toContain("default: minimal");
 
     const listAfter = await dispatchFaceMethod(rt, "agentPreset.list", "l1", {});
     expect(listAfter.result.ok).toBe(true);
@@ -122,8 +122,8 @@ describe("Face settings U2", () => {
     expect(presets.find((p) => p.id === "qichuang")).toMatchObject({
       workspaceLocked: true,
     });
-    expect(presets.find((p) => p.id === "harness")?.isDefault).toBe(true);
-    expect(presets.find((p) => p.id === "minimal")?.isDefault).toBe(false);
+    expect(presets.find((p) => p.id === "minimal")?.isDefault).toBe(true);
+    expect(presets.find((p) => p.id === "harness")?.isDefault).toBe(false);
 
     const frugal = await dispatchFaceMethod(rt, "settings.update", "u1", {
       ns: "agent-presets",
@@ -407,26 +407,7 @@ describe("Face settings U2", () => {
       claudeCode: "",
     });
     expect(externalAgent.applies).toBe("live");
-    expect(v.namespaces.some((n) => n.ns === "ssh-remote")).toBe(true);
-    const sshRemote = v.namespaces.find((n) => n.ns === "ssh-remote") as {
-      ns: string;
-      value: {
-        host: string;
-        workspace: string;
-        user: string;
-        port: number;
-        keyPath: string;
-      };
-      applies: string;
-    };
-    expect(sshRemote.value).toEqual({
-      host: "",
-      workspace: "",
-      user: "",
-      port: 22,
-      keyPath: "",
-    });
-    expect(sshRemote.applies).toBe("restart");
+    expect(v.namespaces.some((n) => n.ns === "ssh-remote")).toBe(false);
     expect(v.namespaces.some((n) => n.ns === "git-attribution")).toBe(true);
     const gitAttribution = v.namespaces.find((n) => n.ns === "git-attribution") as {
       ns: string;

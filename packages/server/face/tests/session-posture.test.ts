@@ -49,9 +49,19 @@ describe("session_posture", () => {
       const codingId = (coding.result.value as { sessionId: string }).sessionId;
       const codingText = formatSessionPosture(runtime, codingId);
       expect(codingText).toMatch(/kind=coding_parent \(项目经理席\)/);
-      expect(codingText).toMatch(/peer lead/);
+      expect(codingText).toMatch(/向日葵 = peer/);
       expect(codingText).toMatch(/workspace_session_prompt/);
       expect(codingText).toMatch(/向阳/);
+
+      const frugal = await dispatchFaceMethod(runtime, "session.create", "f", {
+        workspaceId: codingWs.workspaceId,
+        agentPreset: "frugal",
+      });
+      expect(frugal.result.ok).toBe(true);
+      if (!frugal.result.ok) return;
+      const frugalId = (frugal.result.value as { sessionId: string }).sessionId;
+      // Frugal has no subagent — posture must stay empty (surface_brief + board).
+      expect(formatSessionPosture(runtime, frugalId)).toBe("");
 
       const xy = await dispatchFaceMethod(runtime, "session.create", "xy", {
         workspaceId: XIANGYANG_WORKSPACE_ID,

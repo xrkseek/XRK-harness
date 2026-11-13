@@ -149,6 +149,8 @@ const PRIVILEGED_METHODS = new Set([
   'mcp.oauth.status',
   'mcp.oauth.login',
   'mcp.oauth.logout',
+  'mcp.workspace.get',
+  'mcp.workspace.set',
   'llm.discoverModels',
 ])
 

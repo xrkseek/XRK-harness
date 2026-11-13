@@ -21,7 +21,10 @@ import {
   canonicalAgentPresetId,
 } from "../presets-catalog.js";
 import { isAgentTeamSpawnRole } from "../agent-team-roles.js";
-import { appearanceLookWire } from "../agent-roster-store.js";
+import {
+  appearanceLookWire,
+  effectiveMemberBasePreset,
+} from "../agent-roster-store.js";
 import { formatPeerCollabStopNotice } from "../session-thread-message.js";
 import { sessionIdsOnThread } from "../session-thread-publish.js";
 import {
@@ -258,6 +261,7 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   const reuseExisting = Boolean(requestedId && runtime.store.has(requestedId));
   const slot = reserveModelSessionSlot(runtime, predictedRoute, {
     ...(reuseExisting ? { excludeSessionId: requestedId } : {}),
+    ...(agentPreset ? { agentPreset } : {}),
   });
   if (!slot.ok) {
     return {
@@ -297,11 +301,22 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       ? undefined
       : runtime.workspaces.attachSession(sessionId, attach.workspaceId);
   // 向阳空间 locks 奇创; IM locks im (Host admit also pins im).
+  // Agent-home identity: roster basePreset only — ignore client agentPreset picker.
   const attachWs = attach.workspaceId;
   if (attachWs === XIANGYANG_WORKSPACE_ID) {
     pinSessionAgentPreset(runtime, sessionId, QICHUANG_AGENT_PRESET_ID);
   } else if (attachWs === IM_WORKSPACE_ID) {
     pinSessionAgentPreset(runtime, sessionId, IM_AGENT_PRESET_ID);
+  } else if (identityMemberIdEarly) {
+    const home = runtime.agentRoster.findHome(identityMemberIdEarly);
+    const member = home
+      ? runtime.agentRoster.get(home.rosterWorkspaceId, identityMemberIdEarly)
+      : undefined;
+    pinSessionAgentPreset(
+      runtime,
+      sessionId,
+      effectiveMemberBasePreset(member),
+    );
   } else if (agentPreset) {
     pinSessionAgentPreset(
       runtime,
@@ -1351,7 +1366,9 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
       : modelSelectionFromPrefix(parentEvents.slice(0, cut.cut));
   const forkRoute =
     seedModelPreview ?? resolveSessionModelSelection(runtime, sessionId);
-  const forkSlot = reserveModelSessionSlot(runtime, forkRoute);
+  const forkSlot = reserveModelSessionSlot(runtime, forkRoute, {
+    agentPreset: effectiveSessionAgentPreset(runtime, sessionId),
+  });
   if (!forkSlot.ok) {
     return {
       ok: false,

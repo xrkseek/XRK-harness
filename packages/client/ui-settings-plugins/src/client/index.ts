@@ -9,7 +9,7 @@
  * curated-memory, a2a-inbound, external-agent, cron, auto-review,
  * memory-embed, Host runtime, process & IM channels.
  * Session header also registers `conversation.view` tools (运行时) and skills
- * (注入). General 「远程」: ssh-remote (restart).
+ * (注入). Remote workspaces: attach MCP (no product SSH card).
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -43,7 +43,6 @@ import { McpCard } from './McpCard.tsx'
 import { MemoryEmbedCard } from './MemoryEmbedCard.tsx'
 import { ProcessChannelsCard } from './ProcessChannelsCard.tsx'
 import { SandboxCard } from './SandboxCard.tsx'
-import { SshRemoteCard } from './SshRemoteCard.tsx'
 import { GitAttributionCard } from './GitAttributionCard.tsx'
 import { TelemetryCard } from './TelemetryCard.tsx'
 import { VideoGenCard } from './VideoGenCard.tsx'
@@ -82,7 +81,6 @@ import {
 } from './process-channels-card-controller.ts'
 import { SANDBOX_NS, SandboxCardController } from './sandbox-card-controller.ts'
 import { SESSION_TELEMETRY_NS, TelemetryCardController } from './telemetry-card-controller.ts'
-import { SSH_REMOTE_NS, SshRemoteCardController } from './ssh-remote-card-controller.ts'
 import {
   GIT_ATTRIBUTION_NS,
   GitAttributionCardController,
@@ -129,7 +127,6 @@ export type { ProcessChannelsCardFace, ProcessChannelsCardState } from './proces
 export type { InfoRow } from './info-card-model.ts'
 export type { SandboxCardFace, SandboxCardState } from './sandbox-card-controller.ts'
 export type { TelemetryCardFace, TelemetryCardState } from './telemetry-card-controller.ts'
-export type { SshRemoteCardFace, SshRemoteCardState } from './ssh-remote-card-controller.ts'
 export type {
   GitAttributionCardFace,
   GitAttributionCardState,
@@ -193,9 +190,6 @@ export function apply(ctx: ClientContext): void {
   const webSearch = new WebSearchCardController(ctx.settingsScope.bind({ namespace: WEB_SEARCH_NS }), api)
   const telemetry = new TelemetryCardController(
     ctx.settingsScope.bind({ namespace: SESSION_TELEMETRY_NS }),
-  )
-  const sshRemote = new SshRemoteCardController(
-    ctx.settingsScope.bind({ namespace: SSH_REMOTE_NS }),
   )
   const gitAttribution = new GitAttributionCardController(
     ctx.settingsScope.bind({ namespace: GIT_ATTRIBUTION_NS }),
@@ -470,15 +464,6 @@ export function apply(ctx: ClientContext): void {
         ),
     }),
   }, SkillsCatalogTab))
-
-  // SSH remote on General 「远程」 — world is fixed at Host spawn (restart).
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item',
-    id: 'ssh-remote',
-    order: 30,
-    locale: NS,
-    inject: () => sshRemote.inject(),
-  }, SshRemoteCard))
 
   // Codex-style git Co-authored-by (live prompt guidance).
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({

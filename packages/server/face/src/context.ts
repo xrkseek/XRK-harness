@@ -32,6 +32,7 @@ import type {
 } from "./settings-credentials.js";
 import type { FaceApprovalBroker } from "./approvals.js";
 import type { FaceQuestionBroker } from "./questions.js";
+import type { FaceParentAskBroker } from "./parent-ask.js";
 import type { FacePermissionAutoGate } from "./permission-auto.js";
 import type { SessionPathAllowlist } from "./path-allowlist.js";
 import type { SessionToolDisclosure } from "./tool-disclosure.js";
@@ -334,6 +335,11 @@ export interface FaceRuntime {
   readonly toolDisclosure: SessionToolDisclosure;
   /** DSH user-questions (`question/requested` + `/api/respond`). */
   readonly questions: FaceQuestionBroker;
+  /**
+   * Child → parent-agent ask waiters (`ask` / `answer_ask`).
+   * Not a human question card — parent AI must answer_ask.
+   */
+  readonly parentAsk: FaceParentAskBroker;
   /**
    * Guardian Auto catalog gate (`registerAuto`). Auto is absent from
    * permissions options until an integration mounts.

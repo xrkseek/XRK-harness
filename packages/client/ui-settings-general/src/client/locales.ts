@@ -10,7 +10,7 @@ export const zh = {
   'general.nav': '通用设置',
   'general.title': '通用设置',
   'general.intro':
-    '会话默认与外观。侧栏 agent 推送开关写 ~/.xrk/sidebar/prefs.json。「远程」配 SSH（改完重启 Host）。「Git 共同作者」一个开关：开则挂 Co-authored-by: xrkseek。「命令行 xrkh」默认关。模型与密钥在「模型」；MCP / Shell 等在「插件」。对话可用 /theme · /model · /permission。',
+    '会话默认与外观。侧栏 agent 推送开关写 ~/.xrk/sidebar/prefs.json（需已启用 better-sidebar）。「Git 共同作者」一个开关：开则挂 Co-authored-by: xrkseek。「命令行 xrkh」默认关。远程工作区请挂 MCP。模型与密钥在「模型」；MCP / Shell 等在「插件」。对话可用 /theme · /model · /permission。',
   'sidebarPush.opens.title': '侧栏 agent 打开推送',
   'sidebarPush.opens.description':
     '需已启用 better-sidebar。开启后模型可用 sidebar_open，经 /sidebar/ws/agent-opens 推到侧栏（prefs.agentOpenTools）。',
@@ -75,7 +75,7 @@ export const en = {
   'general.nav': 'General',
   'general.title': 'General',
   'general.intro':
-    'Session defaults and appearance. Sidebar agent-push → ~/.xrk/sidebar/prefs.json. Remote = SSH (Host restart). Git co-author is one switch (on → Co-authored-by: xrkseek). Command-line xrkh is off by default. Models under Models; MCP / Shell under Plugins. Chat: /theme · /model · /permission.',
+    'Session defaults and appearance. Sidebar agent-push → ~/.xrk/sidebar/prefs.json (requires better-sidebar). Git co-author is one switch (on → Co-authored-by: xrkseek). Command-line xrkh is off by default. Remote workspaces → attach MCP. Models under Models; MCP / Shell under Plugins. Chat: /theme · /model · /permission.',
   'sidebarPush.opens.title': 'Sidebar agent open push',
   'sidebarPush.opens.description':
     'Requires better-sidebar enabled. When on, the model may call sidebar_open and push via /sidebar/ws/agent-opens (prefs.agentOpenTools).',
@@ -136,7 +136,7 @@ export const ja = {
   'openDocument.error': '設定ファイルを開けませんでした',
   'general.nav': '一般',
   'general.title': '一般',
-  'general.intro': 'セッションの既定値と外観。サイドバーのエージェントプッシュ切替は ~/.xrk/sidebar/prefs.json に書き込みます。リモートは SSH リモートワークスペースを設定します（Host の再起動が必要）。モデルと認証情報は「モデル」、MCP・Shell・ウェブ検索・エージェントループ・サンドボックスは「プラグイン」にあります。チャットでは /theme · /model · /permission も使えます。',
+  'general.intro': 'セッションの既定値と外観。サイドバーのエージェントプッシュ切替は ~/.xrk/sidebar/prefs.json に書き込みます（better-sidebar が必要）。Git 共同作者は一つのスイッチ。コマンドライン xrkh は既定オフ。リモート作業は MCP を接続します。モデルと認証情報は「モデル」、MCP・Shell は「プラグイン」。チャットでは /theme · /model · /permission も使えます。',
   'sidebarPush.opens.title': 'サイドバー：エージェント起動のプッシュ',
   'sidebarPush.opens.description': 'better-sidebar を有効にする必要があります。オンのとき、モデルは sidebar_open を呼び、/sidebar/ws/agent-opens 経由でプッシュできます（prefs.agentOpenTools）。',
   'sidebarPush.terminals.title': 'サイドバー：エージェント終了のプッシュ',

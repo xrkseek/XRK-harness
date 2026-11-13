@@ -35,6 +35,7 @@ import { DEFAULT_SIDEBAR_SPLIT_RATIO, FLAT_SESSION_ORDER_KEY } from './stores.ts
 import { WorkspacePickFlow } from './WorkspacePicker.tsx'
 import { TeamRoster } from './TeamRoster.tsx'
 import { AddAgentPanel } from './AddAgentPanel.tsx'
+import { useSeatTitles } from './dressing-scope.ts'
 import css from './WorkspaceBrowser.module.css'
 
 /**
@@ -1010,6 +1011,10 @@ export function WorkspaceBrowser({
   exportTeamMember,
   importTeamPack,
 }: WorkspaceBrowserProps) {
+  // Section chrome uses Settings seat titles (titleManager / titleAgent) — never hardcode 经理/干员.
+  const seatTitles = useSeatTitles()
+  const workspacesSection = t('section.workspaces', { manager: seatTitles.manager })
+  const agentsSection = t('section.agents', { agent: seatTitles.agent })
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
@@ -1534,8 +1539,8 @@ export function WorkspaceBrowser({
           {agentWorkspacesAll.length === 0
             ? (
               <div className={css.agentEmpty}>
-                <span className={css.agentEmptyTitle}>{t('agent.empty')}</span>
-                <span>{t('agent.emptyHint')}</span>
+                <span className={css.agentEmptyTitle}>{t('agent.empty', { agent: seatTitles.agent })}</span>
+                <span>{t('agent.emptyHint', { agent: seatTitles.agent })}</span>
               </div>
             )
             : null}
@@ -1629,7 +1634,7 @@ export function WorkspaceBrowser({
                 aria-selected={phoneLane === 'workspaces'}
                 onClick={() => { setPhoneLane('workspaces') }}
               >
-                {groupBy === 'flat' ? t('section.sessions') : t('section.workspaces')}
+                {groupBy === 'flat' ? t('section.sessions') : workspacesSection}
               </button>
               <button
                 type="button"
@@ -1638,7 +1643,7 @@ export function WorkspaceBrowser({
                 aria-selected={phoneLane === 'agents'}
                 onClick={() => { setPhoneLane('agents') }}
               >
-                {t('section.agents')}
+                {agentsSection}
               </button>
             </div>
           ) : null}
@@ -1651,7 +1656,7 @@ export function WorkspaceBrowser({
           >
             <div className={css.sectionHeader} data-phone-section-chrome="">
               <span className={clsx(css.sectionLabel, css.wide, searchExpanded && css.sectionLabelHidden)}>
-                {groupBy === 'flat' ? t('section.sessions') : t('section.workspaces')}
+                {groupBy === 'flat' ? t('section.sessions') : workspacesSection}
               </span>
               <div className={clsx(css.searchSlot, searchExpanded && css.searchSlotExpanded)}>
                 <div
@@ -1787,7 +1792,7 @@ export function WorkspaceBrowser({
           >
             <div className={css.sectionHeader} data-phone-section-chrome="">
               <span className={clsx(css.sectionLabel, css.wide, agentSearchExpanded && css.sectionLabelHidden)}>
-                {t('section.agents')}
+                {agentsSection}
               </span>
               <div className={clsx(css.searchSlot, agentSearchExpanded && css.searchSlotExpanded)}>
                 <div
@@ -1851,11 +1856,11 @@ export function WorkspaceBrowser({
                   t={t}
                 />
                 {teamAvailable && (
-                  <Tooltip label={t('agent.addWorkspace')} side="bottom">
+                  <Tooltip label={t('agent.addWorkspace', { agent: seatTitles.agent })} side="bottom">
                     <button
                       type="button"
                       className={css.iconButton}
-                      aria-label={t('agent.addWorkspace')}
+                      aria-label={t('agent.addWorkspace', { agent: seatTitles.agent })}
                       onClick={openAddAgent}
                     >
                       <IconProjectAddOutlineRegular size={16} />
@@ -1967,7 +1972,12 @@ export function WorkspaceBrowser({
           : {
               description: t(
                 deleteTarget.kind === 'agent-home' ? 'delete.descAgentHome' : 'delete.desc',
-                { name: deleteTarget.title },
+                {
+                  name: deleteTarget.title,
+                  ...(deleteTarget.kind === 'agent-home'
+                    ? { agent: seatTitles.agent }
+                    : {}),
+                },
               ),
             }}
         footer={(

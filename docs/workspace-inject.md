@@ -17,7 +17,7 @@
 
 Inject 按节顺序追加；同名正文 dedupe；**后出现的节更接近当轮任务**。Skills catalog 同样：home 低优先级，项目内高优先级。节渲染带 `> source: <path>` 溯源行（压缩后仍可辨来源）。
 
-**Audience**：只闸 **经理 ledger `XRK.md`**（`audience=user` 才注；干员家 / 委派子会话不注）。产品站立、家约定（`~/.agents` · `~/.claude` · `~/.codex`）、工作区约定、skill catalog **全席同注**（存在都尝试）。徽章与权限只管**工具运行时面**，不管上下文。渐进披露 = catalog 列名 → `skill` 拉正文，不是少注约定。权威车道见 `<instruction_authority>`（`createInstructionAuthorityRegistry`，插件可 `register`）。
+**Audience**：只闸 **经理 ledger `XRK.md`**（`audience=user`；干员家 / 委派子会话不注）。产品站立、家约定、工作区约定、skill catalog **全席同注**。徽章 / 权限只管工具面，不管上下文。渐进披露：catalog 列名 → `skill` 拉正文。权威车道 `<instruction_authority>`；席位 / MCP / ask 看 `<seat_identity>` · `<session_capability>`（含 `mcp_mount`）。
 
 **真源**：`packages/workspace/src/inject-sources.ts`（`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill 根列表）· `ecosystem-instructions.ts` · `workspace-anchor.ts`。
 
@@ -168,7 +168,7 @@ Turn-scoped / recomputable ephemeral context uses **[context-fragments](./contex
 
 Sections append in order; duplicate bodies dedupe; **later sections are closer to the turn**. Skill catalog follows the same rule: home is lower priority than project trees. Each rendered section carries a `> source: <path>` provenance line.
 
-**Audience**: gates **manager ledger `XRK.md` only** (`audience=user`; not 干员家 / delegated children). Product standing, home convention (`~/.agents` · `~/.claude` · `~/.codex`), workspace convention, and skill catalog are the **same for every audience**. Badge and permission control the **tool runtime surface only**, not context. Progressive disclosure = catalog names → `skill` loads bodies — not thinner convention inject. Authority lanes: `<instruction_authority>` (`createInstructionAuthorityRegistry`; plugins may `register`).
+**Audience**: gates **manager ledger `XRK.md` only** (`audience=user`; not 干员家 / delegated children). Product standing, home/workspace convention, and skill catalog are the **same for every audience**. Badge/permission own the **tool surface**, not context. Progressive disclosure: catalog names → `skill` loads bodies. Authority: `<instruction_authority>`; seat / MCP / ask: `<seat_identity>` · `<session_capability>` (incl. `mcp_mount`).
 
 **Source of truth**: `packages/workspace/src/inject-sources.ts` (`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill root lists) · `ecosystem-instructions.ts` · `workspace-anchor.ts`.
 

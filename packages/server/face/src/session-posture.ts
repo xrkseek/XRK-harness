@@ -10,39 +10,34 @@ import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 
 const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
+  // Identity/report lives in <seat_identity>; this card is verbs only.
+  // Frugal / Shell: no card — surface_brief + collab board already say no spawn.
   im: [
     "kind=orchestrator (IM) · path=open",
-    "Reply on-channel (im_send / bridge).",
+    "On-channel: im_send / bridge.",
     "Coding: workspace_list → subagent(workspace_id) | workspace_session_prompt → keep session_id → thread_message; optional thread_upsert.",
-    "Team/干员: team_* (=Team UI); coding spawn prefer member_id.",
-    "Do not implement in ws_im.",
+    "Team: team_* (=Team UI); spawn prefer member_id. Never implement in ws_im.",
   ].join("\n"),
   qichuang: [
-    "kind=orchestrator (向日葵 / 奇创 · 向阳经理席) · path=open · shell_confine=off.",
-    "You are 向阳空间's mid-tier lead; report only to the human 老板. Project titles.manager is a peer, not your boss.",
-    "Admin seat: settings_* · workspace_create/list · team_* · care skills (xrk-home-config · xrk-demand-translate · …).",
+    "kind=orchestrator (向日葵 / 奇创 · 向阳经理席) · path=open · shell_confine=off",
+    "Admin: settings_* · workspace_create/list · team_* · care skills (xrk-home-config · xrk-demand-translate · …).",
     "Vague → skill xrk-demand-translate.",
     "Dispatch: workspace_session_prompt → keep session_id → thread_message; optional thread_upsert + presence_set.",
-    "No nested subagent. Implement on coding peers only.",
+    "No nested subagent — coding peers ship. titles.manager = peer (not boss).",
   ].join("\n"),
-  // Coding 经理席 — thin guide; admin on 向阳; peer work via new session in a coding ws.
   harness: [
     "kind=coding_parent (项目经理席) · path=open",
-    "You are this project's mid-tier lead; report only to the human 老板. 向日葵 on 向阳 is a peer lead.",
-    "Same-project peer: workspace_session_prompt(workspace_id) → new/existing session → thread_message (delegation tree optional).",
-    "Spawn: subagent(member_id). List: workspace_list.",
-    "settings_* here edits field VALUES only (schema-backed ns). Schema/behavior changes, reserved ns, workspace create/delete → 向阳空间: workspace_session_prompt(ws_default) to a 向日葵 session (coding mode may dispatch there). This seat stays coding-light — do not self-declare as the XRK config owner.",
+    "Peer: workspace_session_prompt → thread_message. Spawn: subagent(member_id). List: workspace_list.",
+    "settings_* = VALUES only; schema / reserved ns / create·delete WS → 向阳 (ws_default). 向日葵 = peer.",
+  ].join("\n"),
+  shallow: [
+    "kind=coding_parent (项目经理席 · Shallow) · path=open",
+    "Peer: workspace_session_prompt → thread_message. Spawn: subagent(member_id) when parallel helps (cap 2).",
+    "settings_* = VALUES only; schema / reserved ns / create·delete WS → 向阳. 向日葵 = peer.",
   ].join("\n"),
 };
 
-const CODING_MANAGER_BADGES = new Set([
-  "harness",
-  "shallow",
-  "frugal",
-  "shell",
-]);
-
-/** Compact posture for IM / 奇创 / coding 经理 parents. Empty for children. */
+/** Compact posture for IM / 奇创 / harness·shallow 经理. Empty for Frugal/Shell/children. */
 export function formatSessionPosture(
   runtime: FaceRuntime,
   sessionId: string,
@@ -55,7 +50,6 @@ export function formatSessionPosture(
   const ws = runtime.workspaces.workspaceIdOf(sessionId);
   if (ws === IM_WORKSPACE_ID) return POSTURE_BY_BADGE.im!;
   if (ws === XIANGYANG_WORKSPACE_ID) return POSTURE_BY_BADGE.qichuang!;
-  if (CODING_MANAGER_BADGES.has(badge)) return POSTURE_BY_BADGE.harness!;
   return "";
 }
 

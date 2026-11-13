@@ -36,6 +36,7 @@ import {
   mcpOauthLogout,
   mcpOauthStatus,
 } from "./mcp-oauth.js";
+import { mcpWorkspaceGet, mcpWorkspaceSet } from "./mcp-workspace-face.js";
 import { skillList } from "./skill-list.js";
 import { skillRead } from "./skill-read.js";
 import {
@@ -229,6 +230,8 @@ const HANDLERS: Record<string, FaceHandler> = {
   "mcp.oauth.status": bindPayload(mcpOauthStatus),
   "mcp.oauth.login": bindPayload(mcpOauthLogin),
   "mcp.oauth.logout": bindPayload(mcpOauthLogout),
+  "mcp.workspace.get": bindPayload(mcpWorkspaceGet),
+  "mcp.workspace.set": bindPayload(mcpWorkspaceSet),
   "skill.list": bindPayload((runtime, payload) => skillList(runtime, payload)),
   "skill.read": bindPayload((runtime, payload) => skillRead(runtime, payload)),
   "subagent.list": subagentList,

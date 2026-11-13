@@ -40,7 +40,7 @@ LSP：`@xrkseek/exec-lsp` — Definition `LspService`；Provider stdio JSON-RPC�
 
 PTY：`@xrkseek/exec-pty` — Definition `TerminalSessionService`；Provider `node-pty@1.2.0-beta.15`（NAPI prebuild）+ bash + process-inspector；Consumer `createPtyTools`（六件套）。规格：[pty-tools.md](./pty-tools.md)。
 
-SSH（本地 Host、远端 cwd）：`@xrkseek/exec-ssh` — Settings 通用「远程」或 `XRK_SSH_HOST` + `XRK_SSH_WORKSPACE`（env 旁路）时换接 `FsService` / `SubprocessService`（及可选 `run_code`）；无模型侧 `ssh_*` 工具。Hermes 式 `ssh … bash -lc`；路径为远端 POSIX 坐标。启用时 Host 走 `createSshExecutionWorldReady`（BatchMode `true` 预检，失败拒启；`XRK_SSH_SKIP_PROBE=1` 可跳过）；`xrkh doctor` 有 `ssh-remote`。Web `host.listDirectory` / `host.createDirectory` 走同一 SSH 会话；Agent / 侧栏交互式 PTY、`host.openPath` / OS 选目录在远端模式下关闭（`host.describe.remoteExecution` · `canPty: false` · `canOpenPath: false`）。改 Settings 后需重启 Host。云任务 / Codex Noise `exec-server` **未做**。
+SSH（本地 Host、远端 cwd）：`@xrkseek/exec-ssh` — **无产品 Settings 卡**；仅 `XRK_SSH_HOST` + `XRK_SSH_WORKSPACE`（CI/无头）换接 `FsService` / `SubprocessService`（及可选 `run_code`）；日常远程请挂 MCP。无模型侧 `ssh_*` 工具。Hermes 式 `ssh … bash -lc`；路径为远端 POSIX 坐标。启用时 Host 走 `createSshExecutionWorldReady`（BatchMode `true` 预检，失败拒启；`XRK_SSH_SKIP_PROBE=1` 可跳过）；`xrkh doctor` 有 `ssh-remote`（env）。Web `host.listDirectory` / `host.createDirectory` 走同一 SSH 会话；Agent / 侧栏交互式 PTY、`host.openPath` / OS 选目录在远端模式下关闭（`host.describe.remoteExecution` · `canPty: false` · `canOpenPath: false`）。云任务 / Codex Noise `exec-server` **未做**。
 
 ### 依赖图
 
@@ -117,7 +117,7 @@ LSP: `@xrkseek/exec-lsp` — Definition `LspService`; Provider stdio JSON-RPC; C
 
 PTY: `@xrkseek/exec-pty` — Definition `TerminalSessionService`; Provider `node-pty@1.2.0-beta.15` (NAPI prebuild) + bash + process-inspector; Consumer `createPtyTools` (six-tool set). Spec: [pty-tools.md](./pty-tools.md).
 
-SSH (local Host, remote cwd): `@xrkseek/exec-ssh` — when Settings General → Remote or `XRK_SSH_HOST` + `XRK_SSH_WORKSPACE` (env bypass) are set, swaps `FsService` / `SubprocessService` (and optional `run_code`); no model-facing `ssh_*` tools. Hermes-style `ssh … bash -lc`; paths are remote POSIX coordinates. When enabled, Host uses `createSshExecutionWorldReady` (BatchMode `true` probe, fail-closed; `XRK_SSH_SKIP_PROBE=1` skips); `xrkh doctor` reports `ssh-remote`. Web `host.listDirectory` / `host.createDirectory` ride the same SSH session; Agent / sidebar interactive PTY and `host.openPath` / OS folder picker are off in remote mode (`host.describe.remoteExecution` · `canPty: false` · `canOpenPath: false`). Host restart required after Settings changes. Cloud tasks / Codex Noise `exec-server` are **not done**.
+SSH (local Host, remote cwd): `@xrkseek/exec-ssh` — **no product Settings card**; only `XRK_SSH_HOST` + `XRK_SSH_WORKSPACE` (CI/headless) swaps `FsService` / `SubprocessService` (and optional `run_code`); day-to-day remotes → MCP. No model-facing `ssh_*` tools. Hermes-style `ssh … bash -lc`; paths are remote POSIX coordinates. When enabled, Host uses `createSshExecutionWorldReady` (BatchMode `true` probe, fail-closed; `XRK_SSH_SKIP_PROBE=1` skips); `xrkh doctor` reports `ssh-remote` (env). Web `host.listDirectory` / `host.createDirectory` ride the same SSH session; Agent / sidebar interactive PTY and `host.openPath` / OS folder picker are off in remote mode (`host.describe.remoteExecution` · `canPty: false` · `canOpenPath: false`). Cloud tasks / Codex Noise `exec-server` are **not done**.
 
 ### Dependency graph
 

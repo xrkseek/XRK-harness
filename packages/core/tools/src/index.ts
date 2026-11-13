@@ -132,6 +132,8 @@ export {
   SETTINGS_GET,
   SETTINGS_MUTATE,
   type SettingsToolsOptions,
+  type SettingsToolCallOpts,
+  type SettingsMcpScope,
   type SettingsPathOp,
   type SettingsGetResult,
   type SettingsMutateResult,

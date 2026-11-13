@@ -104,8 +104,8 @@ describe("干员两种座位的上下文工程", () => {
 
   it("ask 通道随座位推导：常驻→老板，派出→派它的人", async () => {
     const { runtime, homeSessionId, home } = await setup();
-    expect(formatSessionCapability(runtime, homeSessionId)).toMatch(
-      /ask: ask_user → the boss directly/,
+    expect(formatSessionCapability(runtime, homeSessionId)).toContain(
+      "ask: ask_user→boss",
     );
 
     const child = await dispatchFaceMethod(runtime, "session.create", "ch", {
@@ -122,9 +122,9 @@ describe("干员两种座位的上下文工程", () => {
       memberId: "mem_coach",
     });
     const childText = formatSessionCapability(runtime, childId);
-    expect(childText).toContain(`ask: ask_parent → ${homeSessionId}`);
-    expect(childText).toContain("it is not the boss");
-    expect(childText).not.toContain("ask_user → the boss directly");
+    expect(childText).toContain(`ask: ask→${homeSessionId}`);
+    expect(childText).toContain("answer_ask");
+    expect(childText).not.toContain("ask_user→boss");
   });
 
   it("agent-home 席位开出的会话是那位同事的身份席，不是无名通用会话", async () => {

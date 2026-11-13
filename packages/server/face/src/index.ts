@@ -188,8 +188,12 @@ export {
   MANAGER_MEMBER_ID,
   SUNFLOWER_MEMBER_ID,
   MEMBER_FILE_TOOLS,
+  DEFAULT_MEMBER_BASE_PRESET,
   applyRosterToolPolicy,
+  effectiveMemberBasePreset,
   formatRosterCatalog,
+  isConfigMountToolName,
+  parseMemberBasePreset,
   catalogMemberWriteProblem,
   displayMemberName,
   SUNFLOWER_FORMAL_NAME,
@@ -475,16 +479,21 @@ export {
   FACE_AGENT_PRESET_IDS,
   HOST_CLI_PRESET_IDS,
   canonicalAgentPresetId,
+  isPeerCollabBadge,
+  isWorkspaceLockedAgentPreset,
+  isCodingAgentPresetSettingsId,
   resolveToolPreset,
   resolveAgentPresetProfile,
   DEFAULT_MAX_ACTIVE_CHILDREN,
   DEFAULT_MAX_DEPTH,
+  SHALLOW_MAX_CONCURRENT_MODEL_SESSIONS,
   type AgentPresetInfo,
   type AgentPresetProfile,
   type AgentSubagentPolicy,
   type AgentToolComposition,
   type AgentToolFlags,
   type CatalogAgentPresetId,
+  type DelegationMode,
 } from "./presets-catalog.js";
 export {
   toQueueItems,
@@ -819,6 +828,13 @@ export {
   type FaceQuestionHooks,
   type PendingQuestionItem,
 } from "./questions.js";
+export {
+  FaceParentAskBroker,
+  bindAskParentTool,
+  bindAnswerAskTool,
+  formatParentAskNotice,
+  type PendingParentAsk,
+} from "./parent-ask.js";
 export { bindSettingsTools } from "./settings-agent-tools.js";
 export {
   bindSessionQueryTools,

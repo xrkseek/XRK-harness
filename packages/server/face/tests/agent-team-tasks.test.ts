@@ -75,7 +75,7 @@ describe("agent team spawn roles", () => {
       cwd: "/repo",
       isolatedWorktree: false,
     });
-    expect(inherited).toContain("seeded completed parent turns");
+    expect(inherited).toContain("completed parent turns only");
 
     const worktree = applySubagentSpawnPreamble({
       prompt: "Patch in isolation.",

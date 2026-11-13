@@ -676,21 +676,6 @@ const ExternalAgentConfig = Schema.object({
   claudeCode: Schema.string().default(""),
 });
 
-/**
- * SSH remote workspace (General 「远程」). Empty host+workspace = local.
- * Non-empty `XRK_SSH_HOST` remains CI bypass (env wins over product).
- * Host builds the SSH world at spawn — restart required.
- */
-const SshRemoteConfig = Schema.object({
-  host: Schema.string().default(""),
-  /** Absolute remote cwd (POSIX `/…`). */
-  workspace: Schema.string().default(""),
-  user: Schema.string().default(""),
-  port: Schema.number().step(1).min(1).max(65535).default(22),
-  /** Local path to OpenSSH identity file (not the key material). */
-  keyPath: Schema.string().default(""),
-});
-
 export const DEFAULT_WORKSPACE_INJECT_MAX_CHARS = 32_000;
 
 const WorkspaceInjectConfig = Schema.object({
@@ -1037,19 +1022,6 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       base: { acpAgent: "", codexAppServer: "", claudeCode: "" },
       // Launch command resolves per subagent external turn.
       applies: "live",
-    },
-    {
-      ns: "ssh-remote",
-      schema: schemasteryJson(SshRemoteConfig) as FaceSchemaEnvelope,
-      base: {
-        host: "",
-        workspace: "",
-        user: "",
-        port: 22,
-        keyPath: "",
-      },
-      // SSH execution world is fixed at Host spawn (before Face).
-      applies: "restart",
     },
     {
       ns: "workspace-inject",

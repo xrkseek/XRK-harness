@@ -105,7 +105,12 @@ import {
   applyDelegatedInheritMask,
   applyRosterToolPolicy,
 } from "./agent-roster-store.js";
-import { bindAskParentTool } from "./subagent-tools.js";
+import {
+  FaceParentAskBroker,
+  bindAskParentTool,
+  bindAnswerAskTool,
+  formatParentAskNotice,
+} from "./parent-ask.js";
 import { FacePresenceStore } from "./presence-store.js";
 import { bindPresenceTools } from "./presence-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
@@ -122,6 +127,10 @@ import {
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { bindImWorkspaceTools } from "./im-workspace-tools.js";
 import { bindWorkspaceOrchestrateTools } from "./workspace-orchestrate-tools.js";
+import {
+  isPeerCollabBadge,
+  resolveAgentPresetProfile,
+} from "./presets-catalog.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import {
   XIANGYANG_WORKSPACE_ID,
@@ -840,6 +849,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     );
     reportedSubagentIdle.add(childSessionId);
     subagentIdleFailCount.delete(childSessionId);
+    parentAsk.cancelForChild(childSessionId, "child stopped");
   };
 
   const notifyOwnedSubagentStopped = (
@@ -1008,6 +1018,21 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
   });
 
+  /** Child ask → parent AI (not human card). Wired after resolveAgent exists. */
+  const parentAskBox: { current?: FaceParentAskBroker } = {};
+  const parentAsk = new FaceParentAskBroker({
+    onRequested(pending) {
+      void options
+        .resolveAgent(pending.parentSessionId)
+        .then((agent) => {
+          agent.admit(formatParentAskNotice(pending), { delivery: "steer" });
+          options.drain.wake(pending.parentSessionId);
+        })
+        .catch(() => undefined);
+    },
+  });
+  parentAskBox.current = parentAsk;
+
   /**
    * Registries whose Face tools are already bound. `ask_user`
    * rebinds through `replace()` (new object identity), so a second bind
@@ -1068,6 +1093,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             runtime,
             sessionId,
           });
+          // IM may spawn coding children — settle their ask without a boss card.
+          bindAnswerAskTool(agent.tools, {
+            parentSessionId: sessionId,
+            broker: parentAsk,
+          });
         } else if (wsId === XIANGYANG_WORKSPACE_ID) {
           bindSessionQueryTools(agent.tools, {
             runtime,
@@ -1087,39 +1117,58 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               .ask(sessionId, qs, signal, opts)
               .then(formatQuestionAnswer),
           );
+          bindAnswerAskTool(agent.tools, {
+            parentSessionId: sessionId,
+            broker: parentAsk,
+          });
           bindSettingsTools(agent.tools, runtime);
           bindPresenceTools(agent.tools, {
             runtime,
             sessionId,
           });
         } else {
-          bindAskUserTool(agent.tools, (qs, signal, opts) =>
-            questions
-              .ask(sessionId, qs, signal, opts)
-              .then(formatQuestionAnswer),
-          );
           // Coding 经理席 stays tool-light: settings / workspace mint·delete live on 向阳.
           // (奇创 branch above still binds settings_*.)
-          bindSessionQueryTools(agent.tools, {
-            runtime,
-            parentSessionId: sessionId,
-          });
-          bindGoalTools(agent.tools, {
-            runtime,
-            sessionId,
-          });
-          bindCanvasTools(agent.tools, {
-            runtime,
-            sessionId,
-          });
-          // Only tool-delegated children skip thread / orchestrate. UI forks keep them
-          // (and are tracked in forkLineage, not subagents).
-          // minimal/shell stay local-only — no workspace_* / thread_* peer surface.
           const childLink = runtime.subagents.getByChild(sessionId);
           const delegatedChild = childLink && childLink.mode !== "fork";
           const badge = effectiveSessionAgentPreset(runtime, sessionId);
-          const peerCollab =
-            badge !== "minimal" && badge !== "shell";
+          const codingProfile = resolveAgentPresetProfile(badge);
+          const officeOn = codingProfile.tools.office === true;
+          // Peer (thread_* / workspace_*) only on shallow|harness (+ IM/奇创 branches above).
+          const peerCollab = isPeerCollabBadge(badge);
+          // Same ask schema; seat chooses execute: boss card vs parent-agent wait.
+          if (delegatedChild && childLink) {
+            bindAskParentTool(agent.tools, {
+              childSessionId: sessionId,
+              parentSessionId: childLink.parentSessionId,
+              childLabel: childLink.label,
+              broker: parentAsk,
+            });
+          } else {
+            bindAskUserTool(agent.tools, (qs, signal, opts) =>
+              questions
+                .ask(sessionId, qs, signal, opts)
+                .then(formatQuestionAnswer),
+            );
+            bindAnswerAskTool(agent.tools, {
+              parentSessionId: sessionId,
+              broker: parentAsk,
+            });
+          }
+          if (officeOn) {
+            bindSessionQueryTools(agent.tools, {
+              runtime,
+              parentSessionId: sessionId,
+            });
+            bindGoalTools(agent.tools, {
+              runtime,
+              sessionId,
+            });
+            bindCanvasTools(agent.tools, {
+              runtime,
+              sessionId,
+            });
+          }
           if (!delegatedChild && peerCollab) {
             bindSessionThreadTools(agent.tools, {
               runtime,
@@ -1130,7 +1179,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               sessionId,
               mode: "coding",
             });
-          } else if (delegatedChild && peerCollab) {
+          } else if (delegatedChild && peerCollab && childLink) {
             // Sibling collab only — not the parent 主线 catalog.
             bindSessionThreadTools(agent.tools, {
               runtime,
@@ -1150,42 +1199,41 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               });
             }
           }
-          if (delegatedChild) {
-            // Children: list roster; if spawned as a 干员, may revise own playbook (team_self).
-            bindAskParentTool(agent.tools, {
-              parentSessionId: childLink.parentSessionId,
-              childLabel: childLink.label,
-              // Raise the card on the immediate parent (经理父席), not the
-              // walked human_face root — 经理 answers; 经理 asks 老板 via ask_user.
-              ask: (qs, signal) =>
-                questions
-                  .ask(childLink.parentSessionId, qs, signal)
-                  .then(formatQuestionAnswer),
-            });
-            bindAgentRosterTools(agent.tools, {
-              runtime,
-              sessionId,
-              listOnly: true,
-              ...(typeof childLink.memberId === "string" && childLink.memberId.trim()
-                ? { selfMemberId: childLink.memberId.trim() }
-                : {}),
-            });
-          } else {
+          if (delegatedChild && childLink) {
+            if (officeOn) {
+              bindAgentRosterTools(agent.tools, {
+                runtime,
+                sessionId,
+                listOnly: true,
+                ...(typeof childLink.memberId === "string" &&
+                childLink.memberId.trim()
+                  ? { selfMemberId: childLink.memberId.trim() }
+                  : {}),
+              });
+            }
+          } else if (officeOn) {
             bindAgentRosterTools(agent.tools, {
               runtime,
               sessionId,
             });
           }
-          bindPresenceTools(agent.tools, {
-            runtime,
-            sessionId,
-          });
+          if (officeOn) {
+            bindPresenceTools(agent.tools, {
+              runtime,
+              sessionId,
+            });
+          }
         }
-        bindProposeSkillTool(agent.tools, {
-          resolveWorkspaceRoot: () => resolveSessionCwd(runtime, sessionId),
-          sessionId,
-          ask: (qs, signal) => questions.ask(sessionId, qs, signal),
-        });
+        {
+          const skillBadge = effectiveSessionAgentPreset(runtime, sessionId);
+          if (resolveAgentPresetProfile(skillBadge).tools.skill) {
+            bindProposeSkillTool(agent.tools, {
+              resolveWorkspaceRoot: () => resolveSessionCwd(runtime, sessionId),
+              sessionId,
+              ask: (qs, signal) => questions.ask(sessionId, qs, signal),
+            });
+          }
+        }
         const childLink = runtime.subagents.getByChild(sessionId);
         if (childLink && childLink.mode !== "fork" && agent.tools) {
           applyDelegatedInheritMask(agent.tools);
@@ -1582,6 +1630,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     pathAllowlist,
     toolDisclosure,
     questions,
+    parentAsk,
     permissionAuto,
     rpcAdmitMap,
     admitRpcMap,

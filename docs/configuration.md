@@ -13,7 +13,7 @@
 | 模型 | **设置 → 模型** |
 | API 密钥 | **设置 → 凭据**（日常使用经设置页配置；无需先 export env） |
 | 默认权限档 | **设置 → 权限**；会话 Access 芯片 / `/permission` |
-| SSH 远程 · Git 共同作者 · 命令行 xrkh | **设置 → 通用**（`ssh-remote` 改完重启；`git-attribution` 热生效；xrkh PATH 默认关） |
+| Git 共同作者 · 命令行 xrkh | **设置 → 通用**（`git-attribution` 热生效；xrkh PATH 默认关）；远程工作区请挂 MCP |
 | MCP · 网页搜索 · 终端 · Agent 循环 · 工作区注入 | **设置 → 插件 → 插件配置** |
 | 打开 yaml | 设置页「打开配置文件」→ `{XRK_HOME}/settings.yaml`（常用 `~/.xrk/settings.yaml`） |
 
@@ -106,21 +106,38 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 | `XRK_SKILLS_DIR` | 工作区 skills 根（`xrkh skill` add/list/remove/path 落点）。未设 = `{workspace}/.agents/skills`；相对路径按工作区解析 — 见 [skills-layers.md](./skills-layers.md) |
 | `XRK_DUMP_SESSION` | 非空时 CLI `run` 向 stderr dump session JSONL（与 `--json` 互斥：已开 `--json` 时不再二次 dump） |
 
-### SSH 远端工作区（Host / CI）
+### SSH 远端工作区（CI / 无头 · 非产品 UI）
 
-本地 Host、远端 cwd：文件 / bash / `run_code` 走 OpenSSH，无模型侧 `ssh_*` 工具。产品 SoT 为 Settings 通用「远程」（`ssh-remote`：host / workspace / user / port / keyPath）；**改完需重启 Host**。非空 `XRK_SSH_HOST` 为 CI 旁路（env 优先于产品）。启用后 `workspaceRoot` 取远端绝对路径；Web 目录浏览经 SSH；交互式 PTY 与本机 `openPath` / OS 选目录关闭（见 `host.describe.remoteExecution`）。
+产品面**不再**提供 Settings「远程」卡；日常远程请挂 **MCP**。本地 Host + 远端 cwd 仍可通过 env 启用 OpenSSH（无模型侧 `ssh_*` 工具）：非空 `XRK_SSH_HOST` 时 Host 在启动时换接 fs / bash / `run_code`，`workspaceRoot` 取远端绝对路径；Web 目录浏览经 SSH；交互式 PTY 与本机 `openPath` / OS 选目录关闭（见 `host.describe.remoteExecution`）。
 
 | 变量 | 含义 |
 |------|------|
-| `XRK_SSH_HOST` | OpenSSH 主机或 `user@host` 别名（非空即旁路 Settings） |
+| `XRK_SSH_HOST` | OpenSSH 主机或 `user@host` 别名（非空即启用） |
 | `XRK_SSH_WORKSPACE` | 远端绝对 cwd（以 `/` 开头） |
 | `XRK_SSH_USER` | 可选用户（host 已含 `user@` 时可省略） |
 | `XRK_SSH_PORT` | 可选端口 |
 | `XRK_SSH_KEY` | 可选私钥路径 |
-| `XRK_SSH_NODE` | 远端 `run_code` 用的 Node（默认 `node`；仅 env） |
+| `XRK_SSH_NODE` | 远端 `run_code` 用的 Node（默认 `node`） |
 | `XRK_SSH_SKIP_PROBE` | `1` 时跳过 Host 启动 BatchMode 连通预检（CI mock） |
 
-Host 启用 SSH 时会先跑 `true` 预检（失败则拒绝启动）；`xrkh doctor` 有 `ssh-remote` 行。云任务 / Codex Noise `exec-server` **未做**（见 [status](./status.md)）。
+Host 启用 SSH 时会先跑 `true` 预检（失败则拒绝启动）；`xrkh doctor` 有 `ssh-remote` 行（仅反映 env）。云任务 / Codex Noise `exec-server` **未做**（见 [status](./status.md)）。
+
+### 工作区 MCP 叠加（`.xrk/mcp.json`）
+
+每个工作区根下可选 `{workspace}/.xrk/mcp.json`（与五档无关）：
+
+```json
+{
+  "servers": { "local-docs": { "command": "npx", "args": ["-y", "mcp-server-docs"] } },
+  "denyGlobal": ["playwright"]
+}
+```
+
+- `servers` / `mcpServers`：增补或同名覆盖全局 Host MCP  
+- `denyGlobal`：本叠加生效时隐藏所列全局 server 名  
+- **配置**：Settings / `settings_*` 在向阳（奇创）  
+- **使用**：看各席 `mcp_mount`（全局 + 会话工作区 + 在席干员家；同名会话赢）。干员私用写该干员家 `workspaceId`，勿进全局  
+Fingerprint 变化会重建相关 agent。
 
 ### Git 共同作者（General）
 
@@ -345,7 +362,7 @@ After `xrkh web`:
 | Model | **Settings → Models** |
 | API keys | **Settings → Credentials** (do not `export` env for routine use) |
 | Default permission preset | **Settings → Permissions**; session Access chip / `/permission` |
-| SSH remote · Git co-author · command-line xrkh | **Settings → General** (`ssh-remote` needs Host restart; `git-attribution` is live; xrkh PATH off by default) |
+| Git co-author · command-line xrkh | **Settings → General** (`git-attribution` is live; xrkh PATH off by default); remote workspaces → attach MCP |
 | MCP · web search · browser · voice · image-gen · video-gen · video-analyze · curated-memory · external-agent · shell · agent loop · workspace inject · sandbox · computer use · cron · session telemetry · auto-review · memory-embed (Advanced) | **Settings → Plugins** |
 | Open yaml | Settings “Open configuration file” → `{XRK_HOME}/settings.yaml` (usually `~/.xrk/settings.yaml`) |
 
@@ -438,21 +455,38 @@ Path jail: `exec-fs` `resolveWithinRoot` ([security-checklist.md](./security-che
 | `XRK_SKILLS_DIR` | Workspace skills root for `xrkh skill` add/list/remove/path. Unset = `{workspace}/.agents/skills`; a relative value resolves against the workspace — see [skills-layers.md](./skills-layers.md) |
 | `XRK_DUMP_SESSION` | When non-empty, CLI `run` dumps session JSONL to stderr (skipped when `--json` already streams the turn) |
 
-### SSH remote workspace (Host / CI)
+### SSH remote workspace (CI / headless · not product UI)
 
-Local Host, remote cwd: file / bash / `run_code` ride OpenSSH; no model-facing `ssh_*` tools. Product SoT is Settings General → Remote (`ssh-remote`: host / workspace / user / port / keyPath); **Host restart required**. Non-empty `XRK_SSH_HOST` is CI bypass (env wins over product). When enabled, `workspaceRoot` is the remote absolute path; Web directory browse rides SSH; interactive PTY and host-local `openPath` / OS folder picker are off (see `host.describe.remoteExecution`).
+The product **no longer** ships a Settings Remote card; day-to-day remotes go through **MCP**. Local Host + remote cwd can still be enabled via env OpenSSH (no model-facing `ssh_*` tools): non-empty `XRK_SSH_HOST` swaps fs / bash / `run_code` at Host spawn, `workspaceRoot` becomes the remote absolute path; Web directory browse rides SSH; interactive PTY and host-local `openPath` / OS folder picker are off (see `host.describe.remoteExecution`).
 
 | Variable | Meaning |
 |------|------|
-| `XRK_SSH_HOST` | OpenSSH host or `user@host` alias (non-empty bypasses Settings) |
+| `XRK_SSH_HOST` | OpenSSH host or `user@host` alias (non-empty enables) |
 | `XRK_SSH_WORKSPACE` | Absolute remote cwd (must start with `/`) |
 | `XRK_SSH_USER` | Optional user (omit when host already has `user@`) |
 | `XRK_SSH_PORT` | Optional port |
 | `XRK_SSH_KEY` | Optional identity file |
-| `XRK_SSH_NODE` | Remote Node for `run_code` (default `node`; env only) |
+| `XRK_SSH_NODE` | Remote Node for `run_code` (default `node`) |
 | `XRK_SSH_SKIP_PROBE` | `1` skips Host BatchMode connect probe (CI mocks) |
 
-When SSH is enabled, Host probes with remote `true` before serving (fail-closed); `xrkh doctor` reports an `ssh-remote` row. Cloud tasks / Codex Noise `exec-server` are **not done** (see [status](./status.md)).
+When SSH is enabled, Host probes with remote `true` before serving (fail-closed); `xrkh doctor` reports an `ssh-remote` row (env only). Cloud tasks / Codex Noise `exec-server` are **not done** (see [status](./status.md)).
+
+### Workspace MCP overlay (`.xrk/mcp.json`)
+
+Optional per-workspace file `{workspace}/.xrk/mcp.json` (orthogonal to coding badges):
+
+```json
+{
+  "servers": { "local-docs": { "command": "npx", "args": ["-y", "mcp-server-docs"] } },
+  "denyGlobal": ["playwright"]
+}
+```
+
+- `servers` / `mcpServers`: add or same-name override global Host MCP  
+- `denyGlobal`: hide listed global names wherever this overlay applies  
+- **Config**: Settings / `settings_*` on Xiangyang (奇创)  
+- **Usage**: each seat’s `mcp_mount` (global + session workspace + seated member home; session wins). Member-private → agent-home `workspaceId`, not global  
+Fingerprint changes rebuild related agents.
 
 ### Git co-author (General)
 

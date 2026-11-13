@@ -597,7 +597,7 @@ describe("prompt-replay dumps", () => {
     );
     expect(homeFrags.some((f) => f.text.includes("施工员"))).toBe(true);
     expect(childFrags.some((f) => f.text.includes("<boss_status>"))).toBe(false);
-    expect(spawn).toContain("cwd workspace AGENTS.md");
+    expect(spawn).toContain("Seat = cwd AGENTS.md");
     expect(spawn).toContain("<seat_identity>");
     expect(spawn).not.toContain("Repo AGENTS.md is not your persona");
     expect(xyFrags.some((f) => f.text.includes("<session_posture>"))).toBe(

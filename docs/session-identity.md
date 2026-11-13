@@ -2,7 +2,7 @@
 
 > **读者**：集成者 · 贡献者（模型面协作契约）
 
-会话 **badge**（tool_surface）与工作区是正交轴。Face 再派生一层**工程身份** `kind`，决定编排权、交付契约与互聊动词。用户用自然语言「许愿」时，模型应从当前身份选出正确工具，而不是猜测。
+会话 **badge**（tool_surface）和工作区是两条正交轴。Face 再派生工程身份 `kind`，管编排权、交付契约、互聊动词。用户用自然语言「许愿」时，按当前身份选工具，别猜。
 
 ## 五种工程身份
 
@@ -29,14 +29,17 @@
 
 | Fragment | 谁有 | 作用 |
 |----------|------|------|
-| `<session_capability>` | 父会话：permission × tool_surface × **model/modality**；干员：`kind=delegated_child` 短块（同样带 model/modality） | 自己是谁（事实真源） |
-| `<session_posture>` | IM / 奇创 | 派活动词卡（不复述 capability） |
-| `<external_collab_board>` | 父会话：名册 + 主线 / 未钉 peers；干员：小队板 | 看见谁（ids） |
+| `<session_capability>` | 父会话：permission × tool_surface × **model/modality** × `mcp_mount` × `ask:`；干员：`kind=delegated_child` 短块（同带 model/modality / mcp / ask） | 自己是谁（事实真源） |
+| `<session_posture>` | IM / 奇创 / harness·shallow 经理；**Frugal / Shell 空**（无 spawn；见 `surface_brief`） | 派活动词卡（不复述 capability） |
+| `<seat_identity>` | 各员工席 | 汇报线 / 称呼 / 同级 peer |
+| `<external_collab_board>` | 父会话：名册 + 主线 / 未钉 peers；干员：小队板 | 看见谁（ids）；同道一句，长链在 posture |
 | spawn preamble | 干员（首轮任务文本） | 身份 + FINAL 交付 |
 
-每回合注入 `model:` / `modality:`（两行）。文本路由：像素不上线、勿瞎编；多模态才走 vision。工具与 guidance 同契约。
+每回合两行：`model:` / `modality:`。文本路由：像素不上线、别瞎编；多模态才走 vision。工具与 guidance 同契约。
 
-协作工具的模型面描述走 `dynamicSchema`，文案集中在 `session-tool-copy.ts`：按 `kind` 重写 `thread_message`（干员可附 live sibling ids）/ `team_list` / `workspace_*` / `subagent` / `list_agents` / `send_message` / `followup_task` / `team_graph` / `interrupt_agent` / `close_agent` / `wait_agent` / `session_inspect`。静态 `description` 只保留短契约。同父干员在 attach 时自动 `peer` 互连（`label=sibling`，不覆盖手改标签）。分场景走查见 [session-identity-scenarios](./session-identity-scenarios.md)。
+**一事一处：** ask → capability；派活长链 → posture；board → ids + 同道。
+
+协作工具描述走 `dynamicSchema`，文案集中在 `session-tool-copy.ts`（按 `kind` 重写 `thread_message` 等）。静态 `description` 只留短契约。同父干员 attach 时自动 `peer`（`label=sibling`，手改标签保留）。走查：[session-identity-scenarios](./session-identity-scenarios.md)。
 
 ### Codex morph（对照 `.tmp/compare`）
 
@@ -93,14 +96,17 @@ Session **badge** (tool_surface) and workspace are orthogonal. Face also derives
 
 | Fragment | Who | Role |
 |----------|-----|------|
-| `<session_capability>` | Parents: permission × tool_surface × **model/modality**; children: short `kind=delegated_child` (same model/modality) | Who am I (source of truth) |
-| `<session_posture>` | IM / Qichuang | Dispatch verb card (no capability re-lecture) |
-| `<external_collab_board>` | Parents: roster + 主线 / unbound peers; children: teammate board | Who is here (ids) |
+| `<session_capability>` | Parents: permission × tool_surface × **model/modality** × `mcp_mount` × `ask:`; children: short `kind=delegated_child` (same model/modality / mcp / ask) | Who am I (source of truth) |
+| `<session_posture>` | IM / Qichuang / harness·shallow managers; **empty for Frugal / Shell** (no spawn — see `surface_brief`) | Dispatch verb card (no capability re-lecture) |
+| `<seat_identity>` | Employee seats | Reporting line / titles / peer leads |
+| `<external_collab_board>` | Parents: roster + 主线 / unbound peers; children: teammate board | Who is here (ids); one same-lane spout — long chains stay in posture |
 | Spawn preamble | Children (first task text) | Identity + FINAL delivery |
 
-Each turn injects `model:` / `modality:` (two lines). Text-only: pixels off wire — do not invent; multimodal may escalate to vision. Tools and guidance share that contract.
+Each turn: `model:` / `modality:`. Text-only keeps pixels off the wire — do not invent; multimodal may use vision. Tools and guidance share that contract.
 
-Collab tool descriptions use `dynamicSchema` with copy centralized in `session-tool-copy.ts`, rewritten from the live `kind` (`thread_message` may attach live sibling ids for 干员; also `team_list` / `workspace_*` / `subagent` / `list_agents` / `send_message` / `followup_task` / `team_graph` / `interrupt_agent` / `close_agent` / `wait_agent` / `session_inspect`). The static `description` stays a short contract. Same-parent siblings are auto peer-linked on attach (`label=sibling`; custom labels are preserved). Scenario walkthrough: [session-identity-scenarios](./session-identity-scenarios.md).
+**One fact one place:** ask → capability; dispatch chains → posture; board → ids + same-lane spout.
+
+Collab tool copy lives in `session-tool-copy.ts` via `dynamicSchema` (rewritten from live `kind`). Static `description` stays short. Same-parent siblings auto-link as `peer` on attach (`label=sibling`; custom labels kept). Walkthrough: [session-identity-scenarios](./session-identity-scenarios.md).
 
 ### Codex morph (from `.tmp/compare`)
 

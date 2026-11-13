@@ -4,6 +4,12 @@
  * `XRK_MCP_SERVERS` / `XRK_MCP_ALLOW` override for headless/CI.
  * Registers each connected server as a synthetic `kind: tools` plugin;
  * live reconcile after `settings.mutate` (no spawn restart) when file-sourced.
+ *
+ * Per-workspace overlay: `{workspace}/.xrk/mcp.json` may add `servers` and
+ * `denyGlobal` names. Host keeps overlays for every project; agent resolve
+ * mounts global ± deny + that session's workspace root. Xiangyang is the
+ * Settings / config seat — not a focus gate. Delegated children and 干员家
+ * seats skip mcp__* (do not inject).
  */
 
 import { mkdirSync, readFileSync } from "node:fs";
@@ -13,7 +19,10 @@ import {
   parseMcpServersJson,
   parseMcpServersValue,
   pickMcpAllowedEnv,
+  readWorkspaceMcpFile,
   resolveMcpStdioCwd,
+  writeWorkspaceMcpFile,
+  type McpServerRow,
 } from "@xrkseek/server-config";
 import {
   createMcpClient,
@@ -697,4 +706,273 @@ export async function reconcileMcpToolPlugins(options: {
   });
 
   return { failures, parked, added, removed, kept };
+}
+
+/** Workspace overlay from `{workspace}/.xrk/mcp.json`. */
+export type WorkspaceMcpOverlay = {
+  readonly servers: readonly McpServerSpec[];
+  /** Global host-settings server names to hide for this workspace. */
+  readonly denyGlobal: readonly string[];
+  /** Stable fingerprint (empty when file absent / unreadable). */
+  readonly fingerprint: string;
+};
+
+function overlayFromFile(file: {
+  readonly servers: readonly McpServerRow[];
+  readonly denyGlobal: readonly string[];
+  readonly fingerprint: string;
+}): WorkspaceMcpOverlay {
+  if (file.servers.length === 0 && file.denyGlobal.length === 0) {
+    return emptyWorkspaceMcpOverlay();
+  }
+  return {
+    servers: mcpDraftsToSpecs(
+      file.servers.map((row) => ({
+        serverName: row.serverName,
+        ...(row.url ? { url: row.url } : {}),
+        ...(row.command ? { command: row.command } : {}),
+        ...(row.args ? { args: [...row.args] } : {}),
+        ...(row.cwd ? { cwd: row.cwd } : {}),
+        ...(row.cwdAllowWorkspace === true ? { cwdAllowWorkspace: true } : {}),
+        ...(row.env ? { env: { ...row.env } } : {}),
+      })),
+    ),
+    denyGlobal: file.denyGlobal,
+    fingerprint: file.fingerprint,
+  };
+}
+
+const EMPTY_WORKSPACE_MCP: WorkspaceMcpOverlay = Object.freeze({
+  servers: Object.freeze([]),
+  denyGlobal: Object.freeze([]),
+  fingerprint: "",
+});
+
+/** Empty overlay (no workspace file / unreadable). */
+export function emptyWorkspaceMcpOverlay(): WorkspaceMcpOverlay {
+  return EMPTY_WORKSPACE_MCP;
+}
+
+/**
+ * Layer two overlays: `secondary` (e.g. agent-home) then `primary` (session
+ * workspace). Same-name servers → primary wins. denyGlobal is the union.
+ */
+export function mergeWorkspaceMcpOverlays(
+  primary: WorkspaceMcpOverlay,
+  secondary: WorkspaceMcpOverlay,
+): WorkspaceMcpOverlay {
+  if (
+    secondary.servers.length === 0 &&
+    secondary.denyGlobal.length === 0
+  ) {
+    return primary;
+  }
+  if (primary.servers.length === 0 && primary.denyGlobal.length === 0) {
+    return secondary;
+  }
+  const deny = [
+    ...new Set(
+      [...secondary.denyGlobal, ...primary.denyGlobal]
+        .map((n) => n.trim())
+        .filter((n) => n.length > 0),
+    ),
+  ].sort();
+  const byName = new Map<string, McpServerSpec>();
+  for (const spec of secondary.servers) byName.set(spec.serverName, spec);
+  for (const spec of primary.servers) byName.set(spec.serverName, spec);
+  return {
+    servers: [...byName.values()],
+    denyGlobal: deny,
+    fingerprint: `${secondary.fingerprint}\0${primary.fingerprint}`,
+  };
+}
+
+/**
+ * Drop Host MCP tool plugins from a session plugin list.
+ * Used when a seat must not mount `mcp__*` at all.
+ */
+export function pluginsWithoutMcpTools(
+  plugins: readonly RegisteredPlugin[],
+): RegisteredPlugin[] {
+  return plugins.filter(
+    (plugin) =>
+      plugin.id !== MCP_RESOURCES_PLUGIN_ID && !plugin.id.startsWith("mcp:"),
+  );
+}
+
+/**
+ * Read `{workspaceRoot}/.xrk/mcp.json` into Host MCP specs.
+ * Missing / invalid → empty overlay.
+ */
+export function readWorkspaceMcpJson(
+  workspaceRoot: string,
+): WorkspaceMcpOverlay {
+  return overlayFromFile(readWorkspaceMcpFile(workspaceRoot));
+}
+
+/** Draft row persisted into `{workspace}/.xrk/mcp.json`. */
+export type WorkspaceMcpServerDraft = McpServerRow;
+
+/**
+ * Atomically write `{workspaceRoot}/.xrk/mcp.json`.
+ * Shape: `{ servers, denyGlobal }` (array form, same as Face drafts).
+ */
+export function writeWorkspaceMcpJson(
+  workspaceRoot: string,
+  input: {
+    readonly servers: readonly WorkspaceMcpServerDraft[];
+    readonly denyGlobal?: readonly string[];
+  },
+): WorkspaceMcpOverlay {
+  return overlayFromFile(
+    writeWorkspaceMcpFile(workspaceRoot, {
+      servers: input.servers,
+      ...(input.denyGlobal ? { denyGlobal: input.denyGlobal } : {}),
+    }),
+  );
+}
+
+/**
+ * Merge global Host MCP specs with a workspace overlay:
+ * drop `denyGlobal`, then overlay `servers` (same name → workspace wins).
+ */
+export function mergeMcpSpecsForWorkspace(
+  global: readonly McpServerSpec[],
+  overlay: WorkspaceMcpOverlay,
+): readonly McpServerSpec[] {
+  const deny = new Set(
+    overlay.denyGlobal.map((n) => n.trim()).filter((n) => n.length > 0),
+  );
+  const byName = new Map<string, McpServerSpec>();
+  for (const spec of global) {
+    if (deny.has(spec.serverName)) continue;
+    byName.set(spec.serverName, spec);
+  }
+  for (const spec of overlay.servers) {
+    byName.set(spec.serverName, spec);
+  }
+  return [...byName.values()];
+}
+
+/**
+ * Filter live plugins for a workspace: drop denied / overridden global
+ * `mcp:*` rows; keep non-MCP plugins and `mcp-resources`.
+ */
+export function filterPluginsForWorkspaceMcp(
+  plugins: readonly RegisteredPlugin[],
+  overlay: WorkspaceMcpOverlay,
+): RegisteredPlugin[] {
+  const deny = new Set(
+    overlay.denyGlobal.map((n) => n.trim()).filter((n) => n.length > 0),
+  );
+  const override = new Set(overlay.servers.map((s) => s.serverName));
+  return plugins.filter((plugin) => {
+    if (plugin.id === MCP_RESOURCES_PLUGIN_ID) return true;
+    if (!plugin.id.startsWith("mcp:")) return true;
+    const name = plugin.id.slice("mcp:".length);
+    if (deny.has(name)) return false;
+    if (override.has(name)) return false;
+    return true;
+  });
+}
+
+type WorkspaceMcpPoolEntry = {
+  fingerprint: string;
+  plugins: McpRegisteredPlugin[];
+};
+
+/**
+ * Per-workspace MCP connect pool (overlay `servers` only). Global Host
+ * reconcile stays on host-settings / env; this pool fills workspace-only
+ * (and same-name overrides) at agent resolve.
+ */
+export function createWorkspaceMcpPool(options: {
+  readonly policy?: PolicyEngine;
+  readonly allowConnect?: () => boolean;
+  readonly onToolsChanged?: (serverName: string) => void | Promise<void>;
+  readonly onHealthChanged?: (
+    serverName: string,
+    status: McpConnectionStatus,
+  ) => void | Promise<void>;
+  readonly imageAdmission?: import("@xrkseek/mcp").McpImageAdmission;
+}): {
+  ensure(
+    workspaceRoot: string,
+    overlay: WorkspaceMcpOverlay,
+  ): Promise<readonly McpRegisteredPlugin[]>;
+  disposeAll(): Promise<void>;
+} {
+  const byRoot = new Map<string, WorkspaceMcpPoolEntry>();
+
+  async function disposeEntry(entry: WorkspaceMcpPoolEntry): Promise<void> {
+    for (const plugin of entry.plugins) {
+      try {
+        await plugin.dispose?.();
+      } catch {
+        /* continue */
+      }
+    }
+    entry.plugins = [];
+  }
+
+  return {
+    async ensure(workspaceRoot, overlay) {
+      const key = path.resolve(workspaceRoot.trim() || ".");
+      const existing = byRoot.get(key);
+      if (existing && existing.fingerprint === overlay.fingerprint) {
+        return existing.plugins;
+      }
+      if (existing) {
+        await disposeEntry(existing);
+        byRoot.delete(key);
+      }
+      if (overlay.servers.length === 0) {
+        const empty: WorkspaceMcpPoolEntry = {
+          fingerprint: overlay.fingerprint,
+          plugins: [],
+        };
+        byRoot.set(key, empty);
+        return empty.plugins;
+      }
+      const allow = options.allowConnect?.() === true;
+      const plugins: McpRegisteredPlugin[] = [];
+      try {
+        const loaded = await loadMcpToolPlugins({
+          specs: overlay.servers,
+          ...(options.policy ? { policy: options.policy } : {}),
+          allowConnect: allow,
+          workspaceRoot: key,
+          ...(options.onToolsChanged
+            ? { onToolsChanged: options.onToolsChanged }
+            : {}),
+          ...(options.onHealthChanged
+            ? { onHealthChanged: options.onHealthChanged }
+            : {}),
+          ...(options.imageAdmission
+            ? { imageAdmission: options.imageAdmission }
+            : {}),
+        });
+        plugins.push(...loaded);
+      } catch (err) {
+        console.warn(
+          `[host] workspace MCP ${key}: connect failed (${
+            err instanceof Error ? err.message : String(err)
+          })`,
+        );
+      }
+      const entry: WorkspaceMcpPoolEntry = {
+        fingerprint: overlay.fingerprint,
+        plugins,
+      };
+      byRoot.set(key, entry);
+      return entry.plugins;
+    },
+
+    async disposeAll() {
+      for (const entry of byRoot.values()) {
+        await disposeEntry(entry);
+      }
+      byRoot.clear();
+    },
+  };
 }

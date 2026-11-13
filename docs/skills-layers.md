@@ -77,10 +77,10 @@ Spec 形态：`./path` · `file:` / `link:` 本地目录；`github:owner/repo` �
 | 层 | 管什么 | 典型落点 |
 |----|--------|----------|
 | **人格 / 站立** | 像谁、边界、语气 | `.xrk/` 的 `IDENTITY` · `SOUL` · `TOOLS`；约定角色用 `.agents/AGENTS.md` |
-| **MCP 挂载（默认）** | 模型可调外部工具 | 设置 → 插件 → MCP；见 [modules/mcp.md](./modules/mcp.md)「终端用户如何挂能力」 |
+| **MCP 挂载（默认）** | 模型可调外部工具 | **配置**在向阳（奇创）Settings / `xrk-home-config`（全局薄种子 `xrk-capability-attach`）；**使用**看各席 `mcp_mount` — [modules/mcp.md](./modules/mcp.md) |
 | **进程插件** | 仓库内自有 tools/prompt/commands | `extensions/<id>/` + `plugin add` + restart |
 
-给 Agent 新工具时 **先 MCP Settings**，再考虑脚手架插件。产品剧本：skill **`xrk-capability-attach`**。
+给 Agent 新工具时 **先 MCP Settings**，再考虑脚手架插件。薄剧本 **`xrk-capability-attach`**；奇创深配 **`xrk-home-config`**。
 
 ## Harness 源码仓写插件
 
@@ -181,10 +181,10 @@ After a complex task, the model may call **`propose_skill`** with a class-level 
 | Layer | Owns | Typical landing |
 |----|------|----------|
 | **Persona / standing** | Voice and boundaries | `.xrk/` `IDENTITY` · `SOUL` · `TOOLS`; convention role via `.agents/AGENTS.md` |
-| **MCP attach (default)** | External model-callable tools | Settings → Plugins → MCP; see [modules/mcp.md](./modules/mcp.md) “How end users attach capabilities” |
+| **MCP attach (default)** | External model-callable tools | **Config** on Xiangyang (奇创) Settings / `xrk-home-config` (thin global seed `xrk-capability-attach`); **usage** is each seat’s `mcp_mount` — [modules/mcp.md](./modules/mcp.md) |
 | **Process plugins** | In-repo tools/prompt/commands | `extensions/<id>/` + `plugin add` + restart |
 
-Prefer **MCP Settings** before scaffolding a process plugin. Product playbook: skill **`xrk-capability-attach`**.
+Prefer **MCP Settings** before scaffolding a process plugin. Thin playbook **`xrk-capability-attach`**; deep on 奇创 **`xrk-home-config`**.
 
 ## Plugin authoring in this repo
 

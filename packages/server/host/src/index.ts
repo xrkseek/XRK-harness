@@ -103,7 +103,6 @@ import {
   ensureMcpLiveIfIdle,
   timingSafeStringEqual,
   listCredentialSlots,
-  peekSettingsYamlSection,
   publishRemoteEvent,
   createSessionRoutingLlm,
   liveRouteAllowsImageInput,
@@ -177,10 +176,15 @@ import { createWalletFaceBridgeFromFace } from "./wallet-bridge.js";
 import { createCommunityLiveMeterFromFace } from "./community-live-bridge.js";
 import { createSidebarFaceBridgeFromFace } from "./sidebar-face-bridge.js";
 import {
+  createWorkspaceMcpPool,
+  emptyWorkspaceMcpOverlay,
+  filterPluginsForWorkspaceMcp,
   mcpDraftsToSpecs,
+  mergeWorkspaceMcpOverlays,
   parseMcpServersEnv,
   readMcpAllowFromHostSettings,
   readMcpServersFromHostSettings,
+  readWorkspaceMcpJson,
   reconcileMcpToolPlugins,
   type McpServerDraft,
   type McpServerSpec,
@@ -243,18 +247,28 @@ export {
   type CreateImToolDefinitionsOptions,
 } from "./im-reply-tool.js";
 export {
+  createWorkspaceMcpPool,
+  emptyWorkspaceMcpOverlay,
+  filterPluginsForWorkspaceMcp,
   loadMcpToolPlugins,
   mcpDraftsToSpecs,
   mcpFingerprint,
+  mergeMcpSpecsForWorkspace,
+  mergeWorkspaceMcpOverlays,
   parseMcpServersEnv,
+  pluginsWithoutMcpTools,
   readMcpAllowFromHostSettings,
   readMcpServersFromHostSettings,
+  readWorkspaceMcpJson,
   reconcileMcpToolPlugins,
   resetLastGoodHostMcpWireCaches,
+  writeWorkspaceMcpJson,
   type McpRegisteredPlugin,
   type McpServerDraft,
   type McpServerSpec,
   type ReconcileMcpResult,
+  type WorkspaceMcpOverlay,
+  type WorkspaceMcpServerDraft,
 } from "./mcp-wire.js";
 
 /**
@@ -1063,6 +1077,17 @@ export function createHostManager(): HostManager {
       refreshFacePlugins();
 
       const agentCache = createHostAgentCache(loader.list(), { hostId: id });
+      /** Per-session workspace MCP overlay fingerprint (invalidate on change). */
+      const workspaceMcpFpBySession = new Map<string, string>();
+      const workspaceMcpPool = createWorkspaceMcpPool({
+        allowConnect: () => mcpAllowConnect,
+        onToolsChanged: () => {
+          void invalidateAgents();
+        },
+        onHealthChanged: () => {
+          notifyMcpOverlay();
+        },
+      });
       // MCP remount / settings_mutate runs inside an active drain. Aborting that
       // agent mid-tool yields "Error: tool call aborted". Skip active sessions
       // and invalidate them after the turn settles. Soft-detach (not dispose)
@@ -1096,9 +1121,8 @@ export function createHostManager(): HostManager {
       };
       const lastDrainResult = new Map<string, AgentRunResult>();
 
-      // Local Host + remote cwd: swap fs/shell (Hermes/DSH provider pattern).
-      // Env `XRK_SSH_HOST` CI-bypasses Face; else peek settings.yaml before Face
-      // (SSH world must own workspaceRoot before createFaceRuntime).
+      // Remote cwd: env `XRK_SSH_HOST` only (CI / headless). Product Settings
+      // no longer peeks `ssh-remote` — remote workspaces go through MCP.
       // Optional pluggable ExecEnvironment (HTTP sidecar · memory CI world) when SSH is off.
       let sshWorld: SshExecutionWorld | undefined;
       let envWorld: ExecWorld | undefined;
@@ -1106,8 +1130,7 @@ export function createHostManager(): HostManager {
       let localHostRoot: string | undefined;
       let execWorldKind: "ssh" | "http" | "memory" | undefined;
       try {
-        const sshProduct = peekSettingsYamlSection(resolveXrkHome(), "ssh-remote");
-        const sshConfig = resolveSshConfig(process.env, sshProduct);
+        const sshConfig = resolveSshConfig(process.env);
         if (sshConfig) {
           execWorldKind = "ssh";
           localHostRoot = config.runtime.workspaceRoot;
@@ -1524,6 +1547,58 @@ export function createHostManager(): HostManager {
                   ? effectiveSessionAgentPreset(faceBox.runtime, sessionId)
                   : undefined) ??
                 config.runtime.preset;
+        // MCP *usage*: global + session workspace `.xrk/mcp.json`, plus the
+        // seated member's agent-home overlay when distinct (skills already
+        // travel with the member — home MCP rides along the same way).
+        // Config/mount Settings tools stay on 奇创 (Face bind).
+        let mcpSessionRoot = "";
+        let mcpHomeRoot = "";
+        let sessionMcpOverlay = emptyWorkspaceMcpOverlay();
+        let homeMcpOverlay = emptyWorkspaceMcpOverlay();
+        {
+          const root = (wsRow?.path ?? sessionRoot).trim();
+          if (root) {
+            mcpSessionRoot = root;
+            sessionMcpOverlay = readWorkspaceMcpJson(mcpSessionRoot);
+          }
+          const rt = faceBox.runtime;
+          const memberId = rt ? sessionSeatMemberId(rt, sessionId) : undefined;
+          if (memberId && rt) {
+            const homeRow = rt.workspaces.findAgentHomeByMember(memberId);
+            // Prefer registered agent-home path; else disk agent-homes/<id>.
+            const rosterHome = rt.agentRoster.home?.trim();
+            const homePath =
+              homeRow?.path?.trim() ||
+              (rosterHome
+                ? path.join(rosterHome, "agent-homes", memberId)
+                : "");
+            if (homePath && homePath !== mcpSessionRoot) {
+              mcpHomeRoot = homePath;
+              homeMcpOverlay = readWorkspaceMcpJson(mcpHomeRoot);
+            }
+          }
+        }
+        const workspaceMcpOverlay = mergeWorkspaceMcpOverlays(
+          sessionMcpOverlay,
+          homeMcpOverlay,
+        );
+        {
+          const prevMcpFp = workspaceMcpFpBySession.get(sessionId);
+          const fpKey = `${wsId ?? ""}\0${mcpSessionRoot}\0${mcpHomeRoot}\0${workspaceMcpOverlay.fingerprint}`;
+          if (prevMcpFp !== undefined && prevMcpFp !== fpKey) {
+            await deferBusyAgentInvalidate({
+              sessionId,
+              drainActive: drainActiveBox.isActive(sessionId),
+              busy: agentCache.isBusy(sessionId),
+              materializing: agentCache.isMaterializing(sessionId),
+              defer: (id) => {
+                pendingAgentInvalidate.add(id);
+              },
+              invalidate: (id) => agentCache.invalidate(id),
+            });
+          }
+          workspaceMcpFpBySession.set(sessionId, fpKey);
+        }
         // Settings `permission.extraWritableRoots` + session pathAccessMode
         // are live getters inside the composition — /permission and Settings
         // hot-switch without agentCache invalidate mid-turn.
@@ -1602,6 +1677,31 @@ export function createHostManager(): HostManager {
               }
             }
             const curatedMemoryAgentLabel = sessionAgentTitle(faceBox.runtime);
+            // Global (± merged deny) + session overlay plugins + home overlay
+            // plugins (session same-name wins when both roots define a server).
+            const sessionMcpPlugins =
+              mcpSessionRoot && sessionMcpOverlay.servers.length > 0
+                ? await workspaceMcpPool.ensure(
+                    mcpSessionRoot,
+                    sessionMcpOverlay,
+                  )
+                : [];
+            const homeMcpPlugins =
+              mcpHomeRoot && homeMcpOverlay.servers.length > 0
+                ? await workspaceMcpPool.ensure(mcpHomeRoot, homeMcpOverlay)
+                : [];
+            const overlayById = new Map<string, (typeof sessionMcpPlugins)[number]>();
+            for (const plugin of homeMcpPlugins) overlayById.set(plugin.id, plugin);
+            for (const plugin of sessionMcpPlugins) {
+              overlayById.set(plugin.id, plugin);
+            }
+            const pluginsForSession = [
+              ...filterPluginsForWorkspaceMcp(
+                loader.list(),
+                workspaceMcpOverlay,
+              ),
+              ...overlayById.values(),
+            ];
             const agent = await factory({
               sessionId,
               store,
@@ -1610,7 +1710,7 @@ export function createHostManager(): HostManager {
               ...(childWorkspaceInject
                 ? { workspaceInject: childWorkspaceInject }
                 : {}),
-              plugins: loader.list(),
+              plugins: pluginsForSession,
               attachments,
               // Existing fs options — product home covers spill / attachments / memories.
               hostReadableRoots: [resolveXrkHome()],
@@ -4054,6 +4154,12 @@ export function createHostManager(): HostManager {
             runWorkspaceSkillCurator();
             await http.close();
             await agentCache.dispose();
+            try {
+              await workspaceMcpPool.disposeAll();
+            } catch {
+              // Host stop must continue even if workspace MCP pool teardown fails.
+            }
+            workspaceMcpFpBySession.clear();
             try {
               await workflowMount?.dispose();
             } catch {

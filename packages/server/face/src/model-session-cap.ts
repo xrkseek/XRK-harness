@@ -16,6 +16,10 @@ import {
   resolveSessionModelSelection,
   type FaceModelSelection,
 } from "./model-catalog.js";
+import {
+  SHALLOW_MAX_CONCURRENT_MODEL_SESSIONS,
+  canonicalAgentPresetId,
+} from "./presets-catalog.js";
 
 /** Global default when neither model row nor agent-loop override is set. */
 export const DEFAULT_MAX_CONCURRENT_MODEL_SESSIONS = 5;
@@ -57,15 +61,26 @@ export function catalogModelSessionCap(
   return undefined;
 }
 
-/** Effective ceiling for this provider/model route. */
+/**
+ * Effective ceiling for this provider/model route.
+ * Optional `agentPreset`: shallow badge hard-caps at
+ * {@link SHALLOW_MAX_CONCURRENT_MODEL_SESSIONS} (min with catalog/loop).
+ */
 export function resolveModelSessionCap(
   runtime: FaceRuntime,
   provider: string,
   model: string,
+  agentPreset?: string,
 ): number {
-  return (
-    catalogModelSessionCap(runtime, provider, model) ?? loopDefaultCap(runtime)
-  );
+  const base =
+    catalogModelSessionCap(runtime, provider, model) ?? loopDefaultCap(runtime);
+  if (
+    agentPreset &&
+    canonicalAgentPresetId(agentPreset) === "shallow"
+  ) {
+    return Math.min(base, SHALLOW_MAX_CONCURRENT_MODEL_SESSIONS);
+  }
+  return base;
 }
 
 function isLiveSession(runtime: FaceRuntime, sessionId: string): boolean {
@@ -107,10 +122,11 @@ export interface ModelSessionQuota {
 export function resolveModelSessionQuota(
   runtime: FaceRuntime,
   selection: FaceModelSelection,
+  agentPreset?: string,
 ): ModelSessionQuota {
   const provider = selection.provider.trim();
   const model = selection.model.trim();
-  const max = resolveModelSessionCap(runtime, provider, model);
+  const max = resolveModelSessionCap(runtime, provider, model, agentPreset);
   const using =
     countSessionsUsingModel(runtime, provider, model) +
     pendingOnRoute(provider, model);
@@ -158,12 +174,20 @@ function capMessage(
 export function modelSessionCapProblem(
   runtime: FaceRuntime,
   selection: FaceModelSelection,
-  options?: { readonly excludeSessionId?: string },
+  options?: {
+    readonly excludeSessionId?: string;
+    readonly agentPreset?: string;
+  },
 ): string | undefined {
   const provider = selection.provider.trim();
   const model = selection.model.trim();
   if (!provider || !model) return undefined;
-  const max = resolveModelSessionCap(runtime, provider, model);
+  const max = resolveModelSessionCap(
+    runtime,
+    provider,
+    model,
+    options?.agentPreset,
+  );
   const using = occupancy(runtime, provider, model, options?.excludeSessionId);
   if (using >= max) return capMessage(provider, model, using, max);
   return undefined;
@@ -191,14 +215,22 @@ export type ModelSessionSlot =
 export function reserveModelSessionSlot(
   runtime: FaceRuntime,
   selection: FaceModelSelection,
-  options?: { readonly excludeSessionId?: string },
+  options?: {
+    readonly excludeSessionId?: string;
+    readonly agentPreset?: string;
+  },
 ): ModelSessionSlot {
   const provider = selection.provider.trim();
   const model = selection.model.trim();
   if (!provider || !model) {
     return { ok: true, release: () => undefined };
   }
-  const max = resolveModelSessionCap(runtime, provider, model);
+  const max = resolveModelSessionCap(
+    runtime,
+    provider,
+    model,
+    options?.agentPreset,
+  );
   const using = occupancy(runtime, provider, model, options?.excludeSessionId);
   if (using >= max) {
     return {

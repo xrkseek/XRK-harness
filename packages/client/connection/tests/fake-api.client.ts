@@ -289,6 +289,23 @@ export class FakeApiClient implements IApiClient {
     }))),
   }
 
+  readonly mcpWorkspace: IApiClient['mcpWorkspace'] = {
+    get: payload => this.record('mcp.workspace.get', payload, Promise.resolve(ok({
+      workspaceId: payload.workspaceId,
+      path: `/tmp/${payload.workspaceId}`,
+      servers: [],
+      denyGlobal: [],
+      fingerprint: '',
+    }))),
+    set: payload => this.record('mcp.workspace.set', payload, Promise.resolve(ok({
+      workspaceId: payload.workspaceId,
+      path: `/tmp/${payload.workspaceId}`,
+      servers: [],
+      denyGlobal: payload.denyGlobal ?? [],
+      fingerprint: 'fake',
+    }))),
+  }
+
   readonly llm: IApiClient['llm'] = {
     providers: payload => this.record('llm.providers', payload, Promise.resolve(ok({ providers: [] }))),
     models: payload => this.record('llm.models', payload, Promise.resolve(ok({ groups: [], failures: [] }))),

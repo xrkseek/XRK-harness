@@ -204,6 +204,8 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
     readonly brief?: string
     readonly inject?: 'subagent' | 'minimal'
     readonly tools?: { readonly mode: 'allow' | 'deny'; readonly names: readonly string[] } | null
+    /** Coding sample badge (PI/shell/frugal/shallow/harness); null clears to default. */
+    readonly basePreset?: string | null
     readonly kind?: 'thin' | 'advanced'
     readonly ready?: boolean
     /** Explicit 「添加干员工作区」 only — roster edits must not mint a home. */
@@ -269,6 +271,8 @@ export type AgentTeamMemberRow = {
   readonly brief?: string
   readonly inject?: string
   readonly tools?: { readonly mode: string; readonly names: readonly string[] }
+  /** Coding sample that seeds the member tool surface. */
+  readonly basePreset?: string
   /** thin (default) or advanced pack-backed. */
   readonly kind?: 'thin' | 'advanced'
   /** Advanced packs start false until parent marks ready. */

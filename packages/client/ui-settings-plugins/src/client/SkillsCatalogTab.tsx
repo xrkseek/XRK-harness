@@ -171,8 +171,11 @@ function documentTitle(
   t: (key: PluginsSettingsLocaleKey, params?: Record<string, string>) => string,
 ): string {
   if (doc.path === 'skills://catalog') return t('skillsCatalogPathLabel')
+  if (doc.path === 'session://instruction-authority') return t('skillsAuthorityPathLabel')
   if (doc.path === 'session://capability') return t('skillsCapabilityPathLabel')
   if (doc.path === 'session://posture') return t('skillsPosturePathLabel')
+  if (doc.path === 'session://boss-status') return t('skillsBossStatusPathLabel')
+  if (doc.path === 'session://seat-identity') return t('skillsSeatIdentityPathLabel')
   if (doc.path === 'session://collab-board') return t('skillsCollabPathLabel')
   return doc.path
 }
@@ -182,8 +185,11 @@ function documentKindLabel(
   t: (key: PluginsSettingsLocaleKey, params?: Record<string, string>) => string,
 ): string {
   if (doc.kind === 'skill-catalog') return t('skillsDocumentKindCatalog')
+  if (doc.kind === 'instruction-authority') return t('skillsDocumentKindAuthority')
   if (doc.kind === 'session-capability') return t('skillsDocumentKindCapability')
   if (doc.kind === 'session-posture') return t('skillsDocumentKindPosture')
+  if (doc.kind === 'boss-status') return t('skillsDocumentKindBossStatus')
+  if (doc.kind === 'seat-identity') return t('skillsDocumentKindSeatIdentity')
   if (doc.kind === 'collab-board') return t('skillsDocumentKindCollab')
   return t('skillsDocumentKindInstruction')
 }

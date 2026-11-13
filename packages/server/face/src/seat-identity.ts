@@ -203,12 +203,12 @@ export function formatSeatIdentity(
     const humanFace = runtime.subagents.humanFacingSessionId(sessionId);
     // Channel markers use live Settings titles (titleBoss/Manager/Agent or scheme),
     // never hardcoded 老板/经理. UI → [titles.boss…]; parent tool → [report seat].
+    // Ask channel lives in <session_capability> — do not restate here.
     return [
       `you: ${you} (subagent · parent_surface=${parentSeat.surface})`,
       `report: ${parent}`,
       `human_face: ${boss} (${humanFace})`,
       `channels: UI→[${boss}] …; parent_tool→[${parent}] …`,
-      `ask: card on parent (${parent}); escalate to human_face via parent ask_user`,
       titlesLine,
     ].join("\n");
   }
@@ -224,8 +224,8 @@ export function formatSeatIdentity(
     return [
       `you: ${you} (agent-home)`,
       `speaker: ${boss}`,
-      // Same-lane only: agent-home ↔ agent-home. Project / 向阳 / IM are another lane.
-      `collab: other agent-home peers via thread_message (not project/向阳/IM sessions)`,
+      // Same-lane only: agent-home ↔ agent-home.
+      `collab: thread_message agent-home↔agent-home only`,
       `report: ${titles.boss}`,
       titlesLine,
     ].join("\n");
@@ -239,23 +239,22 @@ export function formatSeatIdentity(
       titles,
       locale,
     ).label;
-    // Peer managers: 向日葵 owns 向阳; titles.manager is the *project* seat label —
-    // never this seat's boss. Only titles.boss is above you.
+    // Peer domains: 向日葵 ↔ project manager — same tier, never each other's boss.
     return [
-      `you: ${you} (xiangyang · mid-tier lead of 向阳空间)`,
+      `you: ${you} (xiangyang · mid-tier · 向阳空间)`,
       `speaker: ${boss}`,
       `report: ${boss} only (not ${titles.manager})`,
-      `peer: project ${titles.manager} seat is a peer lead — not your boss`,
+      `peer: project ${titles.manager} = peer (not boss)`,
       "nickname: locked",
       titlesLine,
     ].join("\n");
   }
 
   return [
-    `you: ${managerSeat(runtime, titles, locale)} (project · mid-tier lead of this workspace)`,
+    `you: ${managerSeat(runtime, titles, locale)} (project · mid-tier)`,
     `speaker: ${boss}`,
     `report: ${boss} only`,
-    `peer: 向日葵 on 向阳空间 is a peer lead — not your boss`,
+    `peer: 向日葵@向阳 = peer (not boss)`,
     titlesLine,
   ].join("\n");
 }

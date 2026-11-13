@@ -145,9 +145,10 @@ export const FACE_PERMISSION_SCHEMA: FaceSchemaEnvelope = {
 
 /**
  * Face MCP desired servers. `connected` / `parked` are live overlays.
- * `allowConnect` is user-writable (Web Settings); env `XRK_MCP_ALLOW` still
- * forces allow for headless/CI. File-sourced Host remounts on mutate
- * (`applies: live`); env/config MCP stays `applies: restart`.
+ * `allowConnect` user-writable; `XRK_MCP_ALLOW` forces allow (headless/CI).
+ * Config on 奇创; runtime mount = each seat’s `mcp_mount` (global + session
+ * `.xrk/mcp.json` + member home when distinct). File SoT → live remount;
+ * env/config MCP → `applies: restart`.
  */
 export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
   uid: 9,

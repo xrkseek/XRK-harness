@@ -208,14 +208,18 @@ export function apply(ctx: ClientContext): void {
     children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
   }, GeneralSection))
 
-  // Host sidebar prefs.json gates (not Face settings.yaml).
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item',
-    id: 'sidebar-agent-push',
-    order: 35,
-    locale: NS,
-    inject: sidebarPushInjected,
-  }, SidebarAgentPushRows))
+  // Sidebar agent-push prefs: only when better-sidebar (or dsh alias) is in the
+  // boot graph — otherwise the Host prefs API exists but the product surface
+  // that consumes opens/terminals is absent.
+  if (isBetterSidebarBooted()) {
+    ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+      name: 'settings.general.item',
+      id: 'sidebar-agent-push',
+      order: 35,
+      locale: NS,
+      inject: sidebarPushInjected,
+    }, SidebarAgentPushRows))
+  }
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -224,11 +228,27 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
   }, CliCommandRow))
 
-  // After SSH remote card (~30): share is the other “reach this Host” control.
+  // Desktop share: reach this Host from another device.
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
     id: 'desktop-share',
     order: 32,
     locale: NS,
   }, DesktopShareRow))
+}
+
+/** True when `xrkh-better-sidebar` / `dsh-better-sidebar` is in `__XRK_BOOT__`. */
+function isBetterSidebarBooted(): boolean {
+  const boot = (globalThis as {
+    __XRK_BOOT__?: { plugins?: ReadonlyArray<{ id?: unknown }> }
+  }).__XRK_BOOT__
+  const plugins = boot?.plugins
+  if (!Array.isArray(plugins)) return false
+  return plugins.some((row) => {
+    const id = typeof row?.id === 'string' ? row.id : ''
+    if (!id.includes('better-sidebar')) return false
+    // Office add-on is not the sidebar shell itself.
+    if (id.includes('plugin-office')) return false
+    return true
+  })
 }

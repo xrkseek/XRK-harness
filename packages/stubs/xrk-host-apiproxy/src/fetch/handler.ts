@@ -78,6 +78,9 @@ import {
 import {
   mcpOauthLoginRequestSchema, mcpOauthLogoutRequestSchema, mcpOauthStatusRequestSchema,
 } from '../api/mcp-oauth.schema.ts'
+import {
+  mcpWorkspaceGetRequestSchema, mcpWorkspaceSetRequestSchema,
+} from '../api/mcp-workspace.schema.ts'
 import { llmDiscoverModelsRequestSchema, llmModelsRequestSchema, llmProvidersRequestSchema } from '../api/llm.schema.ts'
 import {
   subagentHistoryRequestSchema,
@@ -175,6 +178,8 @@ const UNARY_ROUTES: UnaryRoutes = {
   'mcp.oauth.status': { schema: mcpOauthStatusRequestSchema, invoke: (api, r) => api.mcpOauth.status(r) },
   'mcp.oauth.login': { schema: mcpOauthLoginRequestSchema, invoke: (api, r) => api.mcpOauth.login(r) },
   'mcp.oauth.logout': { schema: mcpOauthLogoutRequestSchema, invoke: (api, r) => api.mcpOauth.logout(r) },
+  'mcp.workspace.get': { schema: mcpWorkspaceGetRequestSchema, invoke: (api, r) => api.mcpWorkspace.get(r) },
+  'mcp.workspace.set': { schema: mcpWorkspaceSetRequestSchema, invoke: (api, r) => api.mcpWorkspace.set(r) },
   'llm.providers': { schema: llmProvidersRequestSchema, invoke: (api, r) => api.llm.providers(r) },
   'llm.models': { schema: llmModelsRequestSchema, invoke: (api, r) => api.llm.models(r) },
   'llm.discoverModels': { schema: llmDiscoverModelsRequestSchema, invoke: (api, r, signal) => api.llm.discoverModels(r, signal) },

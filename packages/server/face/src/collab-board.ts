@@ -72,20 +72,20 @@ export function formatCollabBoardText(input: {
   const recent = input.threads.filter((row) => row.updatedAt >= cutoff);
   const canSpawn = input.canSpawn !== false;
   const surface = input.surface ?? "coding";
-  // Ids + one spout verb. Dispatch chains live in <session_posture> / capability.
-  // Lane: project/向阳/IM boards never list agent-home peers (same-workspace peers only).
+  // Ids + lane spout. Full dispatch chains live in <session_posture> (when present).
+  // project/向阳/IM boards never list agent-home peers.
   const teamLead =
     surface === "im"
-      ? "Roster · peers (project lane). Channel→bridge: im_send. Spawn coding: `subagent` member_id + workspace_id. Peers: workspace_session_prompt → thread_message. Never agent-home. Admin mint → 向阳."
+      ? "Roster · peers (IM). Channel→im_send. Spawn: subagent+workspace_id. Never agent-home. Mint→向阳."
       : surface === "qichuang"
-        ? "Roster · peers (向日葵 admin). workspace_create + settings_* here. Dispatch: workspace_session_prompt → thread_message. Never agent-home."
+        ? "Roster · peers (向日葵 admin). workspace_create + settings_* here. Never agent-home."
         : canSpawn
-          ? "Roster · peers (经理 coding-light). Spawn: `subagent` member_id. Same-ws peer: workspace_session_prompt → thread_message. Settings/create·delete WS → 向阳. Never agent-home."
-          : "Roster (no subagent tools) — Skill-load matching work here. Members:";
+          ? "Roster · peers (经理). Spawn: subagent member_id. WS create/delete → 向阳. Never agent-home."
+          : "Roster (no subagent) — skill-load matching work. Members:";
   const lines = [teamLead, input.membersCatalog];
   lines.push(
     "",
-    "Peers — id · who · duty · todo open · 支线 · 主线(parents). `thread_message` same-lane only. `*` = you.",
+    "Peers — id · who · duty · todo · 支线 · 主线. thread_message same-lane only (workspace_session_prompt→id). *=you.",
   );
   if (recent.length === 0) {
     const peers = input.unboundPeers ?? [];

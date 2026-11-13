@@ -181,7 +181,7 @@ describe("FaceAgentRosterStore", () => {
     expect(ids).toContain("mem_seed_worker");
     expect(ids).not.toContain("mem_seed_release");
     expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.playbook).toContain(
-      "the researcher",
+      "Researcher:",
     );
     expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_manager")?.name).toBe("经理");
     expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_xrkseek")?.name).toBe("向日葵");
@@ -239,7 +239,7 @@ describe("FaceAgentRosterStore", () => {
       kitHat: "halo",
     });
     expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_manager")?.playbook).toContain(
-      "project mid-tier lead",
+      "Project mid-tier",
     );
   });
 
@@ -310,7 +310,7 @@ describe("FaceAgentRosterStore", () => {
       }),
     ).toBeUndefined();
     expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.playbook).toContain(
-      "the researcher",
+      "Researcher:",
     );
     mkdirSync(path.join(dir, "agent-rosters"), { recursive: true });
     writeFileSync(
@@ -331,7 +331,7 @@ describe("FaceAgentRosterStore", () => {
     );
     const again = new FaceAgentRosterStore(dir);
     expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.playbook).toContain(
-      "the researcher",
+      "Researcher:",
     );
     expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.seed).toBe(true);
     expect(

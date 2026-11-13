@@ -27,11 +27,23 @@ export interface SettingsMutateResult {
   }[];
 }
 
+/** Optional scope for ns=mcp (Xiangyang dual-layer). */
+export type SettingsMcpScope = "global" | "workspace";
+
+export interface SettingsToolCallOpts {
+  readonly scope?: SettingsMcpScope;
+  readonly workspaceId?: string;
+}
+
 export interface SettingsToolsOptions {
-  get?: (ns: string | undefined) => Promise<SettingsGetResult>;
+  get?: (
+    ns: string | undefined,
+    opts?: SettingsToolCallOpts,
+  ) => Promise<SettingsGetResult>;
   mutate?: (
     ns: string,
     ops: readonly SettingsPathOp[],
+    opts?: SettingsToolCallOpts,
   ) => Promise<SettingsMutateResult>;
 }
 
@@ -58,13 +70,29 @@ function parseOps(raw: unknown): SettingsPathOp[] | string {
   return out;
 }
 
+function parseCallOpts(args: Record<string, unknown>): SettingsToolCallOpts {
+  const scopeRaw = args.scope;
+  const scope =
+    scopeRaw === "workspace" || scopeRaw === "global" ? scopeRaw : undefined;
+  const workspaceId =
+    typeof args.workspaceId === "string" && args.workspaceId.trim()
+      ? args.workspaceId.trim()
+      : undefined;
+  return {
+    ...(scope ? { scope } : {}),
+    ...(workspaceId ? { workspaceId } : {}),
+  };
+}
+
 /** Read Host Settings namespaces (global ~/.xrk — same as Settings UI). */
 export function createSettingsGetTool(options: SettingsToolsOptions): ToolDefinition {
   return {
     name: SETTINGS_GET,
     description:
-      "Read Host Settings (global ~/.xrk — same namespaces as Settings UI). " +
-      "Omit ns to list namespaces. Does not return credential secret values.",
+      "Read Host Settings (Settings UI namespaces). Omit ns to list. " +
+      "ns=mcp: scope=global (default) or scope=workspace + workspaceId " +
+      "(project or agent-home `.xrk/mcp.json`). Bound only on Xiangyang — else route or use UI. " +
+      "No credential secret values.",
     parameters: {
       type: "object",
       properties: {
@@ -72,6 +100,16 @@ export function createSettingsGetTool(options: SettingsToolsOptions): ToolDefini
           type: "string",
           description:
             "Settings namespace (e.g. mcp, bash, llm-deepseek). Omit to list.",
+        },
+        scope: {
+          type: "string",
+          description:
+            'ns=mcp only: "global" (host-settings) or "workspace" (.xrk/mcp.json).',
+        },
+        workspaceId: {
+          type: "string",
+          description:
+            "Required when scope=workspace — Face workspace id (project or agent-home).",
         },
       },
     },
@@ -87,7 +125,8 @@ export function createSettingsGetTool(options: SettingsToolsOptions): ToolDefini
       content: [{ type: "text" as const, text: result.content }],
     }),
     async execute(args) {
-      const nsRaw = (args as { ns?: unknown }).ns;
+      const a = args as Record<string, unknown>;
+      const nsRaw = a.ns;
       const ns =
         typeof nsRaw === "string" && nsRaw.trim() ? nsRaw.trim() : undefined;
       if (!options.get) {
@@ -96,7 +135,7 @@ export function createSettingsGetTool(options: SettingsToolsOptions): ToolDefini
           isError: true,
         };
       }
-      const out = await options.get(ns);
+      const out = await options.get(ns, parseCallOpts(a));
       if (!out.ok) return { content: out.message, isError: true };
       const body =
         out.payload === undefined
@@ -108,8 +147,9 @@ export function createSettingsGetTool(options: SettingsToolsOptions): ToolDefini
 }
 
 /**
- * Mutate Host Settings (global — same as Settings UI Save).
- * For ns=mcp, Host remounts and this waits until connect finishes.
+ * Mutate Host Settings (same as Settings UI Save).
+ * Global MCP remount waits until connect finishes.
+ * scope=workspace → that root's `.xrk/mcp.json` (project or agent-home).
  */
 export function createSettingsMutateTool(
   options: SettingsToolsOptions,
@@ -117,10 +157,11 @@ export function createSettingsMutateTool(
   return {
     name: SETTINGS_MUTATE,
     description:
-      "Change Host Settings (global ~/.xrk — same as the Settings UI). " +
-      "Pass ops under ns: each op is set or unset with a path array and optional value. " +
-      "Put secrets in Credentials, not as API keys in mcp.servers env. " +
-      "Most namespaces apply live; MCP waits for remount/connect to finish.",
+      "Change Host Settings (same as UI Save). ops: set|unset with path (+ value). " +
+      "ns=mcp: scope=global → host-settings; scope=workspace + workspaceId → that root's " +
+      "`.xrk/mcp.json` (project or agent-home — member-private → home id, not global). " +
+      "Secrets → Credentials (not mcp.servers env). Most ns live; global MCP waits remount/connect. " +
+      "Bound only on Xiangyang — do not invent these tools on other seats.",
     parameters: {
       type: "object",
       properties: {
@@ -128,11 +169,22 @@ export function createSettingsMutateTool(
           type: "string",
           description: "Settings namespace to mutate (e.g. mcp, ui-theme, bash).",
         },
+        scope: {
+          type: "string",
+          description:
+            'ns=mcp only: "global" (host-settings) or "workspace" (.xrk/mcp.json).',
+        },
+        workspaceId: {
+          type: "string",
+          description:
+            "Required when scope=workspace — Face workspace id (project or agent-home).",
+        },
         ops: {
           type: "array",
           description:
             'Path ops only: [{ op:"set"|"unset", path:["field",...], value? }]. ' +
-            'Not a bare { servers: … } body — wrap under ops with path ["servers"].',
+            'Not a bare { servers: … } body — wrap under ops with path ["servers"]. ' +
+            'Workspace scope: path ["servers"] or ["denyGlobal"].',
           items: {
             type: "object",
             properties: {
@@ -158,7 +210,7 @@ export function createSettingsMutateTool(
       content: [{ type: "text" as const, text: result.content }],
     }),
     async execute(args) {
-      const a = args as { ns?: unknown; ops?: unknown };
+      const a = args as Record<string, unknown>;
       const ns = typeof a.ns === "string" ? a.ns.trim() : "";
       if (!ns) {
         return { content: `${SETTINGS_MUTATE}: ns required`, isError: true };
@@ -173,7 +225,7 @@ export function createSettingsMutateTool(
           isError: true,
         };
       }
-      const out = await options.mutate(ns, ops);
+      const out = await options.mutate(ns, ops, parseCallOpts(a));
       const parts = [out.message];
       if (out.failures && out.failures.length > 0) {
         parts.push(

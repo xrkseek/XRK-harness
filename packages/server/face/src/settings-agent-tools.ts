@@ -1,14 +1,17 @@
 /**
- * Face bind for agent Host Settings tools (global ~/.xrk — Settings UI path).
+ * Face bind for agent Host Settings tools (Xiangyang only).
+ * ns=mcp: scope=global|workspace (+ workspaceId for project or agent-home).
  */
 
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import {
   createSettingsTools,
   type SettingsPathOp,
+  type SettingsToolCallOpts,
 } from "@xrkseek/core-tools";
 import type { FaceRuntime } from "./context.js";
 import { formatToolError } from "./face-error-text.js";
+import { mcpWorkspaceGet, mcpWorkspaceSet } from "./mcp-workspace-face.js";
 import { FACE_PRODUCT_SETTINGS_NAMESPACES } from "./settings-schemas.js";
 import {
   settingsDescribeFace,
@@ -22,12 +25,39 @@ const AGENT_SETTINGS_NS = new Set(
 /** The Face-bound instances already installed on a registry (identity guard). */
 const faceBound = new WeakSet<ToolDefinition>();
 
+function workspaceIdRequired(
+  opts: SettingsToolCallOpts | undefined,
+): string | { readonly error: string } {
+  const id = opts?.workspaceId?.trim() ?? "";
+  if (!id) {
+    return {
+      error: 'scope=workspace requires workspaceId (Face project workspace id)',
+    };
+  }
+  return id;
+}
+
 export function bindSettingsTools(
   tools: ToolRegistry,
   runtime: FaceRuntime,
 ): void {
   const bound = createSettingsTools({
-    async get(ns) {
+    async get(ns, opts) {
+      if (ns === "mcp" && opts?.scope === "workspace") {
+        const ws = workspaceIdRequired(opts);
+        if (typeof ws === "object") {
+          return { ok: false, message: ws.error };
+        }
+        const got = await mcpWorkspaceGet(runtime, { workspaceId: ws });
+        if (!got.ok) {
+          return { ok: false, message: formatToolError(got.error) };
+        }
+        return {
+          ok: true,
+          message: `ns=mcp scope=workspace workspaceId=${ws}`,
+          payload: got.value,
+        };
+      }
       const described = await settingsDescribeFace(runtime);
       if (!described.ok) {
         return { ok: false, message: formatToolError(described.error) };
@@ -40,7 +70,8 @@ export function bindSettingsTools(
       if (!ns) {
         return {
           ok: true,
-          message: "Host Settings namespaces (global ~/.xrk)",
+          message:
+            "Host Settings namespaces (Xiangyang). mcp: scope=global|workspace",
           payload: namespaces.map((row) => {
             const r = row as { ns?: string; applies?: string; note?: string };
             return {
@@ -69,11 +100,70 @@ export function bindSettingsTools(
         payload: hit,
       };
     },
-    async mutate(ns, ops) {
+    async mutate(ns, ops, opts) {
       if (!AGENT_SETTINGS_NS.has(ns)) {
         return {
           ok: false,
           message: `unknown or non-product ns "${ns}"`,
+        };
+      }
+      if (ns === "mcp" && opts?.scope === "workspace") {
+        const ws = workspaceIdRequired(opts);
+        if (typeof ws === "object") {
+          return { ok: false, message: ws.error };
+        }
+        const prev = await mcpWorkspaceGet(runtime, { workspaceId: ws });
+        if (!prev.ok) {
+          return { ok: false, message: formatToolError(prev.error) };
+        }
+        let servers = [...prev.value.servers];
+        let denyGlobal = [...prev.value.denyGlobal];
+        for (const op of ops) {
+          const head = op.path[0];
+          if (head === "servers") {
+            if (op.op === "unset") servers = [];
+            else if (Array.isArray(op.value)) {
+              servers = op.value as typeof servers;
+            } else {
+              return {
+                ok: false,
+                message: 'workspace mcp: path ["servers"] value must be an array',
+              };
+            }
+          } else if (head === "denyGlobal") {
+            if (op.op === "unset") denyGlobal = [];
+            else if (Array.isArray(op.value)) {
+              denyGlobal = op.value.filter(
+                (x): x is string => typeof x === "string",
+              );
+            } else {
+              return {
+                ok: false,
+                message:
+                  'workspace mcp: path ["denyGlobal"] value must be a string array',
+              };
+            }
+          } else {
+            return {
+              ok: false,
+              message:
+                'workspace mcp only accepts path ["servers"] or ["denyGlobal"]',
+            };
+          }
+        }
+        const set = await mcpWorkspaceSet(runtime, {
+          workspaceId: ws,
+          servers,
+          denyGlobal,
+        });
+        if (!set.ok) {
+          return { ok: false, message: formatToolError(set.error) };
+        }
+        return {
+          ok: true,
+          message: `settings.mutate ns=mcp scope=workspace workspaceId=${ws} ok`,
+          payload: set.value,
+          applies: "live",
         };
       }
       const result = await settingsMutateFace(runtime, {

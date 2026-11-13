@@ -41,6 +41,7 @@ import {
   MANAGER_MEMBER_ID,
   SUNFLOWER_MEMBER_ID,
   parseMemberAppearance,
+  parseMemberBasePreset,
   parseMemberNickname,
   parseMemberToolPolicy,
   parseRosterScope,
@@ -369,6 +370,12 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
   const toolsRaw =
     args.tools && typeof args.tools === "object" ? args.tools : undefined;
   const tools = parseMemberToolPolicy(toolsRaw);
+  const basePresetArg =
+    args.basePreset === null
+      ? null
+      : typeof args.basePreset === "string"
+        ? parseMemberBasePreset(args.basePreset)
+        : undefined;
   const member = runtime.agentRoster.upsertAtScope(canvasId, scope, {
     name: String(args.name ?? ""),
     playbook: String(args.playbook ?? ""),
@@ -384,6 +391,11 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
       ? { tools }
       : args.tools === null
         ? { tools: null }
+        : {}),
+    ...(args.basePreset === null
+      ? { basePreset: null }
+      : basePresetArg
+        ? { basePreset: basePresetArg }
         : {}),
     ...(hasAppearance
       ? {

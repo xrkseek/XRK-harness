@@ -396,6 +396,16 @@ export interface HarnessCompositionOptions {
   /** Host plugins — `kind: tools` merged after extras; explicit names win. */
   readonly plugins?: readonly RegisteredPlugin[];
   /**
+   * Register bash + job_* tools. Default: on.
+   * `false` skips (PI badge / fs+session-only surfaces).
+   */
+  readonly bashTools?: boolean;
+  /**
+   * Register `skill` + `propose_skill`. Default: on.
+   * `false` skips (PI badge — skills start at Shell).
+   */
+  readonly skillTools?: boolean;
+  /**
    * Register `web_search` / `web_fetch`. Default: on (`createDefaultWebAccess`).
    * `false` skips. Pass a `WebAccess` to inject search/fetch in tests.
    */
@@ -1063,43 +1073,50 @@ export function createHarnessComposition(
       }),
     );
   }
-  for (const tool of createBashTools(shell, {
-    ...(options.bashLimits?.timeoutMs !== undefined
-      ? { timeoutMs: options.bashLimits.timeoutMs }
-      : {}),
-    ...(options.bashLimits?.foregroundYieldMs !== undefined
-      ? { foregroundYieldMs: options.bashLimits.foregroundYieldMs }
-      : {}),
-    // Cap shell dumps at capture (DSH bash default 64_000).
-    maxOutputBytes: options.bashLimits?.maxOutputBytes ?? 64_000,
-    defaultCwd: options.workspaceRoot,
-  })) tools.register(tool);
+  if (options.bashTools !== false) {
+    for (const tool of createBashTools(shell, {
+      ...(options.bashLimits?.timeoutMs !== undefined
+        ? { timeoutMs: options.bashLimits.timeoutMs }
+        : {}),
+      ...(options.bashLimits?.foregroundYieldMs !== undefined
+        ? { foregroundYieldMs: options.bashLimits.foregroundYieldMs }
+        : {}),
+      // Cap shell dumps at capture (DSH bash default 64_000).
+      maxOutputBytes: options.bashLimits?.maxOutputBytes ?? 64_000,
+      defaultCwd: options.workspaceRoot,
+    })) {
+      tools.register(tool);
+    }
+  }
   for (const tool of createStdTools()) tools.register(tool);
   if (options.workingDirectoryTools) {
     tools.register(createWorkingDirectoryTool(options.workingDirectoryTools));
   }
-  if (options.createWorktreeTools) {
+  // worktree follows Shell+ (bash surface); PI has no checkout forks.
+  if (options.createWorktreeTools && options.bashTools !== false) {
     tools.register(createCreateWorktreeTool(options.createWorktreeTools));
   }
-  for (const tool of createSkillTools(
-    standingSkillToolSourceOptions({
-      workspaceRoot: injectOpts.root,
-      productDir,
-      ...(injectOpts.audience !== undefined
-        ? { audience: injectOpts.audience }
-        : {}),
-      ...(injectOpts.extraSkillDirs?.length
-        ? { extraSkillDirs: injectOpts.extraSkillDirs }
-        : {}),
-    }),
-  )) {
-    tools.register(tool);
+  if (options.skillTools !== false) {
+    for (const tool of createSkillTools(
+      standingSkillToolSourceOptions({
+        workspaceRoot: injectOpts.root,
+        productDir,
+        ...(injectOpts.audience !== undefined
+          ? { audience: injectOpts.audience }
+          : {}),
+        ...(injectOpts.extraSkillDirs?.length
+          ? { extraSkillDirs: injectOpts.extraSkillDirs }
+          : {}),
+      }),
+    )) {
+      tools.register(tool);
+    }
+    tools.register(
+      createProposeSkillTool({
+        resolveWorkspaceRoot: () => options.workspaceRoot,
+      }),
+    );
   }
-  tools.register(
-    createProposeSkillTool({
-      resolveWorkspaceRoot: () => options.workspaceRoot,
-    }),
-  );
   if (options.webTools !== false) {
     const access =
       typeof options.webTools === "object"
@@ -1765,19 +1782,21 @@ export function createHarnessComposition(
         availableToolNames().has("cronjob") ? CRON_PROMPT_TEXT : "",
     });
   }
-  prompts.register({
-    id: "tool:skill",
-    order: 112,
-    content: () => SKILL_TOOL_GUIDANCE,
-  });
-  prompts.register({
-    id: "tool:propose_skill",
-    order: 112.5,
-    content: () =>
-      availableToolNames().has("propose_skill")
-        ? "After a complex multi-step task that produced a reusable procedure, call `propose_skill` with a class-level SKILL.md draft (scope=workspace writes the current workspace `.agents/skills`; scope=global writes home `~/.agents/skills`). A 干员 / 成员 / 子代理团队的一员 is `team_save`, not a skill. The user must approve before anything is written."
-        : "",
-  });
+  if (options.skillTools !== false) {
+    prompts.register({
+      id: "tool:skill",
+      order: 112,
+      content: () => SKILL_TOOL_GUIDANCE,
+    });
+    prompts.register({
+      id: "tool:propose_skill",
+      order: 112.5,
+      content: () =>
+        availableToolNames().has("propose_skill")
+          ? "After a complex multi-step task that produced a reusable procedure, call `propose_skill` with a class-level SKILL.md draft (scope=workspace writes the current workspace `.agents/skills`; scope=global writes home `~/.agents/skills`). A 干员 / 成员 / 子代理团队的一员 is `team_save`, not a skill. The user must approve before anything is written."
+          : "",
+    });
+  }
   if (options.lspTools !== false) {
     prompts.register({
       id: "tool:lsp",
@@ -1857,7 +1876,9 @@ export function createHarnessComposition(
       "base",
       ...(curatedMemory ? ["curated-memory-policy", "curated-memory"] : []),
       ...(gitAttributionOn ? ["git:attribution"] : []),
-      "tool:skill",
+      ...(options.skillTools !== false
+        ? ["tool:skill", "tool:propose_skill"]
+        : []),
       "tool:fs-routing",
       "tool:shell-routing",
       "tool:jobs",

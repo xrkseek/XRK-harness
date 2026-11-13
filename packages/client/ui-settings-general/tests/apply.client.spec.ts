@@ -27,7 +27,14 @@ const SEATS = [
   ['settings.section', GeneralSection],
 ] as const
 
-async function bench(isLoopback = true) {
+async function bench(
+  isLoopback = true,
+  opts?: { readonly betterSidebar?: boolean },
+) {
+  // Gate: sidebar push rows register only when better-sidebar is in boot.
+  ;(globalThis as { __XRK_BOOT__?: { plugins: { id: string }[] } }).__XRK_BOOT__ = {
+    plugins: opts?.betterSidebar === false ? [] : [{ id: 'xrkh-better-sidebar' }],
+  }
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
@@ -80,6 +87,16 @@ function generalEntry(slots: SlotRegistry) {
 describe('ui-settings-general apply', () => {
   it('declares the services it uses', () => {
     expect(inject).toEqual(['slots', 'locale', 'connection', 'settingsNav'])
+  })
+
+  it('skips sidebar-agent-push when better-sidebar is absent from boot', async () => {
+    const b = await bench(true, { betterSidebar: false })
+    declare(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    expect(b.slots.entries('settings.general.item').map(e => e.options.id)).toEqual([
+      'desktop-share',
+      'cli-command',
+    ])
   })
 
   it('fills all five seats for declarations before or after apply', async () => {

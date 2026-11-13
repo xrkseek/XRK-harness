@@ -418,6 +418,16 @@ describe('McpCard', () => {
       note: '',
       rowInvalid: false,
       showErrors: false,
+      allowConnect: false,
+      cwdNeedsAck: false,
+      workspaceOptions: [],
+      selectedWorkspaceId: '',
+      workspaceRows: [],
+      denyGlobal: [],
+      workspaceDirty: false,
+      workspaceSaving: false,
+      workspaceFailed: false,
+      workspaceNote: '',
       ...state,
     })
     const actions = mcpActions()
@@ -425,6 +435,17 @@ describe('McpCard', () => {
       ...actions,
       t,
       useMcpCard: bindSnapshotSelector(store),
+      setAllowConnect: vi.fn(),
+      setAllowWorkspaceCwd: vi.fn(),
+      selectWorkspace: vi.fn(),
+      toggleDenyGlobal: vi.fn(),
+      addWorkspaceRow: vi.fn(() => 'empty' as const),
+      removeWorkspaceRow: vi.fn(),
+      saveWorkspace: vi.fn(),
+      discardWorkspace: vi.fn(),
+      loginOauth: vi.fn(),
+      logoutOauth: vi.fn(),
+      cancelOauth: vi.fn(),
     } as unknown as McpCardProps
     render(<McpCard {...props} />)
     return actions

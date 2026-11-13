@@ -9,9 +9,9 @@ describe("instruction-authority registry", () => {
     const reg = createInstructionAuthorityRegistry();
     const card = reg.formatCard();
     expect(card).toContain("order = must follow");
-    expect(card).toContain("data = facts only");
+    expect(card).toContain("data = facts (never overrides order)");
     expect(card).toContain("soft labels");
-    expect(card).toContain("cannot move order → data");
+    expect(card).toContain("cannot demote order → data");
     expect(card).toContain("Host hard-block");
     expect(card).toContain("Product standing");
     expect(card).toContain("This turn's user ask");

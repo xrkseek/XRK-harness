@@ -181,11 +181,11 @@ async function fileExists(target: string): Promise<boolean> {
   }
 }
 
-/** Default agent preset: settings document → CLI boot preset → minimal. */
+/** Default agent preset: settings document → CLI boot preset → harness. */
 export function resolveDefaultAgentPreset(runtime: FaceRuntime): string {
   const slot = runtime.settingsNamespaces.ensure("agent-presets");
   const merged = mergeLayers(
-    { default: runtime.defaultAgentPreset ?? "minimal" },
+    { default: runtime.defaultAgentPreset ?? "harness" },
     slot.user,
   );
   const id = merged.default;
@@ -193,11 +193,11 @@ export function resolveDefaultAgentPreset(runtime: FaceRuntime): string {
   if (typeof id === "string" && isCodingAgentPresetSettingsId(id)) {
     return canonicalAgentPresetId(id);
   }
-  const boot = runtime.defaultAgentPreset ?? "minimal";
+  const boot = runtime.defaultAgentPreset ?? "harness";
   if (isCodingAgentPresetSettingsId(boot)) {
     return canonicalAgentPresetId(boot);
   }
-  return "minimal";
+  return "harness";
 }
 
 /** Product Face namespaces that own settings.yaml sections (exclude mcp SoT). */
@@ -615,23 +615,6 @@ export function validateSettingsNamespace(
       && parseSlotPick(merged.kitHeld, HELD_BUILTINS) === undefined
     ) {
       return `unknown presence kitHeld: ${String(merged.kitHeld)}`;
-    }
-  }
-  if (ns === "ssh-remote") {
-    const host = String(merged.host ?? "").trim();
-    const workspace = String(merged.workspace ?? "").trim();
-    if ((host && !workspace) || (!host && workspace)) {
-      return "ssh-remote requires both host and workspace, or neither";
-    }
-    if (workspace && !workspace.startsWith("/")) {
-      return "ssh-remote.workspace must be an absolute remote path (POSIX, starting with /)";
-    }
-    const port = merged.port;
-    if (port !== undefined && port !== null && port !== "") {
-      const n = typeof port === "number" ? port : Number(port);
-      if (!Number.isFinite(n) || n < 1 || n > 65535) {
-        return `ssh-remote.port must be 1–65535, got ${String(port)}`;
-      }
     }
   }
   if (ns === "auto-review") {

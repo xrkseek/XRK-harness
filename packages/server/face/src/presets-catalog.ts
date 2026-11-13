@@ -3,7 +3,7 @@
 export type AgentToolComposition = "minimal" | "harness";
 
 /**
- * Built-in session badges (five tiers).
+ * Built-in session badges (five coding tiers + workspace-locked).
  * Plan mode is `/plan` / `exit_plan_mode`, not a badge.
  * Order matches product picker: lighter → fuller.
  */
@@ -21,11 +21,23 @@ export interface AgentSubagentPolicy {
   readonly mode: "off" | "on";
 }
 
-/** Harness-plane tool switches (ignored when composition is minimal). */
+/**
+ * Surface-cluster switches for coding badges.
+ * Config mounts (MCP / TTS / image / …) stay orthogonal — never gated here.
+ */
 export interface AgentToolFlags {
+  /** bash + job_* — Shell and above. */
+  readonly bash: boolean;
+  /** skill + propose_skill — Shell and above. */
+  readonly skill: boolean;
   readonly web: boolean;
   readonly lsp: boolean;
   readonly pty: boolean;
+  /**
+   * Coding-seat Face office cluster: session_query / canvas / goal / presence /
+   * team_* (not peer thread/workspace_*). Frugal and above.
+   */
+  readonly office: boolean;
 }
 
 /**
@@ -76,16 +88,50 @@ export function isWorkspaceLockedAgentPreset(id: string): boolean {
   return id === "im" || id === "qichuang";
 }
 
+/**
+ * Coding peer collab (thread_* / workspace_*). Shallow + Harness only.
+ * IM / Qichuang bind peer on their own workspace branches.
+ */
+export function isPeerCollabBadge(id: string): boolean {
+  const badge = canonicalAgentPresetId(id);
+  return badge === "shallow" || badge === "harness";
+}
+
 /** @deprecated Prefer {@link DEFAULT_MAX_CONCURRENT_MODEL_SESSIONS} in model-session-cap. */
 export const DEFAULT_MAX_DEPTH = 0;
 /** @deprecated Prefer per-model concurrent session cap. */
 export const DEFAULT_MAX_ACTIVE_CHILDREN = 0;
 
-const FULL_TOOLS: AgentToolFlags = { web: true, lsp: true, pty: true };
-const SHELL_TOOLS: AgentToolFlags = { web: false, lsp: false, pty: true };
-const MINIMAL_TOOLS: AgentToolFlags = { web: false, lsp: false, pty: false };
+/** Shallow badge hard ceiling for live sessions on one model route. */
+export const SHALLOW_MAX_CONCURRENT_MODEL_SESSIONS = 2;
+
+const PI_TOOLS: AgentToolFlags = {
+  bash: false,
+  skill: false,
+  web: false,
+  lsp: false,
+  pty: false,
+  office: false,
+};
+const SHELL_TOOLS: AgentToolFlags = {
+  bash: true,
+  skill: true,
+  web: false,
+  lsp: false,
+  pty: true,
+  office: false,
+};
+const FRUGAL_TOOLS: AgentToolFlags = {
+  bash: true,
+  skill: true,
+  web: true,
+  lsp: true,
+  pty: true,
+  office: true,
+};
+const FULL_TOOLS: AgentToolFlags = { ...FRUGAL_TOOLS };
 /** Xiangyang orchestrator — full harness tool switches (no nested subagents). */
-const QICHUANG_TOOLS: AgentToolFlags = { web: true, lsp: true, pty: true };
+const QICHUANG_TOOLS: AgentToolFlags = { ...FULL_TOOLS };
 
 const SUBAGENTS_OFF: AgentSubagentPolicy = { mode: "off" };
 
@@ -96,13 +142,13 @@ const SUBAGENTS_OFF: AgentSubagentPolicy = { mode: "off" };
 export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
   {
     id: "minimal",
-    displayName: "Minimal",
+    displayName: "PI",
     description:
-      "Filesystem, skill, and std tools only — no bash, web, lsp, PTY, or subagents",
+      "Read/write + in-session helpers only (todo / ask / plan / cwd). No terminal, skills, web, office board, peer threads, or delegation.",
     profile: {
       id: "minimal",
       composition: "minimal",
-      tools: MINIMAL_TOOLS,
+      tools: PI_TOOLS,
       subagents: SUBAGENTS_OFF,
       subagentRouting: false,
       delegation: "explicit",
@@ -113,7 +159,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "shell",
     displayName: "Shell",
     description:
-      "Filesystem, bash, and terminal (PTY) — no web, lsp, or subagents",
+      "Local coding: PI + bash/jobs, PTY, skills, worktree. Still no web or office collab.",
     profile: {
       id: "shell",
       composition: "harness",
@@ -128,11 +174,11 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "frugal",
     displayName: "Frugal",
     description:
-      "Full coding tools without subagents — lower bill risk",
+      "Single-session full kit: Shell + web/browser/LSP + office (roster/canvas/session). No peer threads, no subagent delegation.",
     profile: {
       id: "frugal",
       composition: "harness",
-      tools: FULL_TOOLS,
+      tools: FRUGAL_TOOLS,
       subagents: SUBAGENTS_OFF,
       subagentRouting: false,
       delegation: "explicit",
@@ -143,7 +189,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "shallow",
     displayName: "Shallow",
     description:
-      "Full coding tools with subagents (same per-model session cap as Harness; prefer lighter delegation)",
+      "Frugal + peer threads + subagent delegation. Same-model live sessions hard-capped at 2 (quota-friendly trial).",
     profile: {
       id: "shallow",
       composition: "harness",
@@ -158,7 +204,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "harness",
     displayName: "XRK Harness",
     description:
-      "Full coding agent: fs + bash + web + lsp + PTY + subagents + workspace/thread collab (per-model live session cap)",
+      "Full default surface (same clusters as Shallow). Concurrent live sessions follow agent-loop (default 5).",
     profile: {
       id: "harness",
       composition: "harness",
@@ -179,7 +225,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     profile: {
       id: "im",
       composition: "minimal",
-      tools: MINIMAL_TOOLS,
+      tools: PI_TOOLS,
       subagents: { mode: "on" },
       subagentRouting: true,
       delegation: "proactive",

@@ -1438,10 +1438,7 @@ export async function settingsMutateFace(
         },
       };
     }
-    slot.user = {
-      servers,
-      allowConnect,
-    };
+    slot.user = { servers, allowConnect };
     slot.applies = applies;
     try {
       await persistHostSettings(runtime);
@@ -1821,7 +1818,10 @@ export function hydrateFaceHostSettings(runtime: FaceRuntime): void {
       throw new Error("host-settings.json: unexpected load status");
     }
     const root = classified.doc as {
-      mcp?: { servers?: unknown; allowConnect?: unknown };
+      mcp?: {
+        servers?: unknown;
+        allowConnect?: unknown;
+      };
     };
     if (root.mcp?.servers === undefined) {
       // Truncated write — keep last good rather than wiping Face MCP.
@@ -1844,10 +1844,7 @@ export function hydrateFaceHostSettings(runtime: FaceRuntime): void {
     const servers = parseFaceMcpServers(root.mcp?.servers);
     const allowConnect = root.mcp?.allowConnect === true;
     const slot = runtime.settingsNamespaces.ensure("mcp");
-    slot.user = {
-      servers,
-      allowConnect,
-    };
+    slot.user = { servers, allowConnect };
     slot.applies = mcpApplies(runtime);
     lastGoodHostMcpByFile.set(key, {
       servers: structuredClone(servers),
@@ -1915,6 +1912,11 @@ async function persistHostSettings(runtime: FaceRuntime): Promise<void> {
   }
   const servers = mcpServersFromRuntime(runtime);
   const allowConnect = mcpAllowFromRuntime(runtime);
+  const prevMcp =
+    previous.mcp && typeof previous.mcp === "object" && !Array.isArray(previous.mcp)
+      ? { ...(previous.mcp as Record<string, unknown>) }
+      : {};
+  delete prevMcp.mountWorkspaceId;
   const body = {
     ...previous,
     note: "Redacted Host snapshot. Secrets are never written here.",
@@ -1925,6 +1927,7 @@ async function persistHostSettings(runtime: FaceRuntime): Promise<void> {
         ? runtime.settingsDocumentPath
         : (previous.policyFile ?? null),
     mcp: {
+      ...prevMcp,
       servers,
       allowConnect,
     },

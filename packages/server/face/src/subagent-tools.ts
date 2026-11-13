@@ -107,7 +107,10 @@ import {
   resolveMemberPackHome,
   resolveMemberPackMaterialsDir,
 } from "./agent-member-pack.js";
-import { GLOBAL_ROSTER_ID } from "./agent-roster-store.js";
+import {
+  GLOBAL_ROSTER_ID,
+  effectiveMemberBasePreset,
+} from "./agent-roster-store.js";
 import { liveMemberPlaybook } from "./agent-roster-tools.js";
 import { bindRalphTool } from "./ralph-tool.js";
 import {
@@ -805,7 +808,7 @@ function createSubagentTool(
         return {
           content:
             `subagent: session badge "${badge}" has subagents off ` +
-            "(Frugal / Minimal / Shell). Switch to Shallow or XRK Harness for a new session.",
+            "(Frugal / PI / Shell). Switch to Shallow or XRK Harness for a new session.",
           isError: true,
         };
       }
@@ -864,6 +867,10 @@ function createSubagentTool(
         if (spawnRole === undefined && rosterMember.role !== "default") {
           spawnRole = rosterMember.role;
         }
+        // Member surface wins over parent badge when caller did not pin agent_preset.
+        if (!agentPresetArg) {
+          createAttach.agentPreset = effectiveMemberBasePreset(rosterMember);
+        }
       }
       const memberSpawn = memberId ? { memberId } : {};
       const schemaCoerce = coerceOutputSchema(a.output_schema);
@@ -921,7 +928,11 @@ function createSubagentTool(
               : {}),
           },
         );
-        const capProblem = modelSessionCapProblem(options.runtime, childRoute);
+        const capProblem = modelSessionCapProblem(options.runtime, childRoute, {
+          ...(createAttach.agentPreset
+            ? { agentPreset: createAttach.agentPreset }
+            : {}),
+        });
         if (capProblem) {
           return { content: `subagent: ${capProblem}`, isError: true };
         }
@@ -1067,7 +1078,11 @@ function createSubagentTool(
             : {}),
         },
       );
-      const capProblem = modelSessionCapProblem(options.runtime, childRoute);
+      const capProblem = modelSessionCapProblem(options.runtime, childRoute, {
+        ...(createAttach.agentPreset
+          ? { agentPreset: createAttach.agentPreset }
+          : {}),
+      });
       if (capProblem) {
         return { content: `subagent: ${capProblem}`, isError: true };
       }
@@ -2609,121 +2624,6 @@ function createCloseAgentTool(
       return { content: lines.join("\n") };
     },
   };
-}
-
-/**
- * Child → parent → human. The question card is raised on the parent session.
- * Replaces `ask_user` so the child cannot ask on its own composer.
- */
-export function bindAskParentTool(
-  tools: ToolRegistry,
-  options: {
-    readonly parentSessionId: string;
-    readonly childLabel: string;
-    readonly ask: (
-      questions: readonly {
-        readonly id: string;
-        readonly question: string;
-        readonly header?: string;
-        readonly options?: readonly {
-          readonly label: string;
-          readonly description?: string;
-        }[];
-      }[],
-      signal?: AbortSignal,
-    ) => Promise<string>;
-  },
-): void {
-  tools.unregister("ask_user");
-  const label = (options.childLabel ?? "").trim() || "subagent";
-  const tool: ToolDefinition = {
-    name: "ask",
-    description:
-      "Ask the parent session one blocker question. Card opens on the parent composer. You get the answer.",
-    parameters: {
-      type: "object",
-      properties: {
-        question: { type: "string", description: "One concrete question." },
-        header: {
-          type: "string",
-          description: "Short chip on the card, ≤12 chars. Optional.",
-        },
-        options: {
-          type: "array",
-          description: "Optional choices. Omit for a free-text answer.",
-          items: {
-            type: "object",
-            properties: {
-              label: { type: "string" },
-              description: { type: "string" },
-            },
-            required: ["label"],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ["question"],
-      additionalProperties: false,
-    },
-    dynamicSchema: () => ({
-      description: `ask → card on parent session ${options.parentSessionId} (${label}). Parent answers. Not ask_user. One blocker.`,
-    }),
-    presentCall: (args) => ({
-      card: "generic",
-      title: "ask",
-      kind: "execute",
-      rawInput: args,
-    }),
-    execute: async (args, signal) => {
-      const a =
-        args && typeof args === "object"
-          ? (args as Record<string, unknown>)
-          : {};
-      const question = typeof a.question === "string" ? a.question.trim() : "";
-      if (!question) return { content: "ask: question required", isError: true };
-      const header =
-        typeof a.header === "string" && a.header.trim()
-          ? a.header.trim().slice(0, 12)
-          : label.slice(0, 12);
-      const optionsRaw = Array.isArray(a.options) ? a.options : [];
-      const choices: { label: string; description?: string }[] = [];
-      for (const row of optionsRaw) {
-        if (!row || typeof row !== "object") continue;
-        const labelText = String(
-          (row as { label?: unknown }).label ?? "",
-        ).trim();
-        if (!labelText) continue;
-        const description = (row as { description?: unknown }).description;
-        choices.push({
-          label: labelText,
-          ...(typeof description === "string" && description.trim()
-            ? { description: description.trim() }
-            : {}),
-        });
-      }
-      try {
-        const text = await options.ask(
-          [
-            {
-              id: "q0",
-              question,
-              header,
-              ...(choices.length > 0 ? { options: choices } : {}),
-            },
-          ],
-          signal,
-        );
-        return { content: text };
-      } catch (err) {
-        return {
-          content: err instanceof Error ? err.message : String(err),
-          isError: true,
-        };
-      }
-    },
-  };
-  if (tools.get("ask")) tools.replace(tool);
-  else tools.register(tool);
 }
 
 /** Register model-facing subagent tools on a live Agent tool registry. */

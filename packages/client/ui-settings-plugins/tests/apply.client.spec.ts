@@ -198,7 +198,7 @@ describe('ui-settings-plugins apply', () => {
     }
   })
 
-  it('registers SSH remote + git attribution on General settings.general.item', async () => {
+  it('registers git attribution + desktop power on General (no SSH card)', async () => {
     const { ctx, slots } = await bench()
     declareRoot(slots)
     slots.register({
@@ -211,11 +211,12 @@ describe('ui-settings-plugins apply', () => {
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     await vi.waitFor(() => {
-      expect(slots.entries('settings.general.item').map(e => e.options.id)).toEqual([
-        'ssh-remote',
+      const ids = slots.entries('settings.general.item').map(e => e.options.id)
+      expect(ids).toEqual([
         'git-attribution',
         'desktop-power',
       ])
+      expect(ids).not.toContain('ssh-remote')
     })
   })
 

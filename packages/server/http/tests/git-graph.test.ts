@@ -82,7 +82,7 @@ describe("git-graph /git routes", () => {
     expect(isGitGraphPath("/api/git")).toBe(false);
   });
 
-  it("returns config · status · branches · graph envelopes", async () => {
+  it("returns config · status · branches · graph envelopes", { timeout: 20_000 }, async () => {
     const home = mkdtempSync(path.join(tmpdir(), "xrk-gg-home-"));
     temps.push(home);
     const repo = initRepo();

@@ -27,7 +27,9 @@ export function McpCard(props: McpCardProps) {
   const state = props.useMcpCard(snapshot => snapshot)
   const disabled = !state.writable
   const pasteRef = useRef<HTMLTextAreaElement>(null)
+  const wsPasteRef = useRef<HTMLTextAreaElement>(null)
   const [pasteHint, setPasteHint] = useState<string | undefined>()
+  const [wsPasteHint, setWsPasteHint] = useState<string | undefined>()
 
   const addFromPaste = () => {
     const pasted = pasteRef.current?.value ?? ''
@@ -131,6 +133,131 @@ export function McpCard(props: McpCardProps) {
         </button>
         {pasteHint ? <p className={css.invalid} role="status">{pasteHint}</p> : null}
       </section>
+      <section className={css.block} aria-label={t('mcpWorkspaceHeading')}>
+        <h3 className={css.heading}>{t('mcpWorkspaceHeading')}</h3>
+        <p className={css.empty}>{t('mcpWorkspaceHint')}</p>
+        {state.workspaceOptions.length === 0
+          ? <p className={css.empty}>{t('mcpWorkspaceEmpty')}</p>
+          : (
+            <>
+              <label className={css.pasteLabel} htmlFor="plugin-config-mcp-ws">
+                {t('mcpWorkspaceSelect')}
+              </label>
+              <select
+                id="plugin-config-mcp-ws"
+                className={css.paste}
+                disabled={disabled}
+                value={state.selectedWorkspaceId}
+                onChange={(event) => { props.selectWorkspace(event.target.value) }}
+              >
+                {state.workspaceOptions.map(opt => (
+                  <option key={opt.workspaceId} value={opt.workspaceId}>
+                    {opt.title}
+                  </option>
+                ))}
+              </select>
+              {state.rows.length > 0
+                ? (
+                  <div className={css.block} aria-label={t('mcpDenyGlobalHeading')}>
+                    <h3 className={css.heading}>{t('mcpDenyGlobalHeading')}</h3>
+                    <p className={css.empty}>{t('mcpDenyGlobalHint')}</p>
+                    <ul className={css.list}>
+                      {state.rows.map(row => (
+                        <li key={`deny-${row.serverName}`} className={css.entry}>
+                          <label className={css.allowRow}>
+                            <input
+                              type="checkbox"
+                              checked={state.denyGlobal.includes(row.serverName)}
+                              disabled={disabled}
+                              onChange={() => { props.toggleDenyGlobal(row.serverName) }}
+                            />
+                            <span className={css.allowTitle}>{row.serverName}</span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+                : null}
+              <h3 className={css.heading}>{t('mcpWorkspaceServersHeading')}</h3>
+              {state.workspaceRows.length === 0
+                ? <p className={css.empty}>{t('mcpWorkspaceServersEmpty')}</p>
+                : (
+                  <ul className={css.list}>
+                    {state.workspaceRows.map((row, index) => (
+                      <ServerSummary
+                        key={`mcp-ws-${row.serverName}-${String(index)}`}
+                        t={t}
+                        row={row}
+                        disabled={disabled}
+                        hideOauth
+                        onRemove={() => { props.removeWorkspaceRow(index) }}
+                        loginOauth={() => {}}
+                        logoutOauth={() => {}}
+                        cancelOauth={() => {}}
+                      />
+                    ))}
+                  </ul>
+                )}
+              <label className={css.pasteLabel} htmlFor="plugin-config-mcp-ws-paste">
+                {t('mcpPaste')}
+              </label>
+              <textarea
+                id="plugin-config-mcp-ws-paste"
+                ref={wsPasteRef}
+                className={css.paste}
+                disabled={disabled}
+                placeholder={t('mcpPasteHint')}
+                rows={6}
+                spellCheck={false}
+              />
+              <div className={css.entryHead}>
+                <button
+                  type="button"
+                  className={css.add}
+                  disabled={disabled}
+                  onClick={() => {
+                    const pasted = wsPasteRef.current?.value ?? ''
+                    const result = props.addWorkspaceRow(pasted)
+                    if (result === 'ok' && wsPasteRef.current) wsPasteRef.current.value = ''
+                    setWsPasteHint(
+                      result === 'ok'
+                        ? undefined
+                        : result === 'empty'
+                          ? t('mcpPasteEmpty')
+                          : t('mcpPasteInvalid'),
+                    )
+                  }}
+                >
+                  <IconPlusOutlineRegular size={14} />
+                  {t('mcpAddServer')}
+                </button>
+                <button
+                  type="button"
+                  className={css.add}
+                  disabled={disabled || state.workspaceSaving || !state.workspaceDirty}
+                  onClick={() => { props.saveWorkspace() }}
+                >
+                  {t('mcpWorkspaceSave')}
+                </button>
+                <button
+                  type="button"
+                  className={css.remove}
+                  disabled={disabled || !state.workspaceDirty}
+                  onClick={() => { props.discardWorkspace() }}
+                >
+                  {t('mcpWorkspaceDiscard')}
+                </button>
+              </div>
+              {wsPasteHint ? <p className={css.invalid} role="status">{wsPasteHint}</p> : null}
+              {state.workspaceFailed
+                ? <p className={css.invalid} role="status">{state.workspaceNote}</p>
+                : state.workspaceNote
+                  ? <p className={css.empty}>{state.workspaceNote}</p>
+                  : null}
+            </>
+          )}
+      </section>
     </PluginCard>
   )
 }
@@ -139,6 +266,8 @@ interface ServerSummaryProps {
   t: McpCardProps['t']
   row: McpServerRow
   disabled: boolean
+  /** Workspace overlay rows: paste-only; OAuth stays on the global list. */
+  hideOauth?: boolean
   onRemove: () => void
   loginOauth: (serverName: string) => void
   logoutOauth: (serverName: string) => void
@@ -176,7 +305,9 @@ function statusBadge(status: McpRowStatus): string {
   return `${css.badge} ${statusTone(status)}`
 }
 
-function ServerSummary({ t, row, disabled, onRemove, loginOauth, logoutOauth, cancelOauth }: ServerSummaryProps) {
+function ServerSummary({
+  t, row, disabled, hideOauth, onRemove, loginOauth, logoutOauth, cancelOauth,
+}: ServerSummaryProps) {
   const summary = row.transport === 'http'
     ? row.url
     : [row.command, row.args].filter(part => part.trim()).join(' ')
@@ -206,7 +337,7 @@ function ServerSummary({ t, row, disabled, onRemove, loginOauth, logoutOauth, ca
           {row.failureMessage
             ? <p className={css.invalid} role="status">{row.failureMessage}</p>
             : null}
-          {row.transport === 'http'
+          {!hideOauth && row.transport === 'http'
             ? (
               <OauthRow
                 t={t}

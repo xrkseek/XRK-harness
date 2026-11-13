@@ -37,15 +37,17 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 
 ## Session 工具面
 
-| id | UI 名 | 工具面 | 用途 |
+| id | UI 名 | 工具面（表面簇） | 用途 |
 |----|-------|--------|------|
-| **minimal** | Minimal | fs + skill + std（无 workspace/thread peer） | 最小，无 shell / 联网（烟测 / `run` 默认） |
-| **im** | IM | minimal + Host `im_send` / `im_binding` + team / session_query / `workspace_*` / `thread_*` / `subagent`（无 bash / web / presence） | IM 通道（`ws_im`）；可删工作区；复杂任务可 `workspace_id` 委派到编码区；AGT 可换 `setImToolPorts` |
-| **qichuang** | 奇创 | harness 面（bash + web + lsp + PTY）+ team / session_query / `workspace_*` / `thread_*`（**无** nested subagent） | 向阳空间锁定徽章；统领全局：查网、终端、语言服务、建区 / 开会话 / 派任务（peer，非嵌套子代理） |
-| **shell** | Shell | + bash + PTY（无 workspace/thread peer） | 本机 shell 专注 |
-| **frugal** | Frugal | 完整工具 + workspace/thread，无子代理（`delegation: explicit`，无子代理工具时不生效） | 控制支出（省钱） |
-| **shallow** | Shallow | 完整工具 + 子代理 + workspace/thread（与 harness 同用每模型会话上限；`delegation: proactive`） | 浅委派偏好 |
-| **harness** | XRK Harness | 完整工具 + 子代理 + workspace/thread 协作（每模型存活会话上限，默认 5；`delegation: proactive`） | 默认产品面 |
+| **minimal** | PI | **fs** + **session**（无 bash/skill/pty/web/office/peer/delegate） | 最瘦可干活的编码面；烟测 / `run` 默认 |
+| **shell** | Shell | PI + **shell** + **skill** + **pty** + worktree | 本机编码：bash/作业/PTY/技能 |
+| **frugal** | Frugal | Shell + **web** + **browser** + **lsp** + **office**（无 peer/delegate） | 单会话全能；不跨会话协作、不委派 |
+| **shallow** | Shallow | Frugal + **peer** + **delegate**（同模型进行中会话硬顶 **2**） | 可协作可委派；省配额试水 |
+| **harness** | XRK Harness | 同 Shallow 簇（并发跟 agent-loop，默认 5） | **产品默认**经理档 |
+| **im** | IM | 通道专用 + team / workspace / thread / subagent（无 bash/web/presence） | IM 通道（`ws_im`）；锁档 |
+| **qichuang** | 奇创 | 向阳锁档：settings + team + web/lsp/pty + peer（**无** nested subagent） | 向日葵 peer 域（管向阳 / 产品帮助；非项目经理上司） |
+
+MCP / TTS / 图像 / 视频等为**配置挂载**，与五档正交（开了就挂）。干员工具面由名册 `basePreset` + allow/deny 钉定（默认 harness）。
 
 计划模式：斜杠 **`/plan`** / Plan 芯片（与徽章正交）；交付物上工作区 **Canvas**；Overview 画布 **Build** 为可选快捷出口（关 Plan + 催实现，不挡回合）。`exit_plan_mode` 仍可用（兼容次路径）。旧 id **`plan`** 仅作 Host 兼容别名 → harness。
 
@@ -181,15 +183,17 @@ Legacy wire value **`server`** normalizes to **`harness`** for storage and badge
 
 ## Session tool surfaces
 
-| `agentPreset` | UI name | Tools / policy | Use when |
+| `agentPreset` | UI name | Surface clusters | Use when |
 |---------------|---------|----------------|----------|
-| **minimal** | Minimal | fs · skill · std; no bash / web / lsp / PTY / subagents / workspace·thread peer tools | Smoke tests; no shell |
-| **im** | IM | Minimal + Host `im_send` / `im_binding` + team / session_query / `workspace_*` / `thread_*` / `subagent` (no bash / web / presence) | IM channel (`ws_im`); deletable workspace; complex asks may `workspace_id` into coding workspaces; AGT may swap via `setImToolPorts` |
-| **qichuang** | 奇创 | Harness plane (bash + web + lsp + PTY) + team / session_query / `workspace_*` / `thread_*` (**no** nested subagent) | Locked badge for 向阳空间; orchestrates globally — web, terminal, language server, create workspace / open peers / dispatch (not nested subagents) |
-| **shell** | Shell | Harness plane: fs + bash + PTY; web / lsp / subagents / workspace·thread peer tools off | Local shell focus |
-| **frugal** | Frugal | Full coding tools + workspace/thread; **subagents off** (`delegation: explicit`) | Control spend |
-| **shallow** | Shallow | Full tools + subagents + workspace/thread (same per-model session cap as harness; `delegation: proactive`) | Light helper tasks |
-| **harness** | **XRK Harness** | Full coding agent + subagents + workspace/thread (per-model live session cap, default 5; `delegation: proactive`) | Default product surface |
+| **minimal** | PI | **fs** + **session** (no bash/skill/pty/web/office/peer/delegate) | Thinnest coding surface; smoke / `run` default |
+| **shell** | Shell | PI + **shell** + **skill** + **pty** + worktree | Local coding: bash/jobs/PTY/skills |
+| **frugal** | Frugal | Shell + **web** + **browser** + **lsp** + **office** (no peer/delegate) | Full single-session; no cross-session collab or spawn |
+| **shallow** | Shallow | Frugal + **peer** + **delegate** (same-model live cap **2**) | Collab + spawn; try-water quota |
+| **harness** | XRK Harness | Same clusters as Shallow (concurrency from agent-loop, default 5) | **Product default** manager badge |
+| **im** | IM | Channel tools + team / workspace / thread / subagent (no bash/web/presence) | IM channel (`ws_im`); locked |
+| **qichuang** | 奇创 | Xiangyang lock: settings + team + web/lsp/pty + peer (**no** nested subagent) | Sunflower peer domain (向阳 / product help; not the project manager's boss) |
+
+MCP / TTS / image / video are **config mounts**, orthogonal to the five coding badges. Member surfaces come from roster `basePreset` + allow/deny (default harness).
 
 Plan mode is **`/plan`** / Plan chip (orthogonal to badges); deliver on a workspace **Canvas**; Overview Canvas **Build** is an optional shortcut (exit plan + steer implement; does not gate turns). `exit_plan_mode` remains available (compat). Legacy id **`plan`** aliases to harness.
 

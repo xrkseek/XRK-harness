@@ -1,4 +1,4 @@
-/** Session inject catalog mirrors turn-start capability / posture / board. */
+/** Session inject catalog mirrors full Host turn-start fragment set. */
 import { describe, expect, it } from "vitest";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,9 +9,12 @@ import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
   listSessionInjectDocuments,
   readSessionInjectDocument,
+  SESSION_AUTHORITY_PATH,
+  SESSION_BOSS_STATUS_PATH,
   SESSION_CAPABILITY_PATH,
   SESSION_COLLAB_PATH,
   SESSION_POSTURE_PATH,
+  SESSION_SEAT_IDENTITY_PATH,
 } from "../src/session-inject-documents.js";
 import type { FaceDrain } from "../src/context.js";
 
@@ -49,6 +52,14 @@ describe("session inject documents", () => {
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
 
     const docs = listSessionInjectDocuments(runtime, sessionId);
+    expect(docs.map((d) => d.path)).toEqual([
+      SESSION_AUTHORITY_PATH,
+      SESSION_CAPABILITY_PATH,
+      SESSION_POSTURE_PATH,
+      SESSION_BOSS_STATUS_PATH,
+      SESSION_SEAT_IDENTITY_PATH,
+      SESSION_COLLAB_PATH,
+    ]);
     const cap = docs.find((d) => d.path === SESSION_CAPABILITY_PATH);
     expect(cap).toMatchObject({
       layer: "session",
@@ -63,6 +74,18 @@ describe("session inject documents", () => {
     expect(body?.content).toContain("<session_capability>");
     expect(body?.content).toContain("badge:");
     expect(body?.content).toContain("permission_label:");
+    expect(
+      readSessionInjectDocument(runtime, sessionId, SESSION_AUTHORITY_PATH)
+        ?.content,
+    ).toContain("<instruction_authority>");
+    expect(
+      readSessionInjectDocument(runtime, sessionId, SESSION_BOSS_STATUS_PATH)
+        ?.content,
+    ).toContain("<boss_status>");
+    expect(
+      readSessionInjectDocument(runtime, sessionId, SESSION_SEAT_IDENTITY_PATH)
+        ?.content,
+    ).toContain("<seat_identity>");
 
     const listed = await dispatchFaceMethod(runtime, "skill.list", "s1", {
       sessionId,
@@ -75,6 +98,9 @@ describe("session inject documents", () => {
     expect(value.documents.some((d) => d.path === SESSION_CAPABILITY_PATH)).toBe(
       true,
     );
+    expect(
+      value.documents.some((d) => d.path === SESSION_SEAT_IDENTITY_PATH),
+    ).toBe(true);
 
     const board = docs.find((d) => d.path === SESSION_COLLAB_PATH);
     expect(board).toMatchObject({ layer: "session", kind: "collab-board" });

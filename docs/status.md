@@ -44,7 +44,8 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | Skill `/` 菜单模糊子序列（对齐 commands） | **能跑** |
 | `read_image` 结果 content=`[text,image]` + Face `meta` + Web 工具卡；`file_path` 可为工作区路径或 `sha256:…` / `attachment:sha256:…`；可选 Hermes 式 `region` `[x1,y1,x2,y2]`（裁剪在 normalize 前） | **能跑** |
 | Host `home` + 工具行 POSIX `~` 缩写（read / read_image / Generic） | **能跑** |
-| SSH 远端工作区（Settings 通用「远程」`ssh-remote`；`XRK_SSH_HOST` CI 旁路；fs / bash / `run_code`；本地 Host） | **能跑**（改完重启；Web 目录浏览走 SSH；交互式 PTY / `openPath` 关闭；见 [seams](./seams.md) · [configuration](./configuration.md)） |
+| SSH 远端工作区（**无产品 UI**；仅 `XRK_SSH_HOST` CI/无头；日常远程 → MCP；fs / bash / `run_code`） | **能跑**（env；Web 目录浏览走 SSH；交互式 PTY / `openPath` 关闭；见 [seams](./seams.md) · [configuration](./configuration.md)） |
+| 工作区 MCP 叠加（`{cwd}/.xrk/mcp.json`：`servers` 增补 · `denyGlobal`） | **能跑**（agent resolve 合并；与五档无关） |
 | Workspace hover POSIX `~` 缩写（`hostDescription.home`；复制仍绝对路径） | **能跑** |
 | `@` 目录 Tab / 行 chevron drill + 面包屑（Enter 插入 folder chip） | **能跑** |
 | Composer 富文本（Lexical） | **能跑**：`DraftEditor` + chip DecoratorNode + keymap（IME / modified-Enter 放行 / Shift+Tab=`tabBack`）+ `data-composer-composing` 占位抑制；keymap-routing · InputBar IME/placeholder/focus 测绿 |
@@ -70,7 +71,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 回合改动卡 · 逐文件 diff | `workspace/changes` + 投影（含 Face `seq`，history 尾页冷恢复）+ `runTurn` 自动 append；Face `changes.fileDiff`（重建失败 `null`）；壳 turnTail **改动卡**；概况 `#改动`（投影优先，空则回退 conversation）；行点击进概况审阅 | 契约 · 发出 · RPC · 对话卡 / Overview **能跑** |
 | 侧栏 Office / URL 嵌入 / 子代理会话 / 计划预览 | protocol + policy 主体已定；`/sidebar` 门禁 + preview RPC；`/office` `office.connect` 已接线；详情栏计划 / Office 页签读已有 RPC | 闸门 · preview RPC · 预览页签 UI **能跑** |
 | 侧栏 `agent-opens` / `agent-terminals` 真推送 | Host `AgentOpenRegistry` / `AgentPtyRegistry` + WS；`sidebar_open` · `terminal_*` 受 prefs 门控（**设置 → 通用**）；`?uuid=` 附着 | **能跑**（prefs 默认关） |
-| SSH 远端执行世界 | fs / bash / `run_code` + Web 目录浏览走 SSH；交互式 PTY / 本机 openPath 关闭；Host 启动 BatchMode 预检；`xrkh doctor` `ssh-remote` | **能跑** |
+| SSH 远端执行世界 | env 启用；fs / bash / `run_code` + Web 目录浏览走 SSH；交互式 PTY / 本机 openPath 关闭；Host 启动 BatchMode 预检；`xrkh doctor` `ssh-remote`（env） | **能跑** |
 | 多沙箱后端（容器隔离 · Windows 写隔离） | `createSandboxStack`：`workspace`（默认）· `docker` · `bwrap`（DSH 式 `--ro-bind / /` + 工作区 bind · 默认 `--unshare-net`）· `windows`（Codex 式 helper；缺 helper **失败关闭**）；`probeSandboxEnvironment` + `xrkh doctor` 报告 helper；出站 `XRK_WEB_FETCH_ALLOWLIST` 审计环 + Host logger observer + doctor 审计尾（非 MITM；execpolicy / seatbelt / landlock **未做**） | **能跑**（见 [sandbox](./sandbox.md) · [web-tools](./web-tools.md)） |
 | ExecEnvironment（多执行环境） | `@xrkseek/exec-environment`：`ExecEnvironmentProvider` → `ExecWorld`（`fs`+`subprocess`）；`local`（默认）· `memory`（内存 CI）· HTTP serverless 样板；`resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`；**Host 已接线**（SSH 优先，否则 `http`/`memory` 换整套 fs/subprocess）；`xrkh doctor` 探测 `/health` 或报告 memory；**不是** sandbox confine；Docker/Modal 持久 world · Face picker **未做** | **能跑**（见 [sandbox](./sandbox.md) · [seams](./seams.md)） |
 | 云任务 / Codex remote exec-server | 无 `cloud-tasks` 编排、无 Noise/`--remote` exec-server 注册面 | **未做**（P2 暂缓；SSH 路径已打磨优先） |
@@ -257,7 +258,8 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 | Skill `/` menu fuzzy subsequence (aligned with commands) | **Working** |
 | `read_image` content=`[text,image]` + Face `meta` + Web tool card; `file_path` may be a workspace path or `sha256:…` / `attachment:sha256:…`; optional Hermes-style `region` `[x1,y1,x2,y2]` (crop before normalize) | **Working** |
 | Host `home` + tool-row POSIX `~` abbreviation (read / read_image / Generic) | **Working** |
-| SSH remote workspace (Settings General → Remote `ssh-remote`; `XRK_SSH_HOST` CI bypass; fs / bash / `run_code`; local Host) | **Working** (restart after change; Web directory browse rides SSH; interactive PTY / `openPath` off; see [seams](./seams.md) · [configuration](./configuration.md)) |
+| SSH remote workspace (**no product UI**; `XRK_SSH_HOST` CI/headless only; day-to-day remotes → MCP; fs / bash / `run_code`) | **Working** (env; Web directory browse rides SSH; interactive PTY / `openPath` off; see [seams](./seams.md) · [configuration](./configuration.md)) |
+| Workspace MCP overlay (`{cwd}/.xrk/mcp.json`: `servers` add · `denyGlobal`) | **Working** (merge at agent resolve; orthogonal to badges) |
 | Workspace hover POSIX `~` abbreviation (`hostDescription.home`; copy stays absolute) | **Working** |
 | `@` directory Tab / row-chevron drill + breadcrumb (Enter inserts folder chip) | **Working** |
 | Composer rich text (Lexical) | **Working**: `DraftEditor` + chip DecoratorNode + keymap (IME / modified-Enter passthrough / Shift+Tab=`tabBack`) + `data-composer-composing` placeholder suppress; keymap-routing · InputBar IME/placeholder/focus specs green |
@@ -289,7 +291,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Turn changed-files card · per-file diff | `workspace/changes` + projection (Face `seq`, history-tail cold reopen) + `runTurn` auto-append; Face `changes.fileDiff` (`null` on rebuild miss); shell turnTail **changed-files card**; Overview `#Changes` (projection first, conversation fallback); row click opens Overview review | Contract · emit · RPC · conversation / Overview **Working** |
 | Sidebar Office / URL embed / subagent session / plan preview | protocol + policy subjects exist; `/sidebar` gates + preview RPCs; `/office` `office.connect` wired; details-column Plan / Office tabs read existing RPCs | Gates · preview RPCs · preview tab UI **Working** |
 | Sidebar `agent-opens` / `agent-terminals` real push | Host `AgentOpenRegistry` / `AgentPtyRegistry` + WS; `sidebar_open` · `terminal_*` gated by prefs (**Settings → General**); `?uuid=` attach | **Working** (prefs default off) |
-| SSH remote execution world | fs / bash / `run_code` + Web directory browse ride SSH; interactive PTY / host-local openPath off; Host BatchMode probe on start; `xrkh doctor` `ssh-remote` | **Working** |
+| SSH remote execution world | env-enabled; fs / bash / `run_code` + Web directory browse ride SSH; interactive PTY / host-local openPath off; Host BatchMode probe on start; `xrkh doctor` `ssh-remote` (env) | **Working** |
 | Multi sandbox backends (containers · Windows write-isolation) | `createSandboxStack`: `workspace` (default) · `docker` · `bwrap` (DSH-style `--ro-bind / /` + workspace bind · `--unshare-net` by default) · `windows` (Codex-style helper; **fail-closed** without helper); `probeSandboxEnvironment` + `xrkh doctor` report helpers; outbound `XRK_WEB_FETCH_ALLOWLIST` audit ring + Host logger observer + doctor audit tail (not MITM; execpolicy / seatbelt / landlock **not** shipped) | **Working** (see [sandbox](./sandbox.md) · [web-tools](./web-tools.md)) |
 | ExecEnvironment (pluggable exec worlds) | `@xrkseek/exec-environment`: `ExecEnvironmentProvider` → `ExecWorld` (`fs`+`subprocess`); `local` (default) · `memory` (in-process CI) · HTTP serverless sample; `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT`; **Host-wired** (SSH first, else `http`/`memory` swaps fs/subprocess); `xrkh doctor` probes `/health` or reports memory; **not** sandbox confine; persistent Docker/Modal worlds · Face picker **not** shipped | **Working** (see [sandbox](./sandbox.md) · [seams](./seams.md)) |
 | Cloud tasks / Codex remote exec-server | No `cloud-tasks` orchestration, no Noise/`--remote` exec-server registry | **Not done** (P2 deferred; SSH path thickened first) |

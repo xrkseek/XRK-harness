@@ -32,6 +32,7 @@ import {
 import { subagentDepth } from "./subagent-tools.js";
 import { liveRouteAllowsImageInput } from "./llm-resolve.js";
 import { resolveSessionModelSelection } from "./model-catalog.js";
+import { sessionSeatMemberId } from "./agent-home-boundary.js";
 
 /** Live provider/model and image modality for this session, one line each. */
 export function formatSessionModelRouteLines(
@@ -53,7 +54,7 @@ export function formatSessionModelRouteLines(
   return [
     `model: ${route}`,
     multimodal
-      ? "modality: multimodal (images reach you)"
+      ? "modality: multimodal"
       : "modality: text-only (no images; switch model for vision)",
   ];
 }
@@ -77,19 +78,19 @@ function permissionBrief(permission: string): string {
 function surfaceBrief(badge: string): string {
   switch (badge) {
     case "minimal":
-      return "kind=coding_parent · fs/skill/std only — no workspace/thread peers; load skills for playbooks.";
+      return "kind=coding_parent · PI · fs+session only — no bash/skill/web/office/peer/subagents.";
     case "shell":
-      return "kind=coding_parent · fs+bash+PTY — no web/lsp/subagents/peers.";
+      return "kind=coding_parent · Shell · fs+session+bash+skill+PTY — no web/office/peer/subagents.";
     case "frugal":
-      return "kind=coding_parent · full tools + peers · no subagents — one session; large work: outline → ask → todo_write → build.";
+      return "kind=coding_parent · Frugal · local+web+office · no peer/subagents — one session; outline→ask→todo→build.";
     case "shallow":
-      return "kind=coding_parent · full tools + subagents + peers — spawn when parallel helps (per-model live session cap).";
+      return "kind=coding_parent · Shallow · Frugal+peer+subagents — spawn when parallel helps (cap 2).";
     case "harness":
-      return "kind=coding_parent · full tools + subagents + peers — prefer team_list member_id; mint 干员→skill xrk-delegate (per-model live session cap).";
+      return "kind=coding_parent · Harness · full peer+subagents — prefer team_list member_id (live session cap).";
     case "im":
       return "kind=orchestrator · surface=im — verbs in <session_posture>.";
     case "qichuang":
-      return "kind=orchestrator · surface=qichuang · path=open (fs incl. grep/glob) — verbs in <session_posture>.";
+      return "kind=orchestrator · surface=qichuang · path=open — verbs in <session_posture>.";
     default:
       return `kind=coding_parent · surface=${badge} — catalog is truth.`;
   }
@@ -101,14 +102,17 @@ function toolSurfaceSummary(badge: string): string {
     return "im (full-access · channel+list/create/session_prompt+subagent→coding+thread_message)";
   }
   if (badge === "qichuang") {
-    return "qichuang (full-access · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · no nested subagents)";
+    return "qichuang (full-access · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · mcp_config · no nested subagent)";
   }
   const profile = resolveAgentPresetProfile(badge);
-  const bits: string[] = ["fs"];
-  if (profile.composition === "harness") bits.push("bash");
+  const bits: string[] = ["fs", "session"];
+  if (profile.tools.bash) bits.push("bash");
+  if (profile.tools.skill) bits.push("skill");
   if (profile.tools.web) bits.push("web");
   if (profile.tools.lsp) bits.push("lsp");
   if (profile.tools.pty) bits.push("pty");
+  if (profile.tools.office) bits.push("office");
+  if (badge === "shallow" || badge === "harness") bits.push("peer");
   const sub =
     profile.subagents.mode === "off"
       ? "subagents=off"
@@ -147,18 +151,36 @@ function briefcaseLines(runtime: FaceRuntime, memberId: string): string[] {
  * per lane, or the two drift (a dispatched 干员 that never learns its ask goes
  * to its dispatcher instead of the boss).
  */
+/** Seat ask routing — one short line; tool dynamicSchema carries live extras. */
 function seatSpeakerLines(
   runtime: FaceRuntime,
   sessionId: string,
 ): string[] {
   const link = runtime.subagents.getByChild(sessionId);
   if (link && link.mode !== "fork") {
-    return [`ask: ask_parent → ${link.parentSessionId} (your dispatcher; it is not the boss)`];
+    return [`ask: ask→${link.parentSessionId} (answer_ask; not boss)`];
   }
-  if (runtime.sessionIdentities.get(sessionId)) {
-    return ["ask: ask_user → the boss directly (you are seated in your own office)"];
-  }
-  return [];
+  return ["ask: ask_user→boss"];
+}
+
+/**
+ * Runtime MCP: global + session workspace (+ agent-home when seated member
+ * has a distinct home overlay). Config/mutate stays on 奇创.
+ */
+function mcpMountLines(
+  runtime: FaceRuntime,
+  sessionId: string,
+): string[] {
+  const wsId = runtime.workspaces.workspaceIdOf(sessionId);
+  const memberId = sessionSeatMemberId(runtime, sessionId);
+  const home = memberId
+    ? runtime.workspaces.findAgentHomeByMember(memberId)
+    : undefined;
+  const homeId = home?.workspaceId;
+  const parts = ["global"];
+  if (wsId) parts.push(`ws:${wsId}`);
+  if (homeId && homeId !== wsId) parts.push(`home:${homeId}`);
+  return [`mcp_mount: ${parts.join("+")}`];
 }
 
 /** Short capability for tool-delegated children (not UI forks). */
@@ -177,8 +199,8 @@ function formatDelegatedCapability(
   const depth = subagentDepth(runtime, sessionId);
   const nestBrief =
     depth <= 1
-      ? "L1 child — report FINAL to parent; no identity theater beyond playbook + seat_identity."
-      : `L${depth} nested — stay narrow; FINAL bubbles one parent at a time; do not restate manager standing.`;
+      ? "L1 — FINAL→parent; identity = playbook + seat_identity."
+      : `L${depth} — stay narrow; FINAL one parent at a time; no manager standing.`;
   const lines = [
     "kind: delegated_child",
     `parent: ${link.parentSessionId}`,
@@ -192,11 +214,12 @@ function formatDelegatedCapability(
     ...briefcase,
     ...(link.memberId ? [`member_id: ${link.memberId}`] : []),
     ...(link.label.trim() ? [`label: ${link.label.trim()}`] : []),
-    `brief: ${nestBrief} FINAL→parent (only visible result; include hard failures). ask→parent (card on parent session). siblings→thread_message. catalog=truth.` +
+    `brief: ${nestBrief} siblings→thread_message. catalog=truth.` +
       (roleDeniedTools(link.role).includes("subagent")
-        ? " no nested subagent (role floor)."
-        : " nested subagent ok when parallel helps."),
+        ? " no nested subagent."
+        : " nested subagent ok."),
     `omitted: ${omittedChildTools(link.role)}`,
+    ...mcpMountLines(runtime, sessionId),
     ...seatSpeakerLines(runtime, sessionId),
     ...childGapLines(runtime, sessionId),
   ];
@@ -254,6 +277,7 @@ export function formatSessionCapability(
     ? briefcaseLines(runtime, identity.memberId)
     : [];
   const shellConfine = shouldConfineSandbox(sandbox) ? "on" : "off";
+  const pendingAsks = runtime.parentAsk.listPending(sessionId);
   const lines = [
     `badge: ${badge}`,
     `permission: ${permission} (path=${pathMode}) · approval=${approval} · shell_confine=${shellConfine}`,
@@ -265,7 +289,19 @@ export function formatSessionCapability(
     `cwd: ${cwd}`,
     ...briefcase,
     ...(identity?.memberId ? [`member_id: ${identity.memberId}`] : []),
+    ...mcpMountLines(runtime, sessionId),
     ...seatSpeakerLines(runtime, sessionId),
+    // Only when live — answer_ask dynamicSchema also lists these.
+    ...(pendingAsks.length > 0
+      ? [
+          `child_ask_pending: ${pendingAsks
+            .map((p) => {
+              const who = p.childLabel.trim() || p.childSessionId;
+              return `${p.askId}←${who}`;
+            })
+            .join(",")}`,
+        ]
+      : []),
     `path_allowlist: ${allowN} objects (session+settings)`,
     `tools: direct=${counts.direct} deferred=${counts.deferred} expanded=${expanded}`,
   ];

@@ -13,6 +13,7 @@ import type { GoalsApi } from './goals.ts'
 import type { SettingsApi } from './settings.ts'
 import type { CredentialsApi } from './credentials.ts'
 import type { McpOauthApi } from './mcp-oauth.ts'
+import type { McpWorkspaceApi } from './mcp-workspace.ts'
 import type { LlmApi } from './llm.ts'
 import type { SubagentsApi } from './subagents.ts'
 import type { JobsApi } from './jobs.ts'
@@ -92,6 +93,8 @@ export interface RpcMethodMap {
   'mcp.oauth.status': McpOauthApi['status']
   'mcp.oauth.login': McpOauthApi['login']
   'mcp.oauth.logout': McpOauthApi['logout']
+  'mcp.workspace.get': McpWorkspaceApi['get']
+  'mcp.workspace.set': McpWorkspaceApi['set']
   'llm.providers': LlmApi['providers']
   'llm.models': LlmApi['models']
   'llm.discoverModels': LlmApi['discoverModels']

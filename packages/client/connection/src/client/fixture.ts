@@ -3357,6 +3357,31 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         status: 'absent' as const,
       }),
     },
+    mcpWorkspace: {
+      get: request => ok(request, {
+        workspaceId: request.payload.workspaceId,
+        path: `/tmp/${request.payload.workspaceId}`,
+        servers: [],
+        denyGlobal: [],
+        fingerprint: '',
+      }),
+      set: request => ok(request, {
+        workspaceId: request.payload.workspaceId,
+        path: `/tmp/${request.payload.workspaceId}`,
+        servers: Array.isArray(request.payload.servers)
+          ? request.payload.servers as {
+            serverName: string
+            command?: string
+            url?: string
+            args?: string[]
+            cwd?: string
+            cwdAllowWorkspace?: boolean
+          }[]
+          : [],
+        denyGlobal: request.payload.denyGlobal ?? [],
+        fingerprint: 'fixture',
+      }),
+    },
     llm: {
       providers: request => ok(request, {
         providers: [
@@ -3576,6 +3601,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'mcp.oauth.status': return this.api.mcpOauth.status(request)
       case 'mcp.oauth.login': return this.api.mcpOauth.login(request)
       case 'mcp.oauth.logout': return this.api.mcpOauth.logout(request)
+      case 'mcp.workspace.get': return this.api.mcpWorkspace.get(request)
+      case 'mcp.workspace.set': return this.api.mcpWorkspace.set(request)
       case 'llm.providers': return this.api.llm.providers(request)
       case 'llm.models': return this.api.llm.models(request)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)

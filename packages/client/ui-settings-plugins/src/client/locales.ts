@@ -27,8 +27,11 @@ export type PluginsSettingsLocaleKey =
   | 'skillsFilterHomeXrk' | 'skillsFilterHomeAgents'
   | 'skillsFilterDocuments' | 'skillsDocumentsTitle' | 'skillsDocumentsHint'
   | 'skillsDocumentBytes' | 'skillsDocumentKindInstruction' | 'skillsDocumentKindCatalog'
-  | 'skillsDocumentKindCapability' | 'skillsDocumentKindPosture' | 'skillsDocumentKindCollab'
-  | 'skillsCatalogPathLabel' | 'skillsCapabilityPathLabel' | 'skillsPosturePathLabel' | 'skillsCollabPathLabel'
+  | 'skillsDocumentKindAuthority' | 'skillsDocumentKindCapability' | 'skillsDocumentKindPosture'
+  | 'skillsDocumentKindBossStatus' | 'skillsDocumentKindSeatIdentity' | 'skillsDocumentKindCollab'
+  | 'skillsCatalogPathLabel' | 'skillsAuthorityPathLabel' | 'skillsCapabilityPathLabel'
+  | 'skillsPosturePathLabel' | 'skillsBossStatusPathLabel' | 'skillsSeatIdentityPathLabel'
+  | 'skillsCollabPathLabel'
   | 'skillsSessionDocumentsTitle' | 'skillsSessionDocumentsHint'
   | 'skillsFilterSession' | 'skillsUserOnly'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
@@ -63,6 +66,10 @@ export type PluginsSettingsLocaleKey =
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
   | 'mcpServersHeading' | 'mcpServersEmpty' | 'mcpAddServer' | 'mcpRemoveServer'
   | 'mcpPaste' | 'mcpPasteHint' | 'mcpPasteEmpty' | 'mcpPasteInvalid'
+  | 'mcpWorkspaceHeading' | 'mcpWorkspaceHint' | 'mcpWorkspaceEmpty' | 'mcpWorkspaceSelect'
+  | 'mcpDenyGlobalHeading' | 'mcpDenyGlobalHint'
+  | 'mcpWorkspaceServersHeading' | 'mcpWorkspaceServersEmpty'
+  | 'mcpWorkspaceSave' | 'mcpWorkspaceDiscard'
   | 'mcpServerRow' | 'mcpServerName' | 'mcpServerNameHint' | 'mcpTransport'
   | 'mcpTransportStdio' | 'mcpTransportHttp' | 'mcpTransportHint'
   | 'mcpCommand' | 'mcpCommandHint' | 'mcpUrl' | 'mcpUrlHint'
@@ -183,13 +190,6 @@ export type PluginsSettingsLocaleKey =
   | 'a2aInboundSession' | 'a2aInboundSessionHint'
   | 'a2aInboundTimeout' | 'a2aInboundTimeoutHint'
   | 'a2aInboundLiveHint'
-  | 'sshRemoteTitle' | 'sshRemoteDescription'
-  | 'sshRemoteHost' | 'sshRemoteHostHint'
-  | 'sshRemoteWorkspace' | 'sshRemoteWorkspaceHint'
-  | 'sshRemoteUser' | 'sshRemoteUserHint'
-  | 'sshRemotePort' | 'sshRemotePortHint'
-  | 'sshRemoteKeyPath' | 'sshRemoteKeyPathHint'
-  | 'sshRemoteRestartHint'
   | 'gitAttributionTitle' | 'gitAttributionDescription'
   | 'autoReviewTitle' | 'autoReviewDescription'
   | 'autoReviewEnabled' | 'autoReviewEnabledHint'
@@ -288,15 +288,21 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   skillsDocumentBytes: '{bytes} chars · click to open',
   skillsDocumentKindInstruction: 'rules',
   skillsDocumentKindCatalog: 'skill catalog',
+  skillsDocumentKindAuthority: 'instruction authority',
   skillsDocumentKindCapability: 'badge · permission',
   skillsDocumentKindPosture: 'session posture',
+  skillsDocumentKindBossStatus: 'boss status',
+  skillsDocumentKindSeatIdentity: 'seat identity',
+  skillsDocumentKindCollab: 'collab board',
   skillsCatalogPathLabel: 'Skill catalog (standing)',
+  skillsAuthorityPathLabel: 'Instruction authority (order · data)',
   skillsCapabilityPathLabel: 'Session capability (badge · permission)',
   skillsPosturePathLabel: 'Session posture',
+  skillsBossStatusPathLabel: 'Boss status',
+  skillsSeatIdentityPathLabel: 'Seat identity',
   skillsCollabPathLabel: 'Team · mainline board',
-  skillsDocumentKindCollab: 'collab board',
   skillsSessionDocumentsTitle: 'This turn',
-  skillsSessionDocumentsHint: 'Badge, permission, posture, and the live team board Host sends at turn start',
+  skillsSessionDocumentsHint: 'Turn-start fragments Host sends: authority · capability · posture · boss · seat · board',
   skillsUserOnly: 'user only',
   empty: 'This deployment exposes no plugin settings.',
   overridden: 'Overridden',
@@ -359,9 +365,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   workspaceInjectMaxChars: 'Inject character budget',
   workspaceInjectMaxCharsHint: 'Total characters for rules + skills catalog inject. Default 32000 (range 4000–128000).',
   mcpTitle: 'MCP servers',
-  mcpDescription: 'Paste Cursor / Trae style JSON, then save — servers mount on save (no separate env step). Omit cwd to use ~/.xrk/mcp-cwd/<name>.',
+  mcpDescription: 'Configure on Xiangyang (奇创). Each seat mounts global + its session `.xrk/mcp.json` + seated member home when distinct (session wins). Paste Cursor/Trae JSON; omit cwd → ~/.xrk/mcp-cwd/<name>.',
   mcpConnectedHeading: 'Connected now',
-  mcpServersHeading: 'Servers',
+  mcpServersHeading: 'Global servers',
   mcpServersEmpty: 'No servers yet. Paste a JSON block below and add.',
   mcpAddServer: 'Add',
   mcpRemoveServer: 'Remove',
@@ -369,6 +375,16 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpPasteHint: '{ "mcpServers": { "demo": { "command": "npx", "args": ["-y", "demo-mcp"] } } }',
   mcpPasteEmpty: 'Paste a JSON block first.',
   mcpPasteInvalid: 'Could not find mcpServers entries in that JSON.',
+  mcpWorkspaceHeading: 'Workspace overlay',
+  mcpWorkspaceHint: 'Edit that root’s `.xrk/mcp.json` (project or agent-home). Live mount follows each seat’s mcp_mount (global + session + home when distinct).',
+  mcpWorkspaceEmpty: 'No path-bearing workspaces yet. Create one in the sidebar, then return here.',
+  mcpWorkspaceSelect: 'Workspace',
+  mcpDenyGlobalHeading: 'Deny global servers here',
+  mcpDenyGlobalHint: 'Checked global names stay off wherever this overlay is applied.',
+  mcpWorkspaceServersHeading: 'Workspace servers',
+  mcpWorkspaceServersEmpty: 'No overlay servers yet. Paste JSON below and add.',
+  mcpWorkspaceSave: 'Save workspace overlay',
+  mcpWorkspaceDiscard: 'Discard overlay edits',
   mcpServerRow: 'Server {index}',
   mcpServerName: 'Name',
   mcpServerNameHint: 'Short id in tool names (mcp__name__…).',
@@ -492,8 +508,8 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   cronLiveHint: 'Applies live: Host starts or stops the ticker and rebuilds agents (no restart).',
   cronScheduleNote: 'Job catalog stays with the cronjob tool and ~/.xrk/cron/jobs.json; run history is cronjob action=runs → ~/.xrk/cron/executions.jsonl (≤1000). This card is the master switch only.',
   desktopTitle: 'Desktop power',
-  desktopDescription: 'Keep the machine awake while a turn runs after the display blanks, and notify when a background session finishes.',
-  desktopPreventIdleHint: 'Master switch = prevent idle system sleep while any session is running (Codex prevent_idle_sleep). The screen may still blank; only system sleep is blocked. Desktop only; toggle applies immediately.',
+  desktopDescription: 'While a turn runs, block system sleep (screen may still blank). Display-off NIC sleep is OS-owned — online is not guaranteed.',
+  desktopPreventIdleHint: 'Master switch = prevent-app-suspension while any session is running. Does not keep the display on; after blanking, network sleep is still up to the OS. Desktop only; toggle applies immediately (Settings → General).',
   desktopNotifyOnComplete: 'Notify when a session finishes',
   desktopNotifyOnCompleteHint: 'OS notification when a background session goes idle (Codex notify).',
   desktopNotifyOn: 'On',
@@ -725,20 +741,6 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   a2aInboundTimeout: 'Reply timeout (ms)',
   a2aInboundTimeoutHint: 'Wait for assistant body after message/send. 0 = default 120000. Cap 600000. Or XRK_A2A_INBOUND_TIMEOUT_MS.',
   a2aInboundLiveHint: 'Applies on the next inbound request (live; no Host restart). Sessions are labeled a2a:<peer>.',
-  sshRemoteTitle: 'Remote',
-  sshRemoteDescription:
-    'Run the agent against a remote workspace over OpenSSH (local Host, remote cwd). Leave host and workspace empty for a local workspace. Non-empty XRK_SSH_HOST still bypasses this card for CI.',
-  sshRemoteHost: 'Host',
-  sshRemoteHostHint: 'OpenSSH host alias or hostname (user@host is fine).',
-  sshRemoteWorkspace: 'Workspace',
-  sshRemoteWorkspaceHint: 'Absolute remote cwd (POSIX path starting with /). Required together with host.',
-  sshRemoteUser: 'User',
-  sshRemoteUserHint: 'Optional SSH user when the host field does not already include user@.',
-  sshRemotePort: 'Port',
-  sshRemotePortHint: 'Optional SSH port (default 22).',
-  sshRemoteKeyPath: 'Identity file',
-  sshRemoteKeyPathHint: 'Optional local path to an OpenSSH private key (not the key material).',
-  sshRemoteRestartHint: 'Requires a Host restart to take effect (SSH world is built at spawn).',
   gitAttributionTitle: 'Git co-author',
   gitAttributionDescription:
     'On (default): agent commits append Co-authored-by: xrkseek. Off: no trailer guidance. Never changes git config or Author.',
@@ -874,15 +876,21 @@ export const ja = {
   skillsDocumentBytes: '{bytes} 文字 · クリックで開く',
   skillsDocumentKindInstruction: 'ルール',
   skillsDocumentKindCatalog: 'スキルカタログ',
+  skillsDocumentKindAuthority: '指示権威',
   skillsDocumentKindCapability: 'バッジ · 権限',
   skillsDocumentKindPosture: 'セッションポスチャ',
+  skillsDocumentKindBossStatus: 'ボス状態',
+  skillsDocumentKindSeatIdentity: '席位アイデンティティ',
+  skillsDocumentKindCollab: 'コラボボード',
   skillsCatalogPathLabel: 'スキルカタログ（常設）',
+  skillsAuthorityPathLabel: '指示権威（order · data）',
   skillsCapabilityPathLabel: 'セッション能力（バッジ · 権限）',
   skillsPosturePathLabel: 'セッションポスチャ',
+  skillsBossStatusPathLabel: 'ボス状態',
+  skillsSeatIdentityPathLabel: '席位アイデンティティ',
   skillsCollabPathLabel: 'チーム · メインラインボード',
-  skillsDocumentKindCollab: 'コラボボード',
   skillsSessionDocumentsTitle: 'このターン',
-  skillsSessionDocumentsHint: 'ターン開始時に Host が送るバッジ、権限、姿勢、ライブチームボード',
+  skillsSessionDocumentsHint: 'ターン開始 Host 断片：権威 · 能力 · ポスチャ · ボス · 席位 · ボード',
   skillsUserOnly: 'ユーザーのみ',
   empty: 'このデプロイメントにはプラグイン設定がありません。',
   overridden: '上書き済み',
@@ -945,9 +953,9 @@ export const ja = {
   workspaceInjectMaxChars: '注入文字数予算',
   workspaceInjectMaxCharsHint: 'ルール＋スキルカタログ注入の合計文字数。デフォルト 32000（範囲 4000–128000）。',
   mcpTitle: 'MCP サーバー',
-  mcpDescription: 'Cursor／Trae 形式の JSON を貼り付けて保存 — 保存時にサーバーがマウントされます（別途の環境変数手順は不要）。cwd を省略すると ~/.xrk/mcp-cwd/<name> を使用。',
+  mcpDescription: '設定は向阳（奇創）。各席はグローバル + セッション `.xrk/mcp.json` + 在席メンバー家（パスが異なる時；同名はセッション優先）。Cursor／Trae JSON；cwd 省略 → ~/.xrk/mcp-cwd/<name>。',
   mcpConnectedHeading: '接続中',
-  mcpServersHeading: 'サーバー',
+  mcpServersHeading: 'グローバルサーバー',
   mcpServersEmpty: 'サーバーはまだありません。下に JSON ブロックを貼り付けて追加してください。',
   mcpAddServer: '追加',
   mcpRemoveServer: '削除',
@@ -955,6 +963,16 @@ export const ja = {
   mcpPasteHint: '{ "mcpServers": { "demo": { "command": "npx", "args": ["-y", "demo-mcp"] } } }',
   mcpPasteEmpty: '先に JSON ブロックを貼り付けてください。',
   mcpPasteInvalid: 'その JSON に mcpServers エントリが見つかりませんでした。',
+  mcpWorkspaceHeading: 'ワークスペース上書き',
+  mcpWorkspaceHint: 'そのルートの `.xrk/mcp.json`（プロジェクト／agent-home）を編集。実マウントは各席の mcp_mount（グローバル + セッション + 家）。',
+  mcpWorkspaceEmpty: 'パス付きワークスペースがまだありません。サイドバーで作成してから戻ってください。',
+  mcpWorkspaceSelect: 'ワークスペース',
+  mcpDenyGlobalHeading: 'ここでグローバルを拒否',
+  mcpDenyGlobalHint: 'チェックしたグローバル名は、この上書きが効く席ではオフのままです。',
+  mcpWorkspaceServersHeading: 'ワークスペースサーバー',
+  mcpWorkspaceServersEmpty: '上書きサーバーはまだありません。下に JSON を貼って追加。',
+  mcpWorkspaceSave: 'ワークスペース上書きを保存',
+  mcpWorkspaceDiscard: '上書きの編集を破棄',
   mcpServerRow: 'サーバー {index}',
   mcpServerName: '名前',
   mcpServerNameHint: 'ツール名に入る短い ID（mcp__name__…）。',
@@ -1078,8 +1096,8 @@ export const ja = {
   cronLiveHint: '即時反映: Host がティッカーを開始／停止し、エージェントを再構築します（再起動不要）。',
   cronScheduleNote: 'ジョブ一覧は cronjob ツールと ~/.xrk/cron/jobs.json；実行履歴は cronjob action=runs → ~/.xrk/cron/executions.jsonl（≤1000）。このカードはマスタースイッチのみです。',
   desktopTitle: 'デスクトップ電源',
-  desktopDescription: '画面が消灯してもターン実行中はスリープさせず、バックグラウンドセッション完了時に通知します。',
-  desktopPreventIdleHint: 'マスタースイッチ＝いずれかのセッション実行中はシステムスリープを抑止（Codex prevent_idle_sleep）。画面は消灯することがあります。Desktop のみ；スイッチで即反映。',
+  desktopDescription: 'ターン実行中はシステムスリープを抑止（画面は消灯し得ます）。消灯後の NIC スリープは OS 側で、オンラインは保証しません。',
+  desktopPreventIdleHint: 'マスタースイッチ＝いずれかのセッション実行中に prevent-app-suspension。画面点灯は維持しません。消灯後のネット休眠は OS 依存。Desktop のみ；スイッチで即反映（設定 → 一般）。',
   desktopNotifyOnComplete: 'セッション完了通知',
   desktopNotifyOnCompleteHint: 'バックグラウンドセッションがアイドルになったとき OS 通知（Codex notify）。',
   desktopNotifyOn: 'オン',
@@ -1310,19 +1328,6 @@ export const ja = {
   a2aInboundTimeout: '返信タイムアウト（ms）',
   a2aInboundTimeoutHint: 'message／send のあとアシスタント本文を待ちます。0 = デフォルト 120000。上限 600000。または XRK_A2A_INBOUND_TIMEOUT_MS。',
   a2aInboundLiveHint: '次の受信リクエストに反映（ライブ、Host 再起動不要）。セッションは a2a:<peer> とラベルされます。',
-  sshRemoteTitle: 'リモート',
-  sshRemoteDescription: 'OpenSSH 経由でリモートワークスペースに対してエージェントを実行します（Host はローカル、cwd はリモート）。ローカルワークスペースにする場合はホストとワークスペースを空にします。XRK_SSH_HOST が非空のときは CI 用にこのカードを迂回します。',
-  sshRemoteHost: 'Host',
-  sshRemoteHostHint: 'OpenSSH のホスト別名またはホスト名（user@host 可）。',
-  sshRemoteWorkspace: 'ワークスペース',
-  sshRemoteWorkspaceHint: 'リモート cwd の絶対パス（/ で始まる POSIX パス）。host とセットで必須です。',
-  sshRemoteUser: 'ユーザー',
-  sshRemoteUserHint: 'ホスト欄に user@ がないときの任意 SSH ユーザー。',
-  sshRemotePort: 'ポート',
-  sshRemotePortHint: '任意の SSH ポート（既定 22）。',
-  sshRemoteKeyPath: 'Identity ファイル',
-  sshRemoteKeyPathHint: 'OpenSSH 秘密鍵への任意ローカルパス（鍵本体ではない）。',
-  sshRemoteRestartHint: '反映には Host の再起動が必要です（SSH 環境は起動時に構築されます）。',
   gitAttributionTitle: 'Git 共著者',
   gitAttributionDescription:
     'オン（既定）: エージェントのコミットに Co-authored-by: xrkseek。オフ: 何もしない。git config / Author は変更しません。',
@@ -1457,15 +1462,21 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   skillsDocumentBytes: '{bytes} 字符 · 点击查看全文',
   skillsDocumentKindInstruction: '规则',
   skillsDocumentKindCatalog: 'Skill 目录',
+  skillsDocumentKindAuthority: '指令权威',
   skillsDocumentKindCapability: '徽章 · 权限',
   skillsDocumentKindPosture: '会话姿态',
+  skillsDocumentKindBossStatus: '老板状态',
+  skillsDocumentKindSeatIdentity: '席位身份',
+  skillsDocumentKindCollab: '协作看板',
   skillsCatalogPathLabel: 'Skill 目录（Standing）',
+  skillsAuthorityPathLabel: '指令权威（order · data）',
   skillsCapabilityPathLabel: '会话能力（徽章 · 权限）',
   skillsPosturePathLabel: '会话姿态',
+  skillsBossStatusPathLabel: '老板状态',
+  skillsSeatIdentityPathLabel: '席位身份',
   skillsCollabPathLabel: '团队 · 主线看板',
-  skillsDocumentKindCollab: '协作看板',
   skillsSessionDocumentsTitle: '本回合',
-  skillsSessionDocumentsHint: '徽章、权限、姿态，以及回合开头实发的团队与主线看板',
+  skillsSessionDocumentsHint: '回合开头 Host 实发：权威 · 能力 · 姿态 · 老板 · 席位 · 看板',
   skillsUserOnly: '仅用户',
   empty: '本部署没有开放任何插件设置。',
   overridden: '已覆盖',
@@ -1528,9 +1539,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   workspaceInjectMaxChars: '注入字符预算',
   workspaceInjectMaxCharsHint: 'rules + skills 目录注入的总字符上限。默认 32000（范围 4000–128000）。',
   mcpTitle: 'MCP 服务器',
-  mcpDescription: '粘贴 Trae / Cursor 风格 mcpServers JSON，保存后会挂载（不必再先开环境变量）。不写 cwd 时默认 ~/.xrk/mcp-cwd/<name>。',
+  mcpDescription: '在向阳（奇创）配置。各席挂载：全局 + 会话 `.xrk/mcp.json` + 在席干员家（路径不同时；同名会话赢）。粘贴 Trae/Cursor JSON；不写 cwd → ~/.xrk/mcp-cwd/<name>。',
   mcpConnectedHeading: '当前已连接',
-  mcpServersHeading: '服务器',
+  mcpServersHeading: '全局服务器',
   mcpServersEmpty: '还没有服务器。在下方粘贴 JSON 块后点添加。',
   mcpAddServer: '添加',
   mcpRemoveServer: '移除',
@@ -1538,6 +1549,16 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpPasteHint: '{ "mcpServers": { "demo": { "command": "npx", "args": ["-y", "demo-mcp"] } } }',
   mcpPasteEmpty: '请先粘贴一段 JSON。',
   mcpPasteInvalid: '这段 JSON 里没有可用的 mcpServers 条目。',
+  mcpWorkspaceHeading: '工作区叠加',
+  mcpWorkspaceHint: '编辑该根目录的 `.xrk/mcp.json`（项目或干员家）。实际挂载看各席 mcp_mount（全局 + 会话 + 家）。',
+  mcpWorkspaceEmpty: '还没有带路径的工作区。先在侧栏创建，再回到这里。',
+  mcpWorkspaceSelect: '工作区',
+  mcpDenyGlobalHeading: '在此拒绝全局服务器',
+  mcpDenyGlobalHint: '勾选的全局名在本叠加生效的席位上保持关闭。',
+  mcpWorkspaceServersHeading: '工作区服务器',
+  mcpWorkspaceServersEmpty: '还没有叠加服务器。在下方粘贴 JSON 后添加。',
+  mcpWorkspaceSave: '保存工作区叠加',
+  mcpWorkspaceDiscard: '丢弃叠加编辑',
   mcpServerRow: '服务器 {index}',
   mcpServerName: '名称',
   mcpServerNameHint: '工具名里的短 id（mcp__name__…）。',
@@ -1661,8 +1682,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   cronLiveHint: '保存后立即生效：Host 启停 ticker 并重建 agent（无需重启）。',
   cronScheduleNote: '任务目录由 cronjob 工具与 ~/.xrk/cron/jobs.json 管理；跑史见 cronjob action=runs → ~/.xrk/cron/executions.jsonl（≤1000）。本卡仅总开关。',
   desktopTitle: '桌面电源',
-  desktopDescription: '息屏后仍在跑回合时阻止系统休眠，并在后台会话结束时发系统通知。',
-  desktopPreventIdleHint: '总开关＝任一会话在跑时阻止系统休眠（Codex prevent_idle_sleep）。屏幕仍可能黑屏，只挡休眠。仅 Desktop；拨动开关立即生效（设置 → 通用）。',
+  desktopDescription: '跑回合时挡系统休眠（屏幕仍可能黑）。息屏后网卡休眠属 OS，不保证在线。',
+  desktopPreventIdleHint: '总开关＝任一会话在跑时 prevent-app-suspension。不保亮屏；息屏后网络休眠仍由系统决定。仅 Desktop；拨动开关立即生效（设置 → 通用）。',
   desktopNotifyOnComplete: '会话结束通知',
   desktopNotifyOnCompleteHint: '后台会话变为空闲时发系统通知（Codex notify）。',
   desktopNotifyOn: '开',
@@ -1894,20 +1915,6 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   a2aInboundTimeout: '等待回复（毫秒）',
   a2aInboundTimeoutHint: 'message/send 后等待助手正文。0 = 默认 120000，顶 600000。或 XRK_A2A_INBOUND_TIMEOUT_MS。',
   a2aInboundLiveHint: '下次入站请求即生效（热切换，无需重启 Host）。会话标签为 a2a:<peer>。',
-  sshRemoteTitle: '远程',
-  sshRemoteDescription:
-    '本地 Host、远端 cwd：文件 / bash / run_code 走 OpenSSH。host 与 workspace 都留空则用本机工作区。CI 可设非空 XRK_SSH_HOST 旁路本卡。',
-  sshRemoteHost: '主机',
-  sshRemoteHostHint: 'OpenSSH 主机或别名（可写 user@host）。',
-  sshRemoteWorkspace: '工作区',
-  sshRemoteWorkspaceHint: '远端绝对 cwd（须以 / 开头）。须与主机成对填写或成对留空。',
-  sshRemoteUser: '用户',
-  sshRemoteUserHint: '可选；host 已含 user@ 时可省略。',
-  sshRemotePort: '端口',
-  sshRemotePortHint: '可选 SSH 端口（默认 22）。',
-  sshRemoteKeyPath: '私钥路径',
-  sshRemoteKeyPathHint: '可选本机私钥文件路径（不是密钥内容）。',
-  sshRemoteRestartHint: '需重启 Host 后生效（SSH 世界在进程启动时构建）。',
   gitAttributionTitle: 'Git 共同作者',
   gitAttributionDescription:
     '开（默认）：Agent 写的 commit 挂 Co-authored-by: xrkseek。关：当没这回事。不改 git config / Author。',

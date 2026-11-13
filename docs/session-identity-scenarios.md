@@ -2,7 +2,7 @@
 
 > **读者**：集成者 · 贡献者
 
-同一契约在不同身份上的**分步走查**。会话 / 工作区 id 为示意。每段写清：用户原话 → 该身份 turn-start **实际注入**（摘录）→ `dynamicSchema` 后工具句 → 工具调用序列（含关键参数）→ 各方可见面 → 反模式。定义见 [session-identity](./session-identity.md)；文案实现见 `packages/server/face/src/session-tool-copy.ts`。
+按身份把同一契约走一遍。id 是示意。每段：用户原话 → turn-start 摘录 → 工具动态句 → 调用序列 → 反模式。定义见 [session-identity](./session-identity.md)；文案真源 `session-tool-copy.ts` / posture / collab。
 
 ## 共享角色卡
 
@@ -34,27 +34,30 @@
 
 ```
 badge: qichuang
-tool_surface: qichuang (full-access · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · no nested subagents)
-surface_brief: kind=orchestrator · surface=qichuang · path=open (fs incl. grep/glob) — verbs in <session_posture>.
+tool_surface: qichuang (full-access · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · mcp_config · no nested subagent)
+surface_brief: kind=orchestrator · surface=qichuang · path=open — verbs in <session_posture>.
+mcp_mount: global+ws:ws_default
+ask: ask_user→boss
 ```
 
 `<session_posture>` 摘录：
 
 ```
-kind=orchestrator (Qichuang) · path=open · shell_confine=off
-Vague → skill xrk-demand-translate. Care: xrk-home-config · …
-Config parity: settings_* (=Settings UI) · team_* (=Team UI; skill xrk-delegate) · habits → xrk-create-skill.
+kind=orchestrator (向日葵 / 奇创 · 向阳经理席) · path=open · shell_confine=off
+Admin: settings_* · workspace_create/list · team_* · care skills (xrk-home-config · xrk-demand-translate · …).
+Vague → skill xrk-demand-translate.
 Dispatch: workspace_session_prompt → keep session_id → thread_message; optional thread_upsert + presence_set.
-No nested subagent. Implement on coding peers only.
+No nested subagent — coding peers ship. titles.manager = peer (not boss).
 ```
 
 `<external_collab_board>` 摘录：
 
 ```
-Roster · 主线 · peers. No nested subagent — match member, then workspace_session_prompt → thread_message …
+Roster · peers (向日葵 admin). workspace_create + settings_* here. Never agent-home.
 - mem_seed_researcher [global] 调研员 · researcher · inject=minimal · …
 - mem_seed_worker [global] 施工员 · worker · inject=minimal · …
-主线 (24h) — …
+
+Peers — id · who · duty · todo · 支线 · 主线. thread_message same-lane only (workspace_session_prompt→id). *=you.
 (none)
 ```
 
@@ -64,7 +67,7 @@ Roster · 主线 · peers. No nested subagent — match member, then workspace_s
 |------|--------|
 | `workspace_list` | `No nested subagent — workspace_session_prompt → keep session_id → thread_message.` |
 | `workspace_session_prompt` | `Qichuang peer only — no nested subagent. Implement there.` |
-| `thread_message` | `Message another parent session by session_id …` |
+| `thread_message` | `Message a parent peer by session_id (same lane only: project↔project or agent-home↔agent-home).` |
 | `team_list` | 附 live 名册；可 `team_save` |
 
 ### A2 · 工具序列
@@ -95,9 +98,9 @@ Roster · 主线 · peers. No nested subagent — match member, then workspace_s
 
 ### B1 · `sess_code` 看见什么
 
-身份：`coding_parent`。**有** `subagent` / `list_agents` / `send_message`。**无** `<session_posture>`。
+身份：`coding_parent`。**有** `subagent` / `list_agents` / `send_message`。harness / shallow 另有短 `<session_posture>`（派活链）；Frugal / Shell **无** posture（`surface_brief` + collab 已说清无 spawn）。
 
-协作板是名册 + 主线（不是小队板）。
+协作板是名册 + 主线（不是小队板）；长派活链在 posture，board 只挂 ids + 同道 spout。
 
 `subagent` 动态句含：`Stay in this workspace — workspace_id / cwd are IM-only` + 当前名册。  
 `send_message`：`Parent→child only`。  
@@ -171,9 +174,9 @@ your_task: task_inject 「补注入目录」 status=in_progress
 | 工具 | 关键句 |
 |------|--------|
 | `thread_message` | `Live siblings: sess_scout.`（若已挂上） |
-| `team_list` | `Read-only … team_save is parent/lead only` + 名册 |
-| `session_inspect` | `Use ids from the turn-start squad board` |
-| `list_agents`（若未 deny） | `Only children you spawned — teammates are on the squad board` |
+| `team_list` | `Read-only roster. Siblings: squad board + thread_message.` + 名册 |
+| `session_inspect` | `Use ids from the turn-start squad board. Same-cwd transcript is session_read.` |
+| `list_agents`（若未 deny） | `Only children you spawned (teammates → squad board).` |
 
 worker **无** `subagent` / `team_graph`（角色 deny）。
 
@@ -207,9 +210,9 @@ worker **无** `subagent` / `team_graph`（角色 deny）。
 
 | 工具 | 动态关键句 |
 |------|------------|
-| `subagent` | `Cross-workspace: workspace_list then workspace_id` + 名册 |
-| `workspace_session_prompt` | `From IM: this is a peer, not your child. Coding child linkage is subagent(workspace_id).` |
-| `workspace_list` | `Prefer subagent + workspace_id … or workspace_session_prompt then thread_message.` |
+| `subagent` | `Cross-workspace: workspace_list then workspace_id (or cwd). inherit_context must be false.` + 名册 |
+| `workspace_session_prompt` | `IM peer (not your child). Coding child = subagent(workspace_id).` |
+| `workspace_list` | `Coding child: subagent(workspace_id) or workspace_session_prompt → thread_message.` |
 
 ### D2 · 两条合法路径
 
@@ -262,7 +265,7 @@ UI rewind fork：工具面同父；不占 subagent depth；不进小队板。
 
 > **Audience**: Integrators · contributors
 
-Step-by-step walks of the **same contract** under each identity. Ids are illustrative. Each scene: user line → inject excerpts → post-`dynamicSchema` tool lines → tool sequence with args → who sees what → anti-patterns. Spec: [session-identity](./session-identity.md). Copy helpers: `packages/server/face/src/session-tool-copy.ts`.
+Same contract, walked per identity. Ids are illustrative. Each scene: user line → inject excerpts → dynamic tool lines → call sequence → anti-patterns. Spec: [session-identity](./session-identity.md). Copy truth: `session-tool-copy.ts` / posture / collab.
 
 ## Shared cast
 
@@ -285,7 +288,7 @@ Sees `kind=orchestrator`, posture + roster board, **no** `subagent`. Dynamic `wo
 
 User on `sess_code`: “Have research and build work it together.”
 
-Sees coding_parent board (roster + 主线). `subagent` stays in-workspace; `send_message` is parent→child. Spawn two `member_id`s (often `run_in_background`), follow with `send_message` / `list_agents` / `wait_agent`. Child–child talk is Scene C. Do not `thread_message` your own children.
+Sees coding_parent board (roster + 主线). harness/shallow also get a short `<session_posture>` (dispatch chain); Frugal/Shell have none. `subagent` stays in-workspace; `send_message` is parent→child. Spawn two `member_id`s (often `run_in_background`), follow with `send_message` / `list_agents` / `wait_agent`. Child–child talk is Scene C. Do not `thread_message` your own children.
 
 ## Scene C · Worker ↔ researcher
 

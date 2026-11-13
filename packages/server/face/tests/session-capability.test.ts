@@ -56,7 +56,7 @@ describe("session_capability", () => {
     expect(text).toMatch(/permission_brief:/);
     expect(text).toMatch(/tool_surface: harness \(/);
     expect(text).toMatch(/surface_brief: kind=coding_parent/);
-    expect(text).toMatch(/full tools \+ subagents/);
+    expect(text).toMatch(/full peer\+subagents/);
     expect(text).toMatch(/^model:/m);
     expect(text).toMatch(/^modality: (multimodal|text-only)/m);
     expect(text).not.toMatch(/modality_brief:/);
@@ -282,7 +282,8 @@ describe("session_capability", () => {
     expect(text).not.toContain(`skill: scout-notes @`);
     expect(text).toContain(`materials: ${materials}`);
     expect(text).not.toContain(`playbook: ${path.join(packHome, "playbook.md")}`);
-    expect(text).toContain("ask→parent");
+    expect(text).toContain(`ask: ask→${parentId}`);
+    expect(text).toContain("answer_ask");
     expect(text).toContain("omitted:");
     expect(text).toContain("ask_user");
     expect(text).not.toMatch(/tool_surface: harness/);

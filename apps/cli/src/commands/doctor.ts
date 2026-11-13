@@ -290,10 +290,10 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
   const execKind = String(process.env.XRK_EXEC_ENVIRONMENT ?? "local")
     .trim()
     .toLowerCase();
+  // Product Settings no longer owns SSH; env `XRK_SSH_HOST` is CI / headless only.
   let sshConfigured = false;
   try {
-    const sshProduct = peekSettingsYamlSection(xrkHome, "ssh-remote");
-    const sshConfig = resolveSshConfig(process.env, sshProduct);
+    const sshConfig = resolveSshConfig(process.env);
     if (sshConfig) {
       sshConfigured = true;
       const probe = await probeSshTarget({
@@ -304,15 +304,14 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
         name: "ssh-remote",
         ok: probe.ok,
         detail: probe.ok
-          ? `${probe.detail} (SSH takes precedence over XRK_EXEC_ENVIRONMENT=http)`
+          ? `${probe.detail} (XRK_SSH_HOST env; takes precedence over XRK_EXEC_ENVIRONMENT=http)`
           : `SSH probe failed: ${probe.detail}`,
       });
     } else {
       checks.push({
         name: "ssh-remote",
         ok: true,
-        detail:
-          "off (Settings General → Remote or XRK_SSH_HOST+XRK_SSH_WORKSPACE)",
+        detail: "off (set XRK_SSH_HOST+XRK_SSH_WORKSPACE for CI remote cwd; product remotes → MCP)",
       });
     }
   } catch (err) {

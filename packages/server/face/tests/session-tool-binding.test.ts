@@ -64,7 +64,8 @@ describe("FaceRuntime.bindSessionAgent", () => {
     runtime.bindSessionAgent("sess-min", hostShapedAgent(tools));
     expect(tools.get("workspace_list")).toBeUndefined();
     expect(tools.get("thread_message")).toBeUndefined();
-    expect(tools.get("presence_set")).toBeDefined();
+    // PI / minimal = fs+session only — no presence / peer tools.
+    expect(tools.get("presence_set")).toBeUndefined();
   });
 
   it("is idempotent per registry and keeps tool identity (no stale settle)", async () => {

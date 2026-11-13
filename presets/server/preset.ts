@@ -115,6 +115,8 @@ export function createServerAgentFactory(
       plugins,
       subagentRouting: profile.subagentRouting,
       delegationMode: profile.delegation,
+      bashTools: profile.tools.bash,
+      skillTools: profile.tools.skill,
       webTools: profile.tools.web,
       lspTools: profile.tools.lsp,
       ...(profile.tools.pty

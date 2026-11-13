@@ -7,7 +7,6 @@ description: >-
   「fan out」, 干员/Agent Team 总结经验·建干员·委派·分享·导入·就绪·修订, or
   after Frugal/Shallow badge questions about subagents. For the session that
   manages Team / mints members — not a default load for every spawned 干员.
-  Not the default load for every spawned 干员.
 ---
 
 # 委派子代理

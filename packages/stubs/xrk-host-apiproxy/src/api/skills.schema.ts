@@ -30,8 +30,11 @@ const injectDocumentEntrySchema = z.object({
   kind: z.enum([
     'instruction',
     'skill-catalog',
+    'instruction-authority',
     'session-capability',
     'session-posture',
+    'boss-status',
+    'seat-identity',
     'collab-board',
   ]),
   bytes: z.number().int().nonnegative(),

@@ -329,15 +329,9 @@
 | `codexAppServer` | string | `""` | Spawn command for `runtime=app-server` (default `codex app-server` when empty). |
 | `claudeCode` | string | `""` | Spawn command for `runtime=claude-code` (default `claude` when empty; Host adds `-p`). |
 
-## `ssh-remote` （需重启）
+## `ssh-remote`（已移除产品面）
 
-| 字段 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `host` | string | `""` |  |
-| `workspace` | string | `""` | Absolute remote cwd (POSIX `/…`). |
-| `user` | string | `""` |  |
-| `port` | number | `22` |  |
-| `keyPath` | string | `""` | Local path to OpenSSH identity file (not the key material). |
+Settings 通用「远程」卡与 Face ns 已下线。日常远程请挂 MCP；CI/无头仍可用 `XRK_SSH_HOST` + `XRK_SSH_WORKSPACE`（见 [configuration.md](./configuration.md)）。
 
 ## `workspace-inject`
 
@@ -360,7 +354,7 @@
 
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `preventIdleSleep` | boolean | `false` | Keep the machine awake while a session is running (default off). Desktop only — CLI / headless Hosts ignore this. |
+| `preventIdleSleep` | boolean | `false` | `prevent-app-suspension` while a session is running (default off). Screen may still blank; NIC sleep after blank is OS-owned. Desktop only. |
 | `notifyOnComplete` | boolean | `true` | Fire an OS notification when a background session finishes (Codex `notify` / TUI completion notice). Default on. |
 | `notifyFocusPolicy` | unfocused \| always | `"unfocused"` | When to show the completion notification. `unfocused` (default) skips while this window has focus; `always` always fires. |
 

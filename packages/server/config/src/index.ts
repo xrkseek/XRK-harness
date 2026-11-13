@@ -35,6 +35,12 @@ export {
   MCP_PROXY_ENV_KEYS,
 } from "./mcp-servers.js";
 export { parseJsonText, stripUtf8Bom } from "./json-text.js";
+export {
+  emptyWorkspaceMcpFile,
+  readWorkspaceMcpFile,
+  writeWorkspaceMcpFile,
+  type WorkspaceMcpFile,
+} from "./workspace-mcp-json.js";
 
 export interface HostCredentials {
   /** API key for /api/* ; empty disables auth (dev only). */
