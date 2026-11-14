@@ -95,6 +95,15 @@ export {
   unscopedPackageName,
   isSamePluginPackage,
   isPluginPackageFamily,
+  listCommunityHostTools,
+  listCommunityHostSkillDirs,
+  listCommunityIndexGlobals,
+  createCommunityPromptFragmentProvider,
+  collectCommunityPromptFragments,
+  publishCommunityHostSurfaces,
+  clearCommunityHostSurfaces,
+  syncCommunityHostToolsOnto,
+  communityHostToolsFingerprint,
 } from "./dsh-compat/index.js";
 export {
   createSidebarPublicHandler,
@@ -139,6 +148,14 @@ export {
   type PluginMutateResult,
   type CliInvocation,
 } from "./xrk/plugin-mutate.js";
+export {
+  buildNpmViewVersionArgs,
+  isNpmViewHttpUrl,
+  normalizeNpmViewNet,
+  planNpmViewSpawn,
+  type NpmViewNetOptions,
+  type NpmViewSpawnPlan,
+} from "./xrk/npm-view-spawn.js";
 
 export interface HttpChatRequest {
   readonly sessionId?: string;
@@ -725,6 +742,7 @@ export {
   bootThemeInjectScript,
   injectBootIntoHtml,
   injectBootThemeIntoHtml,
+  injectCommunityIndexGlobalsIntoHtml,
   type BootThemePreference,
   type WebBootEntry,
   type WebBootManifest,

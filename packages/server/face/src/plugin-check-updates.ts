@@ -1,8 +1,19 @@
 /**
  * Settings inventory update probe: async `npm view` + Host-side cache.
  * Warm on listen; Settings reads cache or forces a refresh.
+ *
+ * Windows spawn plan + argv hygiene: {@link planNpmViewSpawn} /
+ * {@link buildNpmViewVersionArgs} in `@xrkseek/server-http`
+ * (Desktop npm-cli.js or ComSpec-wrapped npm.cmd — never bare .cmd).
+ * Shared posture for Desktop / CLI Host / Mobile guest Host.
  */
 import { spawn } from "node:child_process";
+import {
+  buildNpmViewVersionArgs,
+  normalizeNpmViewNet,
+  planNpmViewSpawn,
+  type NpmViewNetOptions,
+} from "@xrkseek/server-http";
 import {
   classifyManagedPluginSource,
   isSafePluginPackageName,
@@ -10,7 +21,17 @@ import {
   registryPackageNameFromSource,
   type FacePluginInventoryEntry,
 } from "./plugin-inventory.js";
+import { publishRemoteEvent } from "./remote-event.js";
+import type { FaceBus } from "./bus.js";
 import type { FaceRuntime } from "./context.js";
+
+/** Runtime slice for probe cache + optional host/remote-event publish. */
+type ProbeRuntime = Pick<
+  FaceRuntime,
+  "plugins" | "webPlugins" | "hostPublic" | "productDir"
+> & {
+  readonly bus?: Pick<FaceBus, "publishHost">;
+};
 
 export type PluginUpdateProbeStatus =
   | "idle"
@@ -36,9 +57,19 @@ export interface PluginUpdateProbeSnapshot {
   readonly error?: string;
 }
 
+export type { NpmViewNetOptions };
+
 export type NpmViewVersionFn = (
   packageName: string,
+  net?: NpmViewNetOptions,
 ) => Promise<string | undefined>;
+
+/** Re-export spawn helpers so Face tests / callers share one argv + Windows plan. */
+export {
+  buildNpmViewVersionArgs,
+  normalizeNpmViewNet,
+  planNpmViewSpawn,
+};
 
 /** Parse leading semver core (`1.2.3` from `v1.2.3-beta+meta`). */
 function parseSemverCore(raw: string): number[] | undefined {
@@ -88,33 +119,51 @@ async function mapPool<T, R>(
 /** Cap concurrent `npm view` spawns per probe (Host warm + Settings force). */
 const NPM_VIEW_CONCURRENCY = 4;
 
-/** Async `npm view <name> version` (20s). Returns undefined on failure. */
+/**
+ * Async `npm view <name> version` (20s). Returns undefined on failure.
+ * Pass Settings `registry` / `proxy` so Desktop / Web / Mobile probes hit the
+ * same mirror as `plugin add` (install row localStorage). Non-http(s) net is
+ * dropped before argv (see {@link normalizeNpmViewNet}).
+ */
 export function npmViewPackageVersion(
   packageName: string,
+  net?: NpmViewNetOptions,
 ): Promise<string | undefined> {
   const name = packageName.trim();
   // Reject CLI-option shaped names (`--registry=…`) before spawn.
   if (!name || !isSafePluginPackageName(name)) {
     return Promise.resolve(undefined);
   }
-  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
   return new Promise((resolve) => {
-    const child = spawn(npmCmd, ["view", name, "version"], {
-      windowsHide: true,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
     let settled = false;
     const finish = (value: string | undefined): void => {
       if (settled) return;
       settled = true;
       resolve(value);
     };
+    let child: ReturnType<typeof spawn>;
+    try {
+      const plan = planNpmViewSpawn(buildNpmViewVersionArgs(name, net));
+      child = spawn(plan.file, [...plan.args], {
+        windowsHide: true,
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"],
+        ...(plan.windowsVerbatimArguments
+          ? { windowsVerbatimArguments: true }
+          : {}),
+      });
+    } catch {
+      // Sync spawn throw (e.g. bad argv) — one package must not abort the probe.
+      finish(undefined);
+      return;
+    }
+    let stdout = "";
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
       finish(undefined);
     }, 20_000);
+    // Drain stderr so a noisy npm never fills the pipe and stalls close.
+    child.stderr?.resume();
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {
       stdout += chunk;
@@ -150,14 +199,29 @@ async function probeOne(
     sourceClass,
     ...(entry.version ? { installed: entry.version } : {}),
   };
-  if (sourceClass !== "registry") return base;
-  const pkg = registryPackageNameFromSource(entry.source, entry.entryId);
-  if (!pkg) {
-    return { ...base, checkFailed: true };
+  // engine / vcs: no npm view (engine is guest-bundled; vcs pins stay on their URL).
+  if (sourceClass === "engine" || sourceClass === "vcs") return base;
+
+  let pkg: string | undefined;
+  if (sourceClass === "registry") {
+    pkg = registryPackageNameFromSource(entry.source, entry.entryId);
+    if (!pkg) {
+      return { ...base, checkFailed: true };
+    }
+  } else {
+    // local (file:/path / relative): still probe by package id when the id is a
+    // safe registry name — Settings can then offer 「更新」→ id@latest even if
+    // the install origin was a workspace path (common for community client
+    // development installs that are also published).
+    const id = entry.entryId.trim();
+    if (!id || !isSafePluginPackageName(id)) return base;
+    pkg = id;
   }
+
   const latest = await viewVersion(pkg);
   if (!latest) {
-    return { ...base, checkFailed: true };
+    // Registry miss is a hard fail; local miss stays quiet (may be unpublished).
+    return sourceClass === "registry" ? { ...base, checkFailed: true } : base;
   }
   const installed = entry.version?.trim() ?? "";
   const updateAvailable =
@@ -174,6 +238,8 @@ type CacheBucket = {
   updates: PluginUpdateProbeRow[];
   checkedAt?: number;
   error?: string;
+  /** Monotonic run id — supersedes older force/warm writers. */
+  runId: number;
   inflight?: Promise<PluginUpdateProbeSnapshot>;
 };
 
@@ -181,10 +247,42 @@ const cacheByPluginsDir = new Map<string, CacheBucket>();
 
 function cacheKeyOf(
   runtime: Pick<FaceRuntime, "hostPublic" | "productDir">,
+  net?: NpmViewNetOptions,
 ): string {
-  const dir = runtime.hostPublic?.pluginsDir?.trim();
-  if (dir) return dir;
-  return runtime.productDir?.trim() || "default";
+  const dir =
+    runtime.hostPublic?.pluginsDir?.trim() ||
+    runtime.productDir?.trim() ||
+    "default";
+  const safe = normalizeNpmViewNet(net);
+  // Isolate warm/force caches per Settings mirror so npmmirror ≠ npmjs.
+  return `${dir}\0${safe.registry ?? ""}\0${safe.proxy ?? ""}`;
+}
+
+/**
+ * Notify shells that the Host probe cache settled.
+ * Args: status (`ready` | `error`), checkedAt ms — client re-pulls warm cache.
+ */
+function publishUpdatesChanged(
+  runtime: ProbeRuntime,
+  snap: PluginUpdateProbeSnapshot,
+): void {
+  if (!runtime.bus) return;
+  if (snap.status !== "ready" && snap.status !== "error") return;
+  publishRemoteEvent(runtime.bus, "plugin-inventory/updates-changed", [
+    snap.status,
+    snap.checkedAt ?? Date.now(),
+  ]);
+}
+
+/** exactOptionalPropertyTypes-safe net from optional registry/proxy fields. */
+function netFromOptions(options: {
+  readonly registry?: string;
+  readonly proxy?: string;
+}): NpmViewNetOptions {
+  return normalizeNpmViewNet({
+    ...(options.registry !== undefined ? { registry: options.registry } : {}),
+    ...(options.proxy !== undefined ? { proxy: options.proxy } : {}),
+  });
 }
 
 function snapshotOf(bucket: CacheBucket): PluginUpdateProbeSnapshot {
@@ -197,20 +295,23 @@ function snapshotOf(bucket: CacheBucket): PluginUpdateProbeSnapshot {
 }
 
 /**
- * Probe registry-sourced managed entries for newer npm versions.
- * Non-registry rows are included with `updateAvailable: false`.
+ * Probe managed entries for newer npm versions.
+ * Local rows get an advisory registry probe by package id; engine / vcs stay quiet.
  */
 export async function checkFacePluginUpdates(
-  runtime: Pick<
-    FaceRuntime,
-    "plugins" | "webPlugins" | "hostPublic" | "productDir"
-  >,
+  runtime: ProbeRuntime,
   options: {
     readonly entryIds?: readonly string[];
     readonly viewVersion?: NpmViewVersionFn;
+    readonly registry?: string;
+    readonly proxy?: string;
   } = {},
 ): Promise<readonly PluginUpdateProbeRow[]> {
-  const view = options.viewVersion ?? npmViewPackageVersion;
+  const net = netFromOptions(options);
+  const view: NpmViewVersionFn =
+    options.viewVersion ??
+    ((name, viewNet) => npmViewPackageVersion(name, viewNet ?? net));
+  const boundView: NpmViewVersionFn = (name) => view(name, net);
   const want = options.entryIds?.length
     ? new Set(options.entryIds.map((id) => id.trim()).filter(Boolean))
     : undefined;
@@ -219,15 +320,16 @@ export async function checkFacePluginUpdates(
     return e.managed === true;
   });
   return mapPool(targets, NPM_VIEW_CONCURRENCY, (entry) =>
-    probeOne(entry, view),
+    probeOne(entry, boundView),
   );
 }
 
 /** Read the Host-side probe cache without starting work. */
 export function getPluginUpdateProbeCache(
   runtime: Pick<FaceRuntime, "hostPublic" | "productDir">,
+  net?: NpmViewNetOptions,
 ): PluginUpdateProbeSnapshot {
-  const bucket = cacheByPluginsDir.get(cacheKeyOf(runtime));
+  const bucket = cacheByPluginsDir.get(cacheKeyOf(runtime, net));
   if (!bucket) {
     return { status: "idle", updates: [] };
   }
@@ -236,23 +338,27 @@ export function getPluginUpdateProbeCache(
 
 /**
  * Ensure a probe is running or return the last ready snapshot.
- * `force` always starts a new run (after the current inflight settles).
+ * `force` always starts a new run; an in-flight older run is superseded so its
+ * finish cannot clobber the newer result (Desktop force while warm still runs).
+ * When a run settles, publishes `plugin-inventory/updates-changed` on `bus`
+ * (Desktop host SSE / Web host WS → `$dispatch`) so Settings badges refresh
+ * without a second force npm view.
  */
 export async function ensurePluginUpdateProbe(
-  runtime: Pick<
-    FaceRuntime,
-    "plugins" | "webPlugins" | "hostPublic" | "productDir"
-  >,
+  runtime: ProbeRuntime,
   options: {
     readonly force?: boolean;
     readonly entryIds?: readonly string[];
     readonly viewVersion?: NpmViewVersionFn;
+    readonly registry?: string;
+    readonly proxy?: string;
   } = {},
 ): Promise<PluginUpdateProbeSnapshot> {
-  const key = cacheKeyOf(runtime);
+  const net = netFromOptions(options);
+  const key = cacheKeyOf(runtime, net);
   let existing = cacheByPluginsDir.get(key);
   if (!existing) {
-    existing = { status: "idle", updates: [] };
+    existing = { status: "idle", updates: [], runId: 0 };
     cacheByPluginsDir.set(key, existing);
   }
   const bucket = existing;
@@ -264,14 +370,22 @@ export async function ensurePluginUpdateProbe(
     return bucket.inflight;
   }
 
-  const run = (async (): Promise<PluginUpdateProbeSnapshot> => {
+  const runId = ++bucket.runId;
+  // Box so the async body can compare `inflight === this run` without TDZ on const.
+  const box: { run?: Promise<PluginUpdateProbeSnapshot> } = {};
+  box.run = (async (): Promise<PluginUpdateProbeSnapshot> => {
     bucket.status = "checking";
     delete bucket.error;
     try {
       const updates = await checkFacePluginUpdates(runtime, {
         ...(options.entryIds?.length ? { entryIds: options.entryIds } : {}),
         ...(options.viewVersion ? { viewVersion: options.viewVersion } : {}),
+        ...net,
       });
+      // Superseded by a newer force/warm — keep that run's writes.
+      if (runId !== bucket.runId) {
+        return snapshotOf(bucket);
+      }
       // Full scan updates the durable cache; filtered force keeps prior rows
       // for ids not in this pass.
       if (!options.entryIds?.length) {
@@ -283,29 +397,59 @@ export async function ensurePluginUpdateProbe(
       }
       bucket.status = "ready";
       bucket.checkedAt = Date.now();
-      return snapshotOf(bucket);
+      const snap = snapshotOf(bucket);
+      publishUpdatesChanged(runtime, snap);
+      return snap;
     } catch (err) {
+      if (runId !== bucket.runId) {
+        return snapshotOf(bucket);
+      }
       bucket.status = "error";
       bucket.error = err instanceof Error ? err.message : String(err);
-      return snapshotOf(bucket);
+      const snap = snapshotOf(bucket);
+      publishUpdatesChanged(runtime, snap);
+      return snap;
     } finally {
-      delete bucket.inflight;
+      if (bucket.inflight === box.run) {
+        delete bucket.inflight;
+      }
     }
   })();
 
-  bucket.inflight = run;
-  return run;
+  bucket.inflight = box.run;
+  return box.run;
 }
 
 /** Fire-and-forget warm probe after HTTP listen (does not block boot). */
-export function schedulePluginUpdateProbeWarm(
-  runtime: Pick<
-    FaceRuntime,
-    "plugins" | "webPlugins" | "hostPublic" | "productDir"
-  >,
-): void {
+export function schedulePluginUpdateProbeWarm(runtime: ProbeRuntime): void {
   void ensurePluginUpdateProbe(runtime).catch(() => {
-    /* warm probe is best-effort */
+    /* warm probe is best-effort — Settings force uses the install-row mirror */
+  });
+}
+
+/**
+ * After install/update succeeds, re-probe the touched ids so Settings badges
+ * match the new on-disk versions (warm cache would otherwise keep →same).
+ * Settling publishes `plugin-inventory/updates-changed` when `runtime.bus` is set.
+ * Returns the probe promise for tests; remotes fire-and-forget with `.catch`.
+ */
+export function refreshPluginUpdateProbeAfterMutate(
+  runtime: ProbeRuntime,
+  options: {
+    readonly entryIds: readonly string[];
+    readonly registry?: string;
+    readonly proxy?: string;
+    /** Test seam — production remotes omit this and use real `npm view`. */
+    readonly viewVersion?: NpmViewVersionFn;
+  },
+): Promise<PluginUpdateProbeSnapshot | undefined> {
+  const ids = options.entryIds.map((id) => id.trim()).filter(Boolean);
+  if (ids.length === 0) return Promise.resolve(undefined);
+  return ensurePluginUpdateProbe(runtime, {
+    force: true,
+    entryIds: ids,
+    ...(options.viewVersion ? { viewVersion: options.viewVersion } : {}),
+    ...netFromOptions(options),
   });
 }
 

@@ -50,8 +50,8 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
       en: 'Thanks to everyone on the XRK-Harness team.',
     },
     {
-      zh: '感谢何润景、文具盒、刘雅婷、炫彩马桶、乔晨欣、张利民、徐航、王乐、焦雅、贺吉诚、寇瑞哲。',
-      en: 'Special thanks to 何润景, 文具盒, 刘雅婷, 炫彩马桶, 乔晨欣, 张利民, 徐航, 王乐, 焦雅, 贺吉诚, and 寇瑞哲.',
+      zh: '感谢何润景、文具盒、刘雅婷、炫彩马桶、乔晨欣、张利民、徐航、王乐、焦雅、贺吉诚、寇瑞哲、周易恒。',
+      en: 'Special thanks to 何润景, 文具盒, 刘雅婷, 炫彩马桶, 乔晨欣, 张利民, 徐航, 王乐, 焦雅, 贺吉诚, 寇瑞哲, and 周易恒.',
     },
     {
       zh: '11.1 祝续航生日快乐！',
@@ -68,6 +68,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  * sees no dot.
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  {
+    version: '0.7.22',
+    date: '2026-11-14',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '社区壁纸 / 表情包：装包带 Cordis Host 半；绳绘与关于图直出真资源，不再假像素花屏。',
+        en: 'Community wallpaper / stickers: Cordis host half on install; real rope/about art (no fake-pixel glitch).',
+      },
+      {
+        zh: '干员团队改完即存并对齐概况球；工作区发现可调；插件更新探测跟装包同源。',
+        en: 'Agent Team saves live and matches Overview balls; tunable workspace discovery; update probes share install registry/proxy.',
+      },
+      {
+        zh: '自定义模型草稿关 Settings 不丢；Desktop 安装包自带 npm 可装社区插件。',
+        en: 'Custom-provider drafts survive closing Settings; Desktop ships vendored npm for community installs.',
+      },
+    ],
+  },
   {
     version: '0.7.21',
     date: '2026-11-13',

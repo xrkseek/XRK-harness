@@ -221,10 +221,20 @@ describe("干员两种座位的上下文工程", () => {
       .get("workspace_list")!
       .execute({}, new AbortController().signal);
     const homeBody = JSON.parse(String(listed.content)) as {
-      items: Array<{ workspaceId: string; member?: string | null; im?: boolean }>;
+      items: Array<{
+        workspaceId: string;
+        member?: string | null;
+        im?: boolean;
+        xiangyang?: boolean;
+      }>;
     };
     expect(homeBody.items.length).toBeGreaterThan(0);
-    expect(homeBody.items.every((row) => row.member !== undefined)).toBe(true);
+    // Agent-home rooms carry member; pinned 向阳 is allowed without member.
+    expect(
+      homeBody.items.every(
+        (row) => row.member !== undefined || row.xiangyang === true,
+      ),
+    ).toBe(true);
     // Project-only fields must not leak into an office listing.
     expect(homeBody.items.every((row) => row.im === undefined)).toBe(true);
     expect(

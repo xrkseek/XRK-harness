@@ -47,14 +47,30 @@ export function apply(ctx: ClientContext): void {
     const result = await ctx.remote.pluginInventory.remove(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.remove', result)
   }
-  const update: PluginInventorySettingsTabInjected['update'] = async (entryId, requestId) => {
-    const result = await ctx.remote.pluginInventory.update(entryId as PluginEntryId, requestId)
+  const update: PluginInventorySettingsTabInjected['update'] = async (
+    entryId,
+    requestId,
+    registry,
+    proxy,
+  ) => {
+    const reg = registry !== undefined && registry.trim().length > 0 ? registry.trim() : undefined
+    const prox = proxy !== undefined && proxy.trim().length > 0 ? proxy.trim() : undefined
+    const result = await ctx.remote.pluginInventory.update(
+      entryId as PluginEntryId,
+      requestId,
+      reg,
+      prox,
+    )
     if (!result.ok) {
       const details = result.error.details as {
         command?: unknown
         output?: unknown
         exitCode?: unknown
       } | undefined
+      const commandParts = ['xrkh plugin add']
+      if (reg) commandParts.push('--registry', reg)
+      if (prox) commandParts.push('--proxy', prox)
+      commandParts.push(`${entryId}@latest`)
       const log =
         details !== undefined &&
         typeof details.command === 'string' &&
@@ -66,7 +82,7 @@ export function apply(ctx: ClientContext): void {
             exitCode: details.exitCode,
           }
           : {
-            command: `xrkh plugin add ${entryId}@latest`,
+            command: commandParts.join(' '),
             output: result.error.message,
             exitCode: 1,
           }
@@ -146,6 +162,11 @@ export function apply(ctx: ClientContext): void {
     if (id !== requestId) return
     onText(text)
   })
+  const subscribeUpdatesChanged: PluginInventorySettingsTabInjected['subscribeUpdatesChanged'] = (
+    onChanged,
+  ) => ctx.remote.$on('plugin-inventory/updates-changed', () => {
+    onChanged()
+  })
   const open: PluginInventorySettingsTabInjected['open'] = async (entryId) => {
     const result = await ctx.remote.pluginInventory.open(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.open', result)
@@ -153,10 +174,16 @@ export function apply(ctx: ClientContext): void {
   const checkUpdates: PluginInventorySettingsTabInjected['checkUpdates'] = async (
     entryIds,
     force,
+    registry,
+    proxy,
   ) => {
+    const reg = registry !== undefined && registry.trim().length > 0 ? registry.trim() : undefined
+    const prox = proxy !== undefined && proxy.trim().length > 0 ? proxy.trim() : undefined
     const result = await ctx.remote.pluginInventory.checkUpdates(
       entryIds as PluginEntryId[] | undefined,
       force,
+      reg,
+      prox,
     )
     if (!result.ok) throwRemote('pluginInventory.checkUpdates', result)
     return result.value
@@ -169,6 +196,7 @@ export function apply(ctx: ClientContext): void {
     reload,
     install,
     subscribeInstallLog,
+    subscribeUpdatesChanged,
     open,
     checkUpdates,
   })

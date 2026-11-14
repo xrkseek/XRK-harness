@@ -595,6 +595,7 @@ export function CompanionBall({
   face,
   empty,
   compact,
+  preview,
   emotion = '02',
   bodyColor,
   eyeColor,
@@ -620,6 +621,8 @@ export function CompanionBall({
   readonly empty?: boolean
   /** 18px glyph for sidebar workspace rows. */
   readonly compact?: boolean
+  /** Larger stage for the Agent Team look preview card. */
+  readonly preview?: boolean
   readonly emotion?: string
 }) {
   const dark = useChromeDark()
@@ -699,6 +702,7 @@ export function CompanionBall({
       style={ballSize === 1 ? undefined : ({ '--ball-size': String(ballSize) } as CSSProperties)}
       data-empty={empty ? '' : undefined}
       data-compact={compact ? '' : undefined}
+      data-preview={preview ? '' : undefined}
     >
       {empty ? <span className={css.plus} aria-hidden>+</span> : null}
       <span ref={mountRef} className={css.mount} data-ready={ready && !empty ? '' : undefined} aria-hidden />

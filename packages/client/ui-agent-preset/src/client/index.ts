@@ -38,7 +38,9 @@ export type { AgentPresetLabelInjected, AgentPresetLabelProps } from './AgentPre
 export type { AgentPresetRowInjected, AgentPresetRowProps } from './AgentPresetRow.tsx'
 export type { AgentPresetSeatInjected, AgentPresetSeatProps } from './AgentPresetSeat.tsx'
 export type { AgentPresetSectionInjected, AgentPresetSectionProps } from './AgentPresetSection.tsx'
-export type { AgentPresetSeatState, SeatSessionSummary } from './seat-store.ts'
+export type {
+  AgentPresetSeatLock, AgentPresetSeatState, SeatSessionSummary,
+} from './seat-store.ts'
 export {
   draftBlocker, type AgentPresetSectionState, type CopyDraft, type PresetRow, type PresetView,
 } from './section-store.ts'
@@ -104,20 +106,35 @@ export function apply(ctx: ClientContext): void {
     const seat = new AgentPresetSeatController(api, (): SeatSessionSummary | undefined => {
       const state = scope.sessions.list.getSnapshot()
       const summary = state.current === undefined ? undefined : state.byId[state.current]
-      return summary === undefined
-        ? undefined
-        : {
-          id: summary.id,
-          blank: summary.blank,
-          ...summary.agentPreset === undefined ? {} : { agentPreset: summary.agentPreset },
-        }
+      if (summary === undefined) return undefined
+      const workspaces = scope.workspaces.list.getSnapshot().items
+      const home = workspaces.find(
+        (row) => row.kind === 'agent-home' && row.sessionIds.includes(summary.id),
+      )
+      return {
+        id: summary.id,
+        blank: summary.blank,
+        ...summary.agentPreset === undefined ? {} : { agentPreset: summary.agentPreset },
+        ...(home !== undefined ? { lock: 'agent-home' as const } : {}),
+      }
     }, (sessionId, agentPreset) => {
       scope.sessions.noteAgentPreset(sessionId as never, agentPreset)
     })
 
     // Birth pin: workspace connect / New Session create() reads the staged
     // chip so Settings default (frugal) does not overwrite a harness pick.
-    scope.sessions.setCreateAgentPresetProvider(() => seat.peekStaged())
+    // Agent-home ignores the picker — Face pins roster basePreset at create.
+    scope.sessions.setCreateAgentPresetProvider(() => {
+      const session = scope.sessions.list.getSnapshot()
+      const id = session.current
+      if (id !== undefined) {
+        const home = scope.workspaces.list.getSnapshot().items.find(
+          (row) => row.kind === 'agent-home' && row.sessionIds.includes(id),
+        )
+        if (home !== undefined) return undefined
+      }
+      return seat.peekStaged()
+    })
     scope.effect(() => () => {
       scope.sessions.setCreateAgentPresetProvider(undefined)
     }, 'ui-agent-preset: create-agent-preset provider')
@@ -138,7 +155,13 @@ export function apply(ctx: ClientContext): void {
       // Connecting a workspace either creates a blank session or reuses one,
       // and either way the chip's pick predates it — so the stage is applied
       // when the session arrives, not when it was made.
-      const stop = scope.sessions.list.subscribe(() => { void seat.apply() })
+      const stop = scope.sessions.list.subscribe(() => {
+        seat.syncFromSession()
+        void seat.apply()
+      })
+      const stopWs = scope.workspaces.list.subscribe(() => {
+        seat.syncFromSession()
+      })
       // The chip opens on the deployment default, so a default changed from
       // the settings surface moves it too — otherwise the screen that starts
       // the next session keeps offering the previous default until a reload,
@@ -184,6 +207,7 @@ export function apply(ctx: ClientContext): void {
       }, AgentPresetLabel)
       return () => {
         stop()
+        stopWs()
         settingsMoved()
         presetSelected()
         rosterReaders.delete(readRoster)

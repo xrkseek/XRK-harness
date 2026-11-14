@@ -12,7 +12,7 @@
  * re-renders from pushed invalidations or the post-apply reload.
  */
 
-import { memo, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { IApiClient } from '@xrkseek/xrk-api-remotes/client'
 import { Button, IconPlusOutlineRegular, Modal } from '@xrkseek/client-ui-primitives'
@@ -23,6 +23,18 @@ import {
   providerReorderAnchor,
   type ProviderDropHalf,
 } from './ProviderReorderRow.tsx'
+import {
+  beginAddingProviderForm,
+  beginDeclaringProviderForm,
+  clearProviderFormSession,
+  patchAddingProviderForm,
+  patchDeclaringProviderForm,
+  snapshotProviderFormSession,
+  type AddingDraftPersist,
+  type AddingFormTarget,
+  type DeclaringDraftPersist,
+  type ProviderFormSession,
+} from './provider-form-session.ts'
 import {
   defaultModelRoute,
   deriveKeyRef,
@@ -35,6 +47,71 @@ import type { ModelsSettingsState, ModelsSettingsStore, ProviderRow } from './st
 import { ProviderEditor, type ProviderEditorProps } from './ProviderEditor.tsx'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
+
+function editorTargetFromSession(target: AddingFormTarget): EditorTarget {
+  return {
+    provider: target.provider,
+    displayName: target.displayName,
+    settingsNs: target.settingsNs,
+    settingsPath: target.settingsPath,
+    ...(target.credentialRef !== undefined
+      ? { credentialRef: target.credentialRef }
+      : {}),
+    ...(target.declared === true ? { declared: true } : {}),
+  }
+}
+
+function sessionTargetFromEditor(target: EditorTarget): AddingFormTarget {
+  return {
+    provider: target.provider,
+    displayName: target.displayName,
+    settingsNs: target.settingsNs,
+    settingsPath: target.settingsPath,
+    ...(target.credentialRef !== undefined
+      ? { credentialRef: target.credentialRef }
+      : {}),
+    ...(target.declared === true ? { declared: true } : {}),
+  }
+}
+
+/** One-shot Models mount seed from the durable form session. */
+type FormBoot = {
+  readonly resume: ProviderFormSession
+  readonly editing: EditorTarget | undefined
+  readonly adding: boolean
+  readonly declaring: boolean
+}
+
+/**
+ * Freeze the durable form at Models mount. Backdrop remount resumes from this
+ * clone; any in-page open / cancel / edit bumps `formEpoch` so the frozen
+ * seed is not reapplied over a fresh card.
+ */
+function readFormBoot(): FormBoot {
+  const resume = snapshotProviderFormSession()
+  if (resume.kind === 'adding') {
+    return {
+      resume,
+      editing: editorTargetFromSession(resume.target),
+      adding: true,
+      declaring: false,
+    }
+  }
+  if (resume.kind === 'declaring') {
+    return {
+      resume,
+      editing: undefined,
+      adding: false,
+      declaring: true,
+    }
+  }
+  return {
+    resume,
+    editing: undefined,
+    adding: false,
+    declaring: false,
+  }
+}
 
 /** Injected dependencies of {@link ModelsSection} (slot `inject`). */
 export interface ModelsSectionInjected {
@@ -284,13 +361,22 @@ const DefaultModelCard = memo(function DefaultModelCard({
 function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   const { controller, api, t } = injected
   const state = injected.useSnapshot(snapshot => snapshot)
-  const [editing, setEditing] = useState<EditorTarget | undefined>(undefined)
-  const [adding, setAdding] = useState(false)
+  const [boot] = useState(readFormBoot)
+  const { resume } = boot
+  // 0 = still eligible to seed child cards from `resume`. Any local open /
+  // cancel / edit increments so a frozen remount seed cannot override a new card.
+  const [formEpoch, setFormEpoch] = useState(0)
+  const discardResume = useCallback((): void => {
+    setFormEpoch((epoch) => (epoch === 0 ? 1 : epoch))
+  }, [])
+
+  const [editing, setEditing] = useState<EditorTarget | undefined>(boot.editing)
+  const [adding, setAdding] = useState(boot.adding)
   const [deleteTarget, setDeleteTarget] = useState<EditorTarget | undefined>(undefined)
   const [deleting, setDeleting] = useState(false)
   const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined)
   const [savedTarget, setSavedTarget] = useState<ProviderIdentity | undefined>(undefined)
-  const [declaring, setDeclaring] = useState(false)
+  const [declaring, setDeclaring] = useState(boot.declaring)
   const [dismissedSetup, setDismissedSetup] = useState<ReadonlySet<string>>(() => new Set())
   const [providerDrag, setProviderDrag] = useState<{
     providerId: string
@@ -308,7 +394,35 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
     setEditing(undefined)
     setAdding(false)
     setDeclaring(false)
+    discardResume()
+    clearProviderFormSession()
     if (changed) announceSaved(target)
+  }
+
+  const persistAddingDraft = useCallback((next: AddingDraftPersist) => {
+    patchAddingProviderForm(next)
+  }, [])
+
+  const persistDeclaringDraft = useCallback((next: DeclaringDraftPersist) => {
+    patchDeclaringProviderForm(next)
+  }, [])
+
+  const openAdding = (target: EditorTarget): void => {
+    setSavedTarget(undefined)
+    setDeclaring(false)
+    setAdding(true)
+    setEditing(target)
+    discardResume()
+    beginAddingProviderForm(sessionTargetFromEditor(target))
+  }
+
+  const openDeclaring = (): void => {
+    setSavedTarget(undefined)
+    setAdding(false)
+    setEditing(undefined)
+    setDeclaring(true)
+    discardResume()
+    beginDeclaringProviderForm()
   }
 
   /**
@@ -382,6 +496,26 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   // one whose schema names the protocols one may speak; without it mounted
   // there is nothing to declare and the entry point stays disabled.
   const protocols = protocolChoices(state.namespaces.get('llm-pi-ai'))
+  const canResume = formEpoch === 0
+  const addingRestore =
+    canResume
+      && resume.kind === 'adding'
+      && addTarget !== undefined
+      && addTarget.provider === resume.target.provider
+      ? { draft: resume.draft, keyDraft: resume.keyDraft }
+      : undefined
+  const declaringRestore =
+    canResume && resume.kind === 'declaring'
+      ? {
+          route: resume.route,
+          displayName: resume.displayName,
+          baseURL: resume.baseURL,
+          proxy: resume.proxy,
+          protocol: resume.protocol,
+          keyDraft: resume.keyDraft,
+          models: resume.models,
+        }
+      : undefined
 
   const commitProviderDrag = (): void => {
     const active = providerDrag
@@ -519,6 +653,8 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                       // one discards the other's draft.
                       setDeclaring(false)
                       setAdding(false)
+                      discardResume()
+                      clearProviderFormSession()
                       setEditing(open ? undefined : target)
                     }}
                   >
@@ -573,7 +709,10 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                     const row = addable.find(candidate => candidate.entry.provider === event.target.value)
                     /* v8 ignore next -- the select only lists addable rows */
                     if (row === undefined) return
-                    setEditing(targetOf(row))
+                    const next = targetOf(row)
+                    setEditing(next)
+                    discardResume()
+                    beginAddingProviderForm(sessionTargetFromEditor(next))
                   }}
                 >
                   {addable.map(row => (
@@ -591,6 +730,10 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                 api={api}
                 t={t}
                 readOnly={!state.writable}
+                {...(addingRestore !== undefined
+                  ? { restoreDraft: addingRestore }
+                  : {})}
+                onPersistDraft={persistAddingDraft}
                 onClose={(changed) => { closeEditor(changed, addTarget) }}
               />
             </div>
@@ -606,8 +749,14 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                   api={api}
                   t={t}
                   readOnly={!state.writable}
+                  {...(declaringRestore !== undefined
+                    ? { restoreDraft: declaringRestore }
+                    : {})}
+                  onPersistDraft={persistDeclaringDraft}
                   onClose={(changed) => {
                     setDeclaring(false)
+                    discardResume()
+                    clearProviderFormSession()
                     if (changed) void controller.load()
                   }}
                 />
@@ -628,10 +777,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                     const first = addable[0]
                     /* v8 ignore next -- the button is disabled while nothing is addable */
                     if (first === undefined) return
-                    setSavedTarget(undefined)
-                    setDeclaring(false)
-                    setAdding(true)
-                    setEditing(targetOf(first))
+                    openAdding(targetOf(first))
                   }}
                 >
                   {t('add')}
@@ -641,12 +787,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                   className={styles['addButton']}
                   icon={<IconPlusOutlineRegular size={14} />}
                   disabled={protocols.length === 0 || !state.writable}
-                  onClick={() => {
-                    setSavedTarget(undefined)
-                    setAdding(false)
-                    setEditing(undefined)
-                    setDeclaring(true)
-                  }}
+                  onClick={() => { openDeclaring() }}
                 >
                   {t('customAdd')}
                 </Button>

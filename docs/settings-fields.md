@@ -19,6 +19,7 @@
 | 定时任务 | `cron` | `enabled` |
 | 生图 / 生视频 / 看视频 | `image-gen` · `video-gen` · `video-analyze` | `mode` · `baseUrl` · `model` |
 | 联网搜索 | `web-search` | `provider` + 各家的 key |
+| workspace_list 活跃窗 | `workspace-discovery` | `activeWindowHours` · `maxActiveItems` · `maxListItems` |
 | 界面语言 / 主题 | `locale` · `ui-theme` | `preference` · `fontSize` |
 
 ## `ui-onboarding`
@@ -166,6 +167,16 @@
 | `softBudgetPeelAttempts` | number | `3` | Extra keep-halving passes after the standard two soft-budget summaries. |
 | `toolResultMaxInlineBytes` | number | `64_000` | Spill plain-text tool results over this UTF-8 byte ceiling (DSH spill-policy). `0` disables spill (not recommended). Default 64_000. |
 | `maxConcurrentModelSessions` | number | `5` | Default max live sessions per provider/model route (parent + subagent count equally). Per-model `maxConcurrentSessions` in the Models catalog overrides this. Routes are independent (A/x ≠ B/x). |
+
+## `workspace-discovery`
+
+`workspace_list` 默认只回活跃画布；休眠用工具参数 `query` / `includeInactive` 再找。向阳 · IM · 当前画布始终钉住。
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `activeWindowHours` | number | `168` | 距上次提问/触碰仍算活跃的小时数（向阳/IM/当前画布始终钉住）。 |
+| `maxActiveItems` | number | `16` | 未开 `includeInactive` 时最多返回几条。 |
+| `maxListItems` | number | `40` | 含休眠（`includeInactive` / `query`）时的硬上限。 |
 
 ## `web-search`
 

@@ -80,6 +80,13 @@ export function xrkHomePath(
 }
 
 /**
+ * DSH community host packages import `dshHomePath` from
+ * `@deepseek-ai/dsh-home-paths` (remapped to this package).
+ * Same join as {@link xrkHomePath}.
+ */
+export const dshHomePath = xrkHomePath;
+
+/**
  * Join path segments onto the product home's `cache` directory without creating it.
  * Rebuildable data (request-image variants, etc.) belongs here — not under durable
  * `{home}/attachments/v1`.

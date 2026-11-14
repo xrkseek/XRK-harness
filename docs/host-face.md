@@ -100,7 +100,7 @@ mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 *
 
 ### Wire 与流行为
 
-Wire：`session/queue` 带完整 `message` 块；`prompt/*` → mux/history `agent/inbox/spliced`；mux 重连对有 pending 的 session 补发 queue 基线。后台任务：`session/jobs` 全量快照（有 registry 才发；基线只在非空时发；清空仍推 `[]`）。Host 流：`host/session-added` 含 `sessionListFields`（子会话带 `parentSessionId` + `origin: "subagent"`；`blank` 看有无 `turn/start` 或 `command/run`）；`session.delete`（仅已归档）发 `host/session-removed` + 归档/置顶集合变更；`workspace.delete` 发 `host/workspace-removed`；`workspace.insertBefore` 发 `host/workspace-order-changed`（全量 id 序）。凭据 / 设置 mutate / preset select 发 `host/remote-event`（壳 `ctx.remote.$dispatch`；不转发 Cordis inspect/run）。
+Wire：`session/queue` 带完整 `message` 块；`prompt/*` → mux/history `agent/inbox/spliced`；mux 重连对有 pending 的 session 补发 queue 基线。后台任务：`session/jobs` 全量快照（有 registry 才发；基线只在非空时发；清空仍推 `[]`）。Host 流：`host/session-added` 含 `sessionListFields`（子会话带 `parentSessionId` + `origin: "subagent"`；`blank` 看有无 `turn/start` 或 `command/run`）；`session.delete`（仅已归档）发 `host/session-removed` + 归档/置顶集合变更；`workspace.delete` 发 `host/workspace-removed`；`workspace.insertBefore` 发 `host/workspace-order-changed`（全量 id 序）。凭据 / 设置 mutate / preset select / 插件更新探测结算（`plugin-inventory/updates-changed`）发 `host/remote-event`（壳 `ctx.remote.$dispatch`；不转发 Cordis inspect/run）。
 
 ### 审批与提问
 
@@ -278,7 +278,7 @@ Image-bearing sessions: appending `user/message` / `prompt/admitted` with images
 
 ### Wire and stream behavior
 
-Wire: `session/queue` carries a full `message` block; `prompt/*` → mux/history `agent/inbox/spliced`; on mux reconnect, sessions with pending work get a queue baseline. Background jobs: `session/jobs` is a full snapshot (only if a registry exists; baseline only when non-empty; clear still pushes `[]`). Host stream: `host/session-added` includes `sessionListFields` (child sessions carry `parentSessionId` + `origin: "subagent"`; `blank` depends on whether `turn/start` or `command/run` exists); `session.delete` (archived only) emits `host/session-removed` plus archive/pin set changes; `workspace.delete` emits `host/workspace-removed`; `workspace.insertBefore` emits `host/workspace-order-changed` (full id order). Credential / settings mutate / preset select emit `host/remote-event` (shell `ctx.remote.$dispatch`; Cordis inspect/run is not forwarded).
+Wire: `session/queue` carries a full `message` block; `prompt/*` → mux/history `agent/inbox/spliced`; on mux reconnect, sessions with pending work get a queue baseline. Background jobs: `session/jobs` is a full snapshot (only if a registry exists; baseline only when non-empty; clear still pushes `[]`). Host stream: `host/session-added` includes `sessionListFields` (child sessions carry `parentSessionId` + `origin: "subagent"`; `blank` depends on whether `turn/start` or `command/run` exists); `session.delete` (archived only) emits `host/session-removed` plus archive/pin set changes; `workspace.delete` emits `host/workspace-removed`; `workspace.insertBefore` emits `host/workspace-order-changed` (full id order). Credential / settings mutate / preset select / plugin update-probe settle (`plugin-inventory/updates-changed`) emit `host/remote-event` (shell `ctx.remote.$dispatch`; Cordis inspect/run is not forwarded).
 
 ### Approvals and questions
 

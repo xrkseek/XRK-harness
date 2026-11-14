@@ -59,6 +59,8 @@ const DSH_COMPAT_ALLOWED_EXTERNAL = [
   "@xrkseek/protocol",
   "@xrkseek/server-loader",
   "@xrkseek/xrk-home-paths",
+  // Community Cordis host halves register DSH `defineTool` shapes; adapt to core-tools.
+  "@xrkseek/xrk-tools",
 ];
 
 const SKIP_DIRS = new Set([

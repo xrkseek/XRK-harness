@@ -47,7 +47,7 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 | **im** | IM | 通道专用 + team / workspace / thread / subagent（无 bash/web/presence） | IM 通道（`ws_im`）；锁档 |
 | **qichuang** | 奇创 | 向阳锁档：settings + team + web/lsp/pty + peer（**无** nested subagent） | 向日葵 peer 域（管向阳 / 产品帮助；非项目经理上司） |
 
-MCP / TTS / 图像 / 视频等为**配置挂载**，与五档正交（开了就挂）。干员工具面由名册 `basePreset` + allow/deny 钉定（默认 harness）。
+MCP / TTS / 图像 / 视频等为**配置挂载**，与五档正交（开了就挂）。干员工具面由名册 `basePreset` + allow/deny 钉定（默认 harness）；干员家会话头像旁工具面芯片与 IM / 奇创一样**锁定**，改面请到「干员团队」改样品。
 
 计划模式：斜杠 **`/plan`** / Plan 芯片（与徽章正交）；交付物上工作区 **Canvas**；Overview 画布 **Build** 为可选快捷出口（关 Plan + 催实现，不挡回合）。`exit_plan_mode` 仍可用（兼容次路径）。旧 id **`plan`** 仅作 Host 兼容别名 → harness。
 
@@ -193,7 +193,7 @@ Legacy wire value **`server`** normalizes to **`harness`** for storage and badge
 | **im** | IM | Channel tools + team / workspace / thread / subagent (no bash/web/presence) | IM channel (`ws_im`); locked |
 | **qichuang** | 奇创 | Xiangyang lock: settings + team + web/lsp/pty + peer (**no** nested subagent) | Sunflower peer domain (向阳 / product help; not the project manager's boss) |
 
-MCP / TTS / image / video are **config mounts**, orthogonal to the five coding badges. Member surfaces come from roster `basePreset` + allow/deny (default harness).
+MCP / TTS / image / video are **config mounts**, orthogonal to the five coding badges. Member surfaces come from roster `basePreset` + allow/deny (default harness); the hero tool-surface chip is **locked** on agent-home (same as IM / Qichuang) — change the sample on Agent Team.
 
 Plan mode is **`/plan`** / Plan chip (orthogonal to badges); deliver on a workspace **Canvas**; Overview Canvas **Build** is an optional shortcut (exit plan + steer implement; does not gate turns). `exit_plan_mode` remains available (compat). Legacy id **`plan`** aliases to harness.
 

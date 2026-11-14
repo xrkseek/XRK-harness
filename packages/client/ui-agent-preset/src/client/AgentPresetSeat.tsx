@@ -18,9 +18,22 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-s
 import { IconAgentPresetOutlineRegular, IconChevronDownOutlineRegular, Menu } from '@xrkseek/client-ui-primitives'
 // Type-only: pulls the ui-conversation SlotMap merge (the hero seat).
 import type {} from '@xrkseek/client-ui-conversation/client'
-import type { AgentPresetSeatState } from './seat-store.ts'
+import type { AgentPresetSeatLock, AgentPresetSeatState } from './seat-store.ts'
 import { presetDisplayText, resolvePresetDisplayText } from './locales.ts'
+import type { AgentPresetSettingsKey } from './locales.ts'
 import css from './AgentPresetSeat.module.css'
+
+function lockedSeatTitle(
+  lock: AgentPresetSeatLock | undefined,
+  current: string,
+  t: (key: AgentPresetSettingsKey) => string,
+): string {
+  const kind = lock
+    ?? (current === 'qichuang' ? 'qichuang' : current === 'im' ? 'im' : 'agent-home')
+  if (kind === 'qichuang') return t('seatLockedQichuang')
+  if (kind === 'im') return t('seatLockedIm')
+  return t('seatLockedAgentHome')
+}
 
 /** Registration-side business face for the hero chip. */
 export interface AgentPresetSeatInjected {
@@ -76,9 +89,11 @@ export function AgentPresetSeat({ load, select, introduced, useAgentPresetSeat, 
     void load()
   }, [load])
 
-  // IM / 奇创 are workspace-locked — chip is informative only; they are filtered
-  // out of selectable options, so label resolves via built-in locale keys.
-  const lockedSurface = state.current === 'im' || state.current === 'qichuang'
+  // IM / 奇创 / agent-home are locked — chip is informative only.
+  // IM / 奇创 are filtered from options; agent-home still shows the roster badge name.
+  const lockedSurface = state.lock !== undefined
+    || state.current === 'im'
+    || state.current === 'qichuang'
   const chosen = state.options.find(option => option.id === state.current)
   const chosenText = resolvePresetDisplayText(state.current, chosen, t)
   const label = chosenText.name
@@ -136,7 +151,7 @@ export function AgentPresetSeat({ load, select, introduced, useAgentPresetSeat, 
       aria-expanded={lockedSurface ? undefined : open}
       title={
         lockedSurface
-          ? (state.current === 'qichuang' ? t('seatLockedQichuang') : t('seatLockedIm'))
+          ? lockedSeatTitle(state.lock, state.current, t)
           : (state.error ?? t('seatHint'))
       }
       disabled={state.busy || lockedSurface}

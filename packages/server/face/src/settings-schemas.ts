@@ -687,6 +687,19 @@ const WorkspaceInjectConfig = Schema.object({
     .default(DEFAULT_WORKSPACE_INJECT_MAX_CHARS),
 });
 
+/**
+ * workspace_list 活跃窗。默认只回活跃画布；模型用 includeInactive / query 找休眠。
+ * Active window for workspace_list. Default hides dormant; AI finds via includeInactive / query.
+ */
+const WorkspaceDiscoveryConfig = Schema.object({
+  /** 距上次提问/触碰仍算活跃的小时数（向阳/IM/当前画布始终钉住）。Hours since last prompt/touch → still active (Xiangyang/IM/current always pinned). */
+  activeWindowHours: Schema.number().step(1).min(1).max(8760).default(168),
+  /** 未开 includeInactive 时最多返回几条。Cap when includeInactive is off. */
+  maxActiveItems: Schema.number().step(1).min(1).max(100).default(16),
+  /** 含休眠（includeInactive / query）时的硬上限。Hard cap when listing dormant / query hits. */
+  maxListItems: Schema.number().step(1).min(1).max(200).default(40),
+});
+
 const UiConversationConfig = Schema.object({
   busyEnter: Schema.union(["queue", "steer"]),
   toolsDefaultExpanded: Schema.boolean().default(false),
@@ -1027,6 +1040,16 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       ns: "workspace-inject",
       schema: schemasteryJson(WorkspaceInjectConfig) as FaceSchemaEnvelope,
       base: { injectMaxChars: DEFAULT_WORKSPACE_INJECT_MAX_CHARS },
+      applies: "live",
+    },
+    {
+      ns: "workspace-discovery",
+      schema: schemasteryJson(WorkspaceDiscoveryConfig) as FaceSchemaEnvelope,
+      base: {
+        activeWindowHours: 168,
+        maxActiveItems: 16,
+        maxListItems: 40,
+      },
       applies: "live",
     },
     {

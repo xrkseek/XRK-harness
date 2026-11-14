@@ -75,6 +75,7 @@ import {
   ensureXrkPlatformClientBootEntries,
   injectBootIntoHtml,
   injectBootThemeIntoHtml,
+  injectCommunityIndexGlobalsIntoHtml,
   injectMobileAccessShellIntoHtml,
   loadBootManifestFromWebDist,
   mergeWebBootManifests,
@@ -88,6 +89,11 @@ import {
   loadSidebarPrefs,
   createAutoReviewToolPre,
   setImFaceAdmitHook,
+  listCommunityHostSkillDirs,
+  createCommunityPromptFragmentProvider,
+  listCommunityIndexGlobals,
+  syncCommunityHostToolsOnto,
+  communityHostToolsFingerprint,
 } from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
@@ -137,6 +143,7 @@ import {
   readUiLocalePreference,
   credentialsSet,
   settingsMutateFace,
+  persistSettingsDocument,
   communityLoopbackBaseUrlCollision,
   existingPiAiProvider,
   mergeCommunityProviderModels,
@@ -724,6 +731,7 @@ export type AgentFactory = (input: {
     | ReturnType<typeof createSeatIdentityFragmentProvider>
     | ReturnType<typeof createSessionCapabilityFragmentProvider>
     | ReturnType<typeof createSessionPostureFragmentProvider>
+    | ReturnType<typeof createCommunityPromptFragmentProvider>
   >;
   /** Face-backed working_directory tool (Host wires per session). */
   workingDirectoryTools?: import("@xrkseek/core-tools").WorkingDirectoryToolsOptions;
@@ -1079,6 +1087,9 @@ export function createHostManager(): HostManager {
       const agentCache = createHostAgentCache(loader.list(), { hostId: id });
       /** Per-session workspace MCP overlay fingerprint (invalidate on change). */
       const workspaceMcpFpBySession = new Map<string, string>();
+      /** Community Cordis tools we registered onto each session agent (for drop/replace). */
+      const communityToolsTrackedBySession = new Map<string, Set<string>>();
+      const communityToolsFpBySession = new Map<string, string>();
       const workspaceMcpPool = createWorkspaceMcpPool({
         allowConnect: () => mcpAllowConnect,
         onToolsChanged: () => {
@@ -1599,6 +1610,24 @@ export function createHostManager(): HostManager {
           }
           workspaceMcpFpBySession.set(sessionId, fpKey);
         }
+        {
+          // Nekowhale Settings remount flips tools; invalidate when set changes.
+          const fp = communityHostToolsFingerprint();
+          const prev = communityToolsFpBySession.get(sessionId);
+          if (prev !== undefined && prev !== fp) {
+            await deferBusyAgentInvalidate({
+              sessionId,
+              drainActive: drainActiveBox.isActive(sessionId),
+              busy: agentCache.isBusy(sessionId),
+              materializing: agentCache.isMaterializing(sessionId),
+              defer: (id) => {
+                pendingAgentInvalidate.add(id);
+              },
+              invalidate: (id) => agentCache.invalidate(id),
+            });
+          }
+          communityToolsFpBySession.set(sessionId, fp);
+        }
         // Settings `permission.extraWritableRoots` + session pathAccessMode
         // are live getters inside the composition — /permission and Settings
         // hot-switch without agentCache invalidate mid-turn.
@@ -1707,9 +1736,6 @@ export function createHostManager(): HostManager {
               store,
               workspaceRoot: sessionRoot,
               ...(wsRow?.title ? { workspaceDisplayTitle: wsRow.title } : {}),
-              ...(childWorkspaceInject
-                ? { workspaceInject: childWorkspaceInject }
-                : {}),
               plugins: pluginsForSession,
               attachments,
               // Existing fs options — product home covers spill / attachments / memories.
@@ -1873,14 +1899,34 @@ export function createHostManager(): HostManager {
               ...(pluginSettings.webSearch
                 ? { webSearch: pluginSettings.webSearch }
                 : {}),
-              ...(pluginSettings.workspaceInject || childWorkspaceInject
-                ? {
-                    workspaceInject: {
-                      ...(pluginSettings.workspaceInject ?? {}),
-                      ...(childWorkspaceInject ?? {}),
-                    },
-                  }
-                : {}),
+              ...(() => {
+                const communitySkills = listCommunityHostSkillDirs();
+                const baseExtra = [
+                  ...((pluginSettings.workspaceInject as
+                    | { readonly extraSkillDirs?: readonly string[] }
+                    | undefined)?.extraSkillDirs ?? []),
+                  ...((childWorkspaceInject as
+                    | { readonly extraSkillDirs?: readonly string[] }
+                    | undefined)?.extraSkillDirs ?? []),
+                  ...communitySkills,
+                ];
+                if (
+                  !pluginSettings.workspaceInject &&
+                  !childWorkspaceInject &&
+                  communitySkills.length === 0
+                ) {
+                  return {};
+                }
+                return {
+                  workspaceInject: {
+                    ...(pluginSettings.workspaceInject ?? {}),
+                    ...(childWorkspaceInject ?? {}),
+                    ...(baseExtra.length > 0
+                      ? { extraSkillDirs: baseExtra }
+                      : {}),
+                  },
+                };
+              })(),
               ...(pluginSettings.sessionTelemetry
                 ? { sessionTelemetry: pluginSettings.sessionTelemetry }
                 : {}),
@@ -1938,6 +1984,7 @@ export function createHostManager(): HostManager {
                       createBossStatusFragmentProvider(faceBox.runtime),
                       createSeatIdentityFragmentProvider(faceBox.runtime),
                       createCollabBoardFragmentProvider(faceBox.runtime),
+                      createCommunityPromptFragmentProvider(),
                     ],
                     workingDirectoryTools: {
                       get: () => resolveSessionCwd(faceBox.runtime!, sessionId),
@@ -2071,6 +2118,13 @@ export function createHostManager(): HostManager {
             });
             if (faceBox.approvals) {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
+            }
+            // Community Cordis host tools (nekowhale sticker_* / meme_render…).
+            // Tracked set so Settings remount can unregister dropped tools.
+            if (agent.tools) {
+              const tracked = new Set<string>();
+              syncCommunityHostToolsOnto(agent.tools, tracked);
+              communityToolsTrackedBySession.set(sessionId, tracked);
             }
             // ask_user / exit_plan_mode: Face resolveAgent rebinds once.
             if (agent.tools && faceBox.runtime) {
@@ -2264,6 +2318,21 @@ export function createHostManager(): HostManager {
           // before the Face runtime was ready heals on its next resolve.
           if (!faceBox.runtime) await faceRuntimeReady;
           faceBox.runtime?.bindSessionAgent(sessionId, agent);
+          // Cache hits still need live community tool sync (Settings remount
+          // between turns without full agent rebuild when fingerprint matches
+          // name set but execute bodies changed — replace in place).
+          if (agent.tools) {
+            let tracked = communityToolsTrackedBySession.get(sessionId);
+            if (!tracked) {
+              tracked = new Set();
+              communityToolsTrackedBySession.set(sessionId, tracked);
+            }
+            syncCommunityHostToolsOnto(agent.tools, tracked);
+            communityToolsFpBySession.set(
+              sessionId,
+              communityHostToolsFingerprint(),
+            );
+          }
           return agent;
         });
       };
@@ -3634,6 +3703,28 @@ export function createHostManager(): HostManager {
       // critical path (DSH listen-first); see runOptionalWarmupAfterListen.
       applySunflowerFreeEgressSettings(faceRuntime);
 
+      /** Cordis LIVE_KEYS remount watchers (nekowhale / peers). */
+      const communitySettingsWatchers = new Map<string, Set<() => void>>();
+      faceRuntime.bus.subscribeHost((_rpcId, frame) => {
+        if (
+          frame.type !== "host/remote-event" ||
+          frame.event !== "settings/document-updated"
+        ) {
+          return;
+        }
+        const ns =
+          typeof frame.args?.[0] === "string" ? frame.args[0].trim() : "";
+        if (!ns) return;
+        // Face UI `settings.mutate` path — same LIVE remount as Cordis set().
+        communitySettingsWatchers.get(ns)?.forEach((cb) => {
+          try {
+            cb();
+          } catch {
+            /* ignore */
+          }
+        });
+      });
+
       const hostWireCtx = {
         pluginsDir: resolvedPluginsDir,
         xrkHome: resolveXrkHome(),
@@ -3805,6 +3896,106 @@ export function createHostManager(): HostManager {
             );
           }
         },
+        ensureCommunitySettingsNamespace: (
+          namespace: string,
+          defaults: Record<string, unknown>,
+        ) => {
+          const ns = namespace.trim();
+          const slot = faceRuntime.settingsNamespaces.ensure(ns);
+          slot.applies = "live";
+          if (Object.keys(slot.base).length === 0 && Object.keys(defaults).length > 0) {
+            slot.base = { ...defaults };
+          }
+          if (
+            Object.keys(slot.user).length === 0 &&
+            Object.keys(defaults).length > 0
+          ) {
+            // Seed + durable yaml (DSH first-open defaults).
+            const seed = faceRuntime.settingsNamespaces.mutate(
+              ns,
+              Object.entries(defaults).map(([key, value]) => ({
+                op: "set" as const,
+                path: [key],
+                value,
+              })),
+            );
+            if (seed.ok) {
+              void persistSettingsDocument(
+                faceRuntime,
+                faceRuntime.settingsNamespaces,
+              ).catch((err: unknown) => {
+                console.warn(
+                  `[host] community settings seed persist failed ns=${ns}:`,
+                  err instanceof Error ? err.message : err,
+                );
+              });
+            }
+          }
+          return {
+            get: () =>
+              ({
+                ...slot.base,
+                ...slot.user,
+              }) as Record<string, unknown>,
+            set(patch: Record<string, unknown>) {
+              const ops = Object.entries(patch).map(([key, value]) => ({
+                op: "set" as const,
+                path: [key],
+                value,
+              }));
+              if (ops.length === 0) return;
+              const result = faceRuntime.settingsNamespaces.mutate(ns, ops);
+              if (!result.ok) {
+                console.warn(
+                  `[host] community settings mutate failed ns=${ns}: ${result.message}`,
+                );
+                return;
+              }
+              communitySettingsWatchers.get(ns)?.forEach((cb) => {
+                try {
+                  cb();
+                } catch {
+                  /* watcher errors must not break Cordis set */
+                }
+              });
+              void persistSettingsDocument(
+                faceRuntime,
+                faceRuntime.settingsNamespaces,
+              )
+                .then(() => {
+                  publishRemoteEvent(
+                    faceRuntime.bus,
+                    "settings/document-updated",
+                    [ns, result.view.revision],
+                  );
+                })
+                .catch((err: unknown) => {
+                  console.warn(
+                    `[host] community settings persist failed ns=${ns}:`,
+                    err instanceof Error ? err.message : err,
+                  );
+                });
+            },
+          };
+        },
+        watchCommunitySettingsNamespace: (
+          namespace: string,
+          onChange: () => void,
+        ) => {
+          const ns = namespace.trim();
+          if (!ns) return () => undefined;
+          let set = communitySettingsWatchers.get(ns);
+          if (!set) {
+            set = new Set();
+            communitySettingsWatchers.set(ns, set);
+          }
+          set.add(onChange);
+          const watchers = set;
+          return () => {
+            watchers.delete(onChange);
+            if (watchers.size === 0) communitySettingsWatchers.delete(ns);
+          };
+        },
         tokenLedger: {
           ...createCostMeterUsageBridge(faceRuntime),
           ...createUsageStatsBridgeFromFace(faceRuntime),
@@ -3943,10 +4134,13 @@ export function createHostManager(): HostManager {
                       : 14;
                   return injectMobileAccessShellIntoHtml(
                     injectBootThemeIntoHtml(
-                      injectBootIntoHtml(
-                        html,
-                        liveBoot.current,
-                        faceRuntime.version,
+                      injectCommunityIndexGlobalsIntoHtml(
+                        injectBootIntoHtml(
+                          html,
+                          liveBoot.current,
+                          faceRuntime.version,
+                        ),
+                        listCommunityIndexGlobals(),
                       ),
                       faceRuntime.uiSettings.theme,
                       fontSize,

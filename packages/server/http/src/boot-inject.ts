@@ -228,3 +228,33 @@ export function injectBootThemeIntoHtml(
   const at = body.index + body[0].length;
   return `${html.slice(0, at)}${script}${html.slice(at)}`;
 }
+
+/**
+ * Stamp Cordis `webserver/index-inject` globals (e.g. `__NEKOWHALE_PET__`)
+ * before the SPA boots. Client halves that poll HTTP still work without this.
+ */
+export function injectCommunityIndexGlobalsIntoHtml(
+  html: string,
+  globals: readonly { readonly name: string; readonly value: unknown }[],
+): string {
+  const rows = globals.filter(
+    (g) => typeof g.name === "string" && /^[A-Za-z_$][\w$]*$/.test(g.name),
+  );
+  if (rows.length === 0) return html;
+  const assignments = rows
+    .map(
+      (g) =>
+        `window[${JSON.stringify(g.name)}]=${JSON.stringify(g.value)};`,
+    )
+    .join("");
+  const script = `<script>${assignments}</script>`;
+  const stripped = html.replace(
+    /<script>\s*window\[[^\]]+\]=[\s\S]*?<\/script>/i,
+    "",
+  );
+  const idx = stripped.toLowerCase().lastIndexOf("</head>");
+  if (idx >= 0) {
+    return stripped.slice(0, idx) + script + stripped.slice(idx);
+  }
+  return script + stripped;
+}

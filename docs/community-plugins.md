@@ -120,7 +120,8 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 | `dsh-chat-import` | full | `/api-import/*` |
 | `dsh-vision-router` | full | `/vision-router-settings` · Vision Host |
 | `dsh-pocket` | full | `/dsh-pocket` |
-| `dsh-plugin-wallpaper-engine` | partial | 自定义上传 + settings + picker 形 inventory · media/preview；Steam/WebWallGL/ffmpeg/Now Playing 诚实降级 — 细表 [compat](./community-plugin-compat.md#dsh-plugin-wallpaper-engineelysia395dsh-wallpaper-engine) |
+| `dsh-plugin-wallpaper-engine` | full（host-ok；外置 WE/ffmpeg/webwallgl） | Cordis live apply + Face `wallpaper-engine` yaml；无 lib 时 baseline；细表 [compat](./community-plugin-compat.md#dsh-plugin-wallpaper-engineelysia395dsh-wallpaper-engine) |
+| `dsh-nekowhale-stickers` | full（host-ok；外置网络/余额钥） | Cordis tools/skills/`settings.yaml` LIVE watch/HTTP/桌宠；MCP 用户自挂 npx — 细表 [compat](./community-plugin-compat.md#dsh-nekowhale-stickersloping151dsh-nekowhale-stickers) |
 | `dsh-wallpaper-bg` | full（内置） | `/dsh-wallpaper-bg`：builtin webp · health · `/we` 列表（无本机 WE API） |
 | `dsh-context` | partial | `/api/dsh-context/detail` → `{ ok, value }`（session DocStore 可 push）；`balance` · `backfill`；缺 `sidebar.right.pane.*` |
 | `dsh-mnemon` | host-ok | Mnemon RPC：documents CRUD · archive/forget · snapshot/capacity/placement · view-settings；缺 panellist / `main` |
@@ -174,7 +175,8 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 | `@linxin666/dsh-skins`（及内嵌 `blue-fantasy` · `dragon-heir` · `harbor` · `maid-atelier` · `matrix` · `miku` · `minecraft` · `trading` · `whale-mom` · `whale-song` · `xp`） | full | 经 skin-center / skin-assets 发现 `skin.json` |
 | `dsh-skin-market` | full | `/dsh-skin-market/catalog` · state · activate |
 | `dsh-dream-skin` | full | `/dream-skin/api` · Settings `dreamSkin` |
-| `dsh-plugin-wallpaper-engine` | partial | 见上表「壳 · 工具」 |
+| `dsh-plugin-wallpaper-engine` | full（host-ok） | 见上表「壳 · 工具」 |
+| `dsh-nekowhale-stickers` | full（host-ok） | 见上表「壳 · 工具」 |
 | `dsh-client-ui-aqua` | client | Settings `aqua` · body 装饰 |
 | `open-sea-skin` | client | body 装饰 |
 | `dsh-client-liang-intensity-skin` | client | `conversation.input.right` |
@@ -411,7 +413,8 @@ Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; D
 | `dsh-chat-import` | full | `/api-import/*` |
 | `dsh-vision-router` | full | `/vision-router-settings` · Vision host |
 | `dsh-pocket` | full | `/dsh-pocket` |
-| `dsh-plugin-wallpaper-engine` | partial | custom upload + settings + picker-shaped inventory · media/preview; Steam/WebWallGL/ffmpeg/Now Playing honestly degraded — detail [compat](./community-plugin-compat.md) |
+| `dsh-plugin-wallpaper-engine` | full (host-ok; external WE/ffmpeg/webwallgl) | Cordis live apply + Face `wallpaper-engine` yaml; baseline without lib — detail [compat](./community-plugin-compat.md) |
+| `dsh-nekowhale-stickers` | full (host-ok; external network/balance key) | Cordis tools/skills/`settings.yaml` LIVE watch/HTTP/pet; MCP via user npx — detail [compat](./community-plugin-compat.md) |
 | `dsh-wallpaper-bg` | full (builtins) | `/dsh-wallpaper-bg`: builtin webp · health · `/we` list (no local WE API) |
 | `dsh-context` | partial | `/api/dsh-context/detail` → `{ ok, value }` (session DocStore push); `balance` · `backfill`; missing `sidebar.right.pane.*` |
 | `dsh-mnemon` | host-ok | Mnemon RPC: documents CRUD · archive/forget · snapshot/capacity/placement · view-settings; missing panellist / `main` |
@@ -465,7 +468,8 @@ Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; D
 | `@linxin666/dsh-skins` (nested `blue-fantasy` · `dragon-heir` · `harbor` · `maid-atelier` · `matrix` · `miku` · `minecraft` · `trading` · `whale-mom` · `whale-song` · `xp`) | full | discovered via skin-center / skin-assets `skin.json` |
 | `dsh-skin-market` | full | `/dsh-skin-market/catalog` · state · activate |
 | `dsh-dream-skin` | full | `/dream-skin/api` · Settings `dreamSkin` |
-| `dsh-plugin-wallpaper-engine` | partial | see Shell · tools table above |
+| `dsh-plugin-wallpaper-engine` | full (host-ok) | see Shell · tools table above |
+| `dsh-nekowhale-stickers` | full (host-ok) | see Shell · tools table above |
 | `dsh-client-ui-aqua` | client | Settings `aqua` · body décor |
 | `open-sea-skin` | client | body décor |
 | `dsh-client-liang-intensity-skin` | client | `conversation.input.right` |

@@ -9,10 +9,14 @@ import { ModelsSection, providerCopy } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected } from '../src/client/ModelsSection.tsx'
 import { CustomProviderCard } from '../src/client/CustomProviderCard.tsx'
 import { formatCapacity, parseCapacity } from '../src/client/DeepSeekModelsEditor.tsx'
+import { resetProviderFormSessionForTests } from '../src/client/provider-form-session.ts'
 import { ModelsSettingsStore, deriveKeyRef, protocolChoices } from '../src/client/store.ts'
 import { en } from '../src/client/locales.ts'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  resetProviderFormSessionForTests()
+})
 
 const t: ModelsSectionInjected['t'] = key => en[key]
 
@@ -1523,6 +1527,45 @@ describe('hand-declared providers', () => {
     fireEvent.click(screen.getByText(en.cancel))
     await waitFor(() => { expect(screen.queryByText(en.customTitle)).toBeNull() })
     expect(screen.getByRole('button', { name: en.customAdd })).toBeTruthy()
+  })
+
+  it('keeps custom-create typed fields after Settings remount', async () => {
+    const first = await mountSection()
+    fireEvent.click(screen.getByRole('button', { name: en.customAdd }))
+    fireEvent.change(screen.getByLabelText(en.customRoute), {
+      target: { value: 'acme-gateway' },
+    })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), {
+      target: { value: 'https://gateway.acme.example/v1' },
+    })
+    fireEvent.change(screen.getByLabelText(en.keyInput), {
+      target: { value: 'sk-keep' },
+    })
+
+    // Backdrop dismiss: unmount the section without Cancel.
+    cleanup()
+
+    const controller = new ModelsSettingsStore(first.face as unknown as WireFace)
+    await controller.load()
+    render(
+      <ModelsSection
+        controller={controller}
+        useSnapshot={bindSnapshotSelector(controller.store)}
+        api={first.face as never}
+        t={t}
+      />,
+    )
+
+    expect(screen.getByText(en.customTitle)).toBeTruthy()
+    expect(screen.getByLabelText<HTMLInputElement>(en.customRoute).value).toBe(
+      'acme-gateway',
+    )
+    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).value).toBe(
+      'https://gateway.acme.example/v1',
+    )
+    expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).value).toBe(
+      'sk-keep',
+    )
   })
 
   it('refuses an unusable key on the field and blocks creation', () => {

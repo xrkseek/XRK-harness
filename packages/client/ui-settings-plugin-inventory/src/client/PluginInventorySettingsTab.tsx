@@ -33,6 +33,7 @@ import {
   canOfferPluginUpdate,
   classifyPluginSource,
   isPhoneGuestEngineEntry,
+  shouldShowPluginUpdateBadge,
   type PluginSourceClass,
 } from './plugin-source.ts'
 import css from './PluginInventorySettingsTab.module.css'
@@ -87,7 +88,12 @@ export interface PluginInventorySettingsTabInjected {
   /** Remove a managed plugin from the CLI inventory. */
   remove: (entryId: PluginEntryId) => Promise<void>
   /** Reinstall / bump a managed plugin from its install source. */
-  update: (entryId: PluginEntryId, requestId?: string) => Promise<PluginInstallLog | undefined>
+  update: (
+    entryId: PluginEntryId,
+    requestId?: string,
+    registry?: string,
+    proxy?: string,
+  ) => Promise<PluginInstallLog | undefined>
   /** Remount a managed process plugin from disk without reinstalling. */
   reload: (entryId: PluginEntryId) => Promise<void>
   /** Open the managed plugin install folder in the OS. */
@@ -113,12 +119,21 @@ export interface PluginInventorySettingsTabInjected {
     onText: (text: string) => void,
   ) => () => void
   /**
+   * Host `plugin-inventory/updates-changed` — warm / force / post-mutate probe
+   * settled. Pull warm cache (no second npm view). Absent in unit stubs.
+   */
+  subscribeUpdatesChanged?: (onChanged: () => void) => () => void
+  /**
    * Host update probe (warm cache after listen). `force` re-runs npm view.
+   * Pass the same Settings install-row `registry` / `proxy` as `plugin add`
+   * so Desktop / Web / Mobile hit one mirror.
    * Absent in unit tests that stub inventory only.
    */
   checkUpdates?: (
     entryIds?: readonly PluginEntryId[],
     force?: boolean,
+    registry?: string,
+    proxy?: string,
   ) => Promise<PluginUpdateProbeSnapshot>
 }
 
@@ -351,6 +366,7 @@ export function PluginInventorySettingsTab({
   open: openFolder,
   install,
   subscribeInstallLog,
+  subscribeUpdatesChanged,
   checkUpdates,
   t,
 }: PluginInventorySettingsTabProps): ReactNode {
@@ -439,15 +455,32 @@ export function PluginInventorySettingsTab({
     return () => { current = false }
   }, [list, request])
 
+  const installNet = useMemo(() => {
+    const registry = resolveInstallRegistry(registryChoice, registryCustom)
+    const proxy = installProxy.trim()
+    return {
+      ...(registry !== undefined ? { registry } : {}),
+      ...(proxy.length > 0 ? { proxy } : {}),
+    }
+  }, [registryChoice, registryCustom, installProxy])
+
   // Pull Host warm probe (or start one). Poll while status is checking so
   // opening Settings mid-probe shows a spinner, then badges when ready.
+  // Re-pull when Settings mirror changes so badges match install/update.
+  // `plugin-inventory/updates-changed` also pulls warm cache (post-mutate /
+  // warm settle on Desktop host SSE / Web host WS — no second force view).
   useEffect(() => {
     if (!checkUpdates || state.status !== 'ready') return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
     const pull = async (force: boolean): Promise<void> => {
       try {
-        const snap = await checkUpdates(undefined, force)
+        const snap = await checkUpdates(
+          undefined,
+          force,
+          installNet.registry,
+          installNet.proxy,
+        )
         if (cancelled) return
         setUpdateProbe(snap)
         if (snap.status === 'checking' || snap.status === 'idle') {
@@ -459,11 +492,21 @@ export function PluginInventorySettingsTab({
       }
     }
     void pull(false)
+    const unsub = subscribeUpdatesChanged?.(() => {
+      void pull(false)
+    })
     return () => {
       cancelled = true
       if (timer !== undefined) clearTimeout(timer)
+      unsub?.()
     }
-  }, [checkUpdates, state])
+  }, [
+    checkUpdates,
+    subscribeUpdatesChanged,
+    state,
+    installNet.registry,
+    installNet.proxy,
+  ])
 
   const updateById = useMemo(() => {
     const map = new Map<string, PluginUpdateProbeRow>()
@@ -535,9 +578,13 @@ export function PluginInventorySettingsTab({
     setUpdateCheckBusy(true)
     setActionError(null)
     try {
+      persistRegistry(registryChoice, registryCustom)
+      persistProxy(installProxy)
       const snap = await checkUpdates(
         entryId !== undefined ? [entryId] : undefined,
         true,
+        installNet.registry,
+        installNet.proxy,
       )
       setUpdateProbe(snap)
       if (snap.status === 'error') {
@@ -555,6 +602,8 @@ export function PluginInventorySettingsTab({
   // Toast + inventory refresh on busy→ok while this mount is alive (including
   // remount mid-install / mid-update). Settled-while-closed still shows
   // TerminalBlock / refresh hint from the durable session without replaying toast.
+  // Badge refresh prefers Host `plugin-inventory/updates-changed` (post-mutate
+  // re-probe). Warm pull here covers shells that miss the event mid-unmount.
   const wasInstallBusy = useRef(installBusy)
   useEffect(() => {
     const finishedOk = wasInstallBusy.current && !installBusy && installSuccess
@@ -567,7 +616,21 @@ export function PluginInventorySettingsTab({
       if (okSpec.length > 0) showToast(t('toastInstalled', { name: okSpec }))
     }
     setRequest(value => value + 1)
-  }, [installBusy, installSuccess, mutateKind, okSpec, t])
+    if (checkUpdates) {
+      void checkUpdates(undefined, false, installNet.registry, installNet.proxy)
+        .then((snap) => { setUpdateProbe(snap) })
+        .catch(() => { /* badge refresh is best-effort */ })
+    }
+  }, [
+    installBusy,
+    installSuccess,
+    mutateKind,
+    okSpec,
+    t,
+    checkUpdates,
+    installNet.registry,
+    installNet.proxy,
+  ])
 
   // Bring the live TerminalBlock into view when a CLI mutate starts.
   useEffect(() => {
@@ -1065,14 +1128,25 @@ export function PluginInventorySettingsTab({
                 const art = kindArtwork(entry.kind)
                 const ArtworkIcon = art.Icon
                 const showLocal = sourceClass === 'local'
-                const showUpdateAvail = probe?.updateAvailable === true && Boolean(probe.latest)
+                // Re-compare against live inventory version so a stale Host probe
+                // cannot keep →0.1.2 when the card already shows 0.1.2.
+                const showUpdateAvail = shouldShowPluginUpdateBadge({
+                  updateAvailable: probe?.updateAvailable,
+                  latest: probe?.latest,
+                  installed: entry.version ?? probe?.installed,
+                })
                 const showCheckFailed = probe?.checkFailed === true
                 const showChecking = managed
-                  && sourceClass === 'registry'
+                  && (sourceClass === 'registry' || sourceClass === 'local')
                   && !showUpdateAvail
                   && !showCheckFailed
                   && (probeChecking || updateCheckBusy)
-                const offerUpdate = managed && canOfferPluginUpdate(sourceClass)
+                // Local file installs still get 「更新」once the Host advisory
+                // probe finds a newer registry version (installs id@latest).
+                const offerUpdate = managed && (
+                  canOfferPluginUpdate(sourceClass)
+                  || (sourceClass === 'local' && showUpdateAvail)
+                )
                 const ariaBits = [
                   title,
                   managed ? t('managedTag') : null,
@@ -1289,12 +1363,27 @@ export function PluginInventorySettingsTab({
                                   setBusyId(entry.entryId)
                                   setActionError(null)
                                   try {
+                                    persistRegistry(registryChoice, registryCustom)
+                                    persistProxy(installProxy)
+                                    const commandParts = ['xrkh plugin add']
+                                    if (installNet.registry) {
+                                      commandParts.push('--registry', installNet.registry)
+                                    }
+                                    if (installNet.proxy) {
+                                      commandParts.push('--proxy', installNet.proxy)
+                                    }
+                                    commandParts.push(`${entry.entryId}@latest`)
                                     await runPluginCliMutateUi({
                                       kind: 'update',
                                       spec: title,
-                                      command: `xrkh plugin add ${entry.entryId}@latest`,
+                                      command: commandParts.join(' '),
                                       run: async (requestId) => {
-                                        const log = await update(entry.entryId, requestId)
+                                        const log = await update(
+                                          entry.entryId,
+                                          requestId,
+                                          installNet.registry,
+                                          installNet.proxy,
+                                        )
                                         if (log === undefined) {
                                           throw new Error(t('actionFailed'))
                                         }

@@ -31,7 +31,10 @@ import {
   publishSessionThreads,
   sessionIdsOnThread,
 } from "./session-thread-publish.js";
-import { refuseCrossAgentHomeLane } from "./agent-home-boundary.js";
+import {
+  isAgentHomeSession,
+  refuseCrossAgentHomeLane,
+} from "./agent-home-boundary.js";
 
 export interface BindSessionThreadToolsOptions {
   readonly runtime: FaceRuntime;
@@ -117,7 +120,7 @@ export function bindSessionThreadTools(
     description:
       "Message another session by session_id. wait=true (default) returns the next assistant reply.",
     dynamicSchema: () => {
-      const { kind } = sessionToolContext(runtime, sessionId);
+      const { kind, surface } = sessionToolContext(runtime, sessionId);
       const siblingIds =
         messageOnly || kind === "delegated_child"
           ? listSiblingSessionIds(runtime, sessionId)
@@ -126,6 +129,8 @@ export function bindSessionThreadTools(
         description: threadMessageDescription({
           kind,
           messageOnly,
+          fromAgentHome: isAgentHomeSession(runtime, sessionId),
+          ...(surface !== undefined ? { surface } : {}),
           ...(siblingIds && siblingIds.length > 0 ? { siblingIds } : {}),
         }),
       };

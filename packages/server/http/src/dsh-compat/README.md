@@ -75,9 +75,13 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 | `tongflow-node-runtime.ts` | Built-in node execution |
 | `cordis-fiber-runner.ts` · `host-apply-bridge.ts` | `host.mjs` apply / subprocess |
 | `host-module-remap*.ts` | Cordis host `import` remap：`@deepseek-ai/dsh-*` → `@xrkseek/xrk-*`（约定）+ 特例（`cordis` · `schemastery` · `pi-ai` · `secrets` · `workspace` · `core-agent-loop` …）；`xrk-pi-ai` 再导出真包时跳过 remap 以免自环 |
-| `community-cordis-host-session.ts` | 社区 host 半包共用 Cordis Context：webServer/rpc/connection/credentials/settings · fiber await · live dispose |
+| `community-cordis-host-session.ts` | 社区 host 半包共用 Cordis Context：webServer/rpc（Service+fiber）/connection/credentials/settings · 可选 tools/skills/systemPrompt · single-shot provide/track · safe disposer drain · live dispose |
+| `community-cordis-surfaces.ts` · `community-cordis-tool-adapt.ts` · `community-host-registry.ts` | tools/skills/prompt 为 fiber-scoped Service（adapt 缓存 · skill 目录按 provider 回收）；publish 同引用去重；`syncCommunityHostToolsOnto` 供 Host remount |
 | `community-loopback-llm-bridge.ts` | Cordis `registerAdapter` → Face `syncCommunityLlmProvider` 统一桥（指纹 · 重试 · GET nudge · ephemeral `actualPort` 解析） |
 | `workbuddy-host.ts` | `dsh-workbuddy-connect` stage `lib/`：共用 session + 统一桥（CN/AI settled 前 status nudge；signed-in 且 `models` 空时用 fallback 补全） |
+| `wallpaper-host.ts` | `dsh-plugin-wallpaper-engine` Cordis live apply（优先于 baseline `wallpaper.ts`）；Face `wallpaper-engine` yaml |
+| `nekowhale-host.ts` | `dsh-nekowhale-stickers` Cordis apply：工具/技能/提示/Settings yaml + LIVE watch remount/HTTP/桌宠 |
+| `community-settings-store.ts` | Face `ensure`/`watch` → Cordis settings bridge（DSH LIVE_KEYS） |
 | `our-free-model-host.ts` | `dsh-our-free-model` stage `index.js`：共用 session + forward seed · Face sync **仅** free-lane · boot poll `actualPort`/`forwardKey` · `emitAdaptersUpdated` · `profileContext` · `attachments`；Magpie 工作台 win32-only |
 | `cordis-credentials-bridge.ts` | 社区 host 凭据落盘：`resolve`/`set`/`describe`/`unset`（`~/.xrk/community-credentials/<pkg>/`） |
 | `cordis-attachments-bridge.ts` | OFM / channel-pack 图片座：本地 `{XRK_HOME}/attachments/v1` · sync `imageHostPath` · `readImage`/`saveImage`/`readImageRequest` |

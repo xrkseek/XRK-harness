@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
+import { planNpmViewSpawn } from "../xrk/npm-view-spawn.js";
 import { dataPath } from "./underlying/json-store.js";
 
 const execFileAsync = promisify(execFile);
@@ -13,25 +14,6 @@ const execFileAsync = promisify(execFile);
 function funnelFilename(): string {
   const suffix = process.platform === "win32" ? ".exe" : "";
   return `dsh-mobile-funnel-${process.platform}-${process.arch}${suffix}`;
-}
-
-function resolveNpmInvocation(): { command: string; prefixArgs: string[] } {
-  const node = process.execPath;
-  const npmCli = path.join(
-    path.dirname(node),
-    "node_modules",
-    "npm",
-    "bin",
-    "npm-cli.js",
-  );
-  if (existsSync(npmCli)) {
-    return { command: node, prefixArgs: [npmCli] };
-  }
-  const npmCmd =
-    process.platform === "win32"
-      ? path.join(path.dirname(node), "npm.cmd")
-      : "npm";
-  return { command: npmCmd, prefixArgs: [] };
 }
 
 function resolveTarCommand(): string {
@@ -80,19 +62,20 @@ export async function ensureFunnelSidecar(
   const staging = dataPath(xrkHome, "mobile-access", "staging", "funnel-fetch");
   await mkdir(staging, { recursive: true });
   const packPath = path.join(staging, "dsh-mobile.tgz");
-  const { command, prefixArgs } = resolveNpmInvocation();
-  await execFileAsync(
-    command,
-    [
-      ...prefixArgs,
-      "pack",
-      "dsh-mobile@0.2.0",
-      "--silent",
-      "--pack-destination",
-      staging,
-    ],
-    { windowsHide: true, timeout: 180_000 },
-  );
+  const plan = planNpmViewSpawn([
+    "pack",
+    "dsh-mobile@0.2.0",
+    "--silent",
+    "--pack-destination",
+    staging,
+  ]);
+  await execFileAsync(plan.file, [...plan.args], {
+    windowsHide: true,
+    timeout: 180_000,
+    ...(plan.windowsVerbatimArguments
+      ? { windowsVerbatimArguments: true }
+      : {}),
+  });
   const packed = existsSync(packPath)
     ? packPath
     : path.join(staging, "dsh-mobile-0.2.0.tgz");

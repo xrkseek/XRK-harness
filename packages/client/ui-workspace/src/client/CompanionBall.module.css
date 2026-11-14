@@ -27,6 +27,20 @@
   background: transparent;
 }
 
+/* Agent Team look preview — large enough to read shape / kit / face. */
+.stage[data-preview] {
+  --ball-base: 72px;
+  border-radius: 12px;
+  flex: none;
+}
+
+@media (min-width: 641px) {
+  .stage[data-preview] {
+    --ball-base: 96px;
+    border-radius: 14px;
+  }
+}
+
 .stage[data-empty] {
   display: grid;
   place-items: center;

@@ -63,6 +63,10 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopMaxConcurrentModelSessions' | 'agentLoopMaxConcurrentModelSessionsHint'
   | 'workspaceInjectTitle' | 'workspaceInjectDescription'
   | 'workspaceInjectMaxChars' | 'workspaceInjectMaxCharsHint'
+  | 'workspaceDiscoveryTitle' | 'workspaceDiscoveryDescription'
+  | 'workspaceDiscoveryActiveWindowHours' | 'workspaceDiscoveryActiveWindowHoursHint'
+  | 'workspaceDiscoveryMaxActive' | 'workspaceDiscoveryMaxActiveHint'
+  | 'workspaceDiscoveryMaxList' | 'workspaceDiscoveryMaxListHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
   | 'mcpServersHeading' | 'mcpServersEmpty' | 'mcpAddServer' | 'mcpRemoveServer'
   | 'mcpPaste' | 'mcpPasteHint' | 'mcpPasteEmpty' | 'mcpPasteInvalid'
@@ -364,6 +368,14 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   workspaceInjectDescription: 'How much of the workspace rules and skills catalog may enter the system prompt each turn.',
   workspaceInjectMaxChars: 'Inject character budget',
   workspaceInjectMaxCharsHint: 'Total characters for rules + skills catalog inject. Default 32000 (range 4000–128000).',
+  workspaceDiscoveryTitle: 'Workspace discovery',
+  workspaceDiscoveryDescription: 'workspace_list returns active canvases by default. Dormant stay hidden until the agent uses query or includeInactive.',
+  workspaceDiscoveryActiveWindowHours: 'Active window (hours)',
+  workspaceDiscoveryActiveWindowHoursHint: 'Hours since last prompt or touch before a canvas goes dormant. Default 168 (7 days). Xiangyang, IM, and the current canvas stay pinned.',
+  workspaceDiscoveryMaxActive: 'Max active rows',
+  workspaceDiscoveryMaxActiveHint: 'Cap for the default active-only list. Default 16.',
+  workspaceDiscoveryMaxList: 'Max list rows',
+  workspaceDiscoveryMaxListHint: 'Hard cap when dormant rows are included (includeInactive or query). Default 40.',
   mcpTitle: 'MCP servers',
   mcpDescription: 'Configure on Xiangyang (奇创). Each seat mounts global + its session `.xrk/mcp.json` + seated member home when distinct (session wins). Paste Cursor/Trae JSON; omit cwd → ~/.xrk/mcp-cwd/<name>.',
   mcpConnectedHeading: 'Connected now',
@@ -952,6 +964,14 @@ export const ja = {
   workspaceInjectDescription: '各ターンでシステムプロンプトに入れるワークスペースルールとスキルカタログの量。',
   workspaceInjectMaxChars: '注入文字数予算',
   workspaceInjectMaxCharsHint: 'ルール＋スキルカタログ注入の合計文字数。デフォルト 32000（範囲 4000–128000）。',
+  workspaceDiscoveryTitle: 'ワークスペース発見',
+  workspaceDiscoveryDescription: 'workspace_list は既定でアクティブなキャンバスだけ返します。休眠は query または includeInactive のとき。',
+  workspaceDiscoveryActiveWindowHours: 'アクティブ窓（時間）',
+  workspaceDiscoveryActiveWindowHoursHint: '最後のプロンプト／更新からこの時間を超えると休眠。既定 168（7 日）。向阳／IM／現在キャンバスは常にピン。',
+  workspaceDiscoveryMaxActive: 'アクティブ行の上限',
+  workspaceDiscoveryMaxActiveHint: '既定のアクティブのみ一覧の上限。既定 16。',
+  workspaceDiscoveryMaxList: '一覧行の上限',
+  workspaceDiscoveryMaxListHint: '休眠込み（includeInactive／query）の硬上限。既定 40。',
   mcpTitle: 'MCP サーバー',
   mcpDescription: '設定は向阳（奇創）。各席はグローバル + セッション `.xrk/mcp.json` + 在席メンバー家（パスが異なる時；同名はセッション優先）。Cursor／Trae JSON；cwd 省略 → ~/.xrk/mcp-cwd/<name>。',
   mcpConnectedHeading: '接続中',
@@ -1538,6 +1558,14 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   workspaceInjectDescription: '每轮系统提示里可注入多少工作区 rules / skills 目录字符。',
   workspaceInjectMaxChars: '注入字符预算',
   workspaceInjectMaxCharsHint: 'rules + skills 目录注入的总字符上限。默认 32000（范围 4000–128000）。',
+  workspaceDiscoveryTitle: '工作区发现',
+  workspaceDiscoveryDescription: 'workspace_list 默认只回活跃画布。休眠项需模型用 query 或 includeInactive 才会出现。',
+  workspaceDiscoveryActiveWindowHours: '活跃窗口（小时）',
+  workspaceDiscoveryActiveWindowHoursHint: '距上次提问或触碰超过此时长即休眠。默认 168（7 天）。向阳、IM、当前画布始终钉住。',
+  workspaceDiscoveryMaxActive: '活跃条数上限',
+  workspaceDiscoveryMaxActiveHint: '默认「仅活跃」列表最多返回几条。默认 16。',
+  workspaceDiscoveryMaxList: '列表硬上限',
+  workspaceDiscoveryMaxListHint: '含休眠（includeInactive / query）时的硬上限。默认 40。',
   mcpTitle: 'MCP 服务器',
   mcpDescription: '在向阳（奇创）配置。各席挂载：全局 + 会话 `.xrk/mcp.json` + 在席干员家（路径不同时；同名会话赢）。粘贴 Trae/Cursor JSON；不写 cwd → ~/.xrk/mcp-cwd/<name>。',
   mcpConnectedHeading: '当前已连接',

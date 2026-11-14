@@ -430,6 +430,29 @@ describe("FaceAgentRosterStore", () => {
     );
   });
 
+  it("demoting to workspace drops the global original (no dual-list copy)", () => {
+    const store = new FaceAgentRosterStore(home());
+    const member = store.upsertAtScope("ws_alpha", "global", {
+      name: "咸经契",
+      playbook: "Ship the product.",
+      role: "worker",
+    });
+    expect(member?.id).toBeTruthy();
+    expect(store.get(GLOBAL_ROSTER_ID, member!.id)?.scope).toBe("global");
+    const moved = store.upsertAtScope("ws_alpha", "workspace", {
+      id: member!.id,
+      name: "咸经契",
+      playbook: "Ship the product.",
+      role: "worker",
+    });
+    expect(moved?.id).toBe(member!.id);
+    expect(store.list(GLOBAL_ROSTER_ID).some((row) => row.id === member!.id)).toBe(false);
+    expect(store.get("ws_alpha", member!.id)?.scope).toBe("workspace");
+    const panel = store.listForTeamPanel("ws_alpha").filter((row) => row.id === member!.id);
+    expect(panel).toHaveLength(1);
+    expect(panel[0]?.scope).toBe("workspace");
+  });
+
   it("findHome locates workspace-scoped members outside the current canvas", () => {
     const store = new FaceAgentRosterStore(home());
     const member = store.upsertAtScope("ws_alpha", "workspace", {

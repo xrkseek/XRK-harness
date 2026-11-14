@@ -13,6 +13,8 @@ export const FACE_HOST_REMOTE_EVENTS = [
   "credentials/updated",
   "llm/adapters-updated",
   "plugin-inventory/install-log",
+  /** Probe cache settled (warm / force / post-mutate) — Settings update badges. */
+  "plugin-inventory/updates-changed",
   "settings/document-updated",
   // ui-presence titleScheme / title* — Host remounts Agents for agentLabel.
   "settings/seat-titles-updated",

@@ -27,8 +27,19 @@ import {
   isOurFreeModelPackage,
   tryApplyOurFreeModelHost,
 } from "./our-free-model-host.js";
+import {
+  hasWallpaperEngineHostLib,
+  isWallpaperEnginePackage,
+  tryApplyWallpaperEngineHost,
+} from "./wallpaper-host.js";
+import {
+  hasNekowhaleHostLib,
+  isNekowhaleStickersPackage,
+  tryApplyNekowhaleHost,
+} from "./nekowhale-host.js";
 import { disposeLiveHostApply } from "./live-host-apply.js";
 import { unregisterHostApply } from "./host-apply-registry.js";
+import { clearCommunityHostSurfaces } from "./community-host-registry.js";
 
 async function tryApplyStagedHost(
   root: string,
@@ -43,6 +54,14 @@ async function tryApplyStagedHost(
     const ofm = await tryApplyOurFreeModelHost(root, packageName, ctx);
     if (ofm) return ofm;
   }
+  if (isWallpaperEnginePackage(packageName) && hasWallpaperEngineHostLib(root)) {
+    const we = await tryApplyWallpaperEngineHost(root, packageName, ctx);
+    if (we) return we;
+  }
+  if (isNekowhaleStickersPackage(packageName) && hasNekowhaleHostLib(root)) {
+    const nk = await tryApplyNekowhaleHost(root, packageName, ctx);
+    if (nk) return nk;
+  }
   if (!hasHostApplyEntry(root)) return undefined;
   return tryApplyHostModule(root, packageName, ctx);
 }
@@ -51,7 +70,9 @@ function hasStagedHostEntry(root: string, packageName: string): boolean {
   return (
     hasHostApplyEntry(root) ||
     (isWorkBuddyConnectPackage(packageName) && hasWorkBuddyHostLib(root)) ||
-    (isOurFreeModelPackage(packageName) && hasOurFreeModelEntry(root))
+    (isOurFreeModelPackage(packageName) && hasOurFreeModelEntry(root)) ||
+    (isWallpaperEnginePackage(packageName) && hasWallpaperEngineHostLib(root)) ||
+    (isNekowhaleStickersPackage(packageName) && hasNekowhaleHostLib(root))
   );
 }
 
@@ -159,6 +180,7 @@ export async function applyHostPackageByName(
 export async function stopHostPackage(packageName: string): Promise<void> {
   const name = packageName.trim();
   if (!name) return;
+  clearCommunityHostSurfaces(name);
   await disposeLiveHostApply(name);
   unregisterHostApply(name);
   await stopCordisFiber(name);

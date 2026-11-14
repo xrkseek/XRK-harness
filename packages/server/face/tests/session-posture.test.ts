@@ -9,6 +9,7 @@ import {
   createSessionPostureFragmentProvider,
   formatSessionPosture,
 } from "../src/session-posture.js";
+import { mintAgentHomeForMember } from "../src/agent-home.js";
 import { XIANGYANG_WORKSPACE_ID } from "../src/xiangyang-workspace.js";
 import { ensureImWorkspace } from "../src/im-workspace-ensure.js";
 import { IM_WORKSPACE_ID } from "../src/im-workspace.js";
@@ -52,6 +53,36 @@ describe("session_posture", () => {
       expect(codingText).toMatch(/向日葵 = peer/);
       expect(codingText).toMatch(/workspace_session_prompt/);
       expect(codingText).toMatch(/向阳/);
+      expect(codingText).not.toMatch(/Never agent-home/);
+
+      const member = runtime.agentRoster.upsertAtScope(
+        XIANGYANG_WORKSPACE_ID,
+        "global",
+        {
+          name: "Office",
+          playbook: "Sit in agent-home.",
+          role: "worker",
+        },
+      );
+      expect(member).toBeTruthy();
+      const office = await mintAgentHomeForMember(
+        runtime,
+        member!,
+        XIANGYANG_WORKSPACE_ID,
+      );
+      const homeSession = await dispatchFaceMethod(runtime, "session.create", "h", {
+        workspaceId: office.workspaceId,
+        memberId: member!.id,
+        agentPreset: "harness",
+      });
+      expect(homeSession.result.ok).toBe(true);
+      if (!homeSession.result.ok) return;
+      const officeId = (homeSession.result.value as { sessionId: string }).sessionId;
+      const officeText = formatSessionPosture(runtime, officeId);
+      expect(officeText).toMatch(/干员家/);
+      expect(officeText).toMatch(/homes \+ 向阳/);
+      expect(officeText).toMatch(/Never project coding/);
+      expect(officeText).not.toMatch(/项目经理席/);
 
       const frugal = await dispatchFaceMethod(runtime, "session.create", "f", {
         workspaceId: codingWs.workspaceId,

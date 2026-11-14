@@ -2,6 +2,7 @@
  * GenUI dynamic npm component registry — resolve package metadata without embedding npm trees.
  */
 import { spawnSync } from "node:child_process";
+import { planNpmViewSpawn } from "../xrk/npm-view-spawn.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { adapterEcho } from "./honest-envelope.js";
 
@@ -85,12 +86,23 @@ export function resolveGenuiNpmPackage(
   if (!trimmed) {
     return { ok: false, spec: trimmed, error: "empty-spec" };
   }
-  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
-  const res = spawnSync(npmCmd, ["view", trimmed, "name", "version", "description", "--json"], {
+  const plan = planNpmViewSpawn([
+    "view",
+    trimmed,
+    "name",
+    "version",
+    "description",
+    "--json",
+  ]);
+  const res = spawnSync(plan.file, [...plan.args], {
     encoding: "utf8",
     timeout: 20_000,
     windowsHide: true,
+    shell: false,
     stdio: ["ignore", "pipe", "pipe"],
+    ...(plan.windowsVerbatimArguments
+      ? { windowsVerbatimArguments: true }
+      : {}),
   });
   if (res.status !== 0) {
     return {

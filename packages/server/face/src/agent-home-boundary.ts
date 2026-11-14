@@ -1,7 +1,8 @@
 /**
  * Hard lane between project workspaces and 干员 agent-home workspaces.
- * Project / 向阳 / IM sessions must not collaborate or dispatch into agent-home
- * sessions; agent-home sessions may still collaborate with each other.
+ * Coding / IM project seats stay isolated from agent-home.
+ * Exception: 向阳空间 (`ws_default`) ↔ agent-home may message and discover
+ * each other both ways (speech / peer prompt), not other project canvases.
  * 中文。 / English.
  */
 
@@ -14,6 +15,16 @@ import {
   IM_WORKSPACE_ID,
 } from "./im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
+
+/** True when this session sits on the product 向阳空间 canvas. */
+export function isXiangyangSession(
+  runtime: FaceRuntime,
+  sessionId: string,
+): boolean {
+  const id = sessionId.trim();
+  if (!id) return false;
+  return runtime.workspaces.workspaceIdOf(id) === XIANGYANG_WORKSPACE_ID;
+}
 
 /** Collab / dispatch lane for a session. */
 export type SessionCollabLane = "project" | "agent-home";
@@ -98,8 +109,29 @@ export function sessionSeatMemberId(
 }
 
 /**
- * Refuse cross-lane messaging / dispatch: project ↔ agent-home.
- * Same-lane pairs (project↔project, agent-home↔agent-home) stay allowed.
+ * 向阳 ↔ 干员家 bridge: either side of the pair is on 向阳, the other on
+ * agent-home. Other project canvases stay refused.
+ */
+function isXiangyangAgentHomeBridge(
+  runtime: FaceRuntime,
+  fromSessionId: string,
+  toSessionId: string,
+  fromLane: SessionCollabLane,
+  toLane: SessionCollabLane,
+): boolean {
+  if (fromLane === toLane) return false;
+  const fromXy = isXiangyangSession(runtime, fromSessionId);
+  const toXy = isXiangyangSession(runtime, toSessionId);
+  return (
+    (fromLane === "agent-home" && toXy)
+    || (toLane === "agent-home" && fromXy)
+  );
+}
+
+/**
+ * Refuse cross-lane messaging / dispatch: project ↔ agent-home,
+ * except 向阳空间 ↔ agent-home (both directions).
+ * Same-lane pairs stay allowed.
  */
 export function refuseCrossAgentHomeLane(
   runtime: FaceRuntime,
@@ -109,14 +141,25 @@ export function refuseCrossAgentHomeLane(
   const fromLane = sessionCollabLane(runtime, fromSessionId);
   const toLane = sessionCollabLane(runtime, toSessionId);
   if (fromLane === toLane) return undefined;
+  if (
+    isXiangyangAgentHomeBridge(
+      runtime,
+      fromSessionId,
+      toSessionId,
+      fromLane,
+      toLane,
+    )
+  ) {
+    return undefined;
+  }
   return fromLane === "agent-home"
-    ? "agent-home sessions cannot message project workspace sessions"
-    : "project workspace sessions cannot message agent-home sessions";
+    ? "agent-home cannot message this project seat (only 向阳↔agent-home)"
+    : "project seat cannot message agent-home (only 向阳↔agent-home)";
 }
 
 /**
  * Refuse listing / targeting a workspace that sits on the other lane from the
- * calling session (discovery that would invite illegal thread_message).
+ * calling session — except 向阳 ↔ agent-home.
  */
 export function refuseCrossAgentHomeWorkspace(
   runtime: FaceRuntime,
@@ -127,7 +170,12 @@ export function refuseCrossAgentHomeWorkspace(
   const targetIsHome = isAgentHomeWorkspace(runtime, targetWorkspaceId);
   const targetLane: SessionCollabLane = targetIsHome ? "agent-home" : "project";
   if (fromLane === targetLane) return undefined;
+  const fromXy = isXiangyangSession(runtime, fromSessionId);
+  const targetXy = targetWorkspaceId === XIANGYANG_WORKSPACE_ID;
+  if ((fromLane === "agent-home" && targetXy) || (fromXy && targetIsHome)) {
+    return undefined;
+  }
   return fromLane === "agent-home"
-    ? "agent-home sessions cannot target project workspaces"
-    : "project workspace sessions cannot target agent-home workspaces";
+    ? "agent-home cannot target this project workspace (only 向阳↔agent-home)"
+    : "project seat cannot target agent-home (only 向阳↔agent-home)";
 }

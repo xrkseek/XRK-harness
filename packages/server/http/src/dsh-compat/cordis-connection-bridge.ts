@@ -41,10 +41,10 @@ export function matchWebServerRoute(
 export function pushCordisWebServerRoute(
   http: CordisHttpRow[],
   route: XrkWebServerRoute,
-): void {
+): () => void {
   const methods = route.methods?.map((m) => m.toUpperCase());
   const match = matchWebServerRoute(route);
-  http.push({
+  const row: CordisHttpRow = {
     match,
     handle: async (req, res, pathname) => {
       const method = (req.method ?? "GET").toUpperCase();
@@ -67,7 +67,12 @@ export function pushCordisWebServerRoute(
       const result = await route.handler(req, res, pathname);
       return result === undefined ? true : Boolean(result);
     },
-  });
+  };
+  http.push(row);
+  return () => {
+    const i = http.indexOf(row);
+    if (i >= 0) http.splice(i, 1);
+  };
 }
 
 async function incomingToFetchRequest(
@@ -129,7 +134,7 @@ export function createCordisConnectionBridge(
 ): {
   admit: (req: IncomingMessage) => undefined;
   requestRejection: (req: IncomingMessage) => undefined;
-  fetch: { register: (route: CordisFetchRoute) => () => undefined };
+  fetch: { register: (route: CordisFetchRoute) => () => void };
 } {
   return {
     admit(_req: IncomingMessage) {
@@ -178,7 +183,10 @@ export function createCordisConnectionBridge(
             options.onLateMiss?.(route.path);
           }
         }
-        return () => undefined;
+        return () => {
+          const i = options.http.indexOf(row);
+          if (i >= 0) options.http.splice(i, 1);
+        };
       },
     },
   };

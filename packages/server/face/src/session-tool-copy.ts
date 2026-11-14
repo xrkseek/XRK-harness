@@ -20,6 +20,10 @@ export function threadMessageDescription(input: {
   readonly messageOnly?: boolean;
   /** Live sibling ids for delegated children (optional). */
   readonly siblingIds?: readonly string[];
+  /** IM / 奇创 when this seat is an orchestrator. */
+  readonly surface?: OrchestratorSurface;
+  /** True when this seat sits on a 干员 agent-home canvas. */
+  readonly fromAgentHome?: boolean;
 }): string {
   if (input.messageOnly || input.kind === "delegated_child") {
     const ids =
@@ -33,9 +37,14 @@ export function threadMessageDescription(input: {
       "Parent→child uses send_message / followup_task."
     );
   }
+  const lane = input.fromAgentHome
+    ? "same-lane homes, or agent-home↔向阳 — Never project coding"
+    : input.surface === "qichuang"
+      ? "same lane, or 向阳↔agent-home"
+      : "same lane only — Never agent-home";
   return (
-    "Message a parent peer by session_id (same lane: project↔project or agent-home↔agent-home). " +
-    "主线 pin optional — no thread_switch first. Peer keeps its chat; delivery=steer. " +
+    `Message a parent peer by session_id (${lane}). ` +
+    "主线 pin optional. Peer keeps its chat; delivery=steer. " +
     "wait=true (default) returns the next assistant message."
   );
 }
@@ -77,23 +86,30 @@ export function teamListDescription(input: {
 
 export function workspaceListDescription(
   surface: OrchestratorSurface | undefined,
+  options?: { readonly fromAgentHome?: boolean },
 ): string {
-  const hint =
-    surface === "im"
-      ? "Coding child: subagent(workspace_id) or workspace_session_prompt → thread_message."
+  const next = options?.fromAgentHome
+    ? "Next: workspace_session_prompt → thread_message (向阳 or peer homes)."
+    : surface === "im"
+      ? "Next: subagent(workspace_id) or workspace_session_prompt → thread_message."
       : surface === "qichuang"
-        ? "No nested subagent — workspace_session_prompt → keep session_id → thread_message."
-        : "Peer: workspace_session_prompt → thread_message (主线 optional).";
-  return `List Face workspaces (id, title, path, session count). ${hint}`;
+        ? "Next: workspace_session_prompt → keep session_id → thread_message (no nested subagent)."
+        : "Next: workspace_session_prompt → thread_message.";
+  return (
+    `List workspaces (id·title·path·sessions). Active-only default (Settings workspace-discovery). ` +
+    `Dormant: query or includeInactive. ${next}`
+  );
 }
 
 export function workspaceSessionPromptDescription(input: {
   readonly surface: OrchestratorSurface | undefined;
   /** Fallback label when not orchestrator (coding). */
   readonly codingLabel?: string;
+  readonly fromAgentHome?: boolean;
 }): string {
-  const from =
-    input.surface === "im"
+  const from = input.fromAgentHome
+    ? "agent-home peer / 向阳 only — never project coding."
+    : input.surface === "im"
       ? "IM peer (not your child). Coding child = subagent(workspace_id)."
       : input.surface === "qichuang"
         ? "Qichuang peer only — no nested subagent. Implement there."

@@ -51,6 +51,7 @@ import { AsrCard } from './AsrCard.tsx'
 import { TtsCard } from './TtsCard.tsx'
 import { WebSearchCard } from './WebSearchCard.tsx'
 import { WorkspaceInjectCard } from './WorkspaceInjectCard.tsx'
+import { WorkspaceDiscoveryCard } from './WorkspaceDiscoveryCard.tsx'
 import { PluginsSettingsSection } from './PluginsSettingsSection.tsx'
 import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './PluginsSettingsSection.tsx'
 import { AGENT_LOOP_NS, AgentLoopCardController } from './agent-loop-card-controller.ts'
@@ -98,6 +99,10 @@ import {
   WEB_SEARCH_TAVILY_REF,
 } from './web-search-card-controller.ts'
 import { WORKSPACE_INJECT_NS, WorkspaceInjectCardController } from './workspace-inject-card-controller.ts'
+import {
+  WORKSPACE_DISCOVERY_NS,
+  WorkspaceDiscoveryCardController,
+} from './workspace-discovery-card-controller.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import { fetchSessionSkills, fetchSessionTools, fetchSkillContent } from './catalog-fetch.ts'
 import { en, ja, zh } from './locales.ts'
@@ -143,6 +148,10 @@ export type {
   WorkspaceInjectCardFace,
   WorkspaceInjectCardState,
 } from './workspace-inject-card-controller.ts'
+export type {
+  WorkspaceDiscoveryCardFace,
+  WorkspaceDiscoveryCardState,
+} from './workspace-discovery-card-controller.ts'
 export {
   WEB_SEARCH_NS,
   WEB_SEARCH_TAVILY_REF,
@@ -150,6 +159,7 @@ export {
   WEB_SEARCH_DEEPSEEK_REF,
 } from './web-search-card-controller.ts'
 export { WORKSPACE_INJECT_NS } from './workspace-inject-card-controller.ts'
+export { WORKSPACE_DISCOVERY_NS } from './workspace-discovery-card-controller.ts'
 export { SANDBOX_NS } from './sandbox-card-controller.ts'
 export { BROWSER_NS } from './browser-card-controller.ts'
 export { COMPUTER_USE_NS, COMPUTER_USE_BACKGROUND_REF } from './computer-use-card-controller.ts'
@@ -185,6 +195,9 @@ export function apply(ctx: ClientContext): void {
   const agentLoop = new AgentLoopCardController(ctx.settingsScope.bind({ namespace: AGENT_LOOP_NS }))
   const workspaceInject = new WorkspaceInjectCardController(
     ctx.settingsScope.bind({ namespace: WORKSPACE_INJECT_NS }),
+  )
+  const workspaceDiscovery = new WorkspaceDiscoveryCardController(
+    ctx.settingsScope.bind({ namespace: WORKSPACE_DISCOVERY_NS }),
   )
   const mcp = new McpCardController(ctx.settingsScope.bind({ namespace: MCP_NS }), api)
   const webSearch = new WebSearchCardController(ctx.settingsScope.bind({ namespace: WEB_SEARCH_NS }), api)
@@ -509,6 +522,7 @@ export function apply(ctx: ClientContext): void {
   pluginCard(SANDBOX_NS, 70, () => sandbox.inject(), SandboxCard)
   pluginCard(AGENT_LOOP_NS, 80, () => agentLoop.inject(), AgentLoopCard)
   pluginCard(WORKSPACE_INJECT_NS, 90, () => workspaceInject.inject(), WorkspaceInjectCard)
+  pluginCard(WORKSPACE_DISCOVERY_NS, 95, () => workspaceDiscovery.inject(), WorkspaceDiscoveryCard)
   pluginCard(ASR_NS, 100, () => asr.inject(), AsrCard)
   pluginCard(TTS_NS, 110, () => tts.inject(), TtsCard)
   pluginCard(IMAGE_GEN_NS, 120, () => imageGen.inject(), ImageGenCard)

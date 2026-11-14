@@ -268,13 +268,16 @@ declare module '@xrkseek/xrk-typert-protocol' {
     pluginInventory: {
       list: () => Promise<RemoteResult<PluginInventorySnapshot>>
       /**
-       * Probe registry-sourced managed plugins for newer npm versions.
+       * Probe managed plugins for newer npm versions (registry + local advisory).
        * Host may return a warm cache (`status: checking | ready`).
        * Pass `force: true` to re-run; optional `entryIds` limits the probe.
+       * Optional `registry` / `proxy` match Settings install-row (`plugin add`).
        */
       checkUpdates: (
         entryIds?: readonly PluginEntryId[],
         force?: boolean,
+        registry?: string,
+        proxy?: string,
       ) => Promise<RemoteResult<{
         readonly status: 'idle' | 'checking' | 'ready' | 'error'
         readonly updates: readonly {
@@ -299,6 +302,10 @@ declare module '@xrkseek/xrk-typert-protocol' {
         entryId: PluginEntryId,
         /** Correlates live `plugin-inventory/install-log` chunks. */
         requestId?: string,
+        /** Same Settings install-row registry as `plugin add --registry`. */
+        registry?: string,
+        /** Same Settings install-row proxy as `plugin add --proxy`. */
+        proxy?: string,
       ) => Promise<RemoteResult<{
         entryId: PluginEntryId
         updated: true

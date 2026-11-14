@@ -50,6 +50,16 @@ export function normalizeDshCompatWireCtx(
     ...(ctx.syncCommunityLlmProvider
       ? { syncCommunityLlmProvider: ctx.syncCommunityLlmProvider }
       : {}),
+    ...(ctx.ensureCommunitySettingsNamespace
+      ? {
+          ensureCommunitySettingsNamespace: ctx.ensureCommunitySettingsNamespace,
+        }
+      : {}),
+    ...(ctx.watchCommunitySettingsNamespace
+      ? {
+          watchCommunitySettingsNamespace: ctx.watchCommunitySettingsNamespace,
+        }
+      : {}),
     ...(ctx.trustProxy === true ? { trustProxy: true as const } : {}),
     ...(ctx.lanShareEnabled === true
       ? { lanShareEnabled: true as const }

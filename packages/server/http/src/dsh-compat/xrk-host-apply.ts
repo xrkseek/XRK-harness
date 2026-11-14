@@ -282,7 +282,14 @@ export async function tryApplyHostModule(
   }
 
   await registerLiveHostApply(packageName, async () => {
-    for (const d of collection.disposers.reverse()) await d();
+    const stack = collection.disposers.splice(0).reverse();
+    for (const d of stack) {
+      try {
+        await d();
+      } catch {
+        /* best-effort teardown */
+      }
+    }
   });
 
   const gatedHttp = gateLiveHostHttp(packageName, collection.http);

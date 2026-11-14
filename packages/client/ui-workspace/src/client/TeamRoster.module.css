@@ -7,35 +7,36 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
-  align-items: stretch;
-  min-height: min(72vh, 680px);
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  align-items: start;
+  /* Content-sized: avoid a tall empty canvas when the look editor is short. */
+  min-height: 0;
   gap: 0;
 }
 
 .rail {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
   min-width: 0;
-  padding-right: 16px;
+  padding-right: 12px;
   border-right: 1px solid var(--dsw-alias-border-secondary);
 }
 
 .pane {
   min-width: 0;
-  padding-left: 20px;
+  padding-left: 14px;
   display: flex;
   flex-direction: column;
 }
 
 .editorEmpty {
   margin: 0;
-  padding-top: 32px;
+  padding-top: 12px;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   font-size: 13px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
@@ -174,7 +175,7 @@
 }
 
 .heading {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   font-size: 13px;
   font-weight: 600;
   line-height: 18px;
@@ -182,7 +183,7 @@
 }
 
 .hint {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   font-size: 12px;
   line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
@@ -323,30 +324,30 @@
 
 .subhead {
   /* Same top/bottom for every rail band (席位 / 全局 / 工作区). */
-  margin: 14px 0 8px;
+  margin: 10px 0 6px;
   font-size: 11px;
   line-height: 14px;
   color: var(--dsw-alias-label-tertiary);
 }
 
 .heading + .subhead {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .ballField {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 6px;
   margin: 0;
 }
 
-/* 老板 · 经理 · 向日葵 — same 72px / gap rhythm as .ballField (全局), left-aligned. */
+/* 老板 · 经理 · 向日葵 — same tile rhythm as .ballField (全局), left-aligned. */
 .ballFieldSeats {
   display: flex;
   flex-wrap: nowrap;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 6px;
   margin: 0;
   min-width: 0;
   width: 100%;
@@ -355,7 +356,7 @@
 .ballFieldSeats .ballCard,
 .ballFieldSeats .ballCardOn {
   flex: none;
-  width: 72px;
+  width: 64px;
   min-width: 0;
   max-width: none;
   overflow: hidden;
@@ -371,14 +372,14 @@
 
 .ballCard,
 .ballCardOn {
-  width: 72px;
+  width: 64px;
   min-width: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 8px 4px;
+  gap: 4px;
+  padding: 6px 2px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -532,7 +533,82 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* High-frequency look block: preview + pickers fill the editor pane (no right-side void). */
+.lookBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  width: 100%;
+  max-width: 100%;
+}
+
+.lookPreview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 88px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--dsw-alias-border-secondary);
+  background:
+    radial-gradient(
+      ellipse 70% 60% at 18% 45%,
+      color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent),
+      transparent 70%
+    ),
+    var(--dsw-alias-interactive-bg-hover);
+}
+
+.lookPreviewMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.lookPreviewLabel {
+  margin: 0;
+  font-size: 11px;
+  line-height: 14px;
+  letter-spacing: 0.02em;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.lookPreviewName {
+  margin: 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advancedBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dsw-alias-border-secondary);
+}
+
+.advancedHead {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-secondary);
 }
 
 .editorLock {
@@ -756,13 +832,14 @@
 }
 
 .dialogWide {
-  width: min(880px, 100%);
-  max-height: min(88vh, 840px);
+  width: min(820px, 100%);
+  max-height: min(88vh, 780px);
 }
 
 .sheet {
-  min-height: min(76vh, 720px);
-  max-height: min(76vh, 760px);
+  /* Prefer content height; cap scroll so the modal does not become a tall empty well. */
+  min-height: 0;
+  max-height: min(72vh, 680px);
   overflow: auto;
 }
 
@@ -947,52 +1024,64 @@
   }
 }
 
-/* Desktop dressing picker: 2× the phone size (28 → 52/56 px). Phone (≤ 640px)
- * keeps the compact glyphs — the drawer is already tight. Rows wrap, so the
- * wider tiles must never force horizontal scroll. */
+/* Desktop dressing picker: slightly larger than phone (28 → 36) for mouse
+ * aim without the old 52px tiles that left a wide empty gutter. Phone keeps
+ * 28px + 44px list rows. Rows wrap; tiles must never force horizontal scroll. */
 @media (min-width: 641px) {
+  .lookPreview {
+    gap: 16px;
+    min-height: 120px;
+    padding: 14px 16px;
+    border-radius: 14px;
+  }
+
+  .lookPreviewName {
+    font-size: 15px;
+    line-height: 20px;
+  }
+
   .picks {
-    gap: 10px;
+    gap: 8px;
   }
 
   .pick,
   .pickOn,
   .swatch,
   .swatchOn {
-    width: 52px;
-    height: 52px;
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
   }
 
   .kitGlyph {
-    width: 32px;
-    height: 32px;
+    width: 22px;
+    height: 22px;
   }
 
   .overlayCube,
   .overlayCubeOn,
   .overlayAdd {
-    width: 52px;
-    height: 52px;
-    border-radius: 12px;
-  }
-
-  .overlayThumb {
-    width: 32px;
-    height: 32px;
-  }
-
-  .overlayEmpty {
-    font-size: 24px;
-  }
-
-  .customSwatch {
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
     border-radius: 10px;
   }
 
-  .customSwatch::-webkit-color-swatch { border-radius: 8px; }
+  .overlayThumb {
+    width: 22px;
+    height: 22px;
+  }
+
+  .overlayEmpty {
+    font-size: 18px;
+  }
+
+  .customSwatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .customSwatch::-webkit-color-swatch { border-radius: 6px; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

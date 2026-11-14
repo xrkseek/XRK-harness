@@ -21,7 +21,7 @@
  * see instead of rebuilding the whole subtree from a partial descriptor.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { CredentialView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@xrkseek/xrk-api-remotes/client'
 import {
@@ -33,6 +33,7 @@ import {
 import { apiKeyFailure, isApiKeyProbeAuthFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
+import type { AddingDraftPersist } from './provider-form-session.ts'
 import { deriveKeyRef, messageOf, protocolChoices } from './store.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
@@ -83,6 +84,13 @@ export interface ProviderEditorProps {
   submitBusyLabel?: keyof typeof en
   /** Close the editor; `changed` reports whether an Apply committed. */
   onClose: (changed: boolean) => void
+  /**
+   * Seed draft / key from a durable add-provider session (Settings remount).
+   * Only the catalog add card passes this; row Edit starts from settings.
+   */
+  restoreDraft?: AddingDraftPersist
+  /** Persist typed fields while the add card is open (memory session). */
+  onPersistDraft?: (next: AddingDraftPersist) => void
 }
 
 /**
@@ -157,8 +165,13 @@ function refFor(namespace: SettingsNamespaceView, path: readonly string[], provi
 export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const { namespace, api, t } = props
   const settingsPath = editorPath(props.settingsPath)
-  const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(namespace, settingsPath))
-  const [keyDraft, setKeyDraft] = useState('')
+  const [draft, setDraft] = useState<Record<string, unknown>>(() => {
+    if (props.restoreDraft !== undefined) {
+      return structuredClone(props.restoreDraft.draft) as Record<string, unknown>
+    }
+    return draftAt(namespace, settingsPath)
+  })
+  const [keyDraft, setKeyDraft] = useState(() => props.restoreDraft?.keyDraft ?? '')
   const [keyState, setKeyState] = useState<CredentialView | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
@@ -183,6 +196,17 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     () => layout === 'pi-ai' ? protocolChoices(namespace) : [],
     [layout, namespace],
   )
+
+  const onPersistDraft = props.onPersistDraft
+  const lastPersistedRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (onPersistDraft === undefined) return
+    const next: AddingDraftPersist = { draft, keyDraft }
+    const fingerprint = JSON.stringify(next)
+    if (fingerprint === lastPersistedRef.current) return
+    lastPersistedRef.current = fingerprint
+    onPersistDraft(next)
+  }, [draft, keyDraft, onPersistDraft])
 
   useEffect(() => {
     if (layout === 'sunflower-free') {

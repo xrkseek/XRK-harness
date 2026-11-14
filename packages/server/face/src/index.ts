@@ -96,11 +96,16 @@ export {
   type ManagedPluginSourceClass,
 } from "./plugin-inventory.js";
 export {
+  buildNpmViewVersionArgs,
   checkFacePluginUpdates,
   ensurePluginUpdateProbe,
   getPluginUpdateProbeCache,
   isNpmVersionNewer,
+  normalizeNpmViewNet,
+  planNpmViewSpawn,
+  refreshPluginUpdateProbeAfterMutate,
   schedulePluginUpdateProbeWarm,
+  type NpmViewNetOptions,
   type PluginUpdateProbeRow,
   type PluginUpdateProbeSnapshot,
   type PluginUpdateProbeStatus,
@@ -205,12 +210,21 @@ export {
 export {
   isAgentHomeSession,
   isAgentHomeWorkspace,
+  isXiangyangSession,
   refuseCrossAgentHomeLane,
   refuseCrossAgentHomeWorkspace,
   sessionCollabLane,
   sessionSeatMemberId,
   type SessionCollabLane,
 } from "./agent-home-boundary.js";
+export {
+  listWorkspacesForDiscovery,
+  readWorkspaceDiscoverySettings,
+  WORKSPACE_DISCOVERY_DEFAULTS,
+  type WorkspaceDiscoverySettings,
+  type WorkspaceListQuery,
+  type WorkspaceListRow,
+} from "./workspace-discovery.js";
 export {
   catalogSeedDisplayLabel,
   catalogSeedFormalName,
@@ -773,6 +787,7 @@ export {
 } from "./settings-credentials.js";
 export {
   peekSettingsYamlSection,
+  persistSettingsDocument,
   resetLastGoodConfigCaches,
   resolveDefaultAgentPreset,
   resolveHarnessHome,

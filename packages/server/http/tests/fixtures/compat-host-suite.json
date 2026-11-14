@@ -17,6 +17,7 @@
     "dsh-dream-skin": { "version": "1.0.0", "kind": "client" },
     "dsh-undo-savepoint": { "version": "1.0.0", "kind": "client" },
     "dsh-plugin-wallpaper-engine": { "version": "1.0.0", "kind": "client" },
+    "dsh-nekowhale-stickers": { "version": "1.0.0", "kind": "client" },
     "dsh-skin-market": { "version": "1.0.0", "kind": "client" },
     "dsh-tokenledger": { "version": "1.0.0", "kind": "client" },
     "dsh-mobile": { "version": "1.0.0", "kind": "client" },

@@ -35,6 +35,7 @@ describe("formatCollabBoardText", () => {
     expect(text).toContain("mem_68a69c0a9fdc4b53");
     expect(text).toContain("Spawn: subagent member_id");
     expect(text).toContain("thread_message");
+    expect(text).toContain("Never agent-home");
     expect(text).toContain("Roster · peers (经理)");
     expect(text).toContain("th_fresh");
     expect(text).toContain("sess_parent*");
@@ -131,12 +132,29 @@ describe("formatCollabBoardText", () => {
       membersCatalog: "- mem_y",
       threads: [],
     });
-    expect(text).toContain("workspace_session_prompt→id");
+    expect(text).toContain("向阳↔agent-home");
+    expect(text).toContain("workspace_session_prompt");
     expect(text).toContain("thread_message");
     expect(text).toContain("向日葵 admin");
     expect(text).toContain("settings_*");
     expect(text).toContain("workspace_create");
     expect(text).not.toContain("Spawn: subagent");
+    expect(text).not.toContain("Never agent-home");
+  });
+
+  it("agent-home surface bridges 向阳 and closes project coding", () => {
+    const text = formatCollabBoardText({
+      now,
+      surface: "agent-home",
+      canSpawn: true,
+      membersCatalog: "- mem_home",
+      threads: [],
+    });
+    expect(text).toContain("干员家");
+    expect(text).toContain("agent-home↔向阳");
+    expect(text).toContain("Never project coding");
+    expect(text).not.toContain("Never agent-home");
+    expect(text).not.toContain("Spawn: subagent member_id");
   });
 });
 

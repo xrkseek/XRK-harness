@@ -56,6 +56,9 @@ function props(
     ...(overrides.subscribeInstallLog !== undefined
       ? { subscribeInstallLog: overrides.subscribeInstallLog }
       : {}),
+    ...(overrides.subscribeUpdatesChanged !== undefined
+      ? { subscribeUpdatesChanged: overrides.subscribeUpdatesChanged }
+      : {}),
     ...(overrides.checkUpdates !== undefined
       ? { checkUpdates: overrides.checkUpdates }
       : {}),
@@ -182,7 +185,13 @@ describe('PluginInventorySettingsTab', () => {
     expect(screen.getByRole('menuitem', { name: en.remove })).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: en.update }))
     await waitFor(() => {
-      expect(update).toHaveBeenCalledWith('xrkh-better-sidebar', expect.any(String))
+      // registry/proxy follow Settings install-row (default → undefined).
+      expect(update).toHaveBeenCalledWith(
+        'xrkh-better-sidebar',
+        expect.any(String),
+        undefined,
+        undefined,
+      )
     })
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toBe(en.toastUpdated.replace('{name}', 'better-sidebar'))
@@ -567,6 +576,16 @@ describe('PluginInventorySettingsTab', () => {
           source: 'file:./extensions/local-tools',
         },
         {
+          entryId: 'xrkh-file-sidebar',
+          moduleName: 'xrkh-file-sidebar',
+          enabled: true,
+          fiberPhase: 'active',
+          managed: true,
+          version: '0.20.10',
+          kind: 'client',
+          source: 'file:./extensions/xrkh-better-sidebar',
+        },
+        {
           entryId: 'broken-pkg',
           moduleName: 'broken-pkg',
           enabled: true,
@@ -596,6 +615,13 @@ describe('PluginInventorySettingsTab', () => {
           sourceClass: 'local' as const,
         },
         {
+          entryId: 'xrkh-file-sidebar',
+          installed: '0.20.10',
+          latest: '0.20.11',
+          updateAvailable: true,
+          sourceClass: 'local' as const,
+        },
+        {
           entryId: 'broken-pkg',
           installed: '1.0.0',
           updateAvailable: false,
@@ -611,7 +637,8 @@ describe('PluginInventorySettingsTab', () => {
     await waitFor(() => {
       expect(screen.getByText(en.updateAvailableTag.replace('{version}', '0.19.0'))).toBeTruthy()
     })
-    expect(screen.getByText(en.localTag)).toBeTruthy()
+    expect(screen.getByText(en.updateAvailableTag.replace('{version}', '0.20.11'))).toBeTruthy()
+    expect(screen.getAllByText(en.localTag).length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText(en.updateCheckFailedTag)).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', {
@@ -625,5 +652,109 @@ describe('PluginInventorySettingsTab', () => {
     }))
     expect(screen.getByRole('menuitem', { name: en.checkUpdates })).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: en.update })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', {
+      name: en.moreActions.replace('{name}', 'file-sidebar'),
+    }))
+    expect(screen.getByRole('menuitem', { name: en.update })).toBeTruthy()
+  })
+
+  it('re-pulls warm probe when Host publishes updates-changed', async () => {
+    const snap = {
+      entries: [
+        {
+          entryId: 'side-tools',
+          moduleName: 'side-tools',
+          enabled: true,
+          fiberPhase: 'active',
+          managed: true,
+          version: '1.0.0',
+          kind: 'process',
+          source: 'side-tools@1.0.0',
+        },
+      ],
+      agentPresets: SNAPSHOT.agentPresets,
+    } as unknown as Snapshot
+    let notify: (() => void) | undefined
+    const checkUpdates = vi.fn(async (_ids?: unknown, force?: boolean) => {
+      const call = checkUpdates.mock.calls.length
+      if (call <= 1) {
+        return {
+          status: 'ready' as const,
+          updates: [{
+            entryId: 'side-tools',
+            installed: '1.0.0',
+            latest: '1.1.0',
+            updateAvailable: true,
+            sourceClass: 'registry' as const,
+          }],
+        }
+      }
+      expect(force).toBe(false)
+      return {
+        status: 'ready' as const,
+        updates: [{
+          entryId: 'side-tools',
+          installed: '1.1.0',
+          latest: '1.1.0',
+          updateAvailable: false,
+          sourceClass: 'registry' as const,
+        }],
+      }
+    })
+    render(<PluginInventorySettingsTab {...props(async () => snap, {
+      checkUpdates,
+      subscribeUpdatesChanged: (onChanged) => {
+        notify = onChanged
+        return () => { notify = undefined }
+      },
+    })} />)
+    await waitFor(() => {
+      expect(screen.getByText(en.updateAvailableTag.replace('{version}', '1.1.0'))).toBeTruthy()
+    })
+    await act(async () => {
+      notify?.()
+    })
+    await waitFor(() => {
+      expect(screen.queryByText(en.updateAvailableTag.replace('{version}', '1.1.0'))).toBeNull()
+    })
+    expect(checkUpdates.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('hides →version badge when inventory already matches probe.latest', async () => {
+    const snap = {
+      entries: [
+        {
+          entryId: 'xrkh-better-sidebar-plugin-office',
+          moduleName: 'xrkh-better-sidebar-plugin-office',
+          enabled: true,
+          fiberPhase: 'active',
+          managed: true,
+          version: '0.1.2',
+          kind: 'client',
+          source: 'xrkh-better-sidebar-plugin-office@0.1.2',
+        },
+      ],
+      agentPresets: SNAPSHOT.agentPresets,
+    } as unknown as Snapshot
+    const checkUpdates = vi.fn(async () => ({
+      status: 'ready' as const,
+      // Stale Host cache still claims updateAvailable after a successful update.
+      updates: [{
+        entryId: 'xrkh-better-sidebar-plugin-office',
+        installed: '0.1.1',
+        latest: '0.1.2',
+        updateAvailable: true,
+        sourceClass: 'registry' as const,
+      }],
+    }))
+    render(<PluginInventorySettingsTab {...props(async () => snap, { checkUpdates })} />)
+    await waitFor(() => {
+      expect(checkUpdates).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(screen.getByText('0.1.2')).toBeTruthy()
+    })
+    expect(screen.queryByText(en.updateAvailableTag.replace('{version}', '0.1.2'))).toBeNull()
   })
 })

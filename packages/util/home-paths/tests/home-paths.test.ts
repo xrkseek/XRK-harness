@@ -5,8 +5,10 @@ import {
   DEFAULT_XRK_HOME_DISPLAY,
   XRK_HOME_DIR_NAME,
   defaultXrkHome,
+  dshHomePath,
   expandHomePath,
   resolveConfiguredXrkHome,
+  resolveDshHome,
   resolveXrkHome,
   xrkCachePath,
   xrkHomeDisplay,
@@ -75,6 +77,10 @@ describe("xrk-home-paths", () => {
       expect(xrkHomePath("spill")).toBe(
         path.join(resolveXrkHome(), "spill"),
       );
+      expect(dshHomePath("nekowhale-stickers")).toBe(
+        xrkHomePath("nekowhale-stickers"),
+      );
+      expect(resolveDshHome({})).toBe(resolveXrkHome({}));
       expect(xrkCachePath("attachments", "request-images")).toBe(
         path.join(resolveXrkHome(), "cache", "attachments", "request-images"),
       );

@@ -17,6 +17,9 @@ import {
 import { messageOf, presetOptions } from './settings-store.ts'
 import type { AgentPresetOption } from './settings-store.ts'
 
+/** Workspace / seat locks that make the hero chip read-only. */
+export type AgentPresetSeatLock = 'im' | 'qichuang' | 'agent-home'
+
 /** Hero-chip snapshot. */
 export interface AgentPresetSeatState {
   /** Presets the deployment supplies; empty means the chip renders nothing. */
@@ -32,6 +35,11 @@ export interface AgentPresetSeatState {
    * chip); the renderer clears it via `introduced()` once played.
    */
   introduce: boolean
+  /**
+   * When set, the chip is informative only (same as IM / 奇创).
+   * Agent-home follows roster `basePreset`, not this picker.
+   */
+  lock?: AgentPresetSeatLock
 }
 
 const INITIAL: AgentPresetSeatState = {
@@ -46,6 +54,8 @@ export interface SeatSessionSummary {
   blank: boolean
   /** The preset the session already runs, when the summary reports one. */
   agentPreset?: string
+  /** Workspace lock for this seat (agent-home / IM / 奇创). */
+  lock?: AgentPresetSeatLock
 }
 
 /** Stages the next session's preset and applies it when one appears. */
@@ -91,6 +101,8 @@ export class AgentPresetSeatController {
       }
       const { presets } = response.result.value
       this.fallback = presets.find(preset => preset.isDefault)?.id ?? presets[0]?.id ?? ''
+      const session = this.currentSession()
+      const lock = resolveSeatLock(session)
       this.set({
         options: presetOptions(presets),
         // Staged pick first, then the composition the current session
@@ -99,8 +111,12 @@ export class AgentPresetSeatController {
         // an applied stage was consumed — the chip mounts (and loads) only
         // once the flow's session is current, so the reply can arrive after
         // apply() already composed it.
-        current: this.staged ?? this.currentSession()?.agentPreset ?? this.fallback,
+        // Locked seats never show a staged coding pick — roster / workspace wins.
+        current: lock
+          ? (session?.agentPreset ?? this.fallback)
+          : (this.staged ?? session?.agentPreset ?? this.fallback),
         error: null,
+        ...(lock ? { lock } : { lock: undefined }),
       })
     } catch (error) {
       this.set({ error: messageOf(error) })
@@ -115,8 +131,24 @@ export class AgentPresetSeatController {
    */
   async select(id: string): Promise<void> {
     if (this.store.getSnapshot().busy) return
+    // IM / 奇创 / agent-home: chip is display-only.
+    if (resolveSeatLock(this.currentSession())) return
     this.stage(id)
     await this.apply()
+  }
+
+  /** Re-sync lock + label when the current session / workspace changes. */
+  syncFromSession(): void {
+    const session = this.currentSession()
+    const lock = resolveSeatLock(session)
+    const snap = this.store.getSnapshot()
+    const current = lock
+      ? ((session?.agentPreset ?? snap.current) || this.fallback)
+      : ((this.staged ?? session?.agentPreset ?? snap.current) || this.fallback)
+    this.set({
+      current,
+      ...(lock ? { lock } : { lock: undefined }),
+    })
   }
 
   /**
@@ -160,10 +192,21 @@ export class AgentPresetSeatController {
     const staged = this.staged
     const session = this.currentSession()
     if (staged === undefined || session === undefined) return
+    const lock = resolveSeatLock(session)
+    // Locked seats drop any staged coding pick — Host would refuse anyway.
+    if (lock) {
+      this.staged = undefined
+      this.set({
+        current: session.agentPreset ?? this.fallback,
+        error: null,
+        lock,
+      })
+      return
+    }
     // Already composed under this badge — consume the stage quietly.
     if (session.agentPreset === staged) {
       this.staged = undefined
-      this.set({ current: staged, error: null })
+      this.set({ current: staged, error: null, lock: undefined })
       return
     }
     // A started session's history was produced under its own composition; the
@@ -174,6 +217,7 @@ export class AgentPresetSeatController {
       this.set({
         current: session.agentPreset ?? this.fallback,
         error: null,
+        lock: undefined,
       })
       return
     }
@@ -191,7 +235,11 @@ export class AgentPresetSeatController {
       }
       // Consumed: keep showing the pinned badge for this session (not the
       // deployment default — Overview / header must stay in lockstep).
-      this.set({ busy: false, current: response.result.value.agentPreset })
+      this.set({
+        busy: false,
+        current: response.result.value.agentPreset,
+        lock: undefined,
+      })
       this.onApplied?.(session.id, response.result.value.agentPreset)
     } catch (error) {
       this.staged = undefined
@@ -199,7 +247,19 @@ export class AgentPresetSeatController {
         busy: false,
         error: messageOf(error),
         current: session.agentPreset ?? this.fallback,
+        lock: undefined,
       })
     }
   }
+}
+
+/** Resolve workspace / badge lock for the hero chip. */
+export function resolveSeatLock(
+  session: SeatSessionSummary | undefined,
+): AgentPresetSeatLock | undefined {
+  if (!session) return undefined
+  if (session.lock) return session.lock
+  if (session.agentPreset === 'im') return 'im'
+  if (session.agentPreset === 'qichuang') return 'qichuang'
+  return undefined
 }

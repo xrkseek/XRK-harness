@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -22,10 +22,18 @@ afterEach(() => {
 
 async function invoke(
   pathname: string,
-  options: { method?: string; body?: Buffer | string; xrkHome: string },
-): Promise<{ status: number; json?: Record<string, unknown>; headers: Headers }> {
+  options: {
+    method?: string;
+    body?: Buffer | string;
+    xrkHome: string;
+    pluginsDir?: string;
+  },
+): Promise<{ status: number; json?: Record<string, unknown>; headers: Headers; bytes?: ArrayBuffer }> {
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-    void handleWallpaperHttp(req, res, pathname, { xrkHome: options.xrkHome });
+    void handleWallpaperHttp(req, res, pathname, {
+      xrkHome: options.xrkHome,
+      ...(options.pluginsDir ? { pluginsDir: options.pluginsDir } : {}),
+    });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const addr = server.address();
@@ -41,10 +49,18 @@ async function invoke(
       body,
     });
     const ctype = res.headers.get("content-type") ?? "";
-    const json = ctype.includes("json")
-      ? ((await res.json()) as Record<string, unknown>)
-      : undefined;
-    return { status: res.status, json, headers: res.headers };
+    if (ctype.includes("json")) {
+      return {
+        status: res.status,
+        json: (await res.json()) as Record<string, unknown>,
+        headers: res.headers,
+      };
+    }
+    return {
+      status: res.status,
+      headers: res.headers,
+      bytes: await res.arrayBuffer(),
+    };
   } finally {
     await new Promise<void>((resolve, reject) =>
       server.close((err) => (err ? reject(err) : resolve())),
@@ -121,9 +137,95 @@ describe("wallpaper bridge", () => {
     expect(res.json?.ok).toBe(false);
     expect(String(res.json?.note)).toMatch(/ffmpeg/i);
   });
+
+  it("serves staged assets/rope for /rope-art/<name>.png", async () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-we-rope-"));
+    temps.push(home);
+    const pluginsDir = path.join(home, "plugins");
+    const pkg = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "dsh-plugin-wallpaper-engine",
+    );
+    const ropeDir = path.join(pkg, "assets", "rope");
+    mkdirSync(ropeDir, { recursive: true });
+    writeFileSync(
+      path.join(pkg, "package.json"),
+      JSON.stringify({ name: "dsh-plugin-wallpaper-engine", version: "0.0.0" }),
+    );
+    const png = Buffer.from(PLACEHOLDER);
+    writeFileSync(path.join(ropeDir, "deepseek.png"), png);
+
+    const ok = await invoke("/wallpaper-engine/rope-art/deepseek.png", {
+      xrkHome: home,
+      pluginsDir,
+    });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toContain("image/png");
+    expect(ok.bytes?.byteLength).toBe(png.length);
+
+    const miss = await invoke("/wallpaper-engine/rope-art/missing.png", {
+      xrkHome: home,
+      pluginsDir,
+    });
+    expect(miss.status).toBe(404);
+    expect(miss.json?.ok).toBe(false);
+
+    const traversal = await invoke(
+      "/wallpaper-engine/rope-art/..%2Fpackage.json",
+      { xrkHome: home, pluginsDir },
+    );
+    expect(traversal.status).toBe(404);
+  });
+
+  it("serves staged lib/about for /about-qr/<name> and 404s missing art", async () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-we-about-"));
+    temps.push(home);
+    const pluginsDir = path.join(home, "plugins");
+    const pkg = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "dsh-plugin-wallpaper-engine",
+    );
+    const aboutDir = path.join(pkg, "lib", "about");
+    mkdirSync(aboutDir, { recursive: true });
+    writeFileSync(
+      path.join(pkg, "package.json"),
+      JSON.stringify({ name: "dsh-plugin-wallpaper-engine", version: "0.0.0" }),
+    );
+    const png = Buffer.from(PLACEHOLDER);
+    writeFileSync(path.join(aboutDir, "qq-group.png"), png);
+
+    const ok = await invoke("/wallpaper-engine/about-qr/qq-group.png", {
+      xrkHome: home,
+      pluginsDir,
+    });
+    expect(ok.status).toBe(200);
+    expect(ok.bytes?.byteLength).toBe(png.length);
+
+    const miss = await invoke("/wallpaper-engine/about-qr/missing.png", {
+      xrkHome: home,
+      pluginsDir,
+    });
+    expect(miss.status).toBe(404);
+    expect(miss.json?.error).toBe("about-qr-not-found");
+  });
+
+  it("404s missing mascot instead of painting a 1×1 stub", async () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-we-mascot-"));
+    temps.push(home);
+    const res = await invoke("/wallpaper-engine/mascot/custom-abcd.png", {
+      xrkHome: home,
+    });
+    expect(res.status).toBe(404);
+    expect(res.json?.ok).toBe(false);
+    expect(res.headers.get("content-type")).toContain("json");
+  });
 });
 
-/** Tiny PNG used as upload fixture (same bytes as Host placeholder). */
+/** Tiny opaque PNG used as upload / staged-art fixture. */
 const PLACEHOLDER = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
   "base64",

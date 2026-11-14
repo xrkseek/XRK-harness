@@ -2,7 +2,7 @@
 
 /** Locale keys these surfaces render. */
 export type AgentPresetSettingsKey =
-  | 'title' | 'description' | 'loading' | 'error' | 'userTrust' | 'seatHint' | 'seatLockedIm' | 'seatLockedQichuang' | 'headerHint'
+  | 'title' | 'description' | 'loading' | 'error' | 'userTrust' | 'seatHint' | 'seatLockedIm' | 'seatLockedQichuang' | 'seatLockedAgentHome' | 'headerHint'
   | 'nav' | 'sectionIntro' | 'builtIn' | 'setDefault' | 'view'
   | 'presetMinimalName' | 'presetMinimalDescription'
   | 'presetImName' | 'presetImDescription'
@@ -32,6 +32,7 @@ export const en: Record<AgentPresetSettingsKey, string> = {
   seatHint: 'Tool surface for the session you are about to start',
   seatLockedIm: 'IM channel surface — locked for this workspace',
   seatLockedQichuang: 'Qichuang surface — locked to Xiangyang',
+  seatLockedAgentHome: 'Agent-home surface — follows the roster (Agent Team), not this picker',
   headerHint: 'Tool surface this session runs, fixed when it started',
   nav: 'Agent presets',
   sectionIntro:
@@ -113,6 +114,7 @@ export const ja = {
   seatHint: 'これから開始するセッションのツールサーフェス',
   seatLockedIm: 'IM チャネル面 — このワークスペースではロック済み',
   seatLockedQichuang: '奇创サーフェス — 向阳にロック済み',
+  seatLockedAgentHome: 'エージェントホーム面 — 名簿（Agent Team）に従い、このピッカーでは変えません',
   headerHint: 'このセッションが動かすツールサーフェス（開始時に固定）',
   nav: 'エージェントプリセット',
   sectionIntro: 'コーディングワークスペースの通常マネージャ向け組み込みツール面（PI、Shell、Frugal、Shallow、Harness）。エージェントホームは名簿の面に従います。',
@@ -183,6 +185,7 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
   seatHint: '即将开始的这个会话所用的工具面',
   seatLockedIm: 'IM 通道面 — 本工作区锁定',
   seatLockedQichuang: '奇创工具面 — 锁定向阳空间',
+  seatLockedAgentHome: '干员家工具面 — 跟名册（干员团队），不跟这里',
   headerHint: '本会话的工具面，开始时即固定',
   nav: 'Agent 预设',
   sectionIntro:

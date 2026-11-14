@@ -7,8 +7,8 @@
  *   stub     — 1×1 PNG so <img>/video tags settle
  *   refuse   — honest JSON note (no silent fake success)
  *
- * Does **not** run the plugin's Cordis `lib/index.js` apply (Steam scan ·
- * WebWallGL · ffmpeg · subpackages). Those stay future Cordis-host milestones.
+ * Baseline fallback when Cordis live apply is absent
+ * ({@link tryApplyWallpaperEngineHost} registers first and wins on match).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createHash } from "node:crypto";
@@ -22,6 +22,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { findCommunityPluginRoot } from "./community-plugin-root.js";
 import { readBody, sendJson } from "./underlying/http-json.js";
 import { dataPath } from "./underlying/json-store.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
@@ -29,13 +30,23 @@ import { parseJsonBody } from "./underlying/http-kit.js";
 
 export interface WallpaperOptions {
   readonly xrkHome?: string;
+  /** Staged client plugins root — rope-art PNGs live under the package assets/. */
+  readonly pluginsDir?: string;
 }
+
+/** Safe staged image leaf: `deepseek.png`, `qq-group.png`, `update-notice.jpg`. */
+const STAGED_IMAGE_FILE_RE =
+  /^[a-z0-9][a-z0-9._-]{0,64}\.(?:png|jpe?g|webp)$/i;
 
 const BASE = "/wallpaper-engine";
 
-/** 1×1 PNG — keeps <img src="/scene-frame/…"> from breaking. */
+/**
+ * Transparent 1×1 PNG for scene-frame / idle artwork only.
+ * Never use for product art (rope / about / mascot) — a red/opaque pixel
+ * stretches into a visible glitch blob in the UI.
+ */
 const PLACEHOLDER_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
   "base64",
 );
 
@@ -98,6 +109,74 @@ function cacheDir(options: WallpaperOptions): string {
   const dir = path.join(rootDir(options), "cache");
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+function wallpaperPluginRoot(options: WallpaperOptions): string | undefined {
+  return findCommunityPluginRoot(options.pluginsDir, [
+    "dsh-plugin-wallpaper-engine",
+  ]);
+}
+
+/**
+ * Resolve a safe image under the staged wallpaper package (first hit wins).
+ * Used for rope-art (`assets/rope`) and about-qr (`lib/about` · `assets/about`).
+ */
+function resolveStagedImage(
+  options: WallpaperOptions,
+  leaf: string,
+  relativeDirs: readonly string[],
+): string | undefined {
+  const name = path.basename(leaf);
+  if (!STAGED_IMAGE_FILE_RE.test(name)) return undefined;
+  const root = wallpaperPluginRoot(options);
+  if (!root) return undefined;
+  for (const dir of relativeDirs) {
+    const abs = path.join(root, ...dir.split("/"), name);
+    if (existsSync(abs) && statSync(abs).isFile()) return abs;
+  }
+  return undefined;
+}
+
+function resolveRopeArtFile(
+  options: WallpaperOptions,
+  leaf: string,
+): string | undefined {
+  return resolveStagedImage(options, leaf, ["assets/rope"]);
+}
+
+function resolveAboutQrFile(
+  options: WallpaperOptions,
+  leaf: string,
+): string | undefined {
+  // Upstream ships under lib/about/; install may also leave assets/about/.
+  return resolveStagedImage(options, leaf, ["lib/about", "assets/about"]);
+}
+
+/** Custom mascot/avatar bytes under Host data (Cordis half normally owns these). */
+function resolveUserImageFile(
+  options: WallpaperOptions,
+  kind: "mascot" | "avatar",
+  leaf: string,
+): string | undefined {
+  const name = path.basename(leaf);
+  if (!STAGED_IMAGE_FILE_RE.test(name)) return undefined;
+  const candidates = [
+    path.join(rootDir(options), kind === "mascot" ? "mascots" : "avatars", name),
+    path.join(rootDir(options), kind, name),
+  ];
+  for (const abs of candidates) {
+    if (existsSync(abs) && statSync(abs).isFile()) return abs;
+  }
+  return undefined;
+}
+
+function sendMissingImageJson(
+  res: ServerResponse,
+  error: string,
+  note: string,
+  pathName: string,
+): void {
+  sendJson(res, 404, { ok: false, error, note, path: pathName });
 }
 
 function loadSettings(options: WallpaperOptions): Record<string, unknown> {
@@ -543,16 +622,55 @@ export async function handleWallpaperHttp(
     return true;
   }
 
+  // Built-in chibi art: client uses BASE+"/rope-art/<name>.png" (not plugin static).
+  // Without Cordis host apply, serve staged assets/rope/ — never the 1×1 stub
+  // (that pixel stretches into a red glitch blob in the rope dock).
+  if (p === `${BASE}/rope-art` || p.startsWith(`${BASE}/rope-art/`)) {
+    if (method === "GET" || method === "HEAD") {
+      const leaf = tokenTail(p, `${BASE}/rope-art/`);
+      const abs = leaf ? resolveRopeArtFile(options, leaf) : undefined;
+      if (abs) {
+        sendFileBytes(res, method, abs, contentTypeFor(abs));
+        return true;
+      }
+      sendJson(res, 404, {
+        ok: false,
+        error: "rope-art-not-found",
+        note:
+          "Staged assets/rope/<name> missing; install dsh-plugin-wallpaper-engine with assets, or apply Cordis host half.",
+        path: p,
+      });
+      return true;
+    }
+    if (method === "POST" || method === "PUT") await readBody(req);
+    refuse(res, "Rope-art upload is not supported on the baseline bridge.", {
+      path: p,
+    });
+    return true;
+  }
+
   if (
     p === `${BASE}/mascot` ||
     p.startsWith(`${BASE}/mascot/`) ||
     p === `${BASE}/avatar` ||
-    p.startsWith(`${BASE}/avatar/`) ||
-    p === `${BASE}/rope-art` ||
-    p.startsWith(`${BASE}/rope-art/`)
+    p.startsWith(`${BASE}/avatar/`)
   ) {
+    const kind = p.includes("/avatar") ? "avatar" : "mascot";
+    const prefix = `${BASE}/${kind}/`;
     if (method === "GET" || method === "HEAD") {
-      sendPlaceholderPng(res, method);
+      const leaf = p.startsWith(prefix) ? tokenTail(p, prefix) : "";
+      const abs = leaf ? resolveUserImageFile(options, kind, leaf) : undefined;
+      if (abs) {
+        sendFileBytes(res, method, abs, contentTypeFor(abs));
+        return true;
+      }
+      // Never 1×1 stub here — custom art URLs must 404, not paint a glitch pixel.
+      sendMissingImageJson(
+        res,
+        `${kind}-not-found`,
+        "Custom mascot/avatar host half is not applied; no stored image for this id.",
+        p,
+      );
       return true;
     }
     if (method === "POST" || method === "PUT") await readBody(req);
@@ -622,8 +740,34 @@ export async function handleWallpaperHttp(
     return true;
   }
 
-  if (p === `${BASE}/star-count` || p === `${BASE}/about-qr`) {
-    refuse(res, "About-notice subpackage is not applied.", { path: p });
+  if (p === `${BASE}/star-count`) {
+    refuse(res, "About-notice star-count is not applied.", { path: p });
+    return true;
+  }
+
+  // About / update-notice art: client loads BASE+"/about-qr/<file>" (lib/about).
+  if (p === `${BASE}/about-qr` || p.startsWith(`${BASE}/about-qr/`)) {
+    if (method === "GET" || method === "HEAD") {
+      const leaf = p.startsWith(`${BASE}/about-qr/`)
+        ? tokenTail(p, `${BASE}/about-qr/`)
+        : "";
+      const abs = leaf ? resolveAboutQrFile(options, leaf) : undefined;
+      if (abs) {
+        sendFileBytes(res, method, abs, contentTypeFor(abs));
+        return true;
+      }
+      sendMissingImageJson(
+        res,
+        "about-qr-not-found",
+        "Staged lib/about or assets/about missing this file (Cordis about-notice not applied).",
+        p,
+      );
+      return true;
+    }
+    if (method === "POST" || method === "PUT") await readBody(req);
+    refuse(res, "About-notice upload is not supported on the baseline bridge.", {
+      path: p,
+    });
     return true;
   }
 

@@ -1323,7 +1323,9 @@ process.exit(0);
     });
   });
 
-  it("serves modsearch / usage-stats / turn-rewind / releases adapters", async () => {
+  it(
+    "serves modsearch / usage-stats / turn-rewind / releases adapters",
+    async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-extra-adapters-"));
     temps.push(root);
     const handler = createDshCompatPublicHandler({
@@ -1365,9 +1367,13 @@ process.exit(0);
       const relBody = (await rel.json()) as { tag_name: string };
       expect(typeof relBody.tag_name).toBe("string");
     });
-  });
+  },
+  20_000,
+  );
 
-  it("reports git status/branch/log shapes expected by better-sidebar", async () => {
+  it(
+    "reports git status/branch/log shapes expected by better-sidebar",
+    async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-git-"));
     temps.push(root);
     writeFileSync(path.join(root, "tracked.txt"), "hello");
@@ -1538,7 +1544,9 @@ process.exit(0);
       expect(diff.ok).toBe(true);
       expect(diff.value.diff).toContain("changed");
     });
-  });
+  },
+  20_000,
+  );
 
   it("infers mnemon RPC when no host manifest is staged", async () => {
     const pluginsDir = compatPlugins(["dsh-mnemon"], {

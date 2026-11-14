@@ -27,6 +27,7 @@ import { readSessionAttachment } from "../session-attachment.js";
 import { sessionNotFoundMessage } from "../face-error-text.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { publishRemoteEvent } from "../remote-event.js";
+import { isAgentHomeWorkspace } from "../agent-home-boundary.js";
 import { IM_WORKSPACE_ID } from "../im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "../xiangyang-workspace.js";
 
@@ -153,6 +154,17 @@ export const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) =
           wsId === XIANGYANG_WORKSPACE_ID
             ? "Xiangyang sessions are locked to Qichuang (qichuang)"
             : "IM sessions are locked to the im tool surface",
+      },
+    };
+  }
+  // 干员家: roster basePreset only — chip must not re-pin coding badges.
+  if (wsId && isAgentHomeWorkspace(runtime, wsId)) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message:
+          "agent-home sessions follow the roster basePreset — change it on Agent Team",
       },
     };
   }

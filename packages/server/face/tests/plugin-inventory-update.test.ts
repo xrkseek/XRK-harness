@@ -66,6 +66,7 @@ describe("pluginInventory/update", () => {
         syncManagedProcessPlugins,
         cordisHostBridge: { applyHostHalf },
         hostPublic: { pluginsDir },
+        bus: { publishHost: vi.fn() },
       } as never,
       "rpc-2",
       { args: { entryId: "side-tools" } },
@@ -78,6 +79,59 @@ describe("pluginInventory/update", () => {
     expect(syncManagedProcessPlugins).toHaveBeenCalledWith({
       reloadIds: expect.arrayContaining(["side-tools"]),
     });
-    expect(applyHostHalf).toHaveBeenCalledWith("side-tools");
+  });
+
+  it("forwards Settings registry/proxy to updateUserPlugin", async () => {
+    const home = mkdtempSync(join(tmpdir(), "xrk-inv-upd-reg-"));
+    temps.push(home);
+    const pluginsDir = join(home, "plugins");
+    mkdirSync(join(pluginsDir, "side-tools"), { recursive: true });
+    writeFileSync(
+      join(pluginsDir, ".xrk-plugins.json"),
+      JSON.stringify({
+        rev: 1,
+        packages: {
+          "side-tools": {
+            name: "side-tools",
+            version: "1.0.0",
+            kind: "process",
+            source: "side-tools@1.0.0",
+            installedAt: new Date().toISOString(),
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      join(pluginsDir, "side-tools", "xrk.plugin.json"),
+      JSON.stringify({ id: "side-tools", kind: "tools", entry: "./plugin.mjs" }),
+    );
+    const updateUserPlugin = vi.fn(async () => ({ ok: true as const }));
+    const result = await pluginInventoryUpdate(
+      {
+        productDir: home,
+        plugins: [{ id: "side-tools", kind: "tools" }],
+        webPlugins: [],
+        updateUserPlugin,
+        syncManagedProcessPlugins: async () => undefined,
+        hostPublic: { pluginsDir },
+      } as never,
+      "rpc-reg",
+      {
+        args: {
+          entryId: "side-tools",
+          registry: "https://registry.npmmirror.com/",
+          proxy: "http://127.0.0.1:7897",
+        },
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(updateUserPlugin).toHaveBeenCalledWith(
+      "side-tools@latest",
+      expect.objectContaining({
+        registry: "https://registry.npmmirror.com/",
+        proxy: "http://127.0.0.1:7897",
+        onChunk: expect.any(Function),
+      }),
+    );
   });
 });

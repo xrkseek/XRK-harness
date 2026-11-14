@@ -13,9 +13,13 @@
 | 对方（DSH / 社区） | 本桥接 | 原因或后续 |
 |---|---|---|
 | boot 图 id = `package.json` name；`__ModuleLoader__.load({ id })` 必须同名 | 安装 / `serve` reconcile 对齐同族 stamp（裸名 ↔ `@scope/裸名`）；运行时 ModuleLoader 按 boot 图族双登记（并行 prefetch 不依赖单槽 `executingId`）；仅当 stamp 与任何图行都不同族时拒为 mis-stamped | 社区常以裸名注册、scoped 再发行；并行 `async` 脚本曾误伤 OFM 等包；见 `plugin-package-id` · `client-modules` · CLI `alignClientModuleLoaderId` / `realignStagedClientModuleLoaderIds` |
-| Cordis `inject: ['webServer']` + `webServer.register` | Host apply 贡献经 `pushCordisWebServerRoute` 先于 baseline 入册（首匹配胜） | OFM / WorkBuddy 已走此路；wallpaper 整包 Cordis apply（含 `cordis.patch.yml` 子包）仍待 |
-| 具名 Host 半（`lib/index.js` / 根 `index.js`） | **装包**：有根 `index.js` 就拷（+ 存在的 `src`/`adapter`/`vendor`/`locale`），不按 publisher 名单；WorkBuddy 仍拷 `lib/`。**愈合**：`package.json` 声明根 `index.js` 但盘上缺失时 reconcile 才 `npm pack` 补（健康路径只 stat）。**Apply** 仍按裸名族。**Catch-all**：默认 `ok:false`/`incomplete`；已知 Settings 硬依赖数组的 **URL 前缀**（非包名）在 `incomplete-api-shapes` 给空数组 | 社区 scoped 再发行多；勿按包名堆适配器；缺 Host 半时假 `ready` 会让面板 `.filter` 崩 |
+| Cordis `inject: ['webServer']` + `webServer.register` | Cordis `Service` + fiber `effect`；`pushCordisWebServerRoute` 返回真 disposer；贡献先于 baseline（首匹配胜） | Agent remount / soft-disable 会卸路由；OFM / WorkBuddy / wallpaper / nekowhale |
+| Cordis `inject: ['tools']` + `tools.register(defineTool)` | Cordis `Service` + fiber `effect` → `adaptXrkToolToCore` → `publishCommunityHostSurfaces`；Host `syncCommunityHostToolsOnto`（resolve 缓存命中亦同步，指纹变化 invalidate） | remap `@deepseek-ai/dsh-tools` → `@xrkseek/xrk-tools`；关 templates 后 `meme_render` 须从 catalog 消失 |
+| Cordis `skills` / `systemPrompt.section` | 同为 fiber-scoped Service；skills → `extraSkillDirs`；prompt → turn-start fragment | nekowhale 捆绑 `skills/nekowhale-stickers` |
+| Cordis `settings.installSection` | Face `settingsNamespaces.mutate` + **`settings.yaml` 落盘**（同 DSH）；`watchCommunitySettingsNamespace` 接 Settings UI mutate → LIVE remount | 无 Face 时内存 map；Cordis `set` / Face mutate 双通道触发 onChange |
+| 具名 Host 半（`lib/index.js` / 根 `index.js`） | **装包**：有根 `index.js` 就拷（+ 存在的 `src`/`adapter`/`vendor`/`locale`），不按 publisher 名单；WorkBuddy / wallpaper / nekowhale 拷 `lib/`（+ meta/skills/ui 等）并 `npm install` 对方声明的 deps 进 staged `node_modules`（**不**进本仓 lockfile）。**愈合**：根 `index.js` 或 wallpaper/nekowhale `lib/index.js` 缺失时 reconcile 才 `npm pack` 补。**Apply** 仍按裸名族；`applyEntry` 若导出 `Config`（schemastery）先 `Config(seed)` 填默认再调 `apply`。**Catch-all**：默认 `ok:false`/`incomplete` | Desktop 需 vendored npm（afterPack 补拷）；缺 Host 半时假 `ready` 会让面板 `.filter` 崩；漏跑 Config 会把 `site: undefined` 盖掉对方 kit 默认 |
 | `require('@deepseek-ai/dsh-client-*')` | 浏览器 `remapDshClientRequire` → `@xrkseek/client-*`；Host `ensureHostModuleRemap` | 构建期 / 运行时两层 |
+| `@deepseek-ai/dsh-home-paths` → `dshHomePath` / `resolveDshHome` | remap → `@xrkseek/xrk-home-paths`（`dshHomePath` ≡ `xrkHomePath`） | 社区 Host 半按 DSH 名 import；缺别名会 SyntaxError 卸 Cordis |
 
 ### DOM / CSS 样式命名（client 壳双戳）
 
@@ -72,9 +76,9 @@
 
 | 对方 | 本桥接 | 原因或后续 |
 |---|---|---|
-| Cordis 行 + `cordis.patch.yml` 拉起子包（`wallpaper-engine-media-bridge` 等） | 当前 **不**跑对方 `lib/index.js` apply；由 `xrk-wallpaper` baseline 按路径形状服务 | 子包依赖 `ctx.wallpaperEngineHost`、Steam 发现、ffmpeg、独立 media-origin；整包 apply 是后续里程碑 |
-| 安装拷 `lib/` · `packages/` · 资源 | CLI 拷 `client.js` + 常规 asset 目录；**未**整树 stage `packages/` | 待 Cordis apply 时与 WorkBuddy `lib/` staging 同级补齐 |
-| 设置白名单 `lib/settings-schema.js`（构建期内联进 client） | Host 合并写入、不重跑对方 sanitize | 错键可能被对方 client 本地丢掉；后续可内联同源 sanitize |
+| Cordis 行 + `cordis.patch.yml` 拉起子包（`wallpaper-engine-media-bridge` 等） | **优先** `tryApplyWallpaperEngineHost` 跑对方 `lib/index.js`；可 resolve 的子包行尽力 apply；失败/无 lib → `xrk-wallpaper` baseline | 无本机 WE / 无 ffmpeg / 无 webwallgl 时上游自降级；Scene 靠对方 WebWallGL，本仓不重写引擎 |
+| 安装拷 `lib/` · deps · 资源 | CLI `stageWallpaperEngineHost`：`lib/` · `cordis.patch.yml` · locale/assets · `npm install --registry=registry.npmjs.org` 对方 deps（Win 跳过 `x11`）进 staged `node_modules`；网络失败保留 `lib/` 并 warn（Cordis 可能缺子包） | 业务依赖不进本仓 lockfile；Desktop 需 runtime 带 npm；直连不通时设 `HTTPS_PROXY` |
+| 设置白名单 `lib/settings-schema.js`（构建期内联进 client） | Live apply 走对方 sanitize；baseline 合并写入、不重跑对方 sanitize | 错键可能被对方 client 本地丢掉 |
 
 ### HTTP 表面（相对 `BASE=/wallpaper-engine`，另含无前缀根）
 
@@ -88,19 +92,43 @@
 | 4 | `POST /upload` · `POST /remove` | 上传/删除自定义图视频 | 同；id 为内容哈希 | full（自定义子集） |
 | 5 | `POST /upload-dir` | 改上传根目录 | 回当前 `uploadDir` + note（不改根） | refuse→degraded |
 | 6 | `GET /media/<token>` · `/preview/<token>` | Range 视频/预览 | 上传文件按 id 直出；未知 token → 404 JSON | degraded（无 Steam token 表） |
-| 7 | `/scene-frame` · `/scene-anim`（含无 BASE 根路径） | WebWallGL / ffmpeg 帧 | 1×1 PNG stub | stub |
-| 8 | `/scene-live` · `/scene-files` · `/scene-video` · `/scene-audio` · `/live-frame` · `/props` | 场景实时与属性 | JSON note / PNG stub | refuse / stub |
+| 7 | `/scene-frame` · `/scene-anim`（含无 BASE 根路径） | WebWallGL / ffmpeg 帧 | **透明** 1×1 PNG stub（仅场景缺帧；不作产品立绘） | stub |
+| 8 | `/scene-live` · `/scene-files` · `/scene-video` · `/scene-audio` · `/live-frame` · `/props` | 场景实时与属性 | JSON note | refuse |
 | 9 | `/transcoded` · `/transcode-progress` · `/media-info` · `/video-preview` | ffmpeg 转码族 | `ok:false` + note，或进度直接 `done:true` | refuse / degraded |
-| 10 | `/media-status` · `/audio-spectrum` · `/now-playing` · `/media-control` | 系统媒体桥 | 空闲形状（未播放） | degraded |
+| 10 | `/media-status` · `/audio-spectrum` · `/now-playing` · `/media-control` | 系统媒体桥 | 空闲形状（未播放）；artwork 透明 stub | degraded |
 | 11 | `/system-fonts` · `/fontsets` | 枚举本机字体 | 空列表 + note | degraded |
-| 12 | `/glass-presets` · `/glass-row-state` · `/mascot` · `/avatar` · `/rope-art` | 外观子包 | 空/占位 JSON | degraded |
+| 12 | `/glass-presets` · `/glass-row-state` · `/mascot` · `/avatar` · `/rope-art` | 外观子包 | glass 空 JSON；**`GET /rope-art/<name>.png` → staged `assets/rope/<name>.png`**（client 用模型名：`deepseek`/`claude`/…，不是数字 id）；mascot/avatar 有落盘则直出，否则 **404 JSON（禁止 1×1 假图）** | rope full；mascot/avatar degraded |
 | 13 | `/diag` · `/diag-log` · `/client-diag` | 诊断 | 最小 ok 载荷 | degraded |
 | 14 | `/cache-dir` · `/we-assets-dir` · `/media-origin` | 目录与媒体源 | 回报本桥接数据根；不可改 Steam/WE 根 | degraded |
-| 15 | `/occlusion` · `/pet-link/*` · `/star-count` · `/about-qr` | 平台遮挡 / 宠物联动 / 关于 | 诚实 note | refuse |
+| 15 | `/occlusion` · `/pet-link/*` · `/star-count` | 平台遮挡 / 宠物联动 | 诚实 note | refuse |
+| 15b | `/about-qr/<file>` | 关于/公告图（`lib/about`） | **staged `lib/about` · `assets/about` 直出**；缺文件 404 JSON | full（有 stage）/ refuse（无文件） |
 | 16 | `/api/local-assets` | WE 素材目录 | `available:false` | refuse |
 
-**客户端可依赖的子集（今日）**：自定义上传图/视频轮播与设置持久化、占位场景帧不炸 UI。  
-**不可依赖**：Steam 工坊库扫描、Scene WebWallGL、ffmpeg 转码、系统 Now Playing、遮挡暂停。
+**客户端可依赖的子集（今日）**：Live Cordis apply 时对方 inventory/media 路由优先；无 lib 时 baseline 仍提供自定义上传图/视频、设置持久化、**rope / about 随包图**。  
+**不可依赖（无 Cordis `lib/` + 本机 WE）**：Steam 库扫描 · Scene/WebWallGL · ffmpeg 转码 · 系统 Now Playing · 自定义 mascot 上传管线。  
+**外置条件**：本机 Wallpaper Engine（Steam）· ffmpeg · `webwallgl`（经 staged deps）。本仓不嵌入这些。  
+**装包红线**：`stageWallpaperEngineHost` 必须带上 `lib/`；缺 lib 时 `restageIncompleteCommunityHosts` 应补齐——仅 `client.js`+`assets/` 会卡在 baseline。
+
+---
+
+## `dsh-nekowhale-stickers`（[Loping151/dsh-nekowhale-stickers](https://github.com/Loping151/dsh-nekowhale-stickers)）
+
+上游是薄 Cordis 适配器包在中立 `StickerKit` 上。本仓 **完整** Host 半：`nekowhale-host.ts` + 共享 Cordis 面（tools/skills/systemPrompt/settings/webServer/attachments）。
+
+### 打包与装载
+
+| 对方 | 本桥接 | 原因或后续 |
+|---|---|---|
+| `lib/index.js` + `meta/` + `skills/` + `client/ui/` + deps `gifenc`/`gifuct-js` | CLI `stageNekowhaleHost` 拷齐并 `npm install` 对方 deps（`@napi-rs/canvas` 可选跳过） | 业务依赖不进本仓 lockfile；资源 CC BY-NC 不打进本仓 |
+| `inject: ['tools']` + `defineTool` | remap → xrk-tools → `adaptXrkToolToCore` → Host 工具表 | `sticker_search` · `sticker_send` · `meme_render` · `sticker_manage` |
+| `skills.registerProvider` · `systemPrompt.section` | skill 目录进 `extraSkillDirs`；hint/index 进 turn-start fragment | `promptMode=off` 时仅工具 |
+| `settings.installSection('nekowhale-stickers', …)` LIVE_KEYS | Face `nekowhale-stickers` → `settings.yaml`；watch remount 工具表 | 桌宠/表情/黑白名单等热更新；关 templates 卸 `meme_render` |
+| HTTP `/x-nekowhale-stickers` · `/pet/config.json` · `/pet/balance.json` · `/s|r/<hash>.gif` | Live Cordis `webServer.register`（**无** baseline 假 GIF stub） | 余额仅 loopback；非 loopback → 403；**缺 `lib/` 时** catch-all `incomplete`，禁止用 1×1/空字节冒充表情 |
+| Client `shell.overlay` 大肥鱼桌宠 | `client.js` ModuleLoader；`__NEKOWHALE_PET__` index-inject + 5s poll | iframe 来自 kiriyuki.com（需网络）；`pet: false` 可关 |
+| `npx … mcp` | **不**内置；用户可自挂 MCP | 本切片以 Cordis+client 为完整 |
+
+**装包红线**：`stageNekowhaleHost` 必须带 `lib/` · `meta/` · `skills/` · `client/ui`；缺 lib 与 wallpaper 一样走 `restageIncompleteCommunityHosts`，不要只留 `client.js`。  
+**外置条件**：DeepSeek 登录/API Key（余额卡）；网络（桌宠 iframe · lazy sync）；可选 canvas（模板制图增强）。
 
 ---
 
@@ -148,10 +176,10 @@
 
 Same table style as DSH’s Claude Code mods compatibility page: each row = **upstream** · **this bridge** · **why / later**. Code truth: `packages/server/http/src/dsh-compat/`. See also [community-plugins.md](./community-plugins.md).
 
-Shared layer: scoped ↔ bare ModuleLoader family dual-register (install + `serve` reconcile align stamps; runtime dual-keys by boot-graph family so parallel `async` prefetch cannot drop a bare stamp under a sibling `executingId`); root Cordis `index.js` staged by layout (not publisher list) with incomplete-host restage only when `package.json` declares it missing; Host apply routes before baseline; named hosts match bare family ids; catch-all is `incomplete` (path-shape empty arrays only for known Settings contracts).
+Shared layer: scoped ↔ bare ModuleLoader family dual-register (install + `serve` reconcile align stamps; runtime dual-keys by boot-graph family so parallel `async` prefetch cannot drop a bare stamp under a sibling `executingId`); root Cordis `index.js` staged by layout (not publisher list) with incomplete-host restage only when `package.json` declares it missing; Host apply routes before baseline; `applyEntry` runs exported schemastery `Config(seed)` before `apply`; `dshHomePath` remaps via `@xrkseek/xrk-home-paths`; named hosts match bare family ids; catch-all is `incomplete` (path-shape empty arrays only for known Settings contracts).
 
 **DOM / CSS naming**: XRK dual-stamps DSH frame vars (`--dsh-windows-titlebar-height`, `--dsh-frame-*`, `--dsh-windows-content-radius`), menu / elevation / shimmer / turn-trigger tokens, `data-windows-titlebar`, `data-window-drag`, `data-process-activity`, theme-source, conversation / bubble / turn-process / disclosure-header / shortcut-modal / animating / shell-leading / panel-conversation / cordis-approve / menu-material / boot anchors — see Chinese table (`dsh-style-aliases.ts`). `ctx.configForms` is a thin alias over `settingsScope` (`describe.ensure` / `whileServed`); Face persists community settings namespaces in `settings.yaml`. Marketplace Theme cards share that underlay (no per-package Host fork); structural remappers like `dsh-deepcel` stay degraded. Hashed CSS-module class names are not faked.
 
-**Wallpaper Engine**: custom upload + settings + picker-shaped inventory are usable; Steam library, WebWallGL, ffmpeg, Now Playing, occlusion are not. Route grades live in the Chinese tables above.
+**Wallpaper Engine**: Cordis live apply preferred (`lib/index.js` + staged deps); Face `wallpaper-engine` yaml when available; baseline remains when lib/apply missing. Baseline serves staged product images (`/rope-art/*` · `/about-qr/*`) and **404s** missing mascot/avatar — never a red 1×1 fake for product art; transparent 1×1 only for scene-frame idle. Steam/ffmpeg/WebWallGL are external; install must stage `lib/` (`restageIncompleteCommunityHosts`). **Nekowhale stickers**: Cordis-only host (no baseline image stub) — tools/skills/`settings.yaml` LIVE watch/HTTP/pet GIFs come from upstream `lib/index.js` after `stageNekowhaleHost`; without staged lib the path is incomplete catch-all, not a fake GIF. MCP via user npx only.
 
 **Deep whale skins**: catalog GET (with `order`) + preference switch + skin-assets are usable; GitHub version compare and Cordis exclusive patch hot-swap are not.

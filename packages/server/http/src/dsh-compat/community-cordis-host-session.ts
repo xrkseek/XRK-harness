@@ -1,12 +1,13 @@
 /**
- * Shared Cordis Context bootstrap for community host halves (OFM, WorkBuddy, …).
+ * Shared Cordis Context bootstrap for community host halves (OFM, WorkBuddy,
+ * wallpaper, nekowhale, …).
  *
- * Owns: Context · logger · webServer/rpc/connection · credentials · settings stub ·
- * effect/fiber tracking · apply + await · live dispose gate.
+ * Owns: Context · logger · webServer/rpc/connection · credentials · settings ·
+ * tools/skills/systemPrompt · effect/fiber tracking · apply + await · live dispose.
  * Callers keep package-specific seed / bridge / HTTP nudge.
  */
 import { pathToFileURL } from "node:url";
-import { Context } from "@xrkseek/cordis";
+import { Context, Service } from "@xrkseek/cordis";
 import {
   createCordisConnectionBridge,
   pushCordisWebServerRoute,
@@ -15,12 +16,107 @@ import {
 import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
 import type { CordisRpcHandler } from "./cordis-registry.js";
 import {
+  createCommunityIndexInjectBridge,
+  provideCommunityAgentSurfaces,
+  type CommunityIndexInjectBridge,
+  type CommunitySettingsBridge,
+  type CommunitySettingsStore,
+  type CommunitySkillsBridge,
+  type CommunitySystemPromptBridge,
+  type CommunityToolsBridge,
+} from "./community-cordis-surfaces.js";
+import {
   gateLiveHostHttp,
   gateLiveHostRpc,
   registerLiveHostApply,
 } from "./live-host-apply.js";
 import { resolveCompatHome } from "./underlying/json-store.js";
 import type { XrkWebServerRoute } from "./xrk-host-apply.js";
+
+/**
+ * Fiber-scoped webServer: register binds to the *caller* fiber so Agent
+ * remount drops routes (plain provide + noop disposer left duplicates).
+ */
+class CommunityWebServerService extends Service {
+  constructor(
+    ctx: Context,
+    private readonly http: CordisHttpRow[],
+  ) {
+    super(ctx, "webServer");
+  }
+
+  register(route: XrkWebServerRoute): () => void {
+    const dispose = this.ctx.effect(() => {
+      const drop = pushCordisWebServerRoute(this.http, route);
+      return () => {
+        drop();
+      };
+    }, `webServer.register(${JSON.stringify(route.path)})`);
+    return () => {
+      void dispose();
+    };
+  }
+
+  registerUpgrade(): void {
+    /* SSE / unary HTTP covers community status surfaces */
+  }
+
+  tapIndex(): () => void {
+    return () => undefined;
+  }
+
+  get port(): number | undefined {
+    const raw = process.env.XRK_FACE_PORT ?? process.env.PORT;
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+}
+
+/**
+ * Fiber-scoped rpc: remount must drop channels registered on the disposed fiber.
+ * Same-channel overwrite still wins for the active fiber.
+ */
+class CommunityRpcService extends Service {
+  constructor(
+    ctx: Context,
+    private readonly rpc: Record<string, CordisRpcHandler>,
+  ) {
+    super(ctx, "rpc");
+  }
+
+  register(channel: string, handler: CordisRpcHandler): () => void {
+    const key = channel.endsWith("/") ? channel.slice(0, -1) : channel.trim();
+    if (!key) return () => undefined;
+    const dispose = this.ctx.effect(() => {
+      const previous = this.rpc[key];
+      this.rpc[key] = handler;
+      return () => {
+        if (this.rpc[key] === handler) {
+          if (previous) this.rpc[key] = previous;
+          else delete this.rpc[key];
+        }
+      };
+    }, `rpc.register(${JSON.stringify(key)})`);
+    return () => {
+      void dispose();
+    };
+  }
+}
+
+async function drainDisposers(
+  disposers: Array<() => void | Promise<void>>,
+): Promise<void> {
+  // Copy + reverse without mutating the live list (apply fail + finishLive
+  // both drain; in-place reverse() corrupted the second pass).
+  const stack = disposers.splice(0).reverse();
+  for (const d of stack) {
+    try {
+      await d();
+    } catch {
+      /* best-effort teardown */
+    }
+  }
+}
 
 export type CommunityCordisHostLogger = {
   info: (...args: unknown[]) => void;
@@ -35,6 +131,16 @@ export type CommunityCordisHostSession = {
   readonly disposers: Array<() => void | Promise<void>>;
   readonly logger: CommunityCordisHostLogger;
   readonly dshHome: string;
+  /** Agent surfaces — present after {@link CommunityCordisHostSession.provideHostSurfaces}. */
+  readonly agent:
+    | {
+        readonly tools: CommunityToolsBridge;
+        readonly skills: CommunitySkillsBridge;
+        readonly systemPrompt: CommunitySystemPromptBridge;
+        readonly settings: CommunitySettingsBridge;
+        readonly indexInject: CommunityIndexInjectBridge;
+      }
+    | undefined;
   sealHttp(): void;
   isHttpSealed(): boolean;
   /** Wire webServer · rpc · connection · credentials · settings (+ optional extras). */
@@ -43,6 +149,10 @@ export type CommunityCordisHostSession = {
     readonly profileContext?: { readonly name: string; readonly home: string };
     readonly attachments?: unknown;
     readonly commands?: boolean;
+    /** Collect tools/skills/systemPrompt (nekowhale and peers). */
+    readonly agentSurfaces?: boolean;
+    readonly settingsStore?: CommunitySettingsStore;
+    readonly onSettingsChange?: (namespace: string) => void;
   }): void;
   /** Track Cordis effect + child plugin fibers for await/dispose. */
   trackEffectsAndFibers(): void;
@@ -64,9 +174,45 @@ export type CommunityCordisHostSession = {
 
 type ApplyModule = {
   apply?: (ctx: Context, config?: Record<string, unknown>) => void;
+  /** Schemastery Config — call to fill defaults before `apply`. */
+  Config?: ((data?: unknown) => unknown) | unknown;
+  default?: {
+    apply?: (ctx: Context, config?: Record<string, unknown>) => void;
+    Config?: ((data?: unknown) => unknown) | unknown;
+  };
 };
 
-type AwaitableFiber = { await: () => Promise<unknown> };
+/**
+ * Community plugins expect Cordis to hand `apply` a Config-resolved object
+ * (defaults filled). Without this, `site: config.site` overwrites kit defaults
+ * with `undefined` and crashes (nekowhale StickerKit).
+ */
+function resolveApplyConfig(
+  mod: ApplyModule,
+  config: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const raw = config ?? {};
+  const Config =
+    typeof mod.Config === "function"
+      ? mod.Config
+      : typeof mod.default?.Config === "function"
+        ? mod.default.Config
+        : undefined;
+  if (!Config) return raw;
+  try {
+    const resolved = Config(raw);
+    if (resolved && typeof resolved === "object" && !Array.isArray(resolved)) {
+      return resolved as Record<string, unknown>;
+    }
+  } catch {
+    /* keep seed — unit fakes may export a non-schema Config */
+  }
+  return raw;
+}
+
+type AwaitableFiber = {
+  await: () => Promise<unknown>;
+};
 
 /**
  * Open a Cordis root for one staged community host package.
@@ -82,6 +228,17 @@ export function createCommunityCordisHostSession(options: {
   const rpc: Record<string, CordisRpcHandler> = {};
   const disposers: Array<() => void | Promise<void>> = [];
   let httpSealed = false;
+  let surfacesProvided = false;
+  let tracking = false;
+  let agent:
+    | {
+        readonly tools: CommunityToolsBridge;
+        readonly skills: CommunitySkillsBridge;
+        readonly systemPrompt: CommunitySystemPromptBridge;
+        readonly settings: CommunitySettingsBridge;
+        readonly indexInject: CommunityIndexInjectBridge;
+      }
+    | undefined;
 
   const root = new Context();
   const logger: CommunityCordisHostLogger = {
@@ -109,6 +266,9 @@ export function createCommunityCordisHostSession(options: {
     disposers,
     logger,
     dshHome,
+    get agent() {
+      return agent;
+    },
     sealHttp() {
       httpSealed = true;
     },
@@ -116,25 +276,15 @@ export function createCommunityCordisHostSession(options: {
       return httpSealed;
     },
     provideHostSurfaces(surface) {
-      root.provide("webServer", {
-        register(route: XrkWebServerRoute) {
-          pushCordisWebServerRoute(http, route);
-          return () => undefined;
-        },
-        registerUpgrade() {
-          /* SSE / unary HTTP covers community status surfaces */
-        },
-        tapIndex() {
-          return () => undefined;
-        },
-      });
+      if (surfacesProvided) {
+        throw new Error(
+          `[${logPrefix}] provideHostSurfaces called twice — surfaces are single-shot`,
+        );
+      }
+      surfacesProvided = true;
 
-      root.provide("rpc", {
-        register(channel: string, handler: CordisRpcHandler) {
-          const key = channel.endsWith("/") ? channel.slice(0, -1) : channel;
-          rpc[key] = handler;
-        },
-      });
+      new CommunityWebServerService(root, http);
+      new CommunityRpcService(root, rpc);
 
       root.provide(
         "connection",
@@ -153,25 +303,72 @@ export function createCommunityCordisHostSession(options: {
         createCordisCredentialsBridge(dshHome, options.packageName),
       );
 
-      const settingsBase = {
-        installSection() {
-          return () => undefined;
-        },
-        async update() {
-          return undefined;
-        },
-      };
-      root.provide(
-        "settings",
-        surface?.settingsConfigure
-          ? {
-              ...settingsBase,
-              configure() {
-                return () => undefined;
+      if (surface?.agentSurfaces) {
+        agent = provideCommunityAgentSurfaces(root, {
+          settingsConfigure: surface.settingsConfigure !== false,
+          ...(surface.settingsStore
+            ? { settingsStore: surface.settingsStore }
+            : {}),
+          ...(surface.onSettingsChange
+            ? { onSettingsChange: surface.onSettingsChange }
+            : {}),
+        });
+      } else {
+        const settingsBase = {
+          installSection() {
+            return () => undefined;
+          },
+          async update() {
+            return undefined;
+          },
+          configure() {
+            return () => undefined;
+          },
+          peek() {
+            return {};
+          },
+        } satisfies CommunitySettingsBridge;
+        root.provide(
+          "settings",
+          surface?.settingsConfigure
+            ? settingsBase
+            : {
+                installSection: (...args: Parameters<typeof settingsBase.installSection>) =>
+                  settingsBase.installSection(...args),
+                update: (...args: Parameters<typeof settingsBase.update>) =>
+                  settingsBase.update(...args),
               },
-            }
-          : settingsBase,
-      );
+        );
+        // Index-inject collector still available for packages that only need HTTP.
+        const indexInject = createCommunityIndexInjectBridge();
+        agent = {
+          tools: {
+            register() {
+              return () => undefined;
+            },
+            list: () => [],
+            toCoreTools: () => [],
+          },
+          skills: {
+            registerProvider() {
+              return () => undefined;
+            },
+            providers: () => [],
+            skillDirs: () => [],
+            addSkillDir() {
+              /* no-op */
+            },
+          },
+          systemPrompt: {
+            section() {
+              return () => undefined;
+            },
+            sections: () => [],
+          },
+          settings: settingsBase,
+          indexInject,
+        };
+      }
 
       if (surface?.profileContext) {
         root.provide("profileContext", surface.profileContext);
@@ -188,14 +385,16 @@ export function createCommunityCordisHostSession(options: {
       }
     },
     trackEffectsAndFibers() {
-      const originalEffect = root.effect.bind(root);
-      root.effect = ((fn: Parameters<typeof root.effect>[0], label?: string) => {
-        const owned = originalEffect(fn, label);
-        disposers.push(() => {
-          void owned();
-        });
-        return owned;
-      }) as typeof root.effect;
+      if (tracking) {
+        throw new Error(
+          `[${logPrefix}] trackEffectsAndFibers called twice — tracking is single-shot`,
+        );
+      }
+      tracking = true;
+
+      // Do NOT wrap root.effect into disposers: Service registrations already
+      // bind to fibers, and finishLive disposes root.fiber (which runs effects).
+      // Double-owned() races soft-disable teardown.
 
       const registryPlugin = root.registry.plugin.bind(root.registry);
       root.registry.plugin = ((plugin, config?, getOuterStack?) => {
@@ -208,20 +407,36 @@ export function createCommunityCordisHostSession(options: {
       try {
         const entry = pathToFileURL(entryPath).href;
         const mod = (await import(/* @vite-ignore */ entry)) as ApplyModule;
-        if (typeof mod.apply !== "function") return false;
-        mod.apply(root, config);
-        await Promise.all(childFibers.map((fiber) => fiber.await()));
+        const apply =
+          typeof mod.apply === "function"
+            ? mod.apply
+            : typeof mod.default?.apply === "function"
+              ? mod.default.apply
+              : undefined;
+        if (typeof apply !== "function") return false;
+        apply(root, resolveApplyConfig(mod, config));
+        // Await a snapshot — remounts after settle push new fibers but apply
+        // only needs the initial inject graph.
+        const pending = childFibers.splice(0);
+        await Promise.all(pending.map((fiber) => fiber.await()));
+        // Harvest webserver/index-inject globals after fibers settle.
+        agent?.indexInject.emit(root);
         return true;
       } catch (error) {
         logger.error("host apply failed", error);
         onFail?.();
-        for (const d of disposers.reverse()) await d();
+        await drainDisposers(disposers);
+        try {
+          await root.fiber.dispose();
+        } catch {
+          /* already torn down */
+        }
         return false;
       }
     },
     async finishLive(packageName) {
       await registerLiveHostApply(packageName, async () => {
-        for (const d of disposers.reverse()) await d();
+        await drainDisposers(disposers);
         try {
           await root.fiber.dispose();
         } catch {

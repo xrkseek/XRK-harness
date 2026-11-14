@@ -10,6 +10,7 @@ import { formatRosterCatalog } from "./agent-roster-store.js";
 import { listWorkspaceThreadCatalog } from "./session-thread-tools.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveAgentPresetProfile } from "./presets-catalog.js";
+import { isAgentHomeSession } from "./agent-home-boundary.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import type { FaceSubagentLink } from "./subagent-registry.js";
@@ -51,7 +52,7 @@ export interface CollabBoardPeerRow {
 }
 
 /** How the parent session should read the team + 主线 board. */
-export type CollabBoardSurface = "coding" | "im" | "qichuang";
+export type CollabBoardSurface = "coding" | "im" | "qichuang" | "agent-home";
 
 /** Cap unbound peer rows so the board stays scannable. */
 const UNBOUND_PEER_MAX = 8;
@@ -72,21 +73,26 @@ export function formatCollabBoardText(input: {
   const recent = input.threads.filter((row) => row.updatedAt >= cutoff);
   const canSpawn = input.canSpawn !== false;
   const surface = input.surface ?? "coding";
-  // Ids + lane spout. Full dispatch chains live in <session_posture> (when present).
-  // project/向阳/IM boards never list agent-home peers.
+  // Ids + lane spout. Dispatch chains live in <session_posture> (when present).
+  // Lane rule said once here — tools only reinforce when opened.
   const teamLead =
     surface === "im"
-      ? "Roster · peers (IM). Channel→im_send. Spawn: subagent+workspace_id. Never agent-home. Mint→向阳."
+      ? "Roster · peers (IM). Channel→im_send. Spawn: subagent+workspace_id. Mint→向阳."
       : surface === "qichuang"
-        ? "Roster · peers (向日葵 admin). workspace_create + settings_* here. Never agent-home."
-        : canSpawn
-          ? "Roster · peers (经理). Spawn: subagent member_id. WS create/delete → 向阳. Never agent-home."
-          : "Roster (no subagent) — skill-load matching work. Members:";
+        ? "Roster · peers (向日葵 admin). workspace_create + settings_* here."
+        : surface === "agent-home"
+          ? "Roster · peers (干员家). Speech↔向阳. Project coding canvases closed."
+          : canSpawn
+            ? "Roster · peers (经理). Spawn: subagent member_id. WS create/delete → 向阳."
+            : "Roster (no subagent) — skill-load matching work. Members:";
+  const peerLane =
+    surface === "qichuang"
+      ? "thread_message: same-lane or 向阳↔agent-home (id from workspace_session_prompt). *=you."
+      : surface === "agent-home"
+        ? "thread_message: same-lane homes or agent-home↔向阳. Never project coding. *=you."
+        : "thread_message: same-lane only. Never agent-home. *=you.";
   const lines = [teamLead, input.membersCatalog];
-  lines.push(
-    "",
-    "Peers — id · who · duty · todo · 支线 · 主线. thread_message same-lane only (workspace_session_prompt→id). *=you.",
-  );
+  lines.push("", `Peers — id · who · duty · todo · 支线 · 主线. ${peerLane}`);
   if (recent.length === 0) {
     const peers = input.unboundPeers ?? [];
     if (peers.length === 0) {
@@ -386,8 +392,9 @@ export function formatCollabBoard(
   const workspaceId = canvasWorkspaceIdForSession(runtime, sessionId);
   const badge = effectiveSessionAgentPreset(runtime, sessionId);
   const canSpawn = resolveAgentPresetProfile(badge).subagents.mode === "on";
-  const surface: CollabBoardSurface =
-    badge === "im" || workspaceId === IM_WORKSPACE_ID
+  const surface: CollabBoardSurface = isAgentHomeSession(runtime, sessionId)
+    ? "agent-home"
+    : badge === "im" || workspaceId === IM_WORKSPACE_ID
       ? "im"
       : badge === "qichuang" || workspaceId === XIANGYANG_WORKSPACE_ID
         ? "qichuang"

@@ -3,9 +3,11 @@ import {
   listFaceCommandDescriptors,
 } from "../slash.js";
 import { listFaceAgentPresetGroups } from "../plugin-agent-presets.js";
+import { isNpmViewHttpUrl, normalizeNpmViewNet } from "@xrkseek/server-http";
 import {
   ensurePluginUpdateProbe,
   getPluginUpdateProbeCache,
+  refreshPluginUpdateProbeAfterMutate,
 } from "../plugin-check-updates.js";
 import {
   listFacePluginInventory,
@@ -35,15 +37,8 @@ function reloadIdsForEntry(entry: {
   return ids;
 }
 
-/** Face install `--registry` / `--proxy` must be plain http(s) URLs. */
-function isHttpUrl(raw: string): boolean {
-  try {
-    const u = new URL(raw);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
+/** Face install / checkUpdates / update `--registry` / `--proxy` (shared with npm view). */
+const isHttpUrl = isNpmViewHttpUrl;
 
 /** Apply Cordis / host.mjs halves once per unique package name (best-effort). */
 async function applyCordisHostHalves(
@@ -183,21 +178,43 @@ export const pluginInventoryList: FaceHandler = async (runtime) => ({
 });
 
 /**
- * Probe registry-sourced managed plugins for newer npm versions.
- * Returns Host cache when warm; `force: true` re-runs. Local / engine / vcs
- * rows never hit the network (`updateAvailable: false`, optional `checkFailed`).
+ * Probe managed plugins for newer npm versions.
+ * Returns Host cache when warm; `force: true` re-runs.
+ * Optional `registry` / `proxy` match Settings install-row (same as `plugin add`).
+ * - registry source: `npm view` by install source (miss → `checkFailed`)
+ * - local: advisory `npm view` by package id when the id is registry-safe
+ *   (miss stays quiet — local-only packages need not be published)
+ * - engine / vcs: no network (`updateAvailable: false`)
  */
 export const pluginInventoryCheckUpdates: FaceHandler = async (runtime, _rpcId, payload) => {
   const args = remoteArgs(payload);
   const force = args.force === true;
+  const registryRaw = String(args.registry ?? "").trim();
+  const proxyRaw = String(args.proxy ?? "").trim();
+  if (registryRaw && !isHttpUrl(registryRaw)) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "registry must be an http(s) URL" },
+    };
+  }
+  if (proxyRaw && !isHttpUrl(proxyRaw)) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "proxy must be an http(s) URL" },
+    };
+  }
+  const net = normalizeNpmViewNet({
+    registry: registryRaw,
+    proxy: proxyRaw,
+  });
   const rawIds = args.entryIds;
   const entryIds = Array.isArray(rawIds)
     ? rawIds.map((id) => String(id ?? "").trim()).filter(Boolean)
     : undefined;
 
-  // Fast path: UI poll while Host warm probe is still running.
+  // Fast path: UI poll while Host warm probe is still running (same mirror key).
   if (!force) {
-    const cached = getPluginUpdateProbeCache(runtime);
+    const cached = getPluginUpdateProbeCache(runtime, net);
     if (cached.status === "ready" && !entryIds?.length) {
       return { ok: true, value: cached };
     }
@@ -209,6 +226,7 @@ export const pluginInventoryCheckUpdates: FaceHandler = async (runtime, _rpcId, 
   const snapshot = await ensurePluginUpdateProbe(runtime, {
     force,
     ...(entryIds?.length ? { entryIds } : {}),
+    ...net,
   });
   return { ok: true, value: snapshot };
 };
@@ -304,9 +322,27 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, rpcId, payload
   const args = remoteArgs(payload);
   const entryId = String(args.entryId ?? "").trim();
   const requestId = String(args.requestId ?? rpcId).trim() || rpcId;
+  const registryRaw = String(args.registry ?? "").trim();
+  const proxyRaw = String(args.proxy ?? "").trim();
   if (!entryId) {
     return { ok: false, error: { code: "invalid-payload", message: "entryId required" } };
   }
+  if (registryRaw && !isHttpUrl(registryRaw)) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "registry must be an http(s) URL" },
+    };
+  }
+  if (proxyRaw && !isHttpUrl(proxyRaw)) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "proxy must be an http(s) URL" },
+    };
+  }
+  const net = normalizeNpmViewNet({
+    registry: registryRaw,
+    proxy: proxyRaw,
+  });
   const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   if (!entry) {
     return { ok: false, error: { code: "not-found", message: entryNotFoundMessage(entryId) } };
@@ -318,11 +354,15 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, rpcId, payload
     };
   }
   if (!runtime.updateUserPlugin) {
+    const hintParts = ["xrkh plugin add"];
+    if (net.registry) hintParts.push("--registry", net.registry);
+    if (net.proxy) hintParts.push("--proxy", net.proxy);
+    hintParts.push(`${entryId}@latest`);
     return {
       ok: false,
       error: {
         code: "unavailable",
-        message: `Use: xrkh plugin add ${entryId}@latest`,
+        message: `Use: ${hintParts.join(" ")}`,
       },
     };
   }
@@ -343,8 +383,16 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, rpcId, payload
       chunk.text,
     ]);
   };
-  const result = await runtime.updateUserPlugin(spec, { onChunk });
-  const log = mutateLogFromResult(`xrkh plugin add ${spec}`, result);
+  const mutateOpts = {
+    onChunk,
+    ...net,
+  };
+  const result = await runtime.updateUserPlugin(spec, mutateOpts);
+  const commandParts = ["xrkh plugin add"];
+  if (net.registry) commandParts.push("--registry", net.registry);
+  if (net.proxy) commandParts.push("--proxy", net.proxy);
+  commandParts.push(spec);
+  const log = mutateLogFromResult(commandParts.join(" "), result);
   if (!result.ok) {
     return {
       ok: false,
@@ -369,6 +417,13 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, rpcId, payload
   });
   // Cordis / host.mjs half (OFM, WB, …) — same path as inventory reload.
   await applyCordisHostHalves(runtime, reloadIds);
+  // Drop stale →version badges before Settings re-lists.
+  void refreshPluginUpdateProbeAfterMutate(runtime, {
+    entryIds: reloadIds,
+    ...net,
+  }).catch(() => {
+    /* badge refresh is advisory */
+  });
   return {
     ok: true,
     value: { entryId, updated: true as const, ...log },
@@ -427,28 +482,32 @@ export const pluginInventoryReload: FaceHandler = async (runtime, _rpcId, payloa
 export const pluginInventoryInstall: FaceHandler = async (runtime, rpcId, payload) => {
   const args = remoteArgs(payload);
   const spec = String(args.spec ?? "").trim();
-  const registry = String(args.registry ?? "").trim();
-  const proxy = String(args.proxy ?? "").trim();
+  const registryRaw = String(args.registry ?? "").trim();
+  const proxyRaw = String(args.proxy ?? "").trim();
   const requestId = String(args.requestId ?? rpcId).trim() || rpcId;
   if (!spec) {
     return { ok: false, error: { code: "invalid-payload", message: "spec required" } };
   }
-  if (registry && !isHttpUrl(registry)) {
+  if (registryRaw && !isHttpUrl(registryRaw)) {
     return {
       ok: false,
       error: { code: "invalid-payload", message: "registry must be an http(s) URL" },
     };
   }
-  if (proxy && !isHttpUrl(proxy)) {
+  if (proxyRaw && !isHttpUrl(proxyRaw)) {
     return {
       ok: false,
       error: { code: "invalid-payload", message: "proxy must be an http(s) URL" },
     };
   }
+  const net = normalizeNpmViewNet({
+    registry: registryRaw,
+    proxy: proxyRaw,
+  });
   if (!runtime.updateUserPlugin) {
     const hintParts = ["xrkh plugin add"];
-    if (registry) hintParts.push("--registry", registry);
-    if (proxy) hintParts.push("--proxy", proxy);
+    if (net.registry) hintParts.push("--registry", net.registry);
+    if (net.proxy) hintParts.push("--proxy", net.proxy);
     hintParts.push(spec);
     return {
       ok: false,
@@ -470,13 +529,12 @@ export const pluginInventoryInstall: FaceHandler = async (runtime, rpcId, payloa
   };
   const mutateOpts = {
     onChunk,
-    ...(registry ? { registry } : {}),
-    ...(proxy ? { proxy } : {}),
+    ...net,
   };
   const result = await runtime.updateUserPlugin(spec, mutateOpts);
   const commandParts = ["xrkh plugin add"];
-  if (registry) commandParts.push("--registry", registry);
-  if (proxy) commandParts.push("--proxy", proxy);
+  if (net.registry) commandParts.push("--registry", net.registry);
+  if (net.proxy) commandParts.push("--proxy", net.proxy);
   commandParts.push(spec);
   const command = commandParts.join(" ");
   const log = mutateLogFromResult(command, result);
@@ -497,6 +555,12 @@ export const pluginInventoryInstall: FaceHandler = async (runtime, rpcId, payloa
   });
   // Disk mutate alone leaves Cordis host half cold — apply when staged.
   await applyCordisHostHalves(runtime, reloadIds);
+  void refreshPluginUpdateProbeAfterMutate(runtime, {
+    entryIds: reloadIds,
+    ...net,
+  }).catch(() => {
+    /* badge refresh is advisory */
+  });
   return {
     ok: true,
     value: { spec, installed: true as const, ...log },

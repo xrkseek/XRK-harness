@@ -1478,9 +1478,10 @@ export class FaceAgentRosterStore {
   }
 
   /**
-   * Write into global.json or the canvas file.
-   * Global scope is one home: drop that id from every workspace roster.
-   * Workspace scope writes only that canvas (it may overlay a global row).
+   * Write into global.json or the canvas file — **move**, never dual-list.
+   * Global: drop that id from every workspace roster.
+   * Workspace: drop that id from global (and other canvases) so Team UI
+   * does not show the same 干员 twice after a live scope toggle.
    */
   upsertAtScope(
     canvasWorkspaceId: string,
@@ -1489,10 +1490,18 @@ export class FaceAgentRosterStore {
   ): AgentRosterMember | undefined {
     const target = scope === "global" ? GLOBAL_ROSTER_ID : canvasWorkspaceId;
     const member = this.upsert(target, input);
-    if (member && scope === "global") {
+    if (!member) return undefined;
+    if (scope === "global") {
       for (const workspaceId of this.listWorkspaceRosterIds()) {
         this.remove(workspaceId, member.id);
       }
+      return member;
+    }
+    // Demote / create-at-workspace: one home only.
+    this.remove(GLOBAL_ROSTER_ID, member.id);
+    for (const workspaceId of this.listWorkspaceRosterIds()) {
+      if (workspaceId === target) continue;
+      this.remove(workspaceId, member.id);
     }
     return member;
   }

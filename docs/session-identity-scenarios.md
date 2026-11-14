@@ -16,8 +16,9 @@
 | `sess_im` | IM 父会话 |
 | `sess_code` | 编码父会话（harness） |
 | `sess_docs` | 另一编码父会话（peer） |
-| `sess_scout` | 干员 · researcher · `mem_seed_researcher` |
-| `sess_build` | 干员 · worker · `mem_seed_worker` |
+| `sess_scout` | 干员 · researcher · `mem_seed_researcher`（派生子） |
+| `sess_build` | 干员 · worker · `mem_seed_worker`（派生子） |
+| `sess_home` | 同一干员坐在自己 agent-home 的身份会话 |
 | `task_inject` | 任务板行：补注入目录 |
 
 ---
@@ -50,14 +51,16 @@ Dispatch: workspace_session_prompt → keep session_id → thread_message; optio
 No nested subagent — coding peers ship. titles.manager = peer (not boss).
 ```
 
+（车道规则在协作板，不在 posture 重复。）
+
 `<external_collab_board>` 摘录：
 
 ```
-Roster · peers (向日葵 admin). workspace_create + settings_* here. Never agent-home.
+Roster · peers (向日葵 admin). workspace_create + settings_* here.
 - mem_seed_researcher [global] 调研员 · researcher · inject=minimal · …
 - mem_seed_worker [global] 施工员 · worker · inject=minimal · …
 
-Peers — id · who · duty · todo · 支线 · 主线. thread_message same-lane only (workspace_session_prompt→id). *=you.
+Peers — id · who · duty · todo · 支线 · 主线. thread_message: same-lane or 向阳↔agent-home (id from workspace_session_prompt). *=you.
 (none)
 ```
 
@@ -65,9 +68,9 @@ Peers — id · who · duty · todo · 支线 · 主线. thread_message same-lan
 
 | 工具 | 关键句 |
 |------|--------|
-| `workspace_list` | `No nested subagent — workspace_session_prompt → keep session_id → thread_message.` |
+| `workspace_list` | 活跃-only 默认；`Next: workspace_session_prompt → keep session_id → thread_message (no nested subagent).` |
 | `workspace_session_prompt` | `Qichuang peer only — no nested subagent. Implement there.` |
-| `thread_message` | `Message a parent peer by session_id (same lane only: project↔project or agent-home↔agent-home).` |
+| `thread_message` | `… (same lane, or 向阳↔agent-home). …` |
 | `team_list` | 附 live 名册；可 `team_save` |
 
 ### A2 · 工具序列
@@ -89,6 +92,7 @@ Peers — id · who · duty · todo · 支线 · 主线. thread_message same-lan
 - 在 `sess_xy` 调 `subagent`（工具表无 / 契约禁止）。
 - 在向阳 cwd 大改 monorepo。
 - `propose_skill` 冒充干员（应用 `team_save`）。
+- 把编码仓会话当成 agent-home（编码席板写 **Never agent-home**；只有向阳可桥）。
 
 ---
 
@@ -100,11 +104,12 @@ Peers — id · who · duty · todo · 支线 · 主线. thread_message same-lan
 
 身份：`coding_parent`。**有** `subagent` / `list_agents` / `send_message`。harness / shallow 另有短 `<session_posture>`（派活链）；Frugal / Shell **无** posture（`surface_brief` + collab 已说清无 spawn）。
 
-协作板是名册 + 主线（不是小队板）；长派活链在 posture，board 只挂 ids + 同道 spout。
+协作板是名册 + 主线（不是小队板）；派活链在 posture，board 只挂 ids + **Never agent-home**。
 
 `subagent` 动态句含：`Stay in this workspace — workspace_id / cwd are IM-only` + 当前名册。  
-`send_message`：`Parent→child only`。  
-`list_agents`：`Your direct children (not peer parents)`。
+`thread_message`：`same lane only — Never agent-home`。  
+`send_message`：`Parent→child (agent_id). Siblings/peers → thread_message.`  
+`list_agents`：`Your direct children (peers → thread_message).`
 
 ### B2 · 工具序列
 
@@ -131,6 +136,7 @@ Peers — id · who · duty · todo · 支线 · 主线. thread_message same-lan
 - 对 `sess_scout` 发 `thread_message`（父→子走 `send_message`）。
 - 给子会话贴家目录 SOUL（spawn 已 `audience: subagent`）。
 - coding 父传 `workspace_id` 跨仓（IM-only；执行会拒）。
+- 编码父 `thread_message` 干员家会话（车道拒；只有向阳可桥）。
 
 ---
 
@@ -206,13 +212,14 @@ worker **无** `subagent` / `team_graph`（角色 deny）。
 
 ### D1 · 看见什么
 
-身份：`orchestrator`（`im`）。协作板 surface=im。`<session_posture>`：`kind=orchestrator (IM)`。
+身份：`orchestrator`（`im`）。协作板 surface=im（**Never agent-home**）。`<session_posture>`：`kind=orchestrator (IM)`。
 
 | 工具 | 动态关键句 |
 |------|------------|
 | `subagent` | `Cross-workspace: workspace_list then workspace_id (or cwd). inherit_context must be false.` + 名册 |
 | `workspace_session_prompt` | `IM peer (not your child). Coding child = subagent(workspace_id).` |
-| `workspace_list` | `Coding child: subagent(workspace_id) or workspace_session_prompt → thread_message.` |
+| `workspace_list` | `… Next: subagent(workspace_id) or workspace_session_prompt → thread_message.` |
+| `thread_message` | `same lane only — Never agent-home` |
 
 ### D2 · 两条合法路径
 
@@ -225,6 +232,7 @@ worker **无** `subagent` / `team_graph`（角色 deny）。
 - 在 `ws_im` cwd 改业务仓。
 - 对 peer 用 `send_message`（那是父→子）。
 - coding 会话照抄 IM 的 `workspace_id` spawn。
+- IM `thread_message` 干员家（车道拒；桥只在向阳）。
 
 ---
 
@@ -249,15 +257,60 @@ UI rewind fork：工具面同父；不占 subagent depth；不进小队板。
 
 ---
 
+## 场景 F · 干员家 ↔ 向阳（双向）
+
+**用户**（在 `sess_home`，某干员自己的 agent-home）：「跟向日葵说一声进度。」
+
+### F1 · `sess_home` 看见什么
+
+身份：`coding_parent`，但 **车道 = agent-home**（不是项目经理）。徽章可能仍是 harness，**posture 不得套用「项目经理席」模板**。
+
+`<session_posture>`：
+
+```
+kind=coding_parent (干员家) · path=open
+Peer: workspace_session_prompt → thread_message (homes + 向阳 only). Never project coding. Mint/settings → 向阳.
+```
+
+`<external_collab_board>`：
+
+```
+Roster · peers (干员家). Speech↔向阳. Project coding canvases closed.
+…
+Peers — … thread_message: same-lane homes or agent-home↔向阳. Never project coding. *=you.
+```
+
+| 工具 | 关键句要点 |
+|------|------------|
+| `workspace_list` | 可见其他 agent-home + 向阳；**不见**编码仓 |
+| `workspace_session_prompt` | `agent-home peer / 向阳 only — never project coding.` |
+| `thread_message` | `same-lane homes, or agent-home↔向阳 — Never project coding` |
+
+### F2 · 工具序列（家 → 向阳）
+
+1. `workspace_list`（或已知 `ws_default`）→ 向阳。
+2. `workspace_session_prompt` `{ workspace_id: ws_default, prompt: "…" }` → `sess_xy`。
+3. 后续：`thread_message` `{ session_id: sess_xy, message: "…" }`。
+
+反向（向阳 → 家）同场景 A 的桥：向阳板已写 `向阳↔agent-home`。
+
+### F3 · 反模式
+
+- 干员家去 `workspace_session_prompt` / `thread_message` **编码仓**（拒）。
+- 编码父 / IM 去找干员家互聊（拒；须经向阳）。
+- 看见 harness 徽章就当自己是项目经理（posture / 板已标明干员家）。
+
+---
+
 ## 动词对照（速查）
 
-| 意图 | 奇创 | IM | 编码父 | 干员 |
-|------|------|-----|--------|------|
-| 派实现 | `workspace_session_prompt` | `subagent(workspace_id)` 或 peer prompt | `subagent member_id` | — |
-| 父→子跟进 | — | `send_message`（若用了 subagent） | `send_message` / `followup_task` | — |
-| 对等互聊 | `thread_message` | `thread_message` | `thread_message` | — |
-| 队友互聊 | — | — | — | `thread_message` sibling |
-| 交付 | peer FINAL / 人 | 频道 + peer/child | 人可见 FINAL | FINAL → 父工具结果 |
+| 意图 | 奇创 | IM | 编码父 | 干员家 | 派生子 |
+|------|------|-----|--------|--------|--------|
+| 派实现 | `workspace_session_prompt` | `subagent(workspace_id)` 或 peer | `subagent member_id` | — | — |
+| 父→子跟进 | — | `send_message` | `send_message` / `followup_task` | — | — |
+| 对等互聊 | `thread_message`（含↔家） | `thread_message`（禁家） | `thread_message`（禁家） | `thread_message`（家+向阳） | — |
+| 队友互聊 | — | — | — | — | sibling `thread_message` |
+| 交付 | peer / 人 | 频道 + peer/child | 人可见 FINAL | 人 / 向阳 peer | FINAL → 父 |
 
 ---
 
@@ -275,20 +328,21 @@ Same contract, walked per identity. Ids are illustrative. Each scene: user line 
 | `ws_im` | IM workspace |
 | `ws_code` / `ws_docs` | Coding workspaces |
 | `sess_xy` / `sess_im` / `sess_code` / `sess_docs` | Parent sessions |
-| `sess_scout` / `sess_build` | 干员 children |
+| `sess_scout` / `sess_build` | Dispatched 干员 children |
+| `sess_home` | Same member on its agent-home identity seat |
 | `task_inject` | Task-board row |
 
 ## Scene A · Qichuang → coding peer
 
 User on `sess_xy`: “Stand up research and build; patch the inject docs in the coding repo.”
 
-Sees `kind=orchestrator`, posture + roster board, **no** `subagent`. Dynamic `workspace_session_prompt` says peer-only. Sequence: `workspace_list` → `workspace_session_prompt(ws_code)` → keep `sess_code` → optional `thread_upsert` → `thread_message`. Implement on `sess_code`, not Xiangyang cwd.
+Sees `kind=orchestrator`, posture + roster board, **no** `subagent`. Board owns the lane rule (向阳↔agent-home); posture stays the dispatch chain. Coding / IM boards say **Never agent-home**. `workspace_list` is active-only by default. Sequence: `workspace_list` → `workspace_session_prompt(ws_code)` → keep `sess_code` → optional `thread_upsert` → `thread_message`. Implement on `sess_code`, not Xiangyang cwd.
 
 ## Scene B · Coding parent spawns two 干员
 
 User on `sess_code`: “Have research and build work it together.”
 
-Sees coding_parent board (roster + 主线). harness/shallow also get a short `<session_posture>` (dispatch chain); Frugal/Shell have none. `subagent` stays in-workspace; `send_message` is parent→child. Spawn two `member_id`s (often `run_in_background`), follow with `send_message` / `list_agents` / `wait_agent`. Child–child talk is Scene C. Do not `thread_message` your own children.
+Sees coding_parent board (roster + 主线 + Never agent-home). harness/shallow get a short `<session_posture>` (dispatch only); Frugal/Shell have none. `subagent` stays in-workspace; `send_message` is parent→child. Spawn two `member_id`s (often `run_in_background`), follow with `send_message` / `list_agents` / `wait_agent`. Child–child talk is Scene C. Do not `thread_message` your own children or agent-home seats.
 
 ## Scene C · Worker ↔ researcher
 
@@ -298,18 +352,24 @@ Sees coding_parent board (roster + 主线). harness/shallow also get a short `<s
 
 User on `sess_im`: “Fix inject docs in ws_code.”
 
-`subagent` allows cross-workspace `workspace_id`. Peer path: `workspace_session_prompt` then `thread_message`. Do not edit the product repo in `ws_im`.
+`subagent` allows cross-workspace `workspace_id`. Peer path: `workspace_session_prompt` then `thread_message`. Board: Never agent-home. Do not edit the product repo in `ws_im`.
 
 ## Scene E · Two parents align
 
 Both parents; each has a roster/主线 board, not a squad board. `thread_message` either way; optional `session_inspect`. Never `thread_switch` just to talk; never turn the peer into a `subagent`. `fork_clone` keeps parent tools, skips subagent depth and squad board.
 
+## Scene F · Agent-home ↔ Xiangyang
+
+User on `sess_home`: “Ping 向日葵 with progress.”
+
+Badge may still say harness, but posture is **干员家** (not 项目经理席). Board + tools: homes + 向阳 only; project coding closed. Reverse path is Scene A’s bridge from Xiangyang. Coding / IM cannot message agent-home directly.
+
 ## Verb cheat sheet
 
-| Intent | Qichuang | IM | Coding parent | 干员 |
-|--------|----------|-----|---------------|------|
-| Dispatch work | `workspace_session_prompt` | `subagent(workspace_id)` or peer prompt | `subagent member_id` | — |
-| Parent→child follow-up | — | `send_message` if subagent | `send_message` / `followup_task` | — |
-| Peer talk | `thread_message` | `thread_message` | `thread_message` | — |
-| Squad talk | — | — | — | sibling `thread_message` |
-| Deliverable | peer / human | channel + peer/child | FINAL to human | FINAL → parent tool result |
+| Intent | Qichuang | IM | Coding parent | Agent-home | Dispatched |
+|--------|----------|-----|---------------|------------|------------|
+| Dispatch work | `workspace_session_prompt` | `subagent(workspace_id)` or peer | `subagent member_id` | — | — |
+| Parent→child follow-up | — | `send_message` if subagent | `send_message` / `followup_task` | — | — |
+| Peer talk | `thread_message` (↔home OK) | `thread_message` (no home) | `thread_message` (no home) | homes + 向阳 | — |
+| Squad talk | — | — | — | — | sibling `thread_message` |
+| Deliverable | peer / human | channel + peer/child | FINAL to human | human / 向阳 peer | FINAL → parent |

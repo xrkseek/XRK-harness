@@ -21,14 +21,14 @@
  * levels instead.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { IApiClient } from '@xrkseek/xrk-api-remotes/client'
 import { apiKeyFailure, isApiKeyProbeAuthFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { validateDeepSeekModels } from './DeepSeekModelsEditor.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
-import type { ModelDraft } from './ModelListEditor.tsx'
+import type { DeclaringDraftPersist } from './provider-form-session.ts'
 import { deriveKeyRef, messageOf } from './store.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
@@ -75,6 +75,10 @@ export interface CustomProviderCardProps {
   readOnly: boolean
   /** Close the card; `changed` reports whether a provider was created. */
   onClose: (changed: boolean) => void
+  /** Seed from durable session after Settings remount. */
+  restoreDraft?: Partial<DeclaringDraftPersist>
+  /** Persist typed fields while the create card is open (memory session). */
+  onPersistDraft?: (next: DeclaringDraftPersist) => void
 }
 
 /**
@@ -87,15 +91,48 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   // Captured at mount, like the editor's: the write must be judged against the
   // section this card was drafted over, not whatever it grew into meanwhile.
   const [openedAt] = useState(() => props.revision)
-  const [route, setRoute] = useState('')
-  const [displayName, setDisplayName] = useState('')
-  const [baseURL, setBaseURL] = useState('')
-  const [proxy, setProxy] = useState('')
-  const [protocol, setProtocol] = useState(protocols[0] ?? '')
-  const [keyDraft, setKeyDraft] = useState('')
-  const [models, setModels] = useState<readonly ModelDraft[]>([])
+  const seed = props.restoreDraft
+  const [route, setRoute] = useState(() => seed?.route ?? '')
+  const [displayName, setDisplayName] = useState(() => seed?.displayName ?? '')
+  const [baseURL, setBaseURL] = useState(() => seed?.baseURL ?? '')
+  const [proxy, setProxy] = useState(() => seed?.proxy ?? '')
+  const [protocol, setProtocol] = useState(
+    () => seed?.protocol || protocols[0] || '',
+  )
+  const [keyDraft, setKeyDraft] = useState(() => seed?.keyDraft ?? '')
+  const [models, setModels] = useState(
+    () => seed?.models?.map((row) => ({ ...row })) ?? [],
+  )
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
+
+  const onPersistDraft = props.onPersistDraft
+  const lastPersistedRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (onPersistDraft === undefined) return
+    const next: DeclaringDraftPersist = {
+      route,
+      displayName,
+      baseURL,
+      proxy,
+      protocol,
+      keyDraft,
+      models,
+    }
+    const fingerprint = JSON.stringify(next)
+    if (fingerprint === lastPersistedRef.current) return
+    lastPersistedRef.current = fingerprint
+    onPersistDraft(next)
+  }, [
+    route,
+    displayName,
+    baseURL,
+    proxy,
+    protocol,
+    keyDraft,
+    models,
+    onPersistDraft,
+  ])
   /**
    * The profile write landed. Only the key write can still be outstanding, so
    * the fields that describe the provider are settled and the retry path is

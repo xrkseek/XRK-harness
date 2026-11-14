@@ -788,9 +788,17 @@ export function TeamRoster({
   }
 
   const liveTimer = useRef<number | undefined>(undefined)
-  useEffect(() => () => {
-    if (liveTimer.current !== undefined) window.clearTimeout(liveTimer.current)
-  }, [])
+  const clearLiveTimer = () => {
+    if (liveTimer.current === undefined) return
+    window.clearTimeout(liveTimer.current)
+    liveTimer.current = undefined
+  }
+  useEffect(() => () => { clearLiveTimer() }, [])
+  // Switching session/canvas must not flush a pending look write into the
+  // newly bound workspace (that painted a duplicate 干员 under 工作区).
+  useEffect(() => {
+    clearLiveTimer()
+  }, [sessionId])
 
   type LiveLookPatch = {
     readonly shape?: string
@@ -972,7 +980,7 @@ export function TeamRoster({
         : {}),
       ...(lookTouched ? { appearance: nextAppearance } : {}),
     })
-    if (liveTimer.current !== undefined) window.clearTimeout(liveTimer.current)
+    clearLiveTimer()
     liveTimer.current = window.setTimeout(() => {
       liveTimer.current = undefined
       void flushLivePersist(patch)
@@ -1159,6 +1167,8 @@ export function TeamRoster({
                   listKind="project"
                   side="bottom"
                   onPick={(workspaceId) => {
+                    clearLiveTimer()
+                    setSelectedId(null)
                     setWsPickOpen(false)
                     startSession(workspaceId)
                   }}
@@ -1254,25 +1264,34 @@ export function TeamRoster({
                     />
                     <p className={css.fieldHint}>{t('team.bossLive')}</p>
                   </div>
-                  <div className={css.field}>
+                  <div className={`${css.field} ${css.lookBlock}`}>
                     <span className={css.label}>{t('team.bossLook', { boss: seatTitles.boss })}</span>
                     {!presenceOn ? (
                       <p className={css.presenceOff} role="status">{t('team.presenceOff')}</p>
                     ) : (
                       <>
-                        <CompanionBall
-                          shape={bossLook.shape}
-                          color={bossLook.color}
-                          bodyColor={bossLook.bodyColor}
-                          eyeColor={bossLook.eyeColor}
-                          size={bossLook.size}
-                          kitHat={resolveEnginePick(bossLook.kitHat, HAT_BUILTINS)}
-                          kitGlasses={resolveEnginePick(bossLook.kitGlasses, GLASSES_BUILTINS)}
-                          kitHeld={resolveEnginePick(bossLook.kitHeld, HELD_BUILTINS)}
-                          overlayHat={resolveStickerOverlay(bossLook.kitHat, stickers)}
-                          overlayGlasses={resolveStickerOverlay(bossLook.kitGlasses, stickers)}
-                          overlayHeld={resolveStickerOverlay(bossLook.kitHeld, stickers)}
-                        />
+                        <div className={css.lookPreview} aria-label={t('team.lookPreview')}>
+                          <CompanionBall
+                            preview
+                            shape={bossLook.shape}
+                            color={bossLook.color}
+                            bodyColor={bossLook.bodyColor}
+                            eyeColor={bossLook.eyeColor}
+                            size={bossLook.size}
+                            kitHat={resolveEnginePick(bossLook.kitHat, HAT_BUILTINS)}
+                            kitGlasses={resolveEnginePick(bossLook.kitGlasses, GLASSES_BUILTINS)}
+                            kitHeld={resolveEnginePick(bossLook.kitHeld, HELD_BUILTINS)}
+                            overlayHat={resolveStickerOverlay(bossLook.kitHat, stickers)}
+                            overlayGlasses={resolveStickerOverlay(bossLook.kitGlasses, stickers)}
+                            overlayHeld={resolveStickerOverlay(bossLook.kitHeld, stickers)}
+                          />
+                          <div className={css.lookPreviewMeta}>
+                            <p className={css.lookPreviewLabel}>{t('team.lookPreview')}</p>
+                            <p className={css.lookPreviewName}>
+                              {bossNickDraft.trim() || seatTitles.boss}
+                            </p>
+                          </div>
+                        </div>
                         <div className={css.picks} role="group" aria-label={t('team.shape')}>
                           {COMPANION_SHAPES.map((id) => (
                             <button
@@ -1444,6 +1463,214 @@ export function TeamRoster({
                       onBlur={() => { scheduleLivePersist() }}
                     />
                   </div>
+                  </fieldset>
+                  <div className={css.field}>
+                    <label className={css.label} htmlFor="team-member-nickname">{t('team.memberNickname')}</label>
+                    <input
+                      id="team-member-nickname"
+                      className={css.input}
+                      value={nickname}
+                      maxLength={24}
+                      placeholder={t('team.nicknamePlaceholder')}
+                      disabled={busy || nicknameLocked}
+                      onChange={(e) => { setNickname(e.target.value) }}
+                      onBlur={() => {
+                        if (nicknameLocked) return
+                        scheduleLivePersist({ nickname })
+                      }}
+                    />
+                    {sunflowerSelected
+                      ? <p className={css.fieldHint}>{t('team.nicknameLocked')}</p>
+                      : <p className={css.fieldHint}>{t('team.nicknameHint')}</p>}
+                  </div>
+                  <fieldset className={css.editorLock} disabled={busy || appearanceLocked}>
+                  <div className={`${css.field} ${css.lookBlock}`}>
+                    <span className={css.label}>{t('team.look')}</span>
+                    {!presenceOn ? (
+                      <p className={css.presenceOff} role="status">{t('team.presenceOff')}</p>
+                    ) : (
+                    <>
+                    <div className={css.lookPreview} aria-label={t('team.lookPreview')}>
+                      <CompanionBall
+                        preview
+                        shape={shape}
+                        color={color}
+                        bodyColor={bodyColor}
+                        eyeColor={eyeColor}
+                        size={size}
+                        kitHat={resolveEnginePick(kitHat, HAT_BUILTINS)}
+                        kitGlasses={resolveEnginePick(kitGlasses, GLASSES_BUILTINS)}
+                        kitHeld={resolveEnginePick(kitHeld, HELD_BUILTINS)}
+                        overlayHat={resolveStickerOverlay(kitHat, stickers)}
+                        overlayGlasses={resolveStickerOverlay(kitGlasses, stickers)}
+                        overlayHeld={resolveStickerOverlay(kitHeld, stickers)}
+                      />
+                      <div className={css.lookPreviewMeta}>
+                        <p className={css.lookPreviewLabel}>{t('team.lookPreview')}</p>
+                        <p className={css.lookPreviewName}>
+                          {nickname.trim()
+                            ? `${name.trim() || t('team.memberName')}（${nickname.trim()}）`
+                            : (name.trim() || t('team.memberName'))}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={css.picks} role="group" aria-label={t('team.shape')}>
+                      {COMPANION_SHAPES.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={shape === id ? css.pickOn : css.pick}
+                          aria-label={t(`team.shape.${id}` as WorkspaceKey)}
+                          aria-pressed={shape === id}
+                          disabled={busy}
+                          onClick={() => {
+                            setShape(id)
+                            scheduleLivePersist({ shape: id })
+                          }}
+                        >
+                          <CompanionShapeGlyph shape={id} />
+                        </button>
+                      ))}
+                    </div>
+                    <div className={css.picks} role="group" aria-label={t('team.color')}>
+                      {COMPANION_COLORS.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={color === id ? css.swatchOn : css.swatch}
+                          style={{ background: companionPaint(id, false).body }}
+                          aria-label={t(`team.color.${id}` as WorkspaceKey)}
+                          aria-pressed={color === id}
+                          disabled={busy}
+                          onClick={() => {
+                            setColor(id)
+                            scheduleLivePersist({ color: id })
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <CustomColorRow
+                      bodyColor={bodyColor}
+                      eyeColor={eyeColor}
+                      fallbackBody={companionPaint(color, false).body}
+                      fallbackEyes={companionPaint(color, false).eyes}
+                      disabled={busy}
+                      bodyLabel={t('presenceCustom.body' as WorkspaceKey)}
+                      eyeLabel={t('presenceCustom.eyes' as WorkspaceKey)}
+                      resetLabel={t('presenceCustom.followPreset' as WorkspaceKey)}
+                      onBody={(hex) => {
+                        setBodyColor(hex)
+                        scheduleLivePersist({ bodyColor: hex })
+                      }}
+                      onEyes={(hex) => {
+                        setEyeColor(hex)
+                        scheduleLivePersist({ eyeColor: hex })
+                      }}
+                      size={size}
+                      sizeLabel={t('presenceCustom.size' as WorkspaceKey)}
+                      onSize={(next) => {
+                        setSize(next)
+                        scheduleLivePersist({ size: next })
+                      }}
+                      onReset={() => {
+                        setBodyColor('')
+                        setEyeColor('')
+                        scheduleLivePersist({ bodyColor: '', eyeColor: '' })
+                      }}
+                    />
+                    <p className={css.faceHint}>{t('team.overlayHint')}</p>
+                    {([
+                      ['hat', kitHat, setKitHat, HAT_BUILTINS, 'kitHat'] as const,
+                      ['glasses', kitGlasses, setKitGlasses, GLASSES_BUILTINS, 'kitGlasses'] as const,
+                      ['held', kitHeld, setKitHeld, HELD_BUILTINS, 'kitHeld'] as const,
+                    ]).map(([slot, pick, setPick, builtins, patchKey]) => {
+                      const applyKit = (next: string) => {
+                        setPick(next)
+                        scheduleLivePersist({ [patchKey]: next })
+                      }
+                      return (
+                      <div key={slot} className={css.picks} role="group" aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}>
+                        {builtins.map((id) => (
+                          <button
+                            key={id}
+                            type="button"
+                            className={pick === id ? css.pickOn : css.pick}
+                            aria-label={t(`team.kit.${id}` as WorkspaceKey)}
+                            aria-pressed={pick === id}
+                            disabled={busy}
+                            onClick={() => { applyKit(id) }}
+                          >
+                            <CompanionKitMark kit={id} {...(css.kitGlyph ? { className: css.kitGlyph } : {})} />
+                          </button>
+                        ))}
+                        {stickersForSlot(stickers, slot).map((row) => {
+                          const ref = stickerRef(row.id)
+                          return (
+                            <div key={row.id} className={pick === ref ? css.overlayCubeOn : css.overlayCube}>
+                              <button
+                                type="button"
+                                className={css.pick}
+                                disabled={busy}
+                                aria-pressed={pick === ref}
+                                onClick={() => { applyKit(ref) }}
+                              >
+                                <span className={css.overlayThumb} style={{ backgroundImage: `url(${row.image})` }} />
+                              </button>
+                              <button
+                                type="button"
+                                className={css.overlayClear}
+                                disabled={busy}
+                                aria-label={t('team.faceClear')}
+                                onClick={() => {
+                                  removeDressingSticker(row.id)
+                                  if (pick === ref) applyKit('none')
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )
+                        })}
+                        <div className={css.overlayAdd}>
+                          <span className={css.overlayEmpty}>+</span>
+                          <input
+                            className={css.overlayFile}
+                            type="file"
+                            accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif"
+                            disabled={busy}
+                            aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              e.target.value = ''
+                              if (!file) return
+                              const reader = new FileReader()
+                              reader.onload = () => {
+                                const next = String(reader.result ?? '')
+                                if (next.length > FACE_MAX) {
+                                  setError(t('team.faceTooBig'))
+                                  return
+                                }
+                                const id = addDressingSticker(next, slot)
+                                if (!id) {
+                                  setError(t('team.faceTooBig'))
+                                  return
+                                }
+                                applyKit(stickerRef(id))
+                              }
+                              reader.readAsDataURL(file)
+                            }}
+                          />
+                        </div>
+                      </div>
+                      )
+                    })}
+                    </>
+                    )}
+                  </div>
+                  </fieldset>
+                  <div className={css.advancedBlock}>
+                  <p className={css.advancedHead}>{t('team.advancedSection')}</p>
+                  <fieldset className={css.editorLock} disabled={busy || fieldsLocked}>
                   <div className={css.field}>
                     <label className={css.label} htmlFor="team-member-brief">{t('team.memberBrief')}</label>
                     <input
@@ -1625,199 +1852,7 @@ export function TeamRoster({
                     />
                   </div>
                   </fieldset>
-                  <div className={css.field}>
-                    <label className={css.label} htmlFor="team-member-nickname">{t('team.memberNickname')}</label>
-                    <input
-                      id="team-member-nickname"
-                      className={css.input}
-                      value={nickname}
-                      maxLength={24}
-                      placeholder={t('team.nicknamePlaceholder')}
-                      disabled={busy || nicknameLocked}
-                      onChange={(e) => { setNickname(e.target.value) }}
-                      onBlur={() => {
-                        if (nicknameLocked) return
-                        scheduleLivePersist({ nickname })
-                      }}
-                    />
-                    {sunflowerSelected
-                      ? <p className={css.fieldHint}>{t('team.nicknameLocked')}</p>
-                      : <p className={css.fieldHint}>{t('team.nicknameHint')}</p>}
                   </div>
-                  <fieldset className={css.editorLock} disabled={busy || appearanceLocked}>
-                  <div className={css.field}>
-                    <span className={css.label}>{t('team.look')}</span>
-                    {!presenceOn ? (
-                      <p className={css.presenceOff} role="status">{t('team.presenceOff')}</p>
-                    ) : (
-                    <>
-                    <CompanionBall
-                      shape={shape}
-                      color={color}
-                      bodyColor={bodyColor}
-                      eyeColor={eyeColor}
-                      size={size}
-                      kitHat={resolveEnginePick(kitHat, HAT_BUILTINS)}
-                      kitGlasses={resolveEnginePick(kitGlasses, GLASSES_BUILTINS)}
-                      kitHeld={resolveEnginePick(kitHeld, HELD_BUILTINS)}
-                      overlayHat={resolveStickerOverlay(kitHat, stickers)}
-                      overlayGlasses={resolveStickerOverlay(kitGlasses, stickers)}
-                      overlayHeld={resolveStickerOverlay(kitHeld, stickers)}
-                    />
-                    <div className={css.picks} role="group" aria-label={t('team.shape')}>
-                      {COMPANION_SHAPES.map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          className={shape === id ? css.pickOn : css.pick}
-                          aria-label={t(`team.shape.${id}` as WorkspaceKey)}
-                          aria-pressed={shape === id}
-                          disabled={busy}
-                          onClick={() => {
-                            setShape(id)
-                            scheduleLivePersist({ shape: id })
-                          }}
-                        >
-                          <CompanionShapeGlyph shape={id} />
-                        </button>
-                      ))}
-                    </div>
-                    <div className={css.picks} role="group" aria-label={t('team.color')}>
-                      {COMPANION_COLORS.map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          className={color === id ? css.swatchOn : css.swatch}
-                          style={{ background: companionPaint(id, false).body }}
-                          aria-label={t(`team.color.${id}` as WorkspaceKey)}
-                          aria-pressed={color === id}
-                          disabled={busy}
-                          onClick={() => {
-                            setColor(id)
-                            scheduleLivePersist({ color: id })
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <CustomColorRow
-                      bodyColor={bodyColor}
-                      eyeColor={eyeColor}
-                      fallbackBody={companionPaint(color, false).body}
-                      fallbackEyes={companionPaint(color, false).eyes}
-                      disabled={busy}
-                      bodyLabel={t('presenceCustom.body' as WorkspaceKey)}
-                      eyeLabel={t('presenceCustom.eyes' as WorkspaceKey)}
-                      resetLabel={t('presenceCustom.followPreset' as WorkspaceKey)}
-                      onBody={(hex) => {
-                        setBodyColor(hex)
-                        scheduleLivePersist({ bodyColor: hex })
-                      }}
-                      onEyes={(hex) => {
-                        setEyeColor(hex)
-                        scheduleLivePersist({ eyeColor: hex })
-                      }}
-                      size={size}
-                      sizeLabel={t('presenceCustom.size' as WorkspaceKey)}
-                      onSize={(next) => {
-                        setSize(next)
-                        scheduleLivePersist({ size: next })
-                      }}
-                      onReset={() => {
-                        setBodyColor('')
-                        setEyeColor('')
-                        scheduleLivePersist({ bodyColor: '', eyeColor: '' })
-                      }}
-                    />
-                    <p className={css.faceHint}>{t('team.overlayHint')}</p>
-                    {([
-                      ['hat', kitHat, setKitHat, HAT_BUILTINS, 'kitHat'] as const,
-                      ['glasses', kitGlasses, setKitGlasses, GLASSES_BUILTINS, 'kitGlasses'] as const,
-                      ['held', kitHeld, setKitHeld, HELD_BUILTINS, 'kitHeld'] as const,
-                    ]).map(([slot, pick, setPick, builtins, patchKey]) => {
-                      const applyKit = (next: string) => {
-                        setPick(next)
-                        scheduleLivePersist({ [patchKey]: next })
-                      }
-                      return (
-                      <div key={slot} className={css.picks} role="group" aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}>
-                        {builtins.map((id) => (
-                          <button
-                            key={id}
-                            type="button"
-                            className={pick === id ? css.pickOn : css.pick}
-                            aria-label={t(`team.kit.${id}` as WorkspaceKey)}
-                            aria-pressed={pick === id}
-                            disabled={busy}
-                            onClick={() => { applyKit(id) }}
-                          >
-                            <CompanionKitMark kit={id} {...(css.kitGlyph ? { className: css.kitGlyph } : {})} />
-                          </button>
-                        ))}
-                        {stickersForSlot(stickers, slot).map((row) => {
-                          const ref = stickerRef(row.id)
-                          return (
-                            <div key={row.id} className={pick === ref ? css.overlayCubeOn : css.overlayCube}>
-                              <button
-                                type="button"
-                                className={css.pick}
-                                disabled={busy}
-                                aria-pressed={pick === ref}
-                                onClick={() => { applyKit(ref) }}
-                              >
-                                <span className={css.overlayThumb} style={{ backgroundImage: `url(${row.image})` }} />
-                              </button>
-                              <button
-                                type="button"
-                                className={css.overlayClear}
-                                disabled={busy}
-                                aria-label={t('team.faceClear')}
-                                onClick={() => {
-                                  removeDressingSticker(row.id)
-                                  if (pick === ref) applyKit('none')
-                                }}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          )
-                        })}
-                        <div className={css.overlayAdd}>
-                          <span className={css.overlayEmpty}>+</span>
-                          <input
-                            className={css.overlayFile}
-                            type="file"
-                            accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif"
-                            disabled={busy}
-                            aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              e.target.value = ''
-                              if (!file) return
-                              const reader = new FileReader()
-                              reader.onload = () => {
-                                const next = String(reader.result ?? '')
-                                if (next.length > FACE_MAX) {
-                                  setError(t('team.faceTooBig'))
-                                  return
-                                }
-                                const id = addDressingSticker(next, slot)
-                                if (!id) {
-                                  setError(t('team.faceTooBig'))
-                                  return
-                                }
-                                applyKit(stickerRef(id))
-                              }
-                              reader.readAsDataURL(file)
-                            }}
-                          />
-                        </div>
-                      </div>
-                      )
-                    })}
-                    </>
-                    )}
-                  </div>
-                  </fieldset>
                   {selected !== undefined && !isDraftMemberId(selectedId) && selected.ready === false ? (
                     <div className={css.readyGate} role="note">
                       <div className={css.readyGateHead}>

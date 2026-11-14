@@ -157,6 +157,26 @@ export type DshCompatWireOptions = XrkPluginServicesOptions &
         };
       }[];
     }) => void | Promise<void>;
+    /**
+     * Face-backed settings namespace for community Cordis `installSection`
+     * (e.g. `nekowhale-stickers` LIVE_KEYS). Writes persist to `settings.yaml`
+     * like DSH. Absent → in-memory volatile map.
+     */
+    readonly ensureCommunitySettingsNamespace?: (
+      namespace: string,
+      defaults: Record<string, unknown>,
+    ) => {
+      get(): Record<string, unknown>;
+      set(patch: Record<string, unknown>): void;
+    };
+    /**
+     * Watch Face/Cordis writes to a community settings namespace (DSH LIVE_KEYS
+     * remount path). Fires on bridge `set` and Face `settings.mutate`.
+     */
+    readonly watchCommunitySettingsNamespace?: (
+      namespace: string,
+      onChange: () => void,
+    ) => () => void;
   };
 
 export type HostProviderPartial = Pick<DshAdapterContribution, "http" | "rpc">;

@@ -5,13 +5,21 @@
  */
 
 import type { FaceRuntime } from "./context.js";
+import { isAgentHomeSession } from "./agent-home-boundary.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 
+/** 干员家 identity seat — badge may still say harness; lane ≠ 项目经理. */
+const AGENT_HOME_POSTURE = [
+  "kind=coding_parent (干员家) · path=open",
+  "Peer: workspace_session_prompt → thread_message (homes + 向阳 only). Never project coding. Mint/settings → 向阳.",
+].join("\n");
+
 const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
   // Identity/report lives in <seat_identity>; this card is verbs only.
-  // Frugal / Shell: no card — surface_brief + collab board already say no spawn.
+  // Lane rules live on the collab board — posture = dispatch chain.
+  // Frugal / Shell: no card — surface_brief + board already say no spawn.
   im: [
     "kind=orchestrator (IM) · path=open",
     "On-channel: im_send / bridge.",
@@ -37,13 +45,15 @@ const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
   ].join("\n"),
 };
 
-/** Compact posture for IM / 奇创 / harness·shallow 经理. Empty for Frugal/Shell/children. */
+/** Compact posture for IM / 奇创 / harness·shallow / 干员家. Empty for Frugal/Shell/children. */
 export function formatSessionPosture(
   runtime: FaceRuntime,
   sessionId: string,
 ): string {
   if (!runtime.store.has(sessionId)) return "";
   if (runtime.subagents.getByChild(sessionId)) return "";
+  // Before badge: identity office must not inherit 项目经理 harness template.
+  if (isAgentHomeSession(runtime, sessionId)) return AGENT_HOME_POSTURE;
   const badge = effectiveSessionAgentPreset(runtime, sessionId);
   const byBadge = POSTURE_BY_BADGE[badge];
   if (byBadge) return byBadge;

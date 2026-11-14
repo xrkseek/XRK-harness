@@ -244,7 +244,7 @@ describe('ui-settings-plugins apply', () => {
     expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
       .toEqual([
         'mcp', 'web-search', 'browser', 'computer-use', 'bash', 'sandbox',
-        'agent-loop', 'workspace-inject', 'asr', 'tts',
+        'agent-loop', 'workspace-inject', 'workspace-discovery', 'asr', 'tts',
         'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
         'session-telemetry', 'a2a-inbound', 'external-agent', 'cron',
         'auto-review', 'memory-embed', 'process-channels', 'host',
@@ -265,7 +265,7 @@ describe('ui-settings-plugins apply', () => {
       expect(face.hooks.configurablePlugins.getSnapshot().namespaces)
         .toEqual([
           'mcp', 'web-search', 'browser', 'computer-use', 'bash', 'sandbox',
-          'agent-loop', 'workspace-inject', 'asr', 'tts',
+          'agent-loop', 'workspace-inject', 'workspace-discovery', 'asr', 'tts',
           'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
           'session-telemetry', 'a2a-inbound', 'external-agent', 'cron',
           'auto-review', 'memory-embed', 'process-channels', 'host',

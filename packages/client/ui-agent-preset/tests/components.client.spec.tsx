@@ -245,6 +245,25 @@ describe('the new-session chip', () => {
     expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('locks the chip on agent-home — roster basePreset, no menu', () => {
+    renderSeat({ current: 'harness', lock: 'agent-home' })
+
+    const button = screen.getByRole('button')
+    expect(button).toHaveProperty('disabled', true)
+    expect(button.getAttribute('title')).toBe(en.seatLockedAgentHome)
+    expect(button.getAttribute('aria-haspopup')).toBeNull()
+    fireEvent.click(button)
+    expect(screen.queryByText(en.noDescription)).toBeNull()
+  })
+
+  it('locks the chip on IM / Qichuang the same way', () => {
+    renderSeat({ current: 'qichuang', lock: 'qichuang', options: [] })
+
+    const button = screen.getByRole('button')
+    expect(button).toHaveProperty('disabled', true)
+    expect(button.getAttribute('title')).toBe(en.seatLockedQichuang)
+  })
+
   it('disables the trigger while a switch is in flight', () => {
     renderSeat({ busy: true })
 

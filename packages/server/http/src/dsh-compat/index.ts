@@ -112,6 +112,47 @@ export {
   type CommunityCordisHostSession,
 } from "./community-cordis-host-session.js";
 export {
+  adaptXrkToolToCore,
+} from "./community-cordis-tool-adapt.js";
+export {
+  createCommunityIndexInjectBridge,
+  createCommunitySettingsBridge,
+  provideCommunityAgentSurfaces,
+  type CommunityIndexInjectBridge,
+  type CommunitySettingsBridge,
+  type CommunitySettingsStore,
+  type CommunitySkillsBridge,
+  type CommunitySystemPromptBridge,
+  type CommunityToolsBridge,
+} from "./community-cordis-surfaces.js";
+export { faceSettingsStoreFromWire } from "./community-settings-store.js";
+export {
+  clearCommunityHostSurfaces,
+  collectCommunityPromptFragments,
+  communityHostToolsFingerprint,
+  createCommunityPromptFragmentProvider,
+  listCommunityHostPackages,
+  listCommunityHostSkillDirs,
+  listCommunityHostTools,
+  listCommunityIndexGlobals,
+  publishCommunityHostSurfaces,
+  syncCommunityHostToolsOnto,
+  type CommunityHostPackageSurfaces,
+  type CommunityIndexGlobal,
+  type CommunityPromptFragment,
+  type CommunityPromptSection,
+} from "./community-host-registry.js";
+export {
+  hasWallpaperEngineHostLib,
+  isWallpaperEnginePackage,
+  tryApplyWallpaperEngineHost,
+} from "./wallpaper-host.js";
+export {
+  hasNekowhaleHostLib,
+  isNekowhaleStickersPackage,
+  tryApplyNekowhaleHost,
+} from "./nekowhale-host.js";
+export {
   communityLoopbackEndpointFromBits,
   communityLoopbackEndpointFromForwardSettings,
   communityLoopbackEndpointFromSummaryHttp,

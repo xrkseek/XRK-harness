@@ -42,8 +42,8 @@ function quoteWindowsCmdArg(arg: string): string {
   return `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, "$1$1")}"`;
 }
 
-/** Shell-free spawn plan for npm pack (Desktop npm-cli.js or PATH npm). */
-function planNpmPackSpawn(
+/** Shell-free spawn plan for npm pack / install (Desktop npm-cli.js or PATH npm). */
+export function planNpmPackSpawn(
   npm: NpmPackInvocation,
   npmArgs: readonly string[],
   env: NodeJS.ProcessEnv = process.env,

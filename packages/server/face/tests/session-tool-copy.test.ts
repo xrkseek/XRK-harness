@@ -18,8 +18,25 @@ describe("session-tool-copy", () => {
   it("thread_message distinguishes parent vs sibling and lists live siblings", () => {
     const parent = threadMessageDescription({ kind: "coding_parent" });
     expect(parent).toContain("parent peer");
-    expect(parent).toContain("same lane");
+    expect(parent).toContain("same lane only");
+    expect(parent).toContain("Never agent-home");
+    expect(parent).not.toContain("向阳↔agent-home");
     expect(parent).not.toContain("Live siblings");
+
+    const qichuang = threadMessageDescription({
+      kind: "orchestrator",
+      surface: "qichuang",
+    });
+    expect(qichuang).toContain("向阳↔agent-home");
+    expect(qichuang).not.toContain("Never agent-home");
+
+    const home = threadMessageDescription({
+      kind: "coding_parent",
+      fromAgentHome: true,
+    });
+    expect(home).toContain("agent-home↔向阳");
+    expect(home).toContain("Never project coding");
+    expect(home).not.toContain("Never agent-home");
 
     const child = threadMessageDescription({
       kind: "delegated_child",
@@ -30,11 +47,20 @@ describe("session-tool-copy", () => {
   });
 
   it("workspace / subagent copy flips on IM vs coding", () => {
-    expect(workspaceListDescription("qichuang")).toContain("No nested subagent");
+    expect(workspaceListDescription("qichuang")).toContain("no nested subagent");
     expect(workspaceListDescription("im")).toContain("subagent(workspace_id)");
+    expect(
+      workspaceListDescription(undefined, { fromAgentHome: true }),
+    ).toContain("向阳 or peer homes");
     expect(workspaceSessionPromptDescription({ surface: "im" })).toContain(
       "not your child",
     );
+    expect(
+      workspaceSessionPromptDescription({
+        surface: undefined,
+        fromAgentHome: true,
+      }),
+    ).toContain("never project coding");
     expect(
       subagentDescription({
         base: "BASE.",

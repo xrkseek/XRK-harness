@@ -34,7 +34,9 @@ import { orchestratorSurface } from "./session-kind.js";
 import {
   isAgentHomeSession,
   isAgentHomeWorkspace,
+  isXiangyangSession,
 } from "./agent-home-boundary.js";
+import { listWorkspacesForDiscovery } from "./workspace-discovery.js";
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
   if (tools.get(tool.name)) return;
@@ -47,32 +49,6 @@ export interface BindWorkspaceOrchestrateToolsOptions {
   readonly runtime: FaceRuntime;
   readonly sessionId: string;
   readonly mode: WorkspaceOrchestrateMode;
-}
-
-/**
- * Workspaces this seat can actually dispatch into.
- *
- * Project seats reach project workspaces; an agent-home seat reaches 干员
- * offices. Listing the other lane would advertise a door that refuses — the
- * seat then spends turns on impossible moves instead of asking a peer.
- */
-function listItems(runtime: FaceRuntime, sessionId: string) {
-  const fromHome = isAgentHomeSession(runtime, sessionId);
-  const listed = runtime.workspaces.list(runtime.store.list());
-  return listed.items
-    .filter((row) => (fromHome ? row.kind === "agent-home" : row.kind !== "agent-home"))
-    .map((row) => ({
-      workspaceId: row.workspaceId,
-      title: row.title,
-      path: row.path,
-      sessionCount: row.sessionIds.length,
-      ...(fromHome
-        ? { member: row.boundMemberId ?? null }
-        : {
-            im: row.workspaceId === IM_WORKSPACE_ID,
-            xiangyang: row.workspaceId === XIANGYANG_WORKSPACE_ID,
-          }),
-    }));
 }
 
 function fromLabel(mode: WorkspaceOrchestrateMode): string {
@@ -94,26 +70,55 @@ export function bindWorkspaceOrchestrateTools(
 
   registerTool(tools, {
     name: "workspace_list",
-    description: "List Face workspaces (id, title, path, session count).",
+    description:
+      "List Face workspaces. Active-only default; query / includeInactive for dormant.",
     dynamicSchema: () => ({
       description: workspaceListDescription(
         orchestratorSurface(runtime, sessionId),
+        { fromAgentHome: isAgentHomeSession(runtime, sessionId) },
       ),
     }),
     parameters: {
       type: "object",
-      properties: {},
+      properties: {
+        query: {
+          type: "string",
+          description: "Substring on id / title / path / member (includes dormant hits)",
+        },
+        includeInactive: {
+          type: "boolean",
+          description: "Include dormant canvases (default false)",
+        },
+        limit: {
+          type: "number",
+          description: "Soft cap (clamped by Settings maxListItems)",
+        },
+      },
       additionalProperties: false,
     },
     isConcurrencySafe: () => true,
-    presentCall: () => ({
+    presentCall: (args) => ({
       card: "generic",
       title: "workspace_list",
       kind: "search",
-      rawInput: {},
+      rawInput: args ?? {},
     }),
-    async execute() {
-      return { content: JSON.stringify({ items: listItems(runtime, sessionId) }) };
+    async execute(args) {
+      const a = (args ?? {}) as Record<string, unknown>;
+      const result = listWorkspacesForDiscovery(runtime, sessionId, {
+        ...(typeof a.query === "string" ? { query: a.query } : {}),
+        ...(typeof a.includeInactive === "boolean"
+          ? { includeInactive: a.includeInactive }
+          : {}),
+        ...(typeof a.limit === "number" ? { limit: a.limit } : {}),
+      });
+      // Lean wire: omit zero/absent meta; no activeWindowHours echo (Settings owns it).
+      const payload: Record<string, unknown> = { items: result.items };
+      if (result.omittedInactive > 0) {
+        payload.omittedInactive = result.omittedInactive;
+        payload.hint = "dormant omitted — query or includeInactive:true";
+      }
+      return { content: JSON.stringify(payload) };
     },
   });
 
@@ -203,6 +208,7 @@ export function bindWorkspaceOrchestrateTools(
       description: workspaceSessionPromptDescription({
         surface: orchestratorSurface(runtime, sessionId),
         codingLabel: label,
+        fromAgentHome: isAgentHomeSession(runtime, sessionId),
       }),
     }),
     parameters: {
@@ -263,20 +269,21 @@ export function bindWorkspaceOrchestrateTools(
       }
       /**
        * Agent-home takes only identity sessions (session.create validates
-       * memberId ↔ that member's home). So this path may prompt an EXISTING
-       * identity session in a peer's office, or mint one as the home's own
-       * member — never a generic `agentPreset: harness` session, and never
-       * from a project/IM/向阳 seat (lane split stays).
+       * memberId ↔ that member's home). Peer offices stay same-lane; 向阳 may
+       * also open a 干员-office identity session (speech bridge). Coding / IM
+       * project seats still refuse agent-home targets.
        */
       const targetIsHome = isAgentHomeWorkspace(runtime, workspaceId);
       const homeMemberId = targetIsHome
         ? (runtime.workspaces.get(workspaceId)?.boundMemberId ?? "").trim()
         : "";
       if (targetIsHome) {
-        if (!isAgentHomeSession(runtime, sessionId)) {
+        const fromHome = isAgentHomeSession(runtime, sessionId);
+        const fromXy = isXiangyangSession(runtime, sessionId);
+        if (!fromHome && !fromXy) {
           return {
             content:
-              "workspace_session_prompt: refuse agent-home — project / IM / 向阳 seats do not open 干员-office sessions; open that 干员 pane session, or pick a coding project workspace",
+              "workspace_session_prompt: refuse agent-home — coding / IM project seats do not open 干员-office sessions; open that 干员 pane, use 向阳, or pick a coding project workspace",
             isError: true,
           };
         }

@@ -18,7 +18,9 @@ export type ApiRemoteForwardedEvent =
   | 'cordis/inspect-query-resolved'
   | 'llm/adapters-updated'
   | 'plugin-inventory/install-log'
+  | 'plugin-inventory/updates-changed'
   | 'settings/document-updated'
+  | 'settings/seat-titles-updated'
 
 declare module '@xrkseek/xrk-typert-protocol' {
   interface TypertRemoteEventSelection extends Record<ApiRemoteForwardedEvent, true> {}
@@ -35,5 +37,15 @@ declare module '@xrkseek/cordis' {
       stream: 'stdout' | 'stderr',
       text: string,
     ): void
+    /**
+     * Host plugin update probe settled (`ready` | `error`, checkedAt ms).
+     * Settings Manager re-pulls the warm cache for →version badges.
+     */
+    'plugin-inventory/updates-changed'(
+      status: 'ready' | 'error' | string,
+      checkedAt: number,
+    ): void
+    /** ui-presence titleScheme / title* — remount Agents for agentLabel. */
+    'settings/seat-titles-updated'(): void
   }
 }

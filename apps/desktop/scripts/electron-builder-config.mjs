@@ -12,6 +12,41 @@ const APP_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const requireFromApp = createRequire(join(APP_ROOT, "package.json"));
 
 /**
+ * electron-builder FileSet strips `node_modules` from extraResources, so the
+ * vendored npm prepared under `runtime/node` never reaches the installed app
+ * unless we re-copy it here (same discipline as host-bundle afterPack).
+ *
+ * @param {string} preparedNodeRoot - `.desktop-build/.../runtime/node` (has npm)
+ * @param {string} packagedNodeRoot - `resources/runtime/node` in the app out dir
+ */
+export function copyDesktopRuntimeNpm(preparedNodeRoot, packagedNodeRoot) {
+  const npmSrc = join(preparedNodeRoot, "node_modules", "npm");
+  const npmCli = join(npmSrc, "bin", "npm-cli.js");
+  if (!existsSync(npmCli)) {
+    throw new Error(
+      `xrk desktop afterPack: vendored npm missing at ${npmCli} ` +
+        `(run pnpm --filter @xrkseek/harness-desktop prepare:runtime)`,
+    );
+  }
+  mkdirSync(packagedNodeRoot, { recursive: true });
+  const npmDest = join(packagedNodeRoot, "node_modules", "npm");
+  rmSync(npmDest, { recursive: true, force: true });
+  mkdirSync(join(packagedNodeRoot, "node_modules"), { recursive: true });
+  cpSync(npmSrc, npmDest, { recursive: true });
+  for (const name of ["npm.cmd", "npx.cmd", "npm", "npx"]) {
+    const shim = join(preparedNodeRoot, name);
+    if (existsSync(shim)) {
+      cpSync(shim, join(packagedNodeRoot, name));
+    }
+  }
+  if (!existsSync(join(npmDest, "bin", "npm-cli.js"))) {
+    throw new Error(
+      `xrk desktop afterPack: npm-cli.js missing after copy (${npmDest})`,
+    );
+  }
+}
+
+/**
  * @param {NodeJS.ProcessEnv} env
  * @param {NodeJS.Platform} hostPlatform
  * @param {string} hostArch
@@ -202,6 +237,12 @@ export function createElectronBuilderConfig(
             "Settings plugin install/update/remove needs XRK_HARNESS_BIN",
         );
       }
+      // Vendored npm next to Host Node (Settings `plugin add` → npm pack).
+      // extraResources already copied runtime/node.exe but dropped node_modules.
+      copyDesktopRuntimeNpm(
+        join(buildRoot, "runtime", "node"),
+        join(resourcesDir, "runtime", "node"),
+      );
       // 内置 LLM 车道：只拷插件。OpenCode 需要本机 Bun（用户自装）；无 Bun 时
       // 静默跳过 OpenCode，Kilo 仍可直连。Host cwd=resources/host。
       const sunflowerSrc = join(

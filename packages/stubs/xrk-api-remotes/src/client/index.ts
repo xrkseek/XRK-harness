@@ -55,10 +55,10 @@ const FACE_REMOTES: FaceRemoteSpec = {
   },
   pluginInventory: {
     list: [],
-    checkUpdates: ['entryIds', 'force'],
+    checkUpdates: ['entryIds', 'force', 'registry', 'proxy'],
     setEnabled: ['entryId', 'enabled'],
     remove: ['entryId'],
-    update: ['entryId', 'requestId'],
+    update: ['entryId', 'requestId', 'registry', 'proxy'],
     reload: ['entryId'],
     install: ['spec', 'registry', 'requestId', 'proxy'],
     open: ['entryId'],

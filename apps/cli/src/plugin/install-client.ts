@@ -26,6 +26,11 @@ import {
   isSamePluginPackage,
   unscopedPackageName,
 } from "./package-id.js";
+import {
+  isLibCordisHostIncomplete,
+  stageNekowhaleHost,
+  stageWallpaperEngineHost,
+} from "./stage-community-host.js";
 
 const CLIENT_CHUNK_RE = /^client-(.+)\.js$/;
 
@@ -208,16 +213,24 @@ export function restageIncompleteCommunityHosts(
   for (const [name, entry] of Object.entries(inv.packages)) {
     if (entry.kind !== "client" && entry.kind !== "both") continue;
     const destDir = clientInstallDir(pluginsDir, name);
-    if (!isRootCordisHostIncomplete(destDir)) continue;
+    const needsRoot = isRootCordisHostIncomplete(destDir);
+    const needsLib = isLibCordisHostIncomplete(destDir, name);
+    if (!needsRoot && !needsLib) continue;
     const spec =
       entry.source.trim() ||
       (entry.version ? `${name}@${entry.version}` : name);
     let unpacked: ReturnType<typeof fetchPackage> | undefined;
     try {
       unpacked = fetchPackage(spec);
-      if (stageRootCordisHost(unpacked.root, destDir)) {
-        healed.push(name);
+      let did = false;
+      if (needsRoot && stageRootCordisHost(unpacked.root, destDir)) {
+        did = true;
       }
+      if (needsLib) {
+        if (stageWallpaperEngineHost(unpacked.root, destDir, name)) did = true;
+        if (stageNekowhaleHost(unpacked.root, destDir, name)) did = true;
+      }
+      if (did) healed.push(name);
     } catch {
       /* leave incomplete; path-shaped catch-all / restart after a good add */
     } finally {
@@ -383,6 +396,9 @@ export function installClientBundle(
   if (existsSync(pkgJson)) {
     copyFileSync(pkgJson, path.join(destDir, "package.json"));
   }
+  // Wallpaper / nekowhale Cordis host halves + their declared runtime deps.
+  stageWallpaperEngineHost(classified.root, destDir, classified.name);
+  stageNekowhaleHost(classified.root, destDir, classified.name);
   // Skin packs resolve `/skin-assets/<id>/…` via Host using this id map.
   const skinJson = path.join(classified.root, "skin.json");
   if (existsSync(skinJson)) {

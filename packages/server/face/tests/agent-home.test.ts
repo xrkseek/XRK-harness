@@ -185,7 +185,7 @@ describe("agent-home + identity session", () => {
     expect(last.workspace?.boundMemberAppearance?.color).toBe("coral");
   });
 
-  it("refuses cross-lane messaging between project and agent-home sessions", async () => {
+  it("refuses cross-lane messaging between coding project and agent-home sessions", async () => {
     const runtime = createBareFaceRuntime();
     const member = runtime.agentRoster.upsertAtScope(runtime.workspaces.defaultId(), "global", {
       name: "Peer",
@@ -224,9 +224,88 @@ describe("agent-home + identity session", () => {
       /cannot message agent-home/,
     );
     expect(refuseCrossAgentHomeLane(runtime, homeId, projectId)).toMatch(
-      /cannot message project/,
+      /cannot message this project seat/,
     );
     expect(refuseCrossAgentHomeLane(runtime, homeId, homeId)).toBeUndefined();
     expect(refuseCrossAgentHomeLane(runtime, projectId, projectId)).toBeUndefined();
+  });
+
+  it("allows messaging both ways between 向阳 and agent-home", async () => {
+    const runtime = createBareFaceRuntime();
+    const member = runtime.agentRoster.upsertAtScope(runtime.workspaces.defaultId(), "global", {
+      name: "Bridge",
+      playbook: "Talk to Xiangyang.",
+      role: "worker",
+    });
+    expect(member).toBeTruthy();
+    const home = await mintAgentHomeForMember(
+      runtime,
+      member!,
+      runtime.workspaces.defaultId(),
+    );
+    const homeSession = await sessionCreate(runtime, "t6a", {
+      workspaceId: home.workspaceId,
+      memberId: member!.id,
+    });
+    expect(homeSession.ok).toBe(true);
+    if (!homeSession.ok) return;
+    const homeId = String(
+      (homeSession.value as { sessionId?: string }).sessionId ?? "",
+    );
+
+    const xyId = runtime.workspaces.defaultId();
+    const xySession = await sessionCreate(runtime, "t6b", {
+      workspaceId: xyId,
+    });
+    expect(xySession.ok).toBe(true);
+    if (!xySession.ok) return;
+    const xySess = String(
+      (xySession.value as { sessionId?: string }).sessionId ?? "",
+    );
+
+    expect(refuseCrossAgentHomeLane(runtime, homeId, xySess)).toBeUndefined();
+    expect(refuseCrossAgentHomeLane(runtime, xySess, homeId)).toBeUndefined();
+  });
+
+  it("refuses agentPreset.select on agent-home (roster basePreset only)", async () => {
+    const runtime = createBareFaceRuntime();
+    const member = runtime.agentRoster.upsertAtScope(
+      runtime.workspaces.defaultId(),
+      "global",
+      {
+        name: "Locked",
+        playbook: "Stay on roster surface.",
+        role: "worker",
+        basePreset: "shell",
+      },
+    );
+    expect(member).toBeTruthy();
+    const home = await mintAgentHomeForMember(
+      runtime,
+      member!,
+      runtime.workspaces.defaultId(),
+    );
+    const created = await sessionCreate(runtime, "preset-lock", {
+      workspaceId: home.workspaceId,
+      memberId: member!.id,
+      agentPreset: "frugal",
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const sessionId = String(
+      (created.value as { sessionId?: string }).sessionId ?? "",
+    );
+    // Create ignored client picker — pinned to roster shell.
+    expect(runtime.sessionAgentPresets.get(sessionId)).toBe("shell");
+
+    const { dispatchFaceMethod } = await import("../src/dispatch.js");
+    const sel = await dispatchFaceMethod(runtime, "agentPreset.select", "pl", {
+      sessionId,
+      agentPreset: "frugal",
+    });
+    expect(sel.result.ok).toBe(false);
+    if (sel.result.ok) return;
+    expect(sel.result.error.message).toMatch(/roster basePreset/i);
+    expect(runtime.sessionAgentPresets.get(sessionId)).toBe("shell");
   });
 });
