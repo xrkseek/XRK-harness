@@ -15,7 +15,7 @@ import {
 } from "../src/session-tool-copy.js";
 
 describe("session-tool-copy", () => {
-  it("thread_message distinguishes parent vs sibling and lists live siblings", () => {
+  it("thread_message distinguishes parent vs sibling without live id lists", () => {
     const parent = threadMessageDescription({ kind: "coding_parent" });
     expect(parent).toContain("parent peer");
     expect(parent).toContain("same lane only");
@@ -42,7 +42,9 @@ describe("session-tool-copy", () => {
       kind: "delegated_child",
       siblingIds: ["sess_scout", "sess_other"],
     });
-    expect(child).toContain("Live siblings: sess_scout, sess_other");
+    // Live ids stay on turn-start boards — tools[] must stay byte-stable.
+    expect(child).not.toContain("sess_scout");
+    expect(child).toContain("squad board");
     expect(child).toContain("send_message");
   });
 
@@ -75,12 +77,22 @@ describe("session-tool-copy", () => {
         catalog: "- mem_x",
       }),
     ).toContain("IM-only");
+    expect(
+      subagentDescription({
+        base: "BASE.",
+        surface: "im",
+        catalog: "- mem_x",
+      }),
+    ).not.toContain("mem_x");
   });
 
   it("team_list / inspect / list_agents respect listOnly and kind", () => {
     expect(
       teamListDescription({ listOnly: true, catalog: "- a" }),
     ).toContain("Read-only");
+    expect(
+      teamListDescription({ listOnly: true, catalog: "- a" }),
+    ).not.toContain("- a");
     expect(
       teamListDescription({ listOnly: false, catalog: "- a" }),
     ).toContain("team_save");

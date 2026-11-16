@@ -11,7 +11,7 @@ import {
   readSessionEvents,
 } from "@xrkseek/core-session";
 import { permissionSelectFromEvents } from "./permissions.js";
-import { forgetRequestHeaderCache } from "@xrkseek/core-agent-loop";
+import { forgetSessionProcessCaches } from "@xrkseek/core-agent-loop";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 import { formatToolError } from "./face-error-text.js";
@@ -44,7 +44,6 @@ import {
   followupTaskDescription,
   interruptAgentDescription,
   listAgentsDescription,
-  liveRosterCatalog,
   listModelsDescription,
   sendMessageDescription,
   sessionToolContext,
@@ -120,6 +119,7 @@ import {
   waitForSignalOrSlice,
   waitSessionDrainIdle,
 } from "./wait-drain-idle.js";
+import { readWorkspaceDiscoverySettings } from "./workspace-discovery.js";
 
 const FOREGROUND_WAIT_MS = SESSION_DRAIN_WAIT_MS;
 const WAIT_AGENT_DEFAULT_MS = 5 * 60 * 1000;
@@ -131,10 +131,13 @@ export { SUBAGENT_ROUTING_PROMPT_TEXT };
 /**
  * Status quota — per provider/model live session cap.
  * `depth` is lineage info only (no longer a hard ceiling).
+ * `maxDepth` is always 0 (ceiling removed) — do not confuse with Settings
+ * `workspace-discovery.maxDepth` (team_graph view BFS clamp).
  * `active`/`maxActive`/`slotsFree` map to that route's session usage.
  */
 export interface SubagentQuotaCaps {
   readonly depth: number;
+  /** Always 0 — nest depth is not capped. Not workspace-discovery.maxDepth. */
   readonly maxDepth: number;
   readonly active: number;
   readonly maxActive: number;
@@ -366,7 +369,7 @@ async function discardUnstartedChild(
   }
   runtime.listProjectionCache.forget(childSessionId);
   runtime.wireIds.clear(childSessionId);
-  forgetRequestHeaderCache(childSessionId);
+  forgetSessionProcessCaches(childSessionId);
   await Promise.resolve(runtime.invalidateAgent?.(childSessionId)).catch(
     () => undefined,
   );
@@ -605,7 +608,6 @@ function createSubagentTool(
         description: subagentDescription({
           base: description,
           surface: orchestratorSurface(runtime, parentSessionId),
-          catalog: liveRosterCatalog(runtime, parentSessionId),
         }),
       };
     },
@@ -1505,22 +1507,15 @@ function createSubagentTool(
         // would yank the cwd out from under an independent worker. Matches
         // the background-spawn path (`worktreeLine(true)`).
         const extra = worktreeLine(stillRunning);
-        // Same spill ceiling as the success path — never dump a raw multi-MB
-        // salvage into the parent tool result.
-        const salvagedBound = salvaged
-          ? boundChildAnswer(options.parentSessionId, childId, salvaged)
-          : undefined;
-        const salvageLead = salvagedBound
-          ? stillRunning
-            ? `${message}; child still running — last answer so far is salvaged below. Host will steer when it settles.`
-            : `${message}, but the child finished work before the wait expired — its last answer is salvaged below.`
-          : stillRunning
-            ? `${message}; child still running — Host will steer a completion notice when it settles.`
+        // Answers ship only via parent steer handoff — tool result stays status-only.
+        const salvageLead = stillRunning
+          ? `${message}; child still running — result will arrive as a steer handoff when it settles.`
+          : salvaged
+            ? `${message}; child finished before the wait expired — result will arrive as a steer handoff.`
             : `subagent failed: ${message}`;
         return {
           content: [
             salvageLead,
-            salvagedBound,
             timedOut || stillRunning ? childResumeHint(childId) : undefined,
             retrying,
             extra,
@@ -1619,7 +1614,7 @@ function createSubagentTool(
             : `schema_valid=false\n${(schemaErrors ?? []).map((e) => `- ${e}`).join("\n")}`;
       return {
         content: [
-          boundChildAnswer(options.parentSessionId, childId, text),
+          `subagent ${childId} settled — answer delivered via steer handoff (not duplicated here).`,
           schemaLine,
           childRouteReceipt(options.runtime, childId),
           extra,
@@ -2034,20 +2029,36 @@ function createTeamGraphTool(
       if (!view.nodes.length) {
         return { content: "(empty team graph)" };
       }
-      const nodeLines = view.nodes.map((n) => {
+      // Settings maxDepth clamps how deep delegates appear in view (root=0).
+      const maxDepth = readWorkspaceDiscoverySettings(
+        options.runtime,
+      ).maxDepth;
+      const nodes = view.nodes.filter(
+        (n) => n.depth === undefined || n.depth <= maxDepth,
+      );
+      const visible = new Set(nodes.map((n) => n.id));
+      visible.add(root);
+      const edges = view.edges.filter(
+        (e) => visible.has(e.from) && visible.has(e.to),
+      );
+      const nodeLines = nodes.map((n) => {
         const bits = [
           n.role ?? "?",
           n.depth !== undefined ? `d=${n.depth}` : undefined,
         ].filter(Boolean);
         return `N\t${n.id}\t${n.label}\t${bits.join(" · ")}`;
       });
-      const edgeLines = view.edges.map(
+      const edgeLines = edges.map(
         (e) =>
           `E\t${e.kind}\t${e.from}\t${e.to}${e.label ? `\t${e.label}` : ""}`,
       );
+      const clipped = view.nodes.length - nodes.length;
       return {
         content: [
-          `team graph ${view.nodes.length}n/${view.edges.length}e`,
+          `team graph ${nodes.length}n/${edges.length}e` +
+            (clipped > 0
+              ? ` (maxDepth=${maxDepth}, clipped ${clipped})`
+              : ""),
           ...nodeLines,
           ...edgeLines,
         ].join("\n"),
@@ -2427,14 +2438,7 @@ function createWaitAgentTool(
           : `wait_agent completed (${timeoutMs}ms budget)`,
       ];
       for (const childId of targets) {
-        const link = options.runtime.subagents.getByChild(childId);
         const running = isChildSessionActive(options.runtime, childId);
-        const text = lastAssistantBodyText(
-          subagentOwnedEvents(
-            link,
-            readSessionEvents(options.runtime.store, childId),
-          ),
-        );
         const inbox = childInboxCounts(options.runtime, childId);
         lines.push(
           [
@@ -2442,15 +2446,9 @@ function createWaitAgentTool(
             running ? "running" : "idle",
             `q=${inbox.queued}`,
             `steer=${inbox.steering}`,
-            text
-              ? `answer:\n${boundChildAnswer(
-                  options.parentSessionId,
-                  childId,
-                  text,
-                )}`
-              : running
-                ? "(still running)"
-                : "(no assistant text)",
+            running
+              ? "(still running — answer via steer handoff when idle)"
+              : "(idle — see steer handoff for answer)",
           ].join("\t"),
         );
       }
@@ -2552,8 +2550,7 @@ function createInterruptAgentTool(
 }
 
 /**
- * Codex morph of close_agent: same stop path as interrupt_agent, plus a
- * salvaged last-assistant snapshot in the tool result.
+ * Same stop path as interrupt_agent; status-only tool result (answer via steer).
  */
 function createCloseAgentTool(
   options: BindSubagentToolsOptions,
@@ -2561,7 +2558,7 @@ function createCloseAgentTool(
   return {
     name: "close_agent",
     description:
-      "Stop a child and return a snapshot (last assistant text).",
+      "Stop a child; status only — last answer arrives as a steer handoff.",
     dynamicSchema: () => ({
       description: closeAgentDescription(),
     }),
@@ -2596,32 +2593,20 @@ function createCloseAgentTool(
       if (!result.ok) {
         return { content: result.message, isError: true };
       }
-      const link = options.runtime.subagents.getByChild(childId);
       const running = isChildSessionActive(options.runtime, childId);
-      const text = lastAssistantBodyText(
-        subagentOwnedEvents(
-          link,
-          readSessionEvents(options.runtime.store, childId),
-        ),
-      );
       const outcome = formatChildOutcome(
         readSessionEvents(options.runtime.store, childId),
       );
-      const lines = [
-        takeover
-          ? `closed ${childId} (human takeover — task paused)`
-          : `closed ${childId}`,
-        running ? "activity: still-running (cancel in flight)" : "activity: idle",
-        `outcome: ${outcome}`,
-      ];
-      if (text) {
-        lines.push(
-          `answer:\n${boundChildAnswer(options.parentSessionId, childId, text)}`,
-        );
-      } else {
-        lines.push("answer: (none yet)");
-      }
-      return { content: lines.join("\n") };
+      return {
+        content: [
+          takeover
+            ? `closed ${childId} (human takeover — task paused)`
+            : `closed ${childId}`,
+          running ? "activity: still-running (cancel in flight)" : "activity: idle",
+          `outcome: ${outcome}`,
+          "answer: via steer handoff (not duplicated in this tool result)",
+        ].join("\n"),
+      };
     },
   };
 }

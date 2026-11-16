@@ -134,6 +134,7 @@ import {
   createSeatIdentityFragmentProvider,
   createSessionCapabilityFragmentProvider,
   createSessionPostureFragmentProvider,
+  createSessionLanesFragmentProvider,
   createInstructionAuthorityFragmentProvider,
   canvasWorkspaceIdForSession,
   memberPackSkillsDir,
@@ -731,6 +732,7 @@ export type AgentFactory = (input: {
     | ReturnType<typeof createSeatIdentityFragmentProvider>
     | ReturnType<typeof createSessionCapabilityFragmentProvider>
     | ReturnType<typeof createSessionPostureFragmentProvider>
+    | ReturnType<typeof createSessionLanesFragmentProvider>
     | ReturnType<typeof createCommunityPromptFragmentProvider>
   >;
   /** Face-backed working_directory tool (Host wires per session). */
@@ -1981,6 +1983,7 @@ export function createHostManager(): HostManager {
                       createInstructionAuthorityFragmentProvider(),
                       createSessionCapabilityFragmentProvider(faceBox.runtime),
                       createSessionPostureFragmentProvider(faceBox.runtime),
+                      createSessionLanesFragmentProvider(faceBox.runtime),
                       createBossStatusFragmentProvider(faceBox.runtime),
                       createSeatIdentityFragmentProvider(faceBox.runtime),
                       createCollabBoardFragmentProvider(faceBox.runtime),

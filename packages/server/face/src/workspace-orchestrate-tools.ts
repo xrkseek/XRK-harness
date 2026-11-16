@@ -23,6 +23,11 @@ import {
   PEER_WAIT_MIN_MS,
   waitForPeerAssistantReply,
 } from "./peer-session-wait.js";
+import {
+  armPeerCollabAfterPrompt,
+  clearPeerCollabAfterSyncReply,
+  flushPeerCollabIfPeerIdle,
+} from "./peer-collab-handoff.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 import { formatToolError } from "./face-error-text.js";
@@ -373,6 +378,13 @@ export function bindWorkspaceOrchestrateTools(
           isError: true,
         };
       }
+      armPeerCollabAfterPrompt({
+        runtime,
+        peerSessionId: targetId,
+        waiterSessionId: sessionId,
+        seqAtSend,
+        wait,
+      });
       if (!wait) {
         return {
           content: JSON.stringify({
@@ -392,6 +404,11 @@ export function bindWorkspaceOrchestrateTools(
         signal,
       );
       if ("reply" in waited) {
+        clearPeerCollabAfterSyncReply({
+          runtime,
+          peerSessionId: targetId,
+          waiterSessionId: sessionId,
+        });
         return {
           content: JSON.stringify({
             workspaceId,
@@ -402,6 +419,8 @@ export function bindWorkspaceOrchestrateTools(
           }),
         };
       }
+      // Keep the arm; if peer already idle, flush so the reply is not stranded.
+      flushPeerCollabIfPeerIdle(runtime, targetId);
       return {
         content: `workspace_session_prompt: ${waited.error}`,
         isError: true,

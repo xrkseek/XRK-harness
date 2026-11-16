@@ -36,6 +36,8 @@ const injectDocumentEntrySchema = z.object({
     'boss-status',
     'seat-identity',
     'collab-board',
+    'session-lanes',
+    'session-memory',
   ]),
   bytes: z.number().int().nonnegative(),
 })

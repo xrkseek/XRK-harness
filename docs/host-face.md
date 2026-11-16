@@ -62,7 +62,7 @@ Desktop（`xrk-app:`）默认 **`describeBeforeStreams`**：先 unary `host.desc
 
 ## WebSocket 心跳
 
-mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 **2s**）。连续 **5** 次未收到 Pong 则 `terminate`。实现：`ws-heartbeat.ts`。写出走 `ws-send-queue.ts`：JSON 帧串行，等上一帧 `send` 回调后再发下一帧；待发量超软顶时**丢帧并 warn，不掐线**。Agent loop 流式期间约 **16ms** 让出；同一 text / reasoning / tool-call run 的**首片立即落库**，后续片段合并到下一次让出，mux seq 仍连续。
+mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 **2s**）。连续 **5** 次未收到 Pong 则 `terminate`。实现：`ws-heartbeat.ts`。另发应用层文本 **`: keepalive`**（默认 **15s**，与 SSE 注释保活同节奏）：浏览器 `message` 看不到协议 Ping/Pong，壳侧空闲看门狗（三倍间隔无流量 → 断线重连）靠这路证明信道仍活，避免半开套接字把乐观 `running` / 「思考中」卡死。写出走 `ws-send-queue.ts`：JSON 帧串行，等上一帧 `send` 回调后再发下一帧；待发量超软顶时**丢帧并 warn，不掐线**（应用层 keepalive **绕过**队列）。Agent loop 流式期间约 **16ms** 让出；同一 text / reasoning / tool-call run 的**首片立即落库**，后续片段合并到下一次让出，mux seq 仍连续。
 
 ### 发送背压
 
@@ -240,7 +240,7 @@ Copy keys (`settings` dictionary): `connection.phase.describe` · `streams` · `
 
 ## WebSocket heartbeats
 
-After mux / host upgrade, the Host sends **Ping** control frames (default interval **2s**). After **5** consecutive missed Pongs the peer is `terminate`d. Implementation: `ws-heartbeat.ts`. Writes go through `ws-send-queue.ts`: JSON frames serialize on the previous `send` callback; over the soft cap, frames are **dropped** (one warn) without terminating the peer. The agent loop yields about every **16ms** while streaming; the first fragment of a text / reasoning / tool-call run is durable immediately and later fragments coalesce until the next yield. Mux seq stays contiguous.
+After mux / host upgrade, the Host sends **Ping** control frames (default interval **2s**). After **5** consecutive missed Pongs the peer is `terminate`d. Implementation: `ws-heartbeat.ts`. It also sends app-level text **`: keepalive`** (default **15s**, same cadence as SSE comment keepalives): browsers never surface protocol Ping/Pong as `message` events, so the shell idle watchdog (three intervals of silence → reconnect) needs this path to prove the channel is alive and avoid half-open sockets leaving optimistic `running` / thinking chrome stuck. Writes go through `ws-send-queue.ts`: JSON frames serialize on the previous `send` callback; over the soft cap, frames are **dropped** (one warn) without terminating the peer (app keepalives **bypass** the queue). The agent loop yields about every **16ms** while streaming; the first fragment of a text / reasoning / tool-call run is durable immediately and later fragments coalesce until the next yield. Mux seq stays contiguous.
 
 ### Send backpressure
 

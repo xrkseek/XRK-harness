@@ -13,7 +13,10 @@ import { listForModel } from "./tool-exposure.js";
 export type ToolResolveError = "unknown" | "stale";
 
 export interface ToolMaterialization {
-  /** Snapshot used for LLM catalog (and settle). May include dynamicSchema merges. */
+  /**
+   * Full registry snapshot for settle (live identity; no dynamicSchema merge).
+   * Wire catalog is {@link ToolMaterialization.list} only.
+   */
   readonly definitions: readonly ToolDefinition[];
   list(): readonly ToolDefinition[];
   /**
@@ -83,8 +86,9 @@ export function applyToolDynamicSchema(tool: ToolDefinition): ToolDefinition {
 
 /**
  * Freeze the tool table for one provider step / turn slice.
- * Catalog rows may merge {@link ToolDefinition.dynamicSchema}; settle uses the
- * live registry instance (identity) so overrides never flip settle to stale.
+ * Wire catalog merges {@link ToolDefinition.dynamicSchema} only for tools that
+ * pass progressive disclosure; settle uses live registry identity so overrides
+ * never flip settle to stale.
  */
 export function materializeTools(
   registry: ToolRegistry,
@@ -100,8 +104,8 @@ export function materializeTools(
   const live = registry.list().filter((t) => !omit?.has(t.name));
   /** Live identity for settle / stale checks. */
   const snap = new Map(live.map((t) => [t.name, t] as const));
-  /** Catalog view (may be a shallow copy after dynamicSchema). */
-  const definitions = live.map(applyToolDynamicSchema);
+  /** Full snap for settle — dynamicSchema only on the wire catalog below. */
+  const definitions = live;
 
   const resolve = (
     name: string,
@@ -119,11 +123,12 @@ export function materializeTools(
     return { ok: true, tool: captured };
   };
 
-  const catalog = listForModel(definitions, {
+  // Filter first so deferred MCP never pays dynamicSchema until expanded.
+  const catalog = listForModel(live, {
     ...(options.expandedToolNames
       ? { expandedNames: options.expandedToolNames }
       : {}),
-  });
+  }).map(applyToolDynamicSchema);
 
   return {
     definitions,

@@ -267,6 +267,10 @@ export {
   createSessionPostureFragmentProvider,
   formatSessionPosture,
 } from "./session-posture.js";
+export {
+  createSessionLanesFragmentProvider,
+  formatSessionLanes,
+} from "./session-lanes.js";
 export { createInstructionAuthorityFragmentProvider } from "./instruction-authority-fragment.js";
 export {
   createBossStatusFragmentProvider,
@@ -335,8 +339,35 @@ export {
 } from "./session-tool-copy.js";
 export {
   bindAgentRosterTools,
+  liveMemberPlaybook,
   type BindAgentRosterToolsOptions,
 } from "./agent-roster-tools.js";
+export {
+  FacePeerCollabWaiters,
+  armPeerCollabAfterPrompt,
+  clearPeerCollabAfterSyncReply,
+  deliverPeerCollabIdleHandoffs,
+  deliverPeerCollabStopHandoffs,
+  flushPeerCollabIfPeerIdle,
+  formatPeerCollabCompletionNotice,
+  formatPeerCollabStopHandoffNotice,
+  peerCollabNoticeSource,
+  type PeerCollabWaitMode,
+  type PeerCollabWaiter,
+} from "./peer-collab-handoff.js";
+export {
+  adoptLiveMemberIdentityPlaybook,
+  normalizeIdentityPlaybook,
+  publishMemberIdentityPlaybook,
+  readAgentHomeAgentsMd,
+  syncIdentityPlaybookAfterAgentsMdWrite,
+  syncIdentityPlaybookAfterPackWrite,
+  syncIdentityPlaybooksFromWriteTool,
+  syncIdentityPlaybooksFromShellTool,
+  shellIdentityTargetPaths,
+  writeToolTargetPaths,
+  type IdentityPlaybookSource,
+} from "./agent-identity-sync.js";
 export {
   FacePresenceStore,
   type SessionPresenceState,
@@ -432,6 +463,8 @@ export {
   type AttachFaceOptions,
 } from "./attach-http.js";
 export {
+  FACE_WS_APP_KEEPALIVE_INTERVAL_MS,
+  FACE_WS_APP_KEEPALIVE_TEXT,
   FACE_WS_HEARTBEAT_INTERVAL_MS,
   FACE_WS_HEARTBEAT_MAX_MISSED,
   startWsHeartbeat,
@@ -450,6 +483,7 @@ export {
   formatSubagentCompletionNotice,
   formatSubagentStopNotice,
   formatSubagentUserPromptNotice,
+  subagentNoticeSource,
   describeChildOutcome,
   lastAssistantBodyText,
   boundChildAnswer,

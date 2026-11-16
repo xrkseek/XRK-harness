@@ -159,6 +159,7 @@ export default defineConfig({
       "packages/**/tests/**/*.test.ts",
       "presets/**/tests/**/*.test.ts",
       "apps/**/tests/**/*.test.ts",
+      "extensions/**/tests/**/*.test.mjs",
       "scripts/**/*.test.ts",
       "evals/**/*.track.test.ts",
     ],

@@ -177,6 +177,7 @@ function documentTitle(
   if (doc.path === 'session://boss-status') return t('skillsBossStatusPathLabel')
   if (doc.path === 'session://seat-identity') return t('skillsSeatIdentityPathLabel')
   if (doc.path === 'session://collab-board') return t('skillsCollabPathLabel')
+  if (doc.path === 'session://memory') return t('skillsMemoryPathLabel')
   return doc.path
 }
 
@@ -191,6 +192,8 @@ function documentKindLabel(
   if (doc.kind === 'boss-status') return t('skillsDocumentKindBossStatus')
   if (doc.kind === 'seat-identity') return t('skillsDocumentKindSeatIdentity')
   if (doc.kind === 'collab-board') return t('skillsDocumentKindCollab')
+  if (doc.kind === 'session-lanes') return t('skillsDocumentKindLanes')
+  if (doc.kind === 'session-memory') return t('skillsDocumentKindMemory')
   return t('skillsDocumentKindInstruction')
 }
 

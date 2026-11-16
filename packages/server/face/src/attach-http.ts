@@ -33,10 +33,32 @@ import {
   sessionExportFilename,
 } from "./session-export.js";
 import {
+  FACE_WS_APP_KEEPALIVE_INTERVAL_MS,
+  FACE_WS_APP_KEEPALIVE_TEXT,
   FACE_WS_HEARTBEAT_INTERVAL_MS,
   startWsHeartbeat,
 } from "./ws-heartbeat.js";
 import { createWsSendQueue } from "./ws-send-queue.js";
+
+/**
+ * Arm Face app-level keepalive on one accepted socket so browser WebSocket
+ * clients (Mobile / Web) can idle-detect half-open peers. Bypasses the send
+ * queue so congestion cannot starve the heartbeat text.
+ * @param intervalMs - cadence; `0` / negative disables.
+ */
+function armWsAppKeepalive(ws: WebSocket, intervalMs: number): () => void {
+  if (!(intervalMs > 0)) return () => {};
+  const timer = setInterval(() => {
+    if (ws.readyState !== ws.OPEN) return;
+    try {
+      ws.send(FACE_WS_APP_KEEPALIVE_TEXT);
+    } catch {
+      // Peer already closing; close handler clears the timer.
+    }
+  }, intervalMs);
+  timer.unref();
+  return () => clearInterval(timer);
+}
 
 export interface AttachFaceOptions {
   readonly apiKey: string;
@@ -46,6 +68,12 @@ export interface AttachFaceOptions {
    * {@link FACE_WS_HEARTBEAT_INTERVAL_MS}; tests may shorten it.
    */
   readonly heartbeatIntervalMs?: number;
+  /**
+   * App-level `: keepalive` cadence (ms). Defaults to
+   * {@link FACE_WS_APP_KEEPALIVE_INTERVAL_MS}; tests may shorten it.
+   * `0` disables (protocol Ping/Pong still runs).
+   */
+  readonly appKeepaliveIntervalMs?: number;
 }
 
 export { FACE_WS_PATHS, faceMethodFromPath, isFaceWsPath };
@@ -370,23 +398,34 @@ export function attachFaceUpgrades(
 
   server.on("upgrade", onUpgrade);
 
+  const appKeepaliveMs =
+    options.appKeepaliveIntervalMs ?? FACE_WS_APP_KEEPALIVE_INTERVAL_MS;
+
   muxWss.on("connection", (ws: WebSocket) => {
     const queue = createWsSendQueue(ws);
+    const stopKeepalive = armWsAppKeepalive(ws, appKeepaliveMs);
     writeMuxBaseline(runtime, (frame) => {
       queue.sendJson(frame);
     });
     const off = runtime.bus.subscribeMux((rpcId, frame) => {
       queue.sendJson(serverRequestFrame(rpcId, frame));
     });
-    ws.on("close", off);
+    ws.on("close", () => {
+      stopKeepalive();
+      off();
+    });
   });
 
   hostWss.on("connection", (ws: WebSocket) => {
     const queue = createWsSendQueue(ws);
+    const stopKeepalive = armWsAppKeepalive(ws, appKeepaliveMs);
     const off = runtime.bus.subscribeHost((rpcId, frame) => {
       queue.sendJson(serverRequestFrame(rpcId, frame));
     });
-    ws.on("close", off);
+    ws.on("close", () => {
+      stopKeepalive();
+      off();
+    });
   });
 
   return {

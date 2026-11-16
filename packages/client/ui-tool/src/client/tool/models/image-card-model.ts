@@ -150,18 +150,28 @@ export function imageCardModel(
 ): ImageCardModel | null {
   if (!('kind' in block) || block.isError) return null
   const call = parseCallArgs(block)
-  if (call?.name !== 'read_image') return null
-  const filePath = call.args.file_path
-  if (typeof filePath !== 'string' || filePath.trim() === '') return null
-  const path = imageMeta(block.meta)?.path ?? filePath
+  const name = call?.name
+  // read_image + present: both may carry durable image ContentBlocks.
+  if (name !== 'read_image' && name !== 'present') return null
   if (!fullyRendered(block.content)) return null
   // Durable image blocks are the gallery signal. Do not gate on the model
   // envelope text: Windows Host builds used to emit `\r\n` envelopes that
   // failed an LF-only regex and fell back to IN/OUT with no preview.
   const refs = imageReferences(block.content)
   if (refs === null) return null
+  let pathLabel = imageMeta(block.meta)?.path ?? ''
+  if (pathLabel === '' && name === 'read_image') {
+    const filePath = call?.args.file_path
+    if (typeof filePath === 'string' && filePath.trim() !== '') pathLabel = filePath
+  }
+  if (pathLabel === '' && name === 'present') {
+    const files = call?.args.files
+    if (Array.isArray(files) && typeof files[0] === 'string') pathLabel = files[0]
+    else if (typeof call?.args.path === 'string') pathLabel = call.args.path
+  }
+  if (pathLabel === '') pathLabel = refs[0]?.name ?? 'image'
   return {
-    label: displayImagePath(path, sessionCwd, home),
+    label: displayImagePath(pathLabel, sessionCwd, home),
     images: refs.map(ref => ({ attachment: ref, role: 'result' as const })),
     text: '',
   }

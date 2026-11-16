@@ -321,6 +321,8 @@ export const sessionEventJsonSchema = {
         content: messageContentSchema,
         delivery: { enum: ["steer", "queue"] },
         rpcId: { type: "string" },
+        // Same durable producer bag as user/message.source (plugin notices…).
+        source: { type: "object", additionalProperties: true },
       }),
       additionalProperties: false,
     },

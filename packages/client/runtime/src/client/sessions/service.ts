@@ -192,21 +192,44 @@ export function workspaceTitleOf(cwd: string): string {
 }
 
 /**
- * Display title: 主线 when bound, else durable title (first user message),
- * then the raw id. Do **not** fall back to the cwd basename — that duplicates
- * the workspace group label (e.g. every untitled row under `function` also
- * reads as `function`) when the opener was compacted away before a title
- * event landed.
+ * Display title: when a 主线 is bound, prefer `seat · 主线` (干员名 · 主线);
+ * else durable title (first user message), then the raw id. Do **not** fall
+ * back to the cwd basename — that duplicates the workspace group label when
+ * the opener was compacted away before a title event landed.
  */
 function displayTitleOf(
   title: string | undefined,
   _cwd: string | undefined,
   id: SessionId,
   mainline?: string,
+  seatLabel?: string,
 ): string {
-  if (mainline !== undefined && mainline !== '') return mainline
+  const main = mainline?.trim()
+  if (main !== undefined && main !== '') {
+    const seat = seatLabel?.trim()
+    if (seat !== undefined && seat !== '' && seat !== main && !isWeakSubagentLabel(seat)) {
+      return `${seat} · ${main}`
+    }
+    return main
+  }
   if (title !== undefined && title !== '') return title
   return id
+}
+
+/** Spawn / catalog label for a child session, when known. */
+function seatLabelForSession(
+  sessionId: SessionId,
+  subagentsByParent: Readonly<Record<SessionId, SubagentCatalogSnapshot>>,
+): string | undefined {
+  for (const catalog of Object.values(subagentsByParent)) {
+    const hit = catalog.entries.find(
+      (entry) => entry.kind === 'child' && entry.id === sessionId,
+    )
+    if (hit?.kind !== 'child') continue
+    const label = hit.label?.trim()
+    if (label) return label
+  }
+  return undefined
 }
 
 /**
@@ -814,9 +837,16 @@ export class SessionRuntime implements ISessions {
     for (const entry of items) {
       if (entry.running) anyRunning = true
       ids.push(entry.sessionId)
+      const seatLabel = seatLabelForSession(entry.sessionId, subagentsByParent)
       byId[entry.sessionId] = {
         id: entry.sessionId,
-        displayTitle: displayTitleOf(entry.title, entry.cwd, entry.sessionId, entry.mainline),
+        displayTitle: displayTitleOf(
+          entry.title,
+          entry.cwd,
+          entry.sessionId,
+          entry.mainline,
+          seatLabel,
+        ),
         running: entry.running,
         ...(entry.completed ? { completed: true } : {}),
         blank: entry.blank,

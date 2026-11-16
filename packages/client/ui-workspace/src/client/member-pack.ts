@@ -4,6 +4,8 @@
  * Deflated third-party zips still need Face `team.importPack` / AI `team_import`.
  */
 
+import { triggerBrowserOrShellDownload } from '@xrkseek/client-runtime/client'
+
 export const MEMBER_CARD_KIND = 'xrk-agent-member'
 export const MEMBER_PACK_KIND = 'xrk-agent-pack'
 export const MEMBER_PACK_MARKER = '.xrk-agent-pack'
@@ -356,14 +358,11 @@ export function base64ToBytes(b64: string): Uint8Array {
 
 function triggerDownload(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => { URL.revokeObjectURL(url) }, 1500)
+  // Phone thin shell (XrkShell) cannot navigate main frame to blob:; route
+  // through the shared download helper (bytes → native Downloads / open-with).
+  // Keep the object URL alive long enough for async shell fetch of large zips.
+  triggerBrowserOrShellDownload(url, fileName)
+  setTimeout(() => { URL.revokeObjectURL(url) }, 60_000)
 }
 
 /** Thin member → JSON download (no Face round-trip). */

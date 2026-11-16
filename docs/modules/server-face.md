@@ -47,8 +47,8 @@ HTTP/WS (attach-http)
 | `runtime.ts` | `createFaceRuntime` | 组装 bus/seq/projections/approvals/questions |
 | `dispatch.ts` | **RPC 路由表** | 未知 method → NI；新方法在此登记 |
 | `handlers/` | 按域 handler | `session` · `host` · `catalog` · `remotes` · `cordis-stub` · `session-added` |
-| `attach-http.ts` | HTTP 挂载 + WS · mux 重连基线 · Ping 心跳 · send 队列 | pending 补 queue / 审批 / 提问；冷会话跳过 full hydrate；`ws-heartbeat` 默认 2s / 5 miss；`ws-send-queue` 超顶丢帧不掐线 |
-| `ws-heartbeat.ts` | mux/host Ping/Pong 看门狗 | 半开连接 terminate（`FACE_WS_HEARTBEAT_MAX_MISSED`） |
+| `attach-http.ts` | HTTP 挂载 + WS · mux 重连基线 · Ping 心跳 · 应用层 `: keepalive` · send 队列 | pending 补 queue / 审批 / 提问；冷会话跳过 full hydrate；`ws-heartbeat` 默认 2s / 5 miss；应用层 keepalive 15s（绕过 send 队列）；`ws-send-queue` 超顶丢帧不掐线 |
+| `ws-heartbeat.ts` | mux/host Ping/Pong 看门狗 + 应用层 keepalive 常量 | 半开连接 terminate（`FACE_WS_HEARTBEAT_MAX_MISSED`）；壳空闲看门狗依赖应用层文本 |
 | `ws-send-queue.ts` | mux/host JSON 串行写出 + 软顶 | 超顶 / 单帧过大丢帧；写失败停入队；带 `sessionId` 的帧按会话车道 round-robin，避免一路刷屏卡住其它会话 |
 | `bus.ts` | mux/host 订阅扇出 | `publishMux(frame, rpcId?)` 审批用稳定 id |
 | `seq.ts` | `FaceMuxSeq` · `FaceSeqClock`（1-based） | **不是** Session `SessionSeq`；见 [session-log.md](../session-log.md) |
@@ -69,6 +69,8 @@ HTTP/WS (attach-http)
 | `collab-board.ts` | turn-start 协作板 | 父：名册+主线；干员：同父小队+自身任务；契约见 [session-identity](../session-identity.md) |
 | `session-capability.ts` | turn-start `<session_capability>` | 父：permission×tool_surface×model/modality；干员：`kind=delegated` 短块（同带 model/modality） |
 | `session-posture.ts` | turn-start `<session_posture>` | IM / 奇创编排；harness·shallow 经理动词；Frugal/Shell 空 |
+| `session-lanes.ts` | turn-start `<session_lanes>` | 本会话主线/支线/open todos + 完成后切换；父子席每回合 |
+| `agent-identity-sync.ts` | 干员 playbook 三镜热更 | 名册 ↔ 家目录 `AGENTS.md` ↔ 高级 `playbook.md`；写工具后即时；目录种子单向 |
 | `session-kind.ts` | 派生工程身份 | `orchestrator` / `coding_parent` / `delegated_child` / `fork_clone` |
 | `session-tool-copy.ts` | 协作工具 `dynamicSchema` 文案 | 按 kind · 名册 · sibling ids · followup/team_graph/interrupt/close/wait；见 [session-identity](../session-identity.md) |
 | `skill-list.ts` | `skill.list` | 扫已存在的 `.xrk|.claude|.cursor|.agents|.codex/skills`（及用户主目录同名）；不强制建目录；模型加载走 `skill` 工具 |
@@ -223,8 +225,8 @@ HTTP/WS (attach-http)
 | `runtime.ts` | `createFaceRuntime` | Assembles bus/seq/projections/approvals/questions |
 | `dispatch.ts` | **RPC route table** | Unknown method → NI; register new methods here |
 | `handlers/` | Domain handlers | `session` · `host` · `catalog` · `remotes` · `cordis-stub` · `session-added` |
-| `attach-http.ts` | HTTP mount + WS · mux reconnect baseline · Ping heartbeats · send queue | Pending fills queue / approvals / questions; cold sessions skip full hydrate; `ws-heartbeat` default 2s / 5 miss; `ws-send-queue` drops over budget (no terminate) |
-| `ws-heartbeat.ts` | mux/host Ping/Pong watchdog | Terminate half-open peers (`FACE_WS_HEARTBEAT_MAX_MISSED`) |
+| `attach-http.ts` | HTTP mount + WS · mux reconnect baseline · Ping heartbeats · app `: keepalive` · send queue | Pending fills queue / approvals / questions; cold sessions skip full hydrate; `ws-heartbeat` default 2s / 5 miss; app keepalive 15s (bypasses send queue); `ws-send-queue` drops over budget (no terminate) |
+| `ws-heartbeat.ts` | mux/host Ping/Pong watchdog + app keepalive constants | Terminate half-open peers (`FACE_WS_HEARTBEAT_MAX_MISSED`); shell idle watchdog depends on app text |
 | `ws-send-queue.ts` | mux/host serialized JSON writes + soft caps | Drop over-budget / oversize frames; stop enqueue on write error; frames with `sessionId` drain round-robin per session so one burst cannot stall the others |
 | `bus.ts` | mux/host fan-out | `publishMux(frame, rpcId?)` uses stable ids for approvals |
 | `seq.ts` | `FaceMuxSeq` · `FaceSeqClock` (1-based) | **Not** Session `SessionSeq`; see [session-log.md](../session-log.md) |
@@ -245,6 +247,8 @@ HTTP/WS (attach-http)
 | `collab-board.ts` | Turn-start collab board | Parent: roster+主线; child: same-parent squad+own task; see [session-identity](../session-identity.md) |
 | `session-capability.ts` | Turn-start `<session_capability>` | Parent: permission×tool_surface×model/modality; child: short `kind=delegated` block (same model/modality lines) |
 | `session-posture.ts` | Turn-start `<session_posture>` | IM / Qichuang orchestrator; harness·shallow manager verbs; empty for Frugal/Shell |
+| `session-lanes.ts` | Turn-start `<session_lanes>` | This session’s 主线 / 支线 / open todos + completion switch; every turn for parents and children |
+| `agent-identity-sync.ts` | Agent playbook triple-mirror sync | Roster ↔ home `AGENTS.md` ↔ advanced `playbook.md`; immediate after write tools; catalog seeds one-way |
 | `session-kind.ts` | Derived engineering identity | `orchestrator` / `coding_parent` / `delegated_child` / `fork_clone` |
 | `session-tool-copy.ts` | Collab-tool `dynamicSchema` copy | By kind · roster · sibling ids · followup/team_graph/interrupt/close/wait; see [session-identity](../session-identity.md) |
 | `skill-list.ts` | `skill.list` | Scan existing `.xrk|.claude|.cursor|.agents|.codex/skills` (and home peers); do not create dirs; model load uses `skill` tool |

@@ -115,7 +115,7 @@ describe("makeHarness", () => {
     expect(systemText).not.toContain("SHOULD-NOT");
   });
 
-  it("slash recipe expands user + recipe system block", async () => {
+  it("slash recipe expands user + recipe as context inject (not system)", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-slash-"));
     const recipesDir = path.join(root, ".xrk", "recipes");
     await mkdir(recipesDir, { recursive: true });
@@ -135,7 +135,7 @@ parameters:
     );
 
     let systemText = "";
-    let userText = "";
+    let userTexts: string[] = [];
     const llm = {
       id: "slash-cap",
       async chat(req: {
@@ -143,8 +143,9 @@ parameters:
       }) {
         systemText =
           req.messages.find((m) => m.role === "system")?.content ?? "";
-        userText =
-          req.messages.find((m) => m.role === "user")?.content ?? "";
+        userTexts = req.messages
+          .filter((m) => m.role === "user")
+          .map((m) => (typeof m.content === "string" ? m.content : ""));
         return { content: "ok" };
       },
     };
@@ -156,16 +157,29 @@ parameters:
     });
     const agent = await composition.createAgent();
     await agent.continueTurn({ text: "/daily-standup shipped M2" });
-    expect(userText).toContain("EXPANDED-USER");
-    expect(userText).toContain("shipped M2");
-    expect(systemText).toContain("## Recipe");
-    expect(systemText).toContain("RECIPE-SYS");
+    expect(userTexts.some((t) => t.includes("EXPANDED-USER"))).toBe(true);
+    expect(userTexts.some((t) => t.includes("shipped M2"))).toBe(true);
+    // Recipe instructions land as context-fragment (user), not system head.
+    expect(systemText).not.toContain("RECIPE-SYS");
+    expect(userTexts.some((t) => t.includes("## Recipe") && t.includes("RECIPE-SYS"))).toBe(
+      true,
+    );
 
     const events = composition.store.get(composition.sessionId).events;
-    const userMsg = events.find((e) => e.type === "user/message");
-    expect(userMsg && "content" in userMsg ? userMsg.content : "").toContain(
-      "EXPANDED-USER",
+    const expanded = events.find(
+      (e) =>
+        e.type === "user/message" &&
+        "content" in e &&
+        String(e.content).includes("EXPANDED-USER"),
     );
+    expect(expanded).toBeDefined();
+    const recipeInject = events.find(
+      (e) =>
+        e.type === "user/message" &&
+        e.source?.kind === "context-fragment" &&
+        e.source.fragmentId === "slash-recipe",
+    );
+    expect(recipeInject).toBeDefined();
   });
 
   it("slash skill expands into logged user message", async () => {

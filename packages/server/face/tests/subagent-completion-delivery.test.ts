@@ -186,17 +186,26 @@ describe("subagent completion delivery", () => {
     expect(wakes).toContain(parentId);
   });
 
-  it("skips one-shot children", async () => {
+  it("steers one-shot children on idle (single-channel handoff)", async () => {
     const store = createMemorySessionStore();
     const admits: string[] = [];
+    const wakes: string[] = [];
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: process.cwd(),
-      drain: idleFaceDrain,
+      drain: {
+        wake(sessionId: string) {
+          wakes.push(sessionId);
+        },
+        async cancel() {},
+        isActive() {
+          return false;
+        },
+      },
       resolveAgent: async (sessionId) =>
         ({
           admit: (content, opts) => {
-            admits.push(sessionId);
+            admits.push(String(content));
             return admitPrompt(store, sessionId, content, opts);
           },
           pendingAdmits: () => [],
@@ -220,10 +229,80 @@ describe("subagent completion delivery", () => {
     if (!child.result.ok) throw new Error("child create failed");
     const childId = (child.result.value as { sessionId: string }).sessionId;
 
-    runtime.onSessionDrainStatus(childId, false);
-    await Promise.resolve();
+    store.append(childId, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t1",
+      stepId: "s1",
+      content: "one-shot answer",
+    });
 
-    expect(admits).toEqual([]);
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+
+    expect(admits).toHaveLength(1);
+    expect(admits[0]).toContain("one-shot answer");
+    expect(wakes).toContain(parentId);
+  });
+
+  it("one-shot interrupt still couriers a stop notice (not silent suppress)", async () => {
+    const store = createMemorySessionStore();
+    const admits: string[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: idleFaceDrain,
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content) => {
+            admits.push(String(content));
+            return admitPrompt(store, sessionId, content);
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => true,
+          abort() {},
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!parent.result.ok) throw new Error("parent create failed");
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+    const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+      parentSessionId: parentId,
+      mode: "one-shot",
+      label: "worker",
+    });
+    if (!child.result.ok) throw new Error("child create failed");
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    store.append(childId, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t1",
+      stepId: "s1",
+      content: "partial before kill",
+      interrupted: true,
+    });
+
+    runtime.notifyOwnedSubagentStopped(childId, "parent");
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+    expect(admits).toHaveLength(1);
+    expect(admits[0]).toContain("interrupted by the parent");
+    expect(admits[0]).toContain("partial before kill");
+
+    // Idle after interrupt must not also fire a "finished a turn" notice.
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+    expect(admits).toHaveLength(1);
   });
 
   it("steers after a one-shot is promoted to continuable", async () => {

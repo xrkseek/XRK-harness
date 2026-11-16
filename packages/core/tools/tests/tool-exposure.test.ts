@@ -82,6 +82,14 @@ describe("tool_search", () => {
     expect(hits.every((h) => h.name !== TOOL_SEARCH_NAME)).toBe(true);
 
     const search = reg.get(TOOL_SEARCH_NAME)!;
+    // tools[] description stays free of live catalog (KV prefix).
+    expect(search.description).not.toContain("mcp__calendar__create_event");
+    expect(search.dynamicSchema?.()).toEqual({});
+    const browse = await search.execute({ query: "list" });
+    expect(browse.isError).toBeFalsy();
+    expect(String(browse.content)).toContain("mcp__calendar__create_event");
+    expect(expanded.size).toBe(0);
+
     const out = await search.execute({ query: "calendar" });
     expect(out.isError).toBeFalsy();
     expect(expanded.has("mcp__calendar__create_event")).toBe(true);

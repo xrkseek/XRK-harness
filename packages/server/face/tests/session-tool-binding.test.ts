@@ -116,8 +116,8 @@ describe("FaceRuntime.bindSessionAgent", () => {
     expect(subscribed).toBe(2);
   });
 
-  it("keeps child sessions off parent-facing thread tools", () => {
-    const runtime = createBareFaceRuntime();
+  it("gives peer-collab children ownLane thread tools (not parent pin of peers)", () => {
+    const runtime = createBareFaceRuntime({ defaultAgentPreset: "harness" });
     const tools = createToolRegistry();
     runtime.subagents.attach({
       childSessionId: "sess-child",
@@ -129,7 +129,10 @@ describe("FaceRuntime.bindSessionAgent", () => {
       toolSurface: "minimal",
     } as never);
     runtime.bindSessionAgent("sess-child", hostShapedAgent(tools));
-    expect(tools.get("thread_upsert")).toBeUndefined();
+    // Own 主线 for discovery — not messageOnly.
+    expect(tools.get("thread_upsert")).toBeDefined();
+    expect(tools.get("thread_list")).toBeDefined();
+    expect(tools.get("thread_message")).toBeDefined();
     expect(tools.get("team_save")).toBeUndefined();
     expect(tools.get("team_import")).toBeUndefined();
     expect(tools.get("ask")).toBeDefined();
@@ -140,5 +143,77 @@ describe("FaceRuntime.bindSessionAgent", () => {
     expect(tools.get("workspace_create")).toBeUndefined();
     expect(tools.get("presence_set")).toBeDefined();
     expect(tools.get("team_list")).toBeDefined();
+  });
+
+  it("keeps minimal-badge children off peer thread tools", () => {
+    const runtime = createBareFaceRuntime({ defaultAgentPreset: "minimal" });
+    const tools = createToolRegistry();
+    runtime.subagents.attach({
+      childSessionId: "sess-min-child",
+      parentSessionId: "sess-min-parent",
+      role: "worker",
+      status: "idle",
+      startedAt: 0,
+      mode: "in-process",
+      toolSurface: "minimal",
+    } as never);
+    runtime.bindSessionAgent("sess-min-child", hostShapedAgent(tools));
+    expect(tools.get("thread_upsert")).toBeUndefined();
+    expect(tools.get("thread_message")).toBeUndefined();
+  });
+
+  it("gives agent-home identity seats team_list + team_self (not full mint)", () => {
+    const runtime = createBareFaceRuntime({ defaultAgentPreset: "harness" });
+    const member = runtime.agentRoster.upsertAtScope(
+      runtime.workspaces.defaultId(),
+      "global",
+      {
+        name: "Home Scout",
+        playbook: "Stay home.",
+        role: "worker",
+      },
+    );
+    expect(member).toBeTruthy();
+    runtime.sessionIdentities.bind({
+      sessionId: "sess-home",
+      memberId: member!.id,
+      workspaceId: runtime.workspaces.defaultId(),
+    });
+    const tools = createToolRegistry();
+    runtime.bindSessionAgent("sess-home", hostShapedAgent(tools));
+    expect(tools.get("team_list")).toBeDefined();
+    expect(tools.get("team_self")).toBeDefined();
+    expect(tools.get("team_save")).toBeUndefined();
+    expect(tools.get("team_import")).toBeUndefined();
+    expect(tools.get("team_remove")).toBeUndefined();
+  });
+
+  it("gives member_id children team_self even when office is off (minimal)", () => {
+    const runtime = createBareFaceRuntime({ defaultAgentPreset: "minimal" });
+    const member = runtime.agentRoster.upsertAtScope(
+      runtime.workspaces.defaultId(),
+      "global",
+      {
+        name: "Thin Scout",
+        playbook: "Thin.",
+        role: "worker",
+      },
+    );
+    expect(member).toBeTruthy();
+    runtime.subagents.attach({
+      childSessionId: "sess-mem-child",
+      parentSessionId: "sess-mem-parent",
+      role: "worker",
+      status: "idle",
+      startedAt: 0,
+      mode: "in-process",
+      toolSurface: "minimal",
+      memberId: member!.id,
+    } as never);
+    const tools = createToolRegistry();
+    runtime.bindSessionAgent("sess-mem-child", hostShapedAgent(tools));
+    expect(tools.get("team_list")).toBeDefined();
+    expect(tools.get("team_self")).toBeDefined();
+    expect(tools.get("team_save")).toBeUndefined();
   });
 });

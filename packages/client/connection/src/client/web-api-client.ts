@@ -10,6 +10,24 @@ type SocketItem<F> = { kind: 'frame'; envelope: RpcRequest<F> } | { kind: 'end' 
 type Parser<F> = { parse(value: unknown): F }
 
 /**
+ * Face WS app-level keepalive cadence (text `: keepalive`, same interval as
+ * SSE comment keepalives). Protocol Ping/Pong is invisible to the browser
+ * `message` handler, so this is what the client idle watchdog measures.
+ */
+export const WS_DOWNLINK_KEEPALIVE_INTERVAL_MS = 15_000
+
+/**
+ * Idle deadline for one WebSocket downlink. Three missed app keepalives —
+ * mirrors SSE `SSE_IDLE_TIMEOUT_MS` so a half-open socket (TCP still up,
+ * no Face frames) fails into reconnect instead of leaving optimistic
+ * `running` / 「思考中」 stuck forever on Mobile / Web.
+ */
+export const WS_DOWNLINK_IDLE_TIMEOUT_MS = WS_DOWNLINK_KEEPALIVE_INTERVAL_MS * 3
+
+/** Face app keepalive text (SSE uses the same comment body). */
+const WS_APP_KEEPALIVE_PREFIX = ':'
+
+/**
  * Browser platform subclass: unary/respond use fetch; mux/host use WebSocket
  * on http(s), or SSE on Desktop `xrk-app://` (no WS upgrade over custom protocol).
  */
@@ -74,13 +92,48 @@ export class WebApiClient extends AbstractApiClient {
     const socket = new WebSocket(url)
     const inbox: SocketItem<F>[] = []
     let wake: (() => void) | undefined
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    let idleError: Error | undefined
+    const clearIdle = (): void => {
+      if (idleTimer === undefined) return
+      clearTimeout(idleTimer)
+      idleTimer = undefined
+    }
+    const armIdle = (): void => {
+      clearIdle()
+      if (signal.aborted || idleError !== undefined) return
+      idleTimer = setTimeout(() => {
+        idleError = new Error(
+          `downlink idle for ${WS_DOWNLINK_IDLE_TIMEOUT_MS}ms on ${path}: expected app traffic every ${WS_DOWNLINK_KEEPALIVE_INTERVAL_MS}ms`,
+        )
+        wake?.()
+        wake = undefined
+        if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+          socket.close()
+        }
+      }, WS_DOWNLINK_IDLE_TIMEOUT_MS)
+    }
+    const noteActivity = (): void => {
+      if (idleError !== undefined) return
+      armIdle()
+    }
     const enqueue = (item: SocketItem<F>): void => {
       inbox.push(item)
       wake?.()
       wake = undefined
     }
-    const handleOpen = (): void => { onOpen?.() }
+    const handleOpen = (): void => {
+      noteActivity()
+      onOpen?.()
+    }
     const handleMessage = (event: MessageEvent): void => {
+      // Any app byte (including Face `: keepalive`) proves the channel is live.
+      // Protocol Ping/Pong never lands here — without this, a quiet-but-TCP-up
+      // socket leaves optimistic running chrome stuck on Mobile / Web.
+      noteActivity()
+      if (typeof event.data === 'string' && event.data.startsWith(WS_APP_KEEPALIVE_PREFIX)) {
+        return
+      }
       let full: ServerRequest
       let frame: F
       try {
@@ -110,9 +163,12 @@ export class WebApiClient extends AbstractApiClient {
           if (item.kind === 'end') return
           yield item.envelope
         }
+        if (idleError !== undefined) throw idleError
         await new Promise<void>((resolve) => { wake = resolve })
+        if (idleError !== undefined) throw idleError
       }
     } finally {
+      clearIdle()
       signal.removeEventListener('abort', handleAbort)
       socket.removeEventListener('open', handleOpen)
       socket.removeEventListener('message', handleMessage)

@@ -51,6 +51,7 @@ export {
   formatSubagentStopNotice,
   formatSubagentUserPromptNotice,
   lastAssistantBodyText,
+  subagentNoticeSource,
   type ChildOutcome,
   type ChildOutcomeKind,
   type SubagentStopReason,

@@ -11,6 +11,7 @@ import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 
 /** 干员家 identity seat — badge may still say harness; lane ≠ 项目经理. */
+// Lanes verbs live only in <session_lanes> (一事一处 — do not restate here).
 const AGENT_HOME_POSTURE = [
   "kind=coding_parent (干员家) · path=open",
   "Peer: workspace_session_prompt → thread_message (homes + 向阳 only). Never project coding. Mint/settings → 向阳.",
@@ -18,7 +19,7 @@ const AGENT_HOME_POSTURE = [
 
 const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
   // Identity/report lives in <seat_identity>; this card is verbs only.
-  // Lane rules live on the collab board — posture = dispatch chain.
+  // Lane state + switch verbs → <session_lanes>. Board → ids.
   // Frugal / Shell: no card — surface_brief + board already say no spawn.
   im: [
     "kind=orchestrator (IM) · path=open",

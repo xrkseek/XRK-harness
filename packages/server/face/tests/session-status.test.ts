@@ -389,6 +389,13 @@ describe("session status snapshot", () => {
       parentLabel: "向日葵（xrkseek）",
       parentMemberId: "mem_seed_xrkseek",
       childSeat: "agent",
+      parents: [
+        {
+          sessionId: parent,
+          label: "向日葵（xrkseek）",
+          memberId: "mem_seed_xrkseek",
+        },
+      ],
     });
     // Xiangyang-spawned child: left seat is 向日葵（xrkseek）, not 老板.
     expect(buildSessionStatusSnapshot(runtime, untitled).parentCompanionBall).toEqual(
@@ -456,6 +463,13 @@ describe("session status snapshot", () => {
       parentLabel: "向日葵（xrkseek）",
       parentMemberId: "mem_seed_xrkseek",
       childSeat: "agent",
+      parents: [
+        {
+          sessionId: home,
+          label: "向日葵（xrkseek）",
+          memberId: "mem_seed_xrkseek",
+        },
+      ],
     });
     const leafSnap = buildSessionStatusSnapshot(runtime, leaf);
     expect(leafSnap.parentCompanionBall).toEqual({ shape: "wedge", color: "sage" });
@@ -471,6 +485,17 @@ describe("session status snapshot", () => {
       parentLabel: "发版员",
       childSeat: "agent",
       childMemberId: "mem_seed_researcher",
+      parents: [
+        {
+          sessionId: home,
+          label: "向日葵（xrkseek）",
+          memberId: "mem_seed_xrkseek",
+        },
+        {
+          sessionId: mid,
+          label: "发版员",
+        },
+      ],
     });
     expect(formatSessionStatusText(leafSnap)).toContain("delegate: 发版员 → 调研员");
   });

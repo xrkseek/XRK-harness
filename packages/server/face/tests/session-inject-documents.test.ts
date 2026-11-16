@@ -13,6 +13,8 @@ import {
   SESSION_BOSS_STATUS_PATH,
   SESSION_CAPABILITY_PATH,
   SESSION_COLLAB_PATH,
+  SESSION_LANES_PATH,
+  SESSION_MEMORY_PATH,
   SESSION_POSTURE_PATH,
   SESSION_SEAT_IDENTITY_PATH,
 } from "../src/session-inject-documents.js";
@@ -56,9 +58,11 @@ describe("session inject documents", () => {
       SESSION_AUTHORITY_PATH,
       SESSION_CAPABILITY_PATH,
       SESSION_POSTURE_PATH,
+      SESSION_LANES_PATH,
       SESSION_BOSS_STATUS_PATH,
       SESSION_SEAT_IDENTITY_PATH,
       SESSION_COLLAB_PATH,
+      SESSION_MEMORY_PATH,
     ]);
     const cap = docs.find((d) => d.path === SESSION_CAPABILITY_PATH);
     expect(cap).toMatchObject({
@@ -107,6 +111,11 @@ describe("session inject documents", () => {
     expect(
       readSessionInjectDocument(runtime, sessionId, SESSION_COLLAB_PATH)?.content,
     ).toContain("<external_collab_board>");
+    const memory = docs.find((d) => d.path === SESSION_MEMORY_PATH);
+    expect(memory).toMatchObject({ layer: "session", kind: "session-memory" });
+    expect(
+      readSessionInjectDocument(runtime, sessionId, SESSION_MEMORY_PATH)?.content,
+    ).toContain("<session_memory>");
   });
 
   it("injects coding_parent posture for harness badges", async () => {

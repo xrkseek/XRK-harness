@@ -39,7 +39,7 @@ export function FileCard({ file, upload, labels, onRemove, onRetry }: {
   const status = failed
     ? upload.message || labels.failed
     : uploading
-      ? labels.uploading
+      ? (progress === null ? labels.uploading : `${labels.uploading.replace(/…$|\.\.\.$/, '')} ${progress}%`)
       : [fileExtension(name).toUpperCase().slice(0, 8), fileSizeText(file.size)]
         .filter(Boolean).join(' ')
 

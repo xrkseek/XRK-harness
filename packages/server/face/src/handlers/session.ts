@@ -7,7 +7,7 @@ import {
   truncateSession,
   withdrawAdmit,
 } from "@xrkseek/core-session";
-import { forgetRequestHeaderCache } from "@xrkseek/core-agent-loop";
+import { forgetSessionProcessCaches } from "@xrkseek/core-agent-loop";
 import { resetFaceStateAfterLogCut } from "../log-cut-reset.js";
 import {
   type AgentCancelCause,
@@ -25,6 +25,7 @@ import {
   appearanceLookWire,
   effectiveMemberBasePreset,
 } from "../agent-roster-store.js";
+import { deliverPeerCollabStopHandoffs } from "../peer-collab-handoff.js";
 import { formatPeerCollabStopNotice } from "../session-thread-message.js";
 import { sessionIdsOnThread } from "../session-thread-publish.js";
 import {
@@ -428,7 +429,7 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     }
   } catch (err) {
     runtime.store.delete?.(sessionId);
-    forgetRequestHeaderCache(sessionId);
+    forgetSessionProcessCaches(sessionId);
     slot.release();
     return {
       ok: false,
@@ -1063,18 +1064,26 @@ function collabStopWhy(cause: AgentCancelCause): string {
   return `stopped by a hook (${cause.reason})`;
 }
 
-/** Steer every other parent on the same 主线 when this session is cut off. */
+/**
+ * Steer every other parent on the same 主线 when this session is cut off.
+ * Skip waiters that already get the richer stop handoff (partial answer).
+ */
 function notifyThreadCollabStopped(
   runtime: FaceRuntime,
   sessionId: string,
   cause: AgentCancelCause,
+  skipSessionIds?: ReadonlySet<string>,
 ): void {
   const workspaceId = runtime.workspaces.workspaceIdOf(sessionId);
   if (!workspaceId) return;
   const bind = runtime.sessionThreads.bindOf(workspaceId, sessionId);
   if (!bind) return;
-  const peers = sessionIdsOnThread(runtime, workspaceId, bind.threadId)
-    .filter((id) => id !== sessionId && !runtime.subagents.getByChild(id));
+  const peers = sessionIdsOnThread(runtime, workspaceId, bind.threadId).filter(
+    (id) =>
+      id !== sessionId &&
+      !runtime.subagents.getByChild(id) &&
+      !skipSessionIds?.has(id),
+  );
   if (peers.length === 0) return;
   const text = formatPeerCollabStopNotice({
     sessionId,
@@ -1130,13 +1139,29 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   killLiveSessionJobs(runtime.shell, sessionId);
   runtime.publishJobs(sessionId);
   const childLink = runtime.subagents.getByChild(sessionId);
+  // one-shot + continuable: Stop / interrupt must still courier the parent
+  // (partial answer + why stopped). Fork children are not delegated workers.
   if (
-    childLink?.mode === "continuable" &&
+    childLink &&
+    childLink.mode !== "fork" &&
     (cause.kind === "user" || cause.kind === "parent")
   ) {
     runtime.notifyOwnedSubagentStopped(sessionId, cause.kind);
   } else if (!childLink) {
-    notifyThreadCollabStopped(runtime, sessionId, cause);
+    const armedWaiters = runtime.peerCollabWaiters
+      .listForPeer(sessionId)
+      .map((w) => w.waiterSessionId);
+    deliverPeerCollabStopHandoffs(
+      runtime,
+      sessionId,
+      collabStopWhy(cause),
+    );
+    notifyThreadCollabStopped(
+      runtime,
+      sessionId,
+      cause,
+      new Set(armedWaiters),
+    );
   }
   // Delegated workers are independent sessions. Stopping, archiving, or
   // deleting this session must not abort them; they finish and reply on
@@ -1219,7 +1244,7 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
   } catch {
     /* best-effort */
   }
-  forgetRequestHeaderCache(sessionId);
+  forgetSessionProcessCaches(sessionId);
   const sets = runtime.workspaces.forgetSession(sessionId);
   runtime.sessionIdentities.forget(sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
@@ -1458,7 +1483,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     }
   } catch (err) {
     runtime.store.delete?.(child.id);
-    forgetRequestHeaderCache(child.id);
+    forgetSessionProcessCaches(child.id);
     forkSlot.release();
     return {
       ok: false,

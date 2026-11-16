@@ -8,6 +8,7 @@
 
 import { memo, useState } from 'react'
 import type { CompactionSummaryNode } from '@xrkseek/client-runtime/client'
+import { projectTranscriptChrome } from '@xrkseek/client-runtime/client'
 import {
   IconApiOutlineRegular,
   IconChevronDownOutlineRegular,
@@ -51,8 +52,9 @@ export const CompactionItem = memo(function CompactionItem({
   // Auto markers (no command title) nudge Settings when soft/window look wrong
   // after proactive compact; manual `/compact` keeps the row quiet.
   const showSettingsHint = title === undefined
+  const chrome = projectTranscriptChrome({ surface: 'compaction' })
   return (
-    <div className={css.compactionRow}>
+    <div className={css.compactionRow} data-voice={chrome.voice} data-lane={chrome.lane}>
       <button
         type="button"
         className={css.compactionButton}

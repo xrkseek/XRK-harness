@@ -694,6 +694,46 @@ export function TeamRoster({
     })
   }, [open, sessionId])
 
+  // Soft-poll while open: AGENTS.md / pack playbook writes hot-sync on Face,
+  // but the panel only reloaded on open / local save — keep the playbook field
+  // live unless the operator has an unsaved draft in the textarea.
+  const membersRef = useRef(members)
+  membersRef.current = members
+  useEffect(() => {
+    if (!open || sessionId === undefined) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const next = await listTeam(sessionId)
+        if (cancelled) return
+        const prev = membersRef.current
+        const selectedPrev = selectedId
+          ? prev.find((row) => row.id === selectedId)
+          : undefined
+        const selectedNext = selectedId
+          ? next.find((row) => row.id === selectedId)
+          : undefined
+        setMembers(next)
+        if (
+          selectedPrev
+          && selectedNext
+          && selectedPrev.playbook !== selectedNext.playbook
+        ) {
+          const prevBook = selectedPrev.playbook ?? ''
+          const nextBook = selectedNext.playbook ?? ''
+          setPlaybook((draft) => (draft === prevBook ? nextBook : draft))
+        }
+      } catch {
+        // Quiet: the next tick or a local save will retry.
+      }
+    }
+    const timer = window.setInterval(() => { void tick() }, 2500)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [open, sessionId, listTeam, selectedId])
+
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
     setError(null)

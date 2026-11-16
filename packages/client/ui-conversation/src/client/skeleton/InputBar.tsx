@@ -372,7 +372,15 @@ export const InputBar = memo(function InputBar({
       document.documentElement.hasAttribute('data-xrk-shell-keyboard')
       || document.documentElement.hasAttribute('data-xrk-layout-phone')
     )
-    const largeKey = mobileShell ? 'file.largeNeedsWorkspace' : 'file.largeNeedsDesktop'
+    const remoteHttp = typeof document !== 'undefined'
+      && document.documentElement.hasAttribute('data-xrk-host-http')
+    // Local mobile can stage oversized into guest inbox; remote HTTP cannot
+    // (no resumable paperclip upload) — ask for workspace @path instead.
+    const largeKey = remoteHttp
+      ? 'file.largeNeedsRemote'
+      : mobileShell
+        ? 'file.largeNeedsWorkspace'
+        : 'file.largeNeedsDesktop'
     const rejected = ((): string | null => {
       const imageTypes = imageLimits?.mediaTypes as readonly string[] | undefined
       const imageFiles = imageTypes === undefined

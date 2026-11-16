@@ -50,6 +50,8 @@ describe("Face parent-ask (child → parent AI)", () => {
     expect(questions.listPending("parent_1")).toHaveLength(0);
     expect(notices[0]).toContain("<child_ask");
     expect(notices[0]).toContain("answer_ask");
+    // Live ask tip stays on the notice / capability — tools[] stays byte-stable.
+    expect(parentTools.get("answer_ask")?.dynamicSchema?.()).toEqual({});
 
     const answered = await runToolDetailed({
       registry: parentTools,

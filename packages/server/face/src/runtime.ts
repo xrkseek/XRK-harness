@@ -16,6 +16,10 @@ import { echoRpcForAdmit, rebuildAdmitRpcMaps } from "./admit-rpc-rebuild.js";
 import type { AgentHandle } from "@xrkseek/core-agent";
 import { EXIT_PLAN_MODE, type ToolRegistry } from "@xrkseek/core-tools";
 import {
+  syncIdentityPlaybooksFromShellTool,
+  syncIdentityPlaybooksFromWriteTool,
+} from "./agent-identity-sync.js";
+import {
   createProviderRegistry,
   type ProviderRegistry,
 } from "@xrkseek/llm-registry";
@@ -47,17 +51,16 @@ import {
   formatJobCompletionNotice,
   isSettledJobStatus,
   jobViews,
-  JOB_COMPLETION_MAX_WAKES,
   type FaceJobsSource,
   type JobView,
 } from "./adapt/job-view.js";
 import { wireJobSessionJournal } from "./job-session-journal.js";
 import {
   formatSubagentCompletionNotice,
+  subagentNoticeSource,
   formatSubagentStopNotice,
   formatSubagentUserPromptNotice,
   lastAssistantBodyText,
-  lastTurnEndReason,
   type SubagentStopReason,
 } from "./adapt/subagent-notice.js";
 import { resolveSessionModelSelection } from "./model-catalog.js";
@@ -105,6 +108,10 @@ import {
   applyDelegatedInheritMask,
   applyRosterToolPolicy,
 } from "./agent-roster-store.js";
+import {
+  FacePeerCollabWaiters,
+  deliverPeerCollabIdleHandoffs,
+} from "./peer-collab-handoff.js";
 import {
   FaceParentAskBroker,
   bindAskParentTool,
@@ -501,10 +508,20 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const sessionIdentities = new FaceSessionIdentityStore(
     sessionIdentitiesPath(productHome),
   );
+  const peerCollabWaiters = new FacePeerCollabWaiters();
   const presence = new FacePresenceStore();
   const wireIds = new FaceWireIdMaps();
   const toolArgMaps = new FaceToolArgMaps();
   const inboxWire = new FaceInboxWireMaps(admitRpcMap);
+  /**
+   * Pending write-tool args keyed by `${sessionId}:${stepId}` so a successful
+   * `tool/result` can hot-sync agent-home AGENTS.md / pack playbook.md.
+   * Declared before eviction so the LRU callback can clear without TDZ.
+   */
+  const pendingIdentityWrites = new Map<
+    string,
+    { readonly name: string; readonly args: unknown }
+  >();
   /** Filled after `invalidateAgent` is defined — drop cached AgentHandle on LRU. */
   const onResidentEvict: {
     fn?: (sessionId: string) => void | Promise<void>;
@@ -527,7 +544,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       toolArgMaps.clear(sessionId);
       wireIds.clear(sessionId);
       inboxWire.clear(sessionId);
-      toolDisclosure.forget(sessionId);
+      // Keep toolDisclosure across resident remount — expand names are tiny and
+      // dropping them shrinks tools[] while series-baseline / request-header
+      // caches stay (KV + model schema mismatch). Cleared on delete / log cut.
       // Once grants are memory-only; permanent rows rehydrate from the log on
       // next history/open (same pattern as wireIds.primeFromLog).
       pathAllowlist.forget(sessionId);
@@ -540,6 +559,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       sessionImageScanned.delete(sessionId);
       presence.forget(sessionId);
       turnUiIdle.delete(sessionId);
+      for (const key of [...pendingIdentityWrites.keys()]) {
+        if (key.startsWith(`${sessionId}:`)) pendingIdentityWrites.delete(key);
+      }
       void onResidentEvict.fn?.(sessionId);
     });
   }
@@ -548,8 +570,6 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const jobUnsubs = new Map<string, () => void>();
   /** Job ids already notified (or already settled at bind). */
   const reportedJobIds = new Map<string, Set<string>>();
-  /** Consecutive completion-wakes since the last human-promoted admit. */
-  const spentWakes = new Map<string, number>();
   const noticeAdmitIds = new Set<string>();
   /** Optimistic Stop: Status turnActive false while drain join still held. */
   const turnUiIdle = new Set<string>();
@@ -684,9 +704,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
 
   /**
-   * DSH tool-jobs `onJobDone`: idle + wake budget → steer + wake;
-   * busy → steer (+ wake, promotes at next tool-step / turn boundary);
-   * idle over budget → steer only (waits for other wake).
+   * DSH tool-jobs `onJobDone`: always steer + wake (busy or idle).
+   * Wake budget was dropped — an idle parent after spawn must still run a
+   * follow-up turn for the completion notice (same contract as subagent handoff).
    *
    * Steer matches Codex inject-into-running-turn: background jobs exist so the
    * agent can read results without waiting in the user FIFO queue.
@@ -706,10 +726,6 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         continue;
       }
       reported.add(job.id);
-      const idle = !agent.isBusy();
-      const spent = spentWakes.get(sessionId) ?? 0;
-      const followup = idle && spent < JOB_COMPLETION_MAX_WAKES;
-      if (followup) spentWakes.set(sessionId, spent + 1);
       const receipt = agent.admit(
         formatJobCompletionNotice(job, job.outputLimitBytes),
         {
@@ -717,7 +733,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         },
       );
       noticeAdmitIds.add(receipt.admitId);
-      if (followup || !idle) options.drain.wake(sessionId);
+      options.drain.wake(sessionId);
     }
     reportedJobIds.set(sessionId, reported);
   };
@@ -756,7 +772,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
    */
   const deliverOwnedSubagentCompletion = (childSessionId: string): void => {
     const link = subagents.getByChild(childSessionId);
-    if (!link || link.mode !== "continuable") return;
+    // Continuable and one-shot both hand off via steer — tool results no longer
+    // carry the answer body (single channel).
+    if (!link || (link.mode !== "continuable" && link.mode !== "one-shot")) return;
     if (suppressSubagentCompletion.has(childSessionId)) return;
     if (reportedSubagentIdle.has(childSessionId)) return;
     reportedSubagentIdle.add(childSessionId);
@@ -769,21 +787,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         if ((subagentIdleEpoch.get(childSessionId) ?? 0) !== epoch) return;
         if (suppressSubagentCompletion.has(childSessionId)) return;
         if (!reportedSubagentIdle.has(childSessionId)) return;
-        const idle = !parent.isBusy();
         const events = readEvents(childSessionId);
         // A seeded child's log starts with the parent's transcript: answer
         // extraction must slice at the fork boundary or the parent's own last
         // reply is reported as the child's. Mirrors the foreground path.
         const owned = subagentOwnedEvents(link, events);
-        // Unexpected ends (max-tokens, abort, error, interrupt) always wake an
-        // idle parent. A clean finish stays under the shared auto-wake budget.
-        const endReason = lastTurnEndReason(owned);
-        const unexpected = endReason !== undefined && endReason.kind !== "completed";
-        const spent = spentWakes.get(parentId) ?? 0;
-        const followup = idle && (unexpected || spent < JOB_COMPLETION_MAX_WAKES);
-        if (followup && spent < JOB_COMPLETION_MAX_WAKES) {
-          spentWakes.set(parentId, spent + 1);
-        }
         const preview = lastAssistantBodyText(owned);
         const answer = preview
           ? boundChildAnswer(link.parentSessionId, childSessionId, preview)
@@ -791,9 +799,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         // Which route the child actually ran on — a parent that only sees
         // "(QUOTA)" cannot name the model it has to move the child off.
         const childRoute = resolveSessionModelSelection(runtime, childSessionId);
+        // Body lives only on this steer (tools must not duplicate answers).
+        // Always wake (idle parent after spawn must still receive the handoff).
         const receipt = parent.admit(
           formatSubagentCompletionNotice(link, owned, answer, childRoute),
-          { delivery: "steer" },
+          { delivery: "steer", source: subagentNoticeSource(link) },
         );
         noticeAdmitIds.add(receipt.admitId);
         subagentIdleFailCount.delete(childSessionId);
@@ -818,11 +828,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             ? { schemaErrors }
             : {}),
         });
-        // Idle parent: wake under the auto-turn budget — a spawned child
-        // finishing is exactly the "work this turn was waiting on" case.
-        // Busy parent: wake too, so the steer lands at the next tool-step
-        // boundary. Both wake paths are already steered, never queued.
-        if (followup || !idle) options.drain.wake(parentId);
+        options.drain.wake(parentId);
       })
       .catch(() => {
         if ((subagentIdleEpoch.get(childSessionId) ?? 0) !== epoch) return;
@@ -858,7 +864,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   ): void => {
     suppressOwnedSubagentCompletion(childSessionId);
     const link = subagents.getByChild(childSessionId);
-    if (!link || link.mode !== "continuable") return;
+    // Continuable + one-shot both use the courier handoff (v0.8 single
+    // channel). Skipping one-shot here + suppress above stranded interrupt
+    // with neither a stop notice nor a later completion notice.
+    if (!link || (link.mode !== "continuable" && link.mode !== "one-shot")) {
+      return;
+    }
     if (stopNoticeSent.has(childSessionId)) return;
     stopNoticeSent.add(childSessionId);
     const parentId = link.parentSessionId;
@@ -874,12 +885,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         const childRoute = resolveSessionModelSelection(runtime, childSessionId);
         const receipt = parent.admit(
           formatSubagentStopNotice(link, reason, owned, answer, childRoute),
-          { delivery: "steer" },
+          { delivery: "steer", source: subagentNoticeSource(link) },
         );
         noticeAdmitIds.add(receipt.admitId);
-        // A human or parent stop is not a job-completion burst. Always wake,
-        // even when the auto-wake budget is already spent, so an idle parent
-        // actually receives the user-identity notice.
+        // Always wake so an idle parent actually receives the courier notice.
         options.drain.wake(parentId);
       })
       .catch(() => undefined);
@@ -1064,6 +1073,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         // may bind without a prior session.history — restore from the log now.
         if (store.has(sessionId)) {
           pathAllowlist.hydrate(store, sessionId);
+          // Restore tool_search expands after Host restart (header.tools).
+          toolDisclosure.hydrate(store, sessionId);
           if (!wireIds.isPrimed(sessionId)) {
             wireIds.primeFromLog(sessionId, readEvents(sessionId));
           }
@@ -1180,11 +1191,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               mode: "coding",
             });
           } else if (delegatedChild && peerCollab && childLink) {
-            // Sibling collab only — not the parent 主线 catalog.
+            // Own 主线 + sibling mail — cannot pin peer session_ids.
             bindSessionThreadTools(agent.tools, {
               runtime,
               sessionId,
-              messageOnly: true,
+              ownLane: true,
             });
             // A dispatched 干员 keeps its 公文包 and may still open a session
             // in an agent-home (same collab lane) and leave a peer a first
@@ -1199,23 +1210,43 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               });
             }
           }
-          if (delegatedChild && childLink) {
-            if (officeOn) {
+          // Roster surface (self-consistent):
+          // - 向阳/IM/coding 经理 (office): full team_* (mint / install / remove)
+          // - agent-home identity seat: listOnly + team_self (revise self only)
+          // - delegated child with member_id: listOnly + team_self
+          // - delegated child without member_id: listOnly when office is on
+          {
+            const identityMemberId =
+              runtime.sessionIdentities.get(sessionId)?.memberId?.trim() ||
+              undefined;
+            const childMemberId =
+              delegatedChild &&
+              typeof childLink?.memberId === "string" &&
+              childLink.memberId.trim()
+                ? childLink.memberId.trim()
+                : undefined;
+            if (delegatedChild && childLink) {
+              if (childMemberId || officeOn) {
+                bindAgentRosterTools(agent.tools, {
+                  runtime,
+                  sessionId,
+                  listOnly: true,
+                  ...(childMemberId ? { selfMemberId: childMemberId } : {}),
+                });
+              }
+            } else if (identityMemberId) {
               bindAgentRosterTools(agent.tools, {
                 runtime,
                 sessionId,
                 listOnly: true,
-                ...(typeof childLink.memberId === "string" &&
-                childLink.memberId.trim()
-                  ? { selfMemberId: childLink.memberId.trim() }
-                  : {}),
+                selfMemberId: identityMemberId,
+              });
+            } else if (officeOn) {
+              bindAgentRosterTools(agent.tools, {
+                runtime,
+                sessionId,
               });
             }
-          } else if (officeOn) {
-            bindAgentRosterTools(agent.tools, {
-              runtime,
-              sessionId,
-            });
           }
           if (officeOn) {
             bindPresenceTools(agent.tools, {
@@ -1277,7 +1308,6 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         jobUnsubs.delete(sessionId);
         rememberedJobs.delete(sessionId);
         reportedJobIds.delete(sessionId);
-        spentWakes.delete(sessionId);
         reportedSubagentIdle.delete(sessionId);
         subagentIdleEpoch.delete(sessionId);
         subagentIdleFailCount.delete(sessionId);
@@ -1396,7 +1426,58 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       next = { ...next, messageId: newUserMessageId() };
     }
 
+    if (
+      !replayingLog &&
+      next.type === "tool/call" &&
+      (next.call.name === "write_file" ||
+        next.call.name === "apply_edit" ||
+        next.call.name === "apply_patch" ||
+        next.call.name === "bash" ||
+        next.call.name === "shell" ||
+        next.call.name === "exec_command")
+    ) {
+      pendingIdentityWrites.set(`${id}:${next.stepId}`, {
+        name: next.call.name,
+        args: next.call.arguments,
+      });
+    }
+
     const frozen = originalAppend(id, next);
+    // Hot sync: agent-homes/<id>/AGENTS.md write → roster + pack playbook.
+    if (!replayingLog && frozen.type === "tool/result") {
+      const key = `${id}:${frozen.stepId}`;
+      const pending = pendingIdentityWrites.get(key);
+      pendingIdentityWrites.delete(key);
+      if (
+        pending &&
+        frozen.result.isError !== true &&
+        runtimeBox.current
+      ) {
+        const resolveCwd = (sessionId: string) =>
+          resolveSessionCwd(runtimeBox.current!, sessionId);
+        if (
+          pending.name === "bash" ||
+          pending.name === "shell" ||
+          pending.name === "exec_command"
+        ) {
+          syncIdentityPlaybooksFromShellTool(
+            runtimeBox.current,
+            id,
+            pending.name,
+            pending.args,
+            resolveCwd,
+          );
+        } else {
+          syncIdentityPlaybooksFromWriteTool(
+            runtimeBox.current,
+            id,
+            pending.name,
+            pending.args,
+            resolveCwd,
+          );
+        }
+      }
+    }
     if (
       (frozen.type === "user/message" || frozen.type === "prompt/admitted")
       && frozen.content !== undefined
@@ -1466,8 +1547,6 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     if (frozen.type === "prompt/promoted") {
       if (noticeAdmitIds.has(frozen.admitId)) {
         noticeAdmitIds.delete(frozen.admitId);
-      } else {
-        spentWakes.delete(id);
       }
       // Human child follow-up → parent mirror only once this admit enters a step.
       flushOwnedSubagentUserPromptMirror(frozen.admitId, id);
@@ -1656,6 +1735,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     sessionThreads,
     agentRoster,
     sessionIdentities,
+    peerCollabWaiters,
     presence,
     wireIds,
     inboxWire,
@@ -1733,10 +1813,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         // A fresh running stretch may complete naturally again.
         suppressSubagentCompletion.delete(sessionId);
         stopNoticeSent.delete(sessionId);
+        peerCollabWaiters.markRunning(sessionId);
         return;
       }
       turnUiIdle.delete(sessionId);
       deliverOwnedSubagentCompletion(sessionId);
+      deliverPeerCollabIdleHandoffs(runtime, sessionId);
     },
     suppressOwnedSubagentCompletion,
     notifyOwnedSubagentStopped,

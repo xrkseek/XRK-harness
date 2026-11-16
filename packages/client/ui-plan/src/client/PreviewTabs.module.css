@@ -122,6 +122,38 @@
   min-width: 0;
 }
 
+/* N 委派方 (root → … → immediate) stacked left of the arrow → 1 child. */
+.delegateFromStack {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: flex-end;
+  min-width: 0;
+  width: 100%;
+}
+
+.delegateFromStack[data-count='1'] {
+  justify-content: center;
+}
+
+.delegateFromLayer {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:not(:last-child) {
+  margin-right: -28%;
+  opacity: 0.88;
+  transform: scale(0.86);
+  transform-origin: top center;
+  pointer-events: none;
+}
+
+.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:last-child {
+  position: relative;
+  z-index: 2;
+}
+
 .delegatePair:not([data-collapsed]) {
   min-height: 212px;
 }

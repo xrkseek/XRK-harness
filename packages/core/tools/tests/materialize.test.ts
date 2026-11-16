@@ -129,4 +129,45 @@ describe("materializeTools", () => {
     expect(table.list()[0]!.description).toBe("keep-me");
     expect(applyToolDynamicSchema(tool)).toBe(tool);
   });
+
+  it("skips dynamicSchema for deferred tools until expanded", () => {
+    let deferredHits = 0;
+    const reg = createToolRegistry();
+    reg.register({
+      name: "tool_search",
+      description: "search",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        return { content: "ok" };
+      },
+    });
+    reg.register({
+      name: "mcp__fat",
+      description: "deferred",
+      exposure: "deferred",
+      parameters: { type: "object", properties: {} },
+      dynamicSchema: () => {
+        deferredHits += 1;
+        return { description: "should-not-run" };
+      },
+      async execute() {
+        return { content: "ok" };
+      },
+    });
+    const hidden = materializeTools(reg, { expandedToolNames: new Set() });
+    expect(hidden.list().map((t) => t.name)).toEqual(["tool_search"]);
+    expect(deferredHits).toBe(0);
+
+    const open = materializeTools(reg, {
+      expandedToolNames: new Set(["mcp__fat"]),
+    });
+    expect(open.list().map((t) => t.name).sort()).toEqual([
+      "mcp__fat",
+      "tool_search",
+    ]);
+    expect(deferredHits).toBe(1);
+    expect(open.list().find((t) => t.name === "mcp__fat")?.description).toBe(
+      "should-not-run",
+    );
+  });
 });

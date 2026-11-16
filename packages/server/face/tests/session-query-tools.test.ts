@@ -121,7 +121,11 @@ describe("session query tools", () => {
     const searchBody = JSON.parse(String(search.content)) as {
       items: { sessionId: string }[];
     };
-    expect(searchBody.items.map((i) => i.sessionId)).toEqual([other.id]);
+    // preferSameWorkspace ranks same-cwd first, still includes other cwd hits.
+    expect(searchBody.items.map((i) => i.sessionId)).toEqual([
+      other.id,
+      outsider.id,
+    ]);
 
     const denied = await tools.get("session_read")!.execute({
       session_id: outsider.id,

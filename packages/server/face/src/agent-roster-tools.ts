@@ -39,16 +39,17 @@ import {
   materializeAgentMemberPack,
   mergeIntoMemberPack,
   notReadyPackHints,
-  readMemberPackPlaybook,
-  syncMemberPackPlaybook,
   type ParseAgentMemberPackResult,
 } from "./agent-member-pack.js";
+import {
+  adoptLiveMemberIdentityPlaybook,
+  publishMemberIdentityPlaybook,
+} from "./agent-identity-sync.js";
 import { withAdvancedPackPathGuidance } from "./capture-member-playbook.js";
 import { resolveSessionCwd } from "./session-cwd.js";
 import { referencedAttachmentIds } from "./session-attachment.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 import {
-  liveRosterCatalog,
   rosterScopeVisibility,
   teamListDescription,
 } from "./session-tool-copy.js";
@@ -85,10 +86,13 @@ export interface BindAgentRosterToolsOptions {
   readonly sessionId: string;
   /**
    * When true, skip parent mint/install/remove tools.
-   * Pass `selfMemberId` so a spawned 干员 can still revise its own playbook.
+   * Pass `selfMemberId` so a named 干员 can still revise its own playbook.
    */
   readonly listOnly?: boolean;
-  /** Child link member_id — enables `team_self` under listOnly. */
+  /**
+   * Roster member id for `team_self` under listOnly — delegated
+   * `subagent(member_id)` children **and** agent-home identity seats.
+   */
   readonly selfMemberId?: string;
 }
 
@@ -150,41 +154,7 @@ async function loadPackFromArg(
   return loadAgentMemberPack(resolvePackPath(runtime, sessionId, packRaw));
 }
 
-/**
- * Advanced pack: prefer on-disk playbook.md over lagging roster JSON, and heal
- * the roster when they diverge so the next spawn / UI list sees the same text.
- */
-function adoptLiveAdvancedPlaybook(
-  runtime: FaceRuntime,
-  canvasId: string,
-  row: ListedRosterMember,
-): ListedRosterMember {
-  if (row.kind !== "advanced") return row;
-  const rosterWs = row.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
-  const disk = readMemberPackPlaybook({
-    rosterWorkspaceId: rosterWs,
-    memberId: row.id,
-    productHome: runtime.agentRoster.home,
-  });
-  if (!disk || disk === row.playbook.trim()) return row;
-  const scope = row.scope === "global" ? "global" : "workspace";
-  const healed = runtime.agentRoster.upsertAtScope(canvasId, scope, {
-    id: row.id,
-    name: row.name,
-    playbook: disk,
-    role: isAgentTeamSpawnRole(row.role) ? row.role : "worker",
-    kind: row.kind,
-    ready: row.ready,
-    brief: row.brief,
-    inject: row.inject,
-    ...(row.tools ? { tools: row.tools } : {}),
-    appearance: row.appearance,
-  });
-  if (!healed) return row;
-  return runtime.agentRoster.get(canvasId, healed.id) ?? row;
-}
-
-/** Effective playbook for spawn / tool responses (disk wins for advanced packs). */
+/** Effective playbook for spawn / export / tool responses (disk mirrors win). */
 export function liveMemberPlaybook(
   runtime: FaceRuntime,
   canvasId: string,
@@ -192,7 +162,7 @@ export function liveMemberPlaybook(
 ): string {
   const listed: ListedRosterMember =
     "scope" in row ? row : { ...row, scope: "workspace" };
-  return adoptLiveAdvancedPlaybook(runtime, canvasId, listed).playbook;
+  return adoptLiveMemberIdentityPlaybook(runtime, canvasId, listed).playbook;
 }
 
 function enrichListedMember(
@@ -200,7 +170,7 @@ function enrichListedMember(
   canvasId: string,
   row: ListedRosterMember,
 ): Record<string, unknown> {
-  const live = adoptLiveAdvancedPlaybook(runtime, canvasId, row);
+  const live = adoptLiveMemberIdentityPlaybook(runtime, canvasId, row);
   const rosterWs = live.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
   const pub = {
     ...rosterPublicFields(live),
@@ -401,19 +371,11 @@ function patchExistingMember(
 ): ListedRosterMember | undefined {
   const name = (patch.name ?? existing.name).trim();
   const scope = existing.scope === "global" ? "global" : "workspace";
+  // Only revise playbook when explicitly passed — omit must not clobber a
+  // fresher AGENTS.md / pack playbook.md (adopt heals on read).
   let playbook = (patch.playbook ?? existing.playbook).trim();
-  if (existing.kind === "advanced") {
-    if (patch.playbook !== undefined) {
-      playbook = withAdvancedPackPathGuidance(playbook);
-    } else {
-      // Keep roster aligned with disk when the caller omits playbook.
-      const disk = readMemberPackPlaybook({
-        rosterWorkspaceId: scope === "global" ? GLOBAL_ROSTER_ID : canvasId,
-        memberId: existing.id,
-        productHome: runtime.agentRoster.home,
-      });
-      if (disk) playbook = disk;
-    }
+  if (existing.kind === "advanced" && patch.playbook !== undefined) {
+    playbook = withAdvancedPackPathGuidance(playbook);
   }
   if (!name || !playbook) return undefined;
   const inject = patch.inject ?? existing.inject;
@@ -436,16 +398,11 @@ function patchExistingMember(
     appearance: existing.appearance,
   });
   if (!member) return undefined;
-  // Only push roster → disk when playbook was explicitly revised. Omitting
-  // playbook (brief/inject/tools/skills-only) used to overwrite a fresher
-  // playbook.md with the lagging roster copy (41 skills vs 42 on disk).
-  if (existing.kind === "advanced" && patch.playbook !== undefined) {
-    const rosterWs = scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
-    syncMemberPackPlaybook({
-      rosterWorkspaceId: rosterWs,
+  if (patch.playbook !== undefined) {
+    publishMemberIdentityPlaybook(runtime, {
       memberId: member.id,
       playbook: member.playbook,
-      productHome: runtime.agentRoster.home,
+      source: "roster",
     });
   }
   return runtime.agentRoster.get(canvasId, member.id);
@@ -470,7 +427,6 @@ export function bindAgentRosterTools(
       description: teamListDescription({
         listOnly,
         ...(selfMemberId ? { selfRevise: true } : {}),
-        catalog: liveRosterCatalog(runtime, sessionId),
       }),
     }),
     execute: async () => {
@@ -487,9 +443,10 @@ export function bindAgentRosterTools(
       registerTool(tools, {
         name: "team_self",
         description:
-          "Revise YOUR 干员 surfaces (this member_id): playbook, inject, tools, brief. " +
-          "Child tool/inject surface ≠ parent. Durable for next spawn. " +
-          "Cannot mint, import, export, or edit other members.",
+          "Revise YOUR surfaces (playbook / brief / inject / tools). " +
+          "Durable for next spawn + export; also rewrites 干员家 AGENTS.md " +
+          "(+ pack playbook.md when advanced). Same fan-out if you edit AGENTS.md. " +
+          "No mint / import / export / edit others.",
         parameters: {
           type: "object",
           properties: {
@@ -568,11 +525,14 @@ export function bindAgentRosterTools(
           if (!patched) {
             return { content: "team_self: name and playbook required", isError: true };
           }
+          // Heal disk mirrors first, then public fields — never echo a stale
+          // roster playbook when the caller omitted the playbook field.
+          const playbook = liveMemberPlaybook(runtime, canvasId, patched);
           return {
             content: JSON.stringify({
               member: {
                 ...enrichListedMember(runtime, canvasId, patched),
-                playbook: patched.playbook,
+                playbook,
               },
               next: "next subagent member_id uses these surfaces; this turn already started",
             }),
@@ -781,12 +741,14 @@ export function bindAgentRosterTools(
               isError: true,
             };
           }
+          // Heal disk first (omit-playbook must not echo a stale roster copy).
+          const livePlaybook = liveMemberPlaybook(runtime, canvasId, patched);
           return {
             content: JSON.stringify({
               workspaceId: patched.scope === "global" ? "global" : canvasId,
               member: {
                 ...enrichListedMember(runtime, canvasId, patched),
-                playbook: patched.playbook,
+                playbook: livePlaybook,
               },
               kind: "advanced",
               briefcase: MEMBER_PACK_BRIEFCASE,

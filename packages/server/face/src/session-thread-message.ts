@@ -57,15 +57,18 @@ export function peerThreadMessageProblem(input: {
   return undefined;
 }
 
-/** User-identity steer back to peers when a collaborating session is cut off. */
+/**
+ * Pin-mate broadcast when a collaborating session is cut off.
+ * Waiters who armed via thread_message / workspace_session_prompt get the
+ * richer stop handoff instead (see peer-collab-handoff) — do not double-speak.
+ */
 export function formatPeerCollabStopNotice(input: {
   readonly sessionId: string;
   readonly why: string;
 }): string {
   return [
     `[会话协作] Session ${input.sessionId} ${input.why}.`,
-    "Their reply will not arrive on the turn that was waiting.",
-    "thread_message them again if you still need an answer. Do not assume the work finished.",
+    "Do not assume their work finished. thread_message again if you still need them.",
   ].join("\n");
 }
 

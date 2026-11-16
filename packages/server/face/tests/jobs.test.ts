@@ -410,7 +410,7 @@ describe("job completion notices (DSH tool-jobs wakeup)", () => {
     expect(wakes).toEqual([]);
   });
 
-  it("busy agent still wakes; over-budget idle admits without wake", async () => {
+  it("busy agent still wakes; idle always wakes (no wake budget)", async () => {
     const store = createMemorySessionStore();
     const wakes: string[] = [];
     const deliveries: string[] = [];
@@ -486,7 +486,9 @@ describe("job completion notices (DSH tool-jobs wakeup)", () => {
     expect(wakes.filter((s) => s === sessionId)).toHaveLength(3);
     wakes.length = 0;
     settle("b5");
-    expect(wakes.filter((s) => s === sessionId)).toHaveLength(0);
+    // Wake budget removed: idle parents must still turn for the notice
+    // (same contract as subagent handoff).
+    expect(wakes.filter((s) => s === sessionId)).toHaveLength(1);
     const pending = store
       .get(sessionId)
       .events.filter((e) => e.type === "prompt/admitted");

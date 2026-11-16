@@ -4,7 +4,6 @@
  */
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import {
-  listSiblingSessionIds,
   sessionToolContext,
   threadMessageDescription,
 } from "./session-tool-copy.js";
@@ -21,6 +20,11 @@ import {
   waitForPeerAssistantReply,
 } from "./peer-session-wait.js";
 import {
+  armPeerCollabAfterPrompt,
+  clearPeerCollabAfterSyncReply,
+  flushPeerCollabIfPeerIdle,
+} from "./peer-collab-handoff.js";
+import {
   formatPeerCollabPrompt,
   peerThreadMessageProblem,
   sameDelegatedParent,
@@ -35,15 +39,22 @@ import {
   isAgentHomeSession,
   refuseCrossAgentHomeLane,
 } from "./agent-home-boundary.js";
+import { readWorkspaceDiscoverySettings } from "./workspace-discovery.js";
 
 export interface BindSessionThreadToolsOptions {
   readonly runtime: FaceRuntime;
   readonly sessionId: string;
   /**
-   * Delegated children: only `thread_message` (sibling / peer-edge collab).
-   * Parents keep the full 主线 catalog + sideline tools.
+   * Legacy: only `thread_message` (sibling / peer-edge collab). Prefer
+   * {@link ownLane} so children can still mint their own 主线.
    */
   readonly messageOnly?: boolean;
+  /**
+   * Delegated children: `thread_message` + self-only 主线 tools
+   * (`thread_list` / `thread_upsert` / `thread_switch` / `thread_delete`).
+   * Cannot pin peer `session_id`s.
+   */
+  readonly ownLane?: boolean;
 }
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
@@ -93,12 +104,14 @@ export function listWorkspaceThreadCatalog(
     updatedAt: thread.updatedAt,
     sessions: binds.flatMap((row) => {
       if (row.threadId !== thread.id) return [];
-      if (runtime.subagents.getByChild(row.sessionId)) return [];
+      // Include delegated children — they mint their own 主线 for discovery.
       const sideline = sidelineOf(runtime, workspaceId, row.sessionId);
+      const child = Boolean(runtime.subagents.getByChild(row.sessionId));
       return [
         {
           sessionId: row.sessionId,
           self: row.sessionId === selfId,
+          ...(child ? { child: true as const } : {}),
           ...(sideline ? { sideline } : {}),
         },
       ];
@@ -111,8 +124,14 @@ export function bindSessionThreadTools(
   tools: ToolRegistry,
   options: BindSessionThreadToolsOptions,
 ): void {
-  const { runtime, sessionId, messageOnly = false } = options;
+  const {
+    runtime,
+    sessionId,
+    messageOnly = false,
+    ownLane = false,
+  } = options;
   const ws = () => canvasWorkspaceIdForSession(runtime, sessionId);
+  const childLane = ownLane || messageOnly;
 
   const registerThreadMessage = (): void => {
   registerTool(tools, {
@@ -120,18 +139,15 @@ export function bindSessionThreadTools(
     description:
       "Message another session by session_id. wait=true (default) returns the next assistant reply.",
     dynamicSchema: () => {
+      // Keep description free of live sibling id lists — those change every
+      // spawn and bust provider KV prefix reuse (DSH: tools[] must stay byte-stable).
       const { kind, surface } = sessionToolContext(runtime, sessionId);
-      const siblingIds =
-        messageOnly || kind === "delegated_child"
-          ? listSiblingSessionIds(runtime, sessionId)
-          : undefined;
       return {
         description: threadMessageDescription({
           kind,
-          messageOnly,
+          messageOnly: childLane,
           fromAgentHome: isAgentHomeSession(runtime, sessionId),
           ...(surface !== undefined ? { surface } : {}),
-          ...(siblingIds && siblingIds.length > 0 ? { siblingIds } : {}),
         }),
       };
     },
@@ -140,7 +156,7 @@ export function bindSessionThreadTools(
       properties: {
         session_id: {
           type: "string",
-          description: messageOnly
+          description: childLane
             ? "Sibling or peer-edge session id (turn-start squad board, session_inspect, or parent spawn ids)."
             : "Target parent session id (thread_list, collab board, workspace_session_prompt, or session_search).",
         },
@@ -171,20 +187,45 @@ export function bindSessionThreadTools(
       const targetLink = runtime.subagents.getByChild(targetId);
       const selfDelegated = Boolean(selfLink && selfLink.mode !== "fork");
       const targetDelegated = Boolean(targetLink && targetLink.mode !== "fork");
-      const siblingOk =
+      const sameParent =
         selfDelegated &&
         targetDelegated &&
-        (sameDelegatedParent(selfLink?.parentSessionId, targetLink?.parentSessionId) ||
+        sameDelegatedParent(
+          selfLink?.parentSessionId,
+          targetLink?.parentSessionId,
+        );
+      const peerLinked =
+        (selfLink &&
           teamPeerLinked(
-            runtime.agentTeams.view(selfLink!.parentSessionId).edges,
+            runtime.agentTeams.view(selfLink.parentSessionId).edges,
             sessionId,
             targetId,
-          ) ||
-          teamPeerLinked(
-            runtime.agentTeams.view(sessionId).edges,
-            sessionId,
-            targetId,
-          ));
+          )) ||
+        teamPeerLinked(
+          runtime.agentTeams.view(sessionId).edges,
+          sessionId,
+          targetId,
+        );
+      // Settings siblingScope=none: same-parent children cannot mail each other
+      // even when auto-mesh added a label=sibling peer edge. Explicit peer
+      // links between non-siblings still work.
+      const discovery = readWorkspaceDiscoverySettings(runtime);
+      const siblingOk =
+        discovery.siblingScope === "same-delegator"
+          ? Boolean(sameParent || peerLinked)
+          : Boolean(peerLinked && !sameParent);
+      // Surface the Settings knob before the generic "use send_message" path.
+      if (
+        childLane &&
+        sameParent &&
+        discovery.siblingScope === "none"
+      ) {
+        return {
+          content:
+            "thread_message: siblingScope=none — children cannot message each other (Settings → Workspace discovery)",
+          isError: true,
+        };
+      }
       const problem = peerThreadMessageProblem({
         selfId: sessionId,
         targetId,
@@ -197,7 +238,7 @@ export function bindSessionThreadTools(
       if (laneProblem) {
         return { content: `thread_message: ${laneProblem}`, isError: true };
       }
-      if (messageOnly && !siblingOk) {
+      if (childLane && !siblingOk) {
         return {
           content:
             "thread_message: delegated children may only message siblings under the same parent, or a team peer edge",
@@ -237,6 +278,14 @@ export function bindSessionThreadTools(
         return { content: formatToolError(prompted.result.error), isError: true };
       }
       const wait = a.wait !== false;
+      // One channel with subagent courier×handoff: arm always; sync success clears.
+      armPeerCollabAfterPrompt({
+        runtime,
+        peerSessionId: targetId,
+        waiterSessionId: sessionId,
+        seqAtSend,
+        wait,
+      });
       if (!wait) {
         return { content: `delivered to ${targetId} (steer)` };
       }
@@ -249,6 +298,11 @@ export function bindSessionThreadTools(
         signal,
       );
       if ("reply" in waited) {
+        clearPeerCollabAfterSyncReply({
+          runtime,
+          peerSessionId: targetId,
+          waiterSessionId: sessionId,
+        });
         return {
           content: `reply from ${targetId}:\n${boundChildAnswer(
             sessionId,
@@ -257,13 +311,15 @@ export function bindSessionThreadTools(
           )}`,
         };
       }
+      // Timeout / peer quiet — keep the arm; if already idle, flush now.
+      flushPeerCollabIfPeerIdle(runtime, targetId);
       return { content: `thread_message: ${waited.error}`, isError: true };
     },
   });
   };
 
   registerThreadMessage();
-  if (messageOnly) return;
+  if (messageOnly && !ownLane) return;
 
   registerTool(tools, {
     name: "thread_list",
@@ -312,12 +368,14 @@ export function bindSessionThreadTools(
 
   registerTool(tools, {
     name: "thread_upsert",
-    description:
-      "Create or revise a 主线 pin (title + optional brief) so siblings can find the mission on the collab board / thread_list. " +
-      "Default attaches this session in this workspace. " +
-      "Orchestrators (向阳 / IM / coding): pass session_id (+ workspace_id) to pin a peer session you opened elsewhere — " +
-      "e.g. after workspace_session_prompt returns a coding session_id. " +
-      "Not required before thread_message. Skip greetings / one-shot Q&A. Pass id to revise.",
+    description: ownLane
+      ? "Create or revise **your** 主线 pin (title + optional brief). Delegated children mint their own pin — do not copy the parent. " +
+        "Done + unused → thread_delete. Progress detail → todo_write / presence_set, not a new 主线 per micro-step."
+      : "Create or revise a 主线 pin (title + optional brief) so siblings can find the mission on the collab board / thread_list. " +
+        "Default attaches this session in this workspace. " +
+        "Orchestrators (向阳 / IM / coding): pass session_id (+ workspace_id) to pin a peer session you opened elsewhere — " +
+        "e.g. after workspace_session_prompt returns a coding session_id. " +
+        "Not required before thread_message. Skip greetings / one-shot Q&A. Pass id to revise.",
     parameters: {
       type: "object",
       properties: {
@@ -329,14 +387,20 @@ export function bindSessionThreadTools(
           description:
             "If true (default), attach the target session (this session, or session_id when set).",
         },
-        workspace_id: {
-          type: "string",
-          description: "Workspace whose catalog to write (default: this session's, or owner of session_id).",
-        },
-        session_id: {
-          type: "string",
-          description: "Parent session to bind (default: this session). Must live in workspace_id.",
-        },
+        ...(ownLane
+          ? {}
+          : {
+              workspace_id: {
+                type: "string",
+                description:
+                  "Workspace whose catalog to write (default: this session's, or owner of session_id).",
+              },
+              session_id: {
+                type: "string",
+                description:
+                  "Parent session to bind (default: this session). Must live in workspace_id.",
+              },
+            }),
       },
       required: ["title"],
       additionalProperties: false,
@@ -353,21 +417,29 @@ export function bindSessionThreadTools(
       const brief = typeof a.brief === "string" ? a.brief : "";
       const id = typeof a.id === "string" ? a.id : undefined;
       const shouldSwitch = a.switch !== false;
-      const targetSession = String(a.session_id ?? "").trim() || sessionId;
-      const requestedWs = String(a.workspace_id ?? "").trim();
+      const targetSession = ownLane
+        ? sessionId
+        : String(a.session_id ?? "").trim() || sessionId;
+      if (
+        ownLane &&
+        String(a.session_id ?? "").trim() &&
+        String(a.session_id).trim() !== sessionId
+      ) {
+        return {
+          content:
+            "thread_upsert: child own-lane cannot pin another session_id — mint your own 主线 only",
+          isError: true,
+        };
+      }
+      const requestedWs = ownLane ? "" : String(a.workspace_id ?? "").trim();
       if (!runtime.store.has(targetSession)) {
         return {
           content: `thread_upsert: unknown session_id ${targetSession}`,
           isError: true,
         };
       }
-      const childLink = runtime.subagents.getByChild(targetSession);
-      if (childLink && childLink.mode !== "fork") {
-        return {
-          content: "thread_upsert: cannot pin a subagent — pin the parent",
-          isError: true,
-        };
-      }
+      // Child sessions may mint their own 主线 (siblings discover via
+      // thread_list). Fork lineage still pins like a parent chat.
       const ownerWs = runtime.workspaces.workspaceIdOf(targetSession);
       const workspaceId = requestedWs || ownerWs || ws();
       if (requestedWs && !runtime.workspaces.get(requestedWs)) {
@@ -381,6 +453,29 @@ export function bindSessionThreadTools(
           content: `thread_upsert: session ${targetSession} is in ${ownerWs}, not ${workspaceId}`,
           isError: true,
         };
+      }
+      if (ownLane && id) {
+        const bound =
+          runtime.sessionThreads.bindOf(workspaceId, sessionId)?.threadId;
+        if (bound !== id) {
+          return {
+            content:
+              "thread_upsert: child own-lane may only revise the 主线 you are bound to",
+            isError: true,
+          };
+        }
+        // thread_switch can land a child on a parent/sibling pin — still
+        // refuse rewriting a shared mission (title/brief stay owner-owned).
+        const coBinders = sessionIdsOnThread(runtime, workspaceId, id).filter(
+          (sid) => sid !== sessionId,
+        );
+        if (coBinders.length > 0) {
+          return {
+            content:
+              "thread_upsert: child own-lane cannot revise a 主线 shared with other sessions — mint or revise your own pin",
+            isError: true,
+          };
+        }
       }
       const thread = runtime.sessionThreads.upsert(workspaceId, {
         title,
@@ -450,9 +545,11 @@ export function bindSessionThreadTools(
 
   registerTool(tools, {
     name: "thread_delete",
-    description:
-      "Delete a workspace 主线 you created and drop every session bind to it. " +
-      "Does not delete sessions. Only this workspace's catalog.",
+    description: ownLane
+      ? "Delete **your** 主线 when you are the sole session bound to it. " +
+        "Cannot delete a pin still shared with the parent or siblings."
+      : "Delete a workspace 主线 you created and drop every session bind to it. " +
+        "Does not delete sessions. Only this workspace's catalog.",
     parameters: {
       type: "object",
       properties: { id: { type: "string" } },
@@ -469,6 +566,22 @@ export function bindSessionThreadTools(
       const id = String(readArgs(args).id ?? "").trim();
       const workspaceId = ws();
       const affected = sessionIdsOnThread(runtime, workspaceId, id);
+      if (ownLane) {
+        if (!affected.includes(sessionId)) {
+          return {
+            content:
+              "thread_delete: own-lane may only delete a 主线 you are bound to",
+            isError: true,
+          };
+        }
+        if (affected.some((sid) => sid !== sessionId)) {
+          return {
+            content:
+              "thread_delete: own-lane refuses — other sessions still bound to this 主线",
+            isError: true,
+          };
+        }
+      }
       const ok = runtime.sessionThreads.remove(workspaceId, id);
       if (!ok) {
         return { content: "thread_delete: unknown 主线 id", isError: true };

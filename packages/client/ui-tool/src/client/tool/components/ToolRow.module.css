@@ -89,6 +89,17 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* present (and similar force-expanded rows): long deliverable paths wrap. */
+.root[data-force-expanded] .summary,
+.root[data-force-expanded] .fileLink {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 20px;
+}
+
 /* Trailing summary fragment kept out of .summary's ellipsis, for a count whose
    whole value is that it survives a narrow row (the todo row's parallel-active
    `+n`). Repeats .summary's type because it sits beside that text, and its

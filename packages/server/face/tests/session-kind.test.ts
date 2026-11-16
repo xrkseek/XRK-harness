@@ -94,7 +94,9 @@ describe("session kind + dynamic tool copy", () => {
       messageOnly: true,
     });
     const childMsg = applyToolDynamicSchema(childTools.get("thread_message")!);
-    expect(childMsg.description).toContain(`Live siblings: ${sibId}`);
+    // Live sibling ids stay on the squad board — not in tools[].
+    expect(childMsg.description).not.toContain(sibId);
+    expect(childMsg.description).toContain("squad board");
     expect(childMsg.description).toContain("send_message");
 
     const roster = createToolRegistry();
@@ -106,6 +108,7 @@ describe("session kind + dynamic tool copy", () => {
     const listed = applyToolDynamicSchema(roster.get("team_list")!);
     expect(listed.description).toContain("Read-only");
     expect(listed.description).toContain("mem_seed_");
+    expect(listed.description).toContain("collab board");
 
     const query = createToolRegistry();
     bindSessionQueryTools(query, { runtime, parentSessionId: childId });

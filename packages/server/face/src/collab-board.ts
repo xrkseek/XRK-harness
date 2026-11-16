@@ -13,6 +13,7 @@ import { resolveAgentPresetProfile } from "./presets-catalog.js";
 import { isAgentHomeSession } from "./agent-home-boundary.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
+import { readWorkspaceDiscoverySettings } from "./workspace-discovery.js";
 import type { FaceSubagentLink } from "./subagent-registry.js";
 
 /** Parent 主线 rows whose thread was updated in the last day. */
@@ -253,6 +254,8 @@ export interface TeamMateRow {
   readonly duty?: string;
   readonly todoOpen?: number;
   readonly sideline?: string;
+  /** Child-owned 主线 title when pinned (ownLane). */
+  readonly mainline?: string;
   readonly running?: boolean;
 }
 
@@ -271,9 +274,9 @@ export function formatTeamMateBoardText(input: {
 }): string {
   const lines = [
     `squad · parent=${input.parentSessionId} · * = you`,
-    "siblings → thread_message (no 主线 on child collab). Parent↔you = send_message / followup_task. FINAL→parent.",
+    "siblings → thread_message; each child mints its own 主线 (thread_upsert). Parent↔you = send_message / followup_task. FINAL→parent.",
     "",
-    "Teammates — id · who · duty · todo · 支线 (主线=n/a):",
+    "Teammates — id · who · duty · todo · 支线 · 主线:",
   ];
   if (input.mates.length === 0) {
     lines.push("(none)");
@@ -292,9 +295,12 @@ export function formatTeamMateBoardText(input: {
       const todos =
         mate.todoOpen !== undefined ? ` todo_open=${mate.todoOpen}` : "";
       const tip = mate.sideline ? ` 支线=${clipBrief(mate.sideline)}` : "";
+      const main = mate.mainline
+        ? ` 主线=「${clipBrief(mate.mainline)}」`
+        : " 主线=none";
       const run = mate.running ? " · running" : "";
       lines.push(
-        `- ${mate.sessionId}${mark}${who}${member}${duty}${todos}${tip} 主线=n/a${run}`,
+        `- ${mate.sessionId}${mark}${who}${member}${duty}${todos}${tip}${main}${run}`,
       );
     }
   }
@@ -315,12 +321,25 @@ function mateSideline(runtime: FaceRuntime, childId: string): string | undefined
   return tip?.trim() ? tip.trim() : undefined;
 }
 
+function mateMainline(
+  runtime: FaceRuntime,
+  childId: string,
+): string | undefined {
+  const wsId = runtime.workspaces.workspaceIdOf(childId);
+  if (!wsId) return undefined;
+  const bind = runtime.sessionThreads.bindOf(wsId, childId);
+  if (!bind) return undefined;
+  const title = runtime.sessionThreads.get(wsId, bind.threadId)?.title?.trim();
+  return title || undefined;
+}
+
 function linkToMateRow(
   runtime: FaceRuntime,
   link: FaceSubagentLink,
   selfId: string,
 ): TeamMateRow {
   const sideline = mateSideline(runtime, link.childSessionId);
+  const mainline = mateMainline(runtime, link.childSessionId);
   const todoOpen = countOpenTodos(runtime, link.childSessionId);
   let nickname: string | undefined;
   let duty: string | undefined;
@@ -348,6 +367,7 @@ function linkToMateRow(
     ...(duty ? { duty } : {}),
     ...(todoOpen !== undefined ? { todoOpen } : {}),
     ...(sideline ? { sideline } : {}),
+    ...(mainline ? { mainline } : {}),
     ...(runtime.drain.isActive(link.childSessionId) ? { running: true } : {}),
   };
 }
@@ -363,7 +383,13 @@ export function formatTeamMateBoard(
   const selfLink = runtime.subagents.getByChild(sessionId);
   if (!selfLink || selfLink.mode === "fork") return "";
   const siblings = runtime.subagents.listDelegated(selfLink.parentSessionId);
-  const mates = siblings.map((link) => linkToMateRow(runtime, link, sessionId));
+  // siblingScope=none: board shows only self (+ own task), not other children.
+  const scope = readWorkspaceDiscoverySettings(runtime).siblingScope;
+  const visible =
+    scope === "none"
+      ? siblings.filter((link) => link.childSessionId === sessionId)
+      : siblings;
+  const mates = visible.map((link) => linkToMateRow(runtime, link, sessionId));
   const task = runtime.agentTeamTasks.findByChild(sessionId);
   return formatTeamMateBoardText({
     parentSessionId: selfLink.parentSessionId,

@@ -331,6 +331,12 @@ export interface PromptAdmittedEvent extends SessionEventBase {
    * `user/message.rpcId` on promote (docs/session-delivery.md).
    */
   readonly rpcId?: string;
+  /**
+   * Durable producer of this admit. When present, promote stamps the same
+   * `source` onto `user/message` (plugin notices, auto-continue, …). Omit for
+   * ordinary human / queue prompts (`kind: "user"`).
+   */
+  readonly source?: UserMessageSource;
 }
 
 /** Marks an admit as consumed into a turn (still not a chat message by itself). */

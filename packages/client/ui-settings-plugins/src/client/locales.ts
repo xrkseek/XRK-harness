@@ -29,9 +29,10 @@ export type PluginsSettingsLocaleKey =
   | 'skillsDocumentBytes' | 'skillsDocumentKindInstruction' | 'skillsDocumentKindCatalog'
   | 'skillsDocumentKindAuthority' | 'skillsDocumentKindCapability' | 'skillsDocumentKindPosture'
   | 'skillsDocumentKindBossStatus' | 'skillsDocumentKindSeatIdentity' | 'skillsDocumentKindCollab'
+  | 'skillsDocumentKindLanes' | 'skillsDocumentKindMemory'
   | 'skillsCatalogPathLabel' | 'skillsAuthorityPathLabel' | 'skillsCapabilityPathLabel'
   | 'skillsPosturePathLabel' | 'skillsBossStatusPathLabel' | 'skillsSeatIdentityPathLabel'
-  | 'skillsCollabPathLabel'
+  | 'skillsCollabPathLabel' | 'skillsMemoryPathLabel'
   | 'skillsSessionDocumentsTitle' | 'skillsSessionDocumentsHint'
   | 'skillsFilterSession' | 'skillsUserOnly'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
@@ -67,6 +68,12 @@ export type PluginsSettingsLocaleKey =
   | 'workspaceDiscoveryActiveWindowHours' | 'workspaceDiscoveryActiveWindowHoursHint'
   | 'workspaceDiscoveryMaxActive' | 'workspaceDiscoveryMaxActiveHint'
   | 'workspaceDiscoveryMaxList' | 'workspaceDiscoveryMaxListHint'
+  | 'workspaceDiscoveryOn' | 'workspaceDiscoveryOff'
+  | 'workspaceDiscoveryPreferSame' | 'workspaceDiscoveryPreferSameHint'
+  | 'workspaceDiscoveryPeerSessions' | 'workspaceDiscoveryPeerSessionsHint'
+  | 'workspaceDiscoverySiblingScope' | 'workspaceDiscoverySiblingScopeHint'
+  | 'workspaceDiscoverySiblingSame' | 'workspaceDiscoverySiblingNone'
+  | 'workspaceDiscoveryMaxDepth' | 'workspaceDiscoveryMaxDepthHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
   | 'mcpServersHeading' | 'mcpServersEmpty' | 'mcpAddServer' | 'mcpRemoveServer'
   | 'mcpPaste' | 'mcpPasteHint' | 'mcpPasteEmpty' | 'mcpPasteInvalid'
@@ -298,6 +305,8 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   skillsDocumentKindBossStatus: 'boss status',
   skillsDocumentKindSeatIdentity: 'seat identity',
   skillsDocumentKindCollab: 'collab board',
+  skillsDocumentKindLanes: '主线 · 支线 · todo',
+  skillsDocumentKindMemory: 'curated memory',
   skillsCatalogPathLabel: 'Skill catalog (standing)',
   skillsAuthorityPathLabel: 'Instruction authority (order · data)',
   skillsCapabilityPathLabel: 'Session capability (badge · permission)',
@@ -305,8 +314,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   skillsBossStatusPathLabel: 'Boss status',
   skillsSeatIdentityPathLabel: 'Seat identity',
   skillsCollabPathLabel: 'Team · mainline board',
+  skillsMemoryPathLabel: 'Curated memory (pointer)',
   skillsSessionDocumentsTitle: 'This turn',
-  skillsSessionDocumentsHint: 'Turn-start fragments Host sends: authority · capability · posture · boss · seat · board',
+  skillsSessionDocumentsHint: 'Turn-start fragments Host sends: authority · capability · posture · boss · seat · board · memory',
   skillsUserOnly: 'user only',
   empty: 'This deployment exposes no plugin settings.',
   overridden: 'Overridden',
@@ -369,13 +379,25 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   workspaceInjectMaxChars: 'Inject character budget',
   workspaceInjectMaxCharsHint: 'Total characters for rules + skills catalog inject. Default 32000 (range 4000–128000).',
   workspaceDiscoveryTitle: 'Workspace discovery',
-  workspaceDiscoveryDescription: 'workspace_list returns active canvases by default. Dormant stay hidden until the agent uses query or includeInactive.',
+  workspaceDiscoveryDescription: 'workspace_list returns active canvases by default. Dormant stay hidden until the agent uses query or includeInactive. Peer / sibling scope tunes session_search and list_agents.',
   workspaceDiscoveryActiveWindowHours: 'Active window (hours)',
   workspaceDiscoveryActiveWindowHoursHint: 'Hours since last prompt or touch before a canvas goes dormant. Default 168 (7 days). Xiangyang, IM, and the current canvas stay pinned.',
   workspaceDiscoveryMaxActive: 'Max active rows',
   workspaceDiscoveryMaxActiveHint: 'Cap for the default active-only list. Default 16.',
   workspaceDiscoveryMaxList: 'Max list rows',
   workspaceDiscoveryMaxListHint: 'Hard cap when dormant rows are included (includeInactive or query). Default 40.',
+  workspaceDiscoveryOn: 'On',
+  workspaceDiscoveryOff: 'Off',
+  workspaceDiscoveryPreferSame: 'Prefer same workspace',
+  workspaceDiscoveryPreferSameHint: 'When searching peers, rank same-workspace sessions first.',
+  workspaceDiscoveryPeerSessions: 'Peer session discovery',
+  workspaceDiscoveryPeerSessionsHint: 'Let boss sessions find sibling chats under the same operator.',
+  workspaceDiscoverySiblingScope: 'Subagent sibling scope',
+  workspaceDiscoverySiblingScopeHint: 'same-delegator: N children of one parent see each other. none: only the parent sees children.',
+  workspaceDiscoverySiblingSame: 'Same delegator',
+  workspaceDiscoverySiblingNone: 'None',
+  workspaceDiscoveryMaxDepth: 'Max discovery depth',
+  workspaceDiscoveryMaxDepthHint: '1 = direct peers / siblings only. Max 3.',
   mcpTitle: 'MCP servers',
   mcpDescription: 'Configure on Xiangyang (奇创). Each seat mounts global + its session `.xrk/mcp.json` + seated member home when distinct (session wins). Paste Cursor/Trae JSON; omit cwd → ~/.xrk/mcp-cwd/<name>.',
   mcpConnectedHeading: 'Connected now',
@@ -894,6 +916,8 @@ export const ja = {
   skillsDocumentKindBossStatus: 'ボス状態',
   skillsDocumentKindSeatIdentity: '席位アイデンティティ',
   skillsDocumentKindCollab: 'コラボボード',
+  skillsDocumentKindLanes: '主線 · 支線 · todo',
+  skillsDocumentKindMemory: 'キュレート記憶',
   skillsCatalogPathLabel: 'スキルカタログ（常設）',
   skillsAuthorityPathLabel: '指示権威（order · data）',
   skillsCapabilityPathLabel: 'セッション能力（バッジ · 権限）',
@@ -901,8 +925,9 @@ export const ja = {
   skillsBossStatusPathLabel: 'ボス状態',
   skillsSeatIdentityPathLabel: '席位アイデンティティ',
   skillsCollabPathLabel: 'チーム · メインラインボード',
+  skillsMemoryPathLabel: 'キュレート記憶（ポインタ）',
   skillsSessionDocumentsTitle: 'このターン',
-  skillsSessionDocumentsHint: 'ターン開始 Host 断片：権威 · 能力 · ポスチャ · ボス · 席位 · ボード',
+  skillsSessionDocumentsHint: 'ターン開始 Host 断片：権威 · 能力 · ポスチャ · ボス · 席位 · ボード · 記憶',
   skillsUserOnly: 'ユーザーのみ',
   empty: 'このデプロイメントにはプラグイン設定がありません。',
   overridden: '上書き済み',
@@ -965,13 +990,25 @@ export const ja = {
   workspaceInjectMaxChars: '注入文字数予算',
   workspaceInjectMaxCharsHint: 'ルール＋スキルカタログ注入の合計文字数。デフォルト 32000（範囲 4000–128000）。',
   workspaceDiscoveryTitle: 'ワークスペース発見',
-  workspaceDiscoveryDescription: 'workspace_list は既定でアクティブなキャンバスだけ返します。休眠は query または includeInactive のとき。',
+  workspaceDiscoveryDescription: 'workspace_list は既定でアクティブなキャンバスだけ返します。休眠は query または includeInactive のとき。ピア／兄弟範囲は session_search と list_agents に効きます。',
   workspaceDiscoveryActiveWindowHours: 'アクティブ窓（時間）',
   workspaceDiscoveryActiveWindowHoursHint: '最後のプロンプト／更新からこの時間を超えると休眠。既定 168（7 日）。向阳／IM／現在キャンバスは常にピン。',
   workspaceDiscoveryMaxActive: 'アクティブ行の上限',
   workspaceDiscoveryMaxActiveHint: '既定のアクティブのみ一覧の上限。既定 16。',
   workspaceDiscoveryMaxList: '一覧行の上限',
   workspaceDiscoveryMaxListHint: '休眠込み（includeInactive／query）の硬上限。既定 40。',
+  workspaceDiscoveryOn: 'オン',
+  workspaceDiscoveryOff: 'オフ',
+  workspaceDiscoveryPreferSame: '同一ワークスペース優先',
+  workspaceDiscoveryPreferSameHint: 'ピア検索時、同じワークスペースのセッションを先に並べます。',
+  workspaceDiscoveryPeerSessions: 'ピアセッション発見',
+  workspaceDiscoveryPeerSessionsHint: 'ボスセッションが同じ操作者下の兄弟チャットを見つけられるようにします。',
+  workspaceDiscoverySiblingScope: 'サブエージェント兄弟範囲',
+  workspaceDiscoverySiblingScopeHint: 'same-delegator: 同一親の N 子が互いに見える。none: 親だけが子を見る。',
+  workspaceDiscoverySiblingSame: '同一委任元',
+  workspaceDiscoverySiblingNone: 'なし',
+  workspaceDiscoveryMaxDepth: '発見の最大深度',
+  workspaceDiscoveryMaxDepthHint: '1 = 直接のピア／兄弟のみ。最大 3。',
   mcpTitle: 'MCP サーバー',
   mcpDescription: '設定は向阳（奇創）。各席はグローバル + セッション `.xrk/mcp.json` + 在席メンバー家（パスが異なる時；同名はセッション優先）。Cursor／Trae JSON；cwd 省略 → ~/.xrk/mcp-cwd/<name>。',
   mcpConnectedHeading: '接続中',
@@ -1488,6 +1525,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   skillsDocumentKindBossStatus: '老板状态',
   skillsDocumentKindSeatIdentity: '席位身份',
   skillsDocumentKindCollab: '协作看板',
+  skillsDocumentKindLanes: '主线 · 支线 · todo',
+  skillsDocumentKindMemory: '策展记忆',
   skillsCatalogPathLabel: 'Skill 目录（Standing）',
   skillsAuthorityPathLabel: '指令权威（order · data）',
   skillsCapabilityPathLabel: '会话能力（徽章 · 权限）',
@@ -1495,8 +1534,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   skillsBossStatusPathLabel: '老板状态',
   skillsSeatIdentityPathLabel: '席位身份',
   skillsCollabPathLabel: '团队 · 主线看板',
+  skillsMemoryPathLabel: '策展记忆（指针）',
   skillsSessionDocumentsTitle: '本回合',
-  skillsSessionDocumentsHint: '回合开头 Host 实发：权威 · 能力 · 姿态 · 老板 · 席位 · 看板',
+  skillsSessionDocumentsHint: '回合开头 Host 实发：权威 · 能力 · 姿态 · 老板 · 席位 · 看板 · 记忆',
   skillsUserOnly: '仅用户',
   empty: '本部署没有开放任何插件设置。',
   overridden: '已覆盖',
@@ -1559,13 +1599,25 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   workspaceInjectMaxChars: '注入字符预算',
   workspaceInjectMaxCharsHint: 'rules + skills 目录注入的总字符上限。默认 32000（范围 4000–128000）。',
   workspaceDiscoveryTitle: '工作区发现',
-  workspaceDiscoveryDescription: 'workspace_list 默认只回活跃画布。休眠项需模型用 query 或 includeInactive 才会出现。',
+  workspaceDiscoveryDescription: 'workspace_list 默认只回活跃画布。休眠项需模型用 query 或 includeInactive 才会出现。会话协作 / 子代理范围会作用到 session_search 与 list_agents。',
   workspaceDiscoveryActiveWindowHours: '活跃窗口（小时）',
   workspaceDiscoveryActiveWindowHoursHint: '距上次提问或触碰超过此时长即休眠。默认 168（7 天）。向阳、IM、当前画布始终钉住。',
   workspaceDiscoveryMaxActive: '活跃条数上限',
   workspaceDiscoveryMaxActiveHint: '默认「仅活跃」列表最多返回几条。默认 16。',
   workspaceDiscoveryMaxList: '列表硬上限',
   workspaceDiscoveryMaxListHint: '含休眠（includeInactive / query）时的硬上限。默认 40。',
+  workspaceDiscoveryOn: '开',
+  workspaceDiscoveryOff: '关',
+  workspaceDiscoveryPreferSame: '优先同工作区',
+  workspaceDiscoveryPreferSameHint: '搜同伴会话时，同工作区结果排前面。',
+  workspaceDiscoveryPeerSessions: '老板会话互见',
+  workspaceDiscoveryPeerSessionsHint: '允许同操作者下的老板级会话互相发现。',
+  workspaceDiscoverySiblingScope: '子代理互见范围',
+  workspaceDiscoverySiblingScopeHint: 'same-delegator：同一委派方的 N 个子代理互见。none：只有父会话看得见子。',
+  workspaceDiscoverySiblingSame: '同委派方',
+  workspaceDiscoverySiblingNone: '不互见',
+  workspaceDiscoveryMaxDepth: '发现深度上限',
+  workspaceDiscoveryMaxDepthHint: '1 = 仅直接同伴 / 兄弟。最大 3。',
   mcpTitle: 'MCP 服务器',
   mcpDescription: '在向阳（奇创）配置。各席挂载：全局 + 会话 `.xrk/mcp.json` + 在席干员家（路径不同时；同名会话赢）。粘贴 Trae/Cursor JSON；不写 cwd → ~/.xrk/mcp-cwd/<name>。',
   mcpConnectedHeading: '当前已连接',

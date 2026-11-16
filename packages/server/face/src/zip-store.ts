@@ -19,12 +19,28 @@ export interface ZipStoreEntry {
   readonly data: Uint8Array;
 }
 
+/**
+ * Characters illegal in ZIP entry leaf names on Windows / Android extractors
+ * (`:` breaks `attachments/sha256:…png` → "invalid archive entry").
+ * Control chars (U+0000–U+001F) checked by code point — avoid no-control-regex.
+ */
+function sanitizeZipLeaf(part: string): string {
+  let out = "";
+  for (const ch of part) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < 0x20 || '<>:"|?*'.includes(ch)) out += "_";
+    else out += ch;
+  }
+  return out;
+}
+
 /** Collapse `..` / absolute prefixes so ZIP entries cannot escape the archive root. */
 export function zipEntryName(name: string): string {
   const parts = name
     .replaceAll("\\", "/")
     .split("/")
-    .filter((part) => part.length > 0 && part !== "." && part !== "..");
+    .filter((part) => part.length > 0 && part !== "." && part !== "..")
+    .map(sanitizeZipLeaf);
   return parts.join("/") || "unnamed";
 }
 

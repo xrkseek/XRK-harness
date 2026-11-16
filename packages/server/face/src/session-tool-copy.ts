@@ -2,8 +2,9 @@
  * Dynamic catalog copy for collab tools — keyed by {@link SessionKind}.
  * Static ToolDefinition.description stays short; materializeTools merges these.
  *
- * Copy standard: human sentences; keep live facts (ids, caps, morphs); no
- * telegram pipes. Cross-tool routing said once, not restated on every sibling.
+ * Copy standard: human sentences; **no live id/roster lists in tools[]**
+ * (those belong on turn-start fragments / tool results — DSH KV prefix).
+ * Kind / surface verbs may vary; cross-tool routing said once.
  */
 import type { FaceRuntime } from "./context.js";
 import { formatRosterCatalog } from "./agent-roster-store.js";
@@ -14,11 +15,15 @@ import {
   type OrchestratorSurface,
   type SessionKind,
 } from "./session-kind.js";
+import { readWorkspaceDiscoverySettings } from "./workspace-discovery.js";
 
 export function threadMessageDescription(input: {
   readonly kind: SessionKind;
   readonly messageOnly?: boolean;
-  /** Live sibling ids for delegated children (optional). */
+  /**
+   * @deprecated Ignored — live sibling ids belong on turn-start
+   * `collab_board` / `session_inspect`, not in tools[] (KV-cache stable).
+   */
   readonly siblingIds?: readonly string[];
   /** IM / 奇创 when this seat is an orchestrator. */
   readonly surface?: OrchestratorSurface;
@@ -26,14 +31,10 @@ export function threadMessageDescription(input: {
   readonly fromAgentHome?: boolean;
 }): string {
   if (input.messageOnly || input.kind === "delegated_child") {
-    const ids =
-      input.siblingIds && input.siblingIds.length > 0
-        ? ` Live siblings: ${input.siblingIds.join(", ")}.`
-        : " Ids: turn-start squad board or session_inspect.";
     return (
-      "Message a sibling (same parent) or team peer-edge by session_id." +
-      ids +
-      " wait=true (default) returns their next assistant message. " +
+      "Message a sibling (same parent) or team peer-edge by session_id. " +
+      "Ids: turn-start squad board or session_inspect. " +
+      "wait=true (default) → reply in tool; wait=false → async steer when they finish. " +
       "Parent→child uses send_message / followup_task."
     );
   }
@@ -45,7 +46,7 @@ export function threadMessageDescription(input: {
   return (
     `Message a parent peer by session_id (${lane}). ` +
     "主线 pin optional. Peer keeps its chat; delivery=steer. " +
-    "wait=true (default) returns the next assistant message."
+    "wait=true (default) → reply in tool; wait=false → async steer when they finish."
   );
 }
 
@@ -74,14 +75,23 @@ export function teamListDescription(input: {
   readonly listOnly: boolean;
   /** Child spawned with member_id may revise own playbook via team_self. */
   readonly selfRevise?: boolean;
-  readonly catalog: string;
+  /**
+   * @deprecated Ignored — live roster rows belong on turn-start
+   * `collab_board` and in this tool's result body (KV-cache stable tools[]).
+   */
+  readonly catalog?: string;
 }): string {
+  void input.catalog;
   const head = input.listOnly
     ? input.selfRevise
-      ? "team_list + team_self: revise YOUR playbook/inject/tools (durable; next spawn). No mint/export/remove of others."
+      ? "team_list + team_self: revise YOUR playbook/inject/tools (durable; next spawn + export). " +
+        "Editing your 干员工作区 AGENTS.md also hot-syncs the same playbook. No mint/export/remove of others."
       : "Read-only roster. Siblings: squad board + thread_message."
     : `Spawn: subagent member_id (applies that member's tools+inject+playbook). ${packShareFlowHint()}`;
-  return `${head}\n${input.catalog}`;
+  return (
+    `${head} ` +
+    "Member ids: turn-start collab board; call this tool for full rows (mem_seed_* catalog seeds)."
+  );
 }
 
 export function workspaceListDescription(
@@ -114,19 +124,30 @@ export function workspaceSessionPromptDescription(input: {
       : input.surface === "qichuang"
         ? "Qichuang peer only — no nested subagent. Implement there."
         : `${input.codingLabel ?? "coding"} peer. Nested work here → subagent.`;
-  return `${from} Keep sessionId → thread_message. wait=true returns the peer reply.`;
+  return (
+    `${from} Keep sessionId → thread_message. ` +
+    `wait=true → reply in tool; wait=false → async steer when they finish.`
+  );
 }
 
 export function subagentDescription(input: {
   readonly base: string;
   readonly surface: OrchestratorSurface | undefined;
-  readonly catalog: string;
+  /**
+   * @deprecated Ignored — live roster belongs on turn-start collab board /
+   * team_list result (keep tools[] byte-stable for provider KV).
+   */
+  readonly catalog?: string;
 }): string {
+  void input.catalog;
   const cross =
     input.surface === "im"
       ? "Cross-workspace: workspace_list then workspace_id (or cwd). inherit_context must be false."
       : "Stay in this workspace — workspace_id / cwd are IM-only.";
-  return `${input.base} ${cross}\nPrefer member_id:\n${input.catalog}`;
+  return (
+    `${input.base} ${cross} ` +
+    "Prefer member_id from turn-start collab board or team_list (do not invent ids)."
+  );
 }
 
 export function listAgentsDescription(kind: SessionKind): string {
@@ -222,6 +243,11 @@ export function listSiblingSessionIds(
 ): readonly string[] {
   const self = runtime.subagents.getByChild(sessionId);
   if (!self || self.mode === "fork") return [];
+  // Settings → Workspace discovery → siblingScope=none: children do not
+  // discover each other (parent still lists them via list_agents).
+  if (readWorkspaceDiscoverySettings(runtime).siblingScope === "none") {
+    return [];
+  }
   return runtime.subagents
     .listDelegated(self.parentSessionId)
     .map((link) => link.childSessionId)

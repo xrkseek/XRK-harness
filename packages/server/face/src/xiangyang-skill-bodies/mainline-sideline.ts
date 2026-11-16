@@ -20,17 +20,29 @@ description: >-
 
 主线 accelerates discovery — it is not a messaging gate. Skipping pins still leaves zero-foundation users with anonymous sidebars.
 
+Child subagents mint **their own** 主线 (do not copy the parent's pin as the search key). Sidebar title paints \`干员名 · 主线\`; 支线 stays the small tips line.
+
 ## Pin
 
 1. After \`workspace_session_prompt\` → \`thread_upsert({ title, brief, session_id, workspace_id })\`.
 2. \`title\` = short task; \`brief\` = one line others understand.
 3. No empty brief, no \`mainline-a\` spam, no progress-log pins.
-4. Own work: \`thread_upsert({ title, brief })\`; done + unused → \`thread_delete\`.
+4. Own work (including child sessions): \`thread_upsert({ title, brief })\`; done + unused → \`thread_delete\`.
 5. \`thread_list\` periodically — empty / test / dup → fix.
 
 ## Sideline
 
 Start / blocked / waiting / done → \`presence_set({ tips })\`. Progress detail → \`todo_write\`, not 主线.
+
+## Switch when done
+
+Every turn gets live \`<session_lanes>\` (主线 · 支线 · open todos). When todos settle:
+
+1. \`presence_set({ tips })\` with a done tip
+2. \`thread_delete\` unused pin **or** \`thread_upsert\` the next title
+3. \`todo_write\` the next outline
+
+Do not leave a finished 主线 sticky across a new mission.
 
 ## With demand-translate
 
@@ -41,4 +53,5 @@ After picking a coding workspace, dispatch **must** pin 主线 + update 支线.
 - Prompt without \`thread_upsert\`.
 - One 主线 per micro-task.
 - Assume no pin ⇒ cannot \`thread_message\`.
+- Skip \`<session_lanes>\` after completion (stale pin / open todos).
 `;

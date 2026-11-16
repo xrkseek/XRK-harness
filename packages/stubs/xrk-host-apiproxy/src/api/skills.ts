@@ -55,6 +55,8 @@ export type InjectDocumentKind =
   | 'boss-status'
   | 'seat-identity'
   | 'collab-board'
+  | 'session-lanes'
+  | 'session-memory'
 
 /** Standing inject document Host actually puts on the prompt. */
 export interface InjectDocumentEntry {

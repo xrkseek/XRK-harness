@@ -271,62 +271,53 @@ describe("subagent tools", () => {
     expect(
       (props.provider as { description?: string }).description,
     ).toMatch(/provider/i);
-    expect(def.dynamicSchema?.()?.description).toContain("mem_seed_researcher");
+    // Live roster stays on collab board / team_list result — not in tools[].
+    expect(def.dynamicSchema?.()?.description).toContain("collab board");
+    expect(def.dynamicSchema?.()?.description).not.toContain("mem_seed_researcher");
   });
 
-  it("spills an oversized child answer to a file the parent can read", async () => {
-    const prevHome = process.env.XRK_HOME;
-    const home = mkdtempSync(path.join(tmpdir(), "xrk-sa-spill-"));
-    process.env.XRK_HOME = home;
-    try {
-      const store = createMemorySessionStore();
-      const runtime = createFaceRuntime({
-        store,
-        workspaceRoot: process.cwd(),
-        productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-spill-dir-")),
-        drain: drain(),
-        resolveAgent: async () => stubAgent(),
-        defaultAgentPreset: "harness",
-      });
-      const parent = runtime.ensureSession("parent");
-      runtime.sessionAgentPresets.set(parent, "harness");
-      const child = runtime.ensureSession("child");
-      runtime.subagents.attach({
-        parentSessionId: parent,
-        childSessionId: child,
-        mode: "continuable",
-        label: "c",
-      });
-      const fat = "结论段落。".repeat(4_000);
-      store.append(child, {
-        type: "assistant/message",
-        ts: Date.now(),
-        turnId: "t1",
-        stepId: "s1",
-        content: fat,
-      } as never);
+  it("wait_agent reports status only (answer via steer handoff)", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-status-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const child = runtime.ensureSession("child");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "continuable",
+      label: "c",
+    });
+    const fat = "结论段落。".repeat(4_000);
+    store.append(child, {
+      type: "assistant/message",
+      ts: Date.now(),
+      turnId: "t1",
+      stepId: "s1",
+      content: fat,
+    } as never);
 
-      const tools = createToolRegistry();
-      bindSubagentTools(tools, { runtime, parentSessionId: parent });
-      const out = await tools.get("wait_agent")!.execute({
-        agent_id: child,
-        timeout_ms: 1_000,
-      });
-      const text = String(out.content);
-      expect(text).toContain("read_file");
-      expect(text).toContain("middle omitted");
-      const locator = text.match(/stored at: (.+?)\. Retrieve/)?.[1];
-      expect(locator).toBeTruthy();
-      expect(locator!.replace(/\\/g, "/")).toContain("/spill/tool-outputs/");
-      expect(readFileSync(locator!, "utf8")).toBe(fat);
-    } finally {
-      if (prevHome === undefined) delete process.env.XRK_HOME;
-      else process.env.XRK_HOME = prevHome;
-      rmSync(home, { recursive: true, force: true });
-    }
+    const tools = createToolRegistry();
+    bindSubagentTools(tools, { runtime, parentSessionId: parent });
+    const out = await tools.get("wait_agent")!.execute({
+      agent_id: child,
+      timeout_ms: 1_000,
+    });
+    const text = String(out.content);
+    expect(text).toMatch(/wait_agent/);
+    expect(text).toContain("steer handoff");
+    expect(text).not.toContain(fat.slice(0, 40));
+    expect(text).not.toContain("read_file");
   });
 
-  it("keeps a short child answer inline", async () => {
+  it("wait_agent does not inline a short child answer", async () => {
     const store = createMemorySessionStore();
     const runtime = createFaceRuntime({
       store,
@@ -359,59 +350,8 @@ describe("subagent tools", () => {
       agent_id: child,
       timeout_ms: 1_000,
     });
-    expect(String(out.content)).toContain("结论只有一行。");
-    expect(String(out.content)).not.toContain("read_file");
-  });
-
-  it("never reports the parent's own last reply as a seeded child's answer", async () => {
-    const store = createMemorySessionStore();
-    const runtime = createFaceRuntime({
-      store,
-      workspaceRoot: process.cwd(),
-      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-seed-")),
-      drain: drain(),
-      resolveAgent: async () => stubAgent(),
-      defaultAgentPreset: "harness",
-    });
-    const parent = runtime.ensureSession("parent");
-    runtime.sessionAgentPresets.set(parent, "harness");
-    const child = runtime.ensureSession("child");
-    runtime.sessionAgentPresets.set(child, "harness");
-    runtime.subagents.attach({
-      parentSessionId: parent,
-      childSessionId: child,
-      mode: "continuable",
-      label: "seeded",
-    });
-
-    // The seeded prefix is the parent's transcript …
-    store.append(child, {
-      type: "assistant/message",
-      ts: Date.now(),
-      turnId: "parent-turn",
-      stepId: "p1",
-      content: "父会话上一轮的回答",
-    } as never);
-    const seedCut = store.get(child).events.length;
-    runtime.subagents.setSeedEventCount(child, seedCut);
-    // … and the child's real answer follows it.
-    store.append(child, {
-      type: "assistant/message",
-      ts: Date.now() + 1,
-      turnId: "child-turn",
-      stepId: "c1",
-      content: "子代理真正的结论",
-    } as never);
-
-    const tools = createToolRegistry();
-    bindSubagentTools(tools, { runtime, parentSessionId: parent });
-    const out = await tools.get("wait_agent")!.execute({
-      agent_id: child,
-      timeout_ms: 1_000,
-    });
-    const text = String(out.content);
-    expect(text).toContain("子代理真正的结论");
-    expect(text).not.toContain("父会话上一轮的回答");
+    expect(String(out.content)).not.toContain("结论只有一行。");
+    expect(String(out.content)).toContain("steer handoff");
   });
 
   it("refuses a task_id another child already owns", async () => {
@@ -611,72 +551,58 @@ describe("subagent tools", () => {
     expect(lastAssistantBodyText(childOwnedEvents(runtime, mute))).toBe("");
   });
 
-  it("spills an oversized salvaged answer on wait timeout", async () => {
-    const prevHome = process.env.XRK_HOME;
-    const home = mkdtempSync(path.join(tmpdir(), "xrk-sa-salvage-spill-"));
-    process.env.XRK_HOME = home;
-    try {
-      const store = createMemorySessionStore();
-      const fat = "超时前长答。".repeat(4_000);
-      const runtime = createFaceRuntime({
-        store,
-        workspaceRoot: process.cwd(),
-        productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-salvage-spill-dir-")),
-        drain: {
-          wake() {},
-          async cancel() {},
-          isActive() {
-            return true;
-          },
-          // Join hangs so the foreground wait hits its deadline; the child's
-          // answer is already on disk before the race rejects.
-          async run(sessionId: string) {
-            store.append(sessionId, {
-              type: "assistant/message",
-              ts: Date.now(),
-              turnId: "t1",
-              stepId: "s1",
-              content: fat,
-            } as never);
-            await new Promise(() => {});
-          },
+  it("foreground wait timeout stays status-only (answer via later steer)", async () => {
+    const store = createMemorySessionStore();
+    const fat = "超时前长答。".repeat(4_000);
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-timeout-steer-")),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive() {
+          return true;
         },
-        resolveAgent: async () => stubAgent(),
-        defaultAgentPreset: "harness",
-      });
-      const parent = runtime.ensureSession("parent");
-      runtime.sessionAgentPresets.set(parent, "harness");
-      const tools = createToolRegistry();
-      bindSubagentTools(tools, {
-        runtime,
-        parentSessionId: parent,
-        foregroundWaitMs: 40,
-      });
-      const out = await tools.get("subagent")!.execute({
-        prompt: "write a long answer",
-        run_in_background: false,
-      });
-      expect(out.isError).toBe(true);
-      const text = String(out.content);
-      expect(text).toMatch(/timed out waiting/i);
-      expect(text).toContain("child still running");
-      expect(text).toContain("salvaged");
-      expect(text).toContain("read_file");
-      expect(text).toContain("middle omitted");
-      // Preview may keep a head/tail of the answer; the full body must live on disk.
-      expect(text.length).toBeLessThan(fat.length);
-      const locator = text.match(/stored at: (.+?)\. Retrieve/)?.[1];
-      expect(locator).toBeTruthy();
-      expect(readFileSync(locator!, "utf8")).toBe(fat);
-      // Foreground one-shot must promote so a later idle still steers.
-      const children = runtime.subagents.listDelegated(parent);
-      expect(children).toHaveLength(1);
-      expect(children[0]!.mode).toBe("continuable");
-    } finally {
-      if (prevHome === undefined) delete process.env.XRK_HOME;
-      else process.env.XRK_HOME = prevHome;
-      rmSync(home, { recursive: true, force: true });
-    }
+        // Join hangs so the foreground wait hits its deadline; the child's
+        // answer is already on disk — courier delivers it as steer, not in
+        // the tool result (single-channel report-back).
+        async run(sessionId: string) {
+          store.append(sessionId, {
+            type: "assistant/message",
+            ts: Date.now(),
+            turnId: "t1",
+            stepId: "s1",
+            content: fat,
+          } as never);
+          await new Promise(() => {});
+        },
+      },
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const tools = createToolRegistry();
+    bindSubagentTools(tools, {
+      runtime,
+      parentSessionId: parent,
+      foregroundWaitMs: 40,
+    });
+    const out = await tools.get("subagent")!.execute({
+      prompt: "write a long answer",
+      run_in_background: false,
+    });
+    expect(out.isError).toBe(true);
+    const text = String(out.content);
+    expect(text).toMatch(/timed out waiting/i);
+    expect(text).toContain("child still running");
+    expect(text).toContain("steer");
+    expect(text).not.toContain(fat.slice(0, 40));
+    // Foreground one-shot must promote so a later idle still steers.
+    const children = runtime.subagents.listDelegated(parent);
+    expect(children).toHaveLength(1);
+    expect(children[0]!.mode).toBe("continuable");
   });
 
   it("tells a rate-limited child apart from a wedged one", () => {

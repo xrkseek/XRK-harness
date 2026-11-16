@@ -37,8 +37,12 @@ import {
   type AssemblePersona,
   type AssemblePersonaContext,
 } from "@xrkseek/core-agent-loop";
-import type { PromptDelivery, SafetyNoticePayload, MessageContent } from "@xrkseek/protocol";
-
+import type {
+  PromptDelivery,
+  SafetyNoticePayload,
+  MessageContent,
+  UserMessageSource,
+} from "@xrkseek/protocol";
 export { SessionBusyError } from "@xrkseek/core-session";
 export { NoPendingAdmitError } from "@xrkseek/core-session";
 export { SessionSafetyLimitError } from "@xrkseek/core-session";
@@ -178,6 +182,7 @@ export interface AgentHandle {
       readonly delivery?: PromptDelivery;
       readonly admitId?: string;
       readonly rpcId?: string;
+      readonly source?: UserMessageSource;
     },
   ): AdmitReceipt;
   /** Pending admits not yet promoted. */

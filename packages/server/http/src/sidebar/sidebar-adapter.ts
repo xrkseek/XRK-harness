@@ -133,6 +133,13 @@ function policyFail(denied: PolicyWireError): unknown {
 function isPathInside(root: string, target: string): boolean {
   const r = path.resolve(root);
   const t = path.resolve(target);
+  // Windows drives / tools often disagree on casing (`C:\` vs `c:\`); a
+  // case-sensitive prefix check then marks in-workspace files as missing.
+  if (process.platform === "win32") {
+    const rl = r.toLowerCase();
+    const tl = t.toLowerCase();
+    return tl === rl || tl.startsWith(`${rl}\\`);
+  }
   return t === r || t.startsWith(r + path.sep);
 }
 
@@ -181,18 +188,12 @@ function resolveCwd(
 
 function safeJoin(root: string, rel: string): string | undefined {
   const target = path.resolve(root, rel);
-  const rootResolved = path.resolve(root);
-  if (
-    target !== rootResolved &&
-    !target.startsWith(rootResolved + path.sep)
-  ) {
-    return undefined;
-  }
+  if (!isPathInside(root, target)) return undefined;
   return target;
 }
 
 /**
- * Resolve a caller path inside the session workspace.
+ * Resolve a caller path inside the session workspace (mutations / explorer).
  * Absolute paths still must stay under `cwd` — a bare `path.resolve` would
  * otherwise let `fs.write` / `fs.mkdir` / `fs.delete` escape the fence.
  */
@@ -205,9 +206,48 @@ function resolveWorkspacePath(
   const abs = path.isAbsolute(trimmed)
     ? path.resolve(trimmed)
     : path.resolve(cwd, trimmed);
-  const root = path.resolve(cwd);
-  if (abs !== root && !abs.startsWith(root + path.sep)) return undefined;
+  if (!isPathInside(cwd, abs)) return undefined;
   return abs;
+}
+
+/** Typed outcome for read-only path resolution (preview / editor). */
+type ReadablePathResult =
+  | { readonly ok: true; readonly abs: string }
+  | {
+      readonly ok: false;
+      readonly code: "empty" | "outside-fence" | "not-found";
+      readonly message: string;
+    };
+
+/**
+ * Resolve a path for read-only preview (`fs.read` / `fs.stat` / editor stats).
+ *
+ * Absolute paths are allowed — same trust as `GET /sidebar/file` and the
+ * pre-0.7.19 Host sidebar. Chat file links often open agent-touched absolute
+ * paths outside the session cwd (path=open / Full access / spill / home);
+ * fencing those reads as "file missing" broke the better-sidebar editor.
+ * Relative paths stay under the session cwd fence.
+ */
+function resolveReadablePath(
+  cwd: string,
+  raw: string,
+): ReadablePathResult {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { ok: false, code: "empty", message: "path required" };
+  }
+  if (path.isAbsolute(trimmed)) {
+    return { ok: true, abs: path.resolve(trimmed) };
+  }
+  const inside = resolveWorkspacePath(cwd, trimmed);
+  if (!inside) {
+    return {
+      ok: false,
+      code: "outside-fence",
+      message: "path escapes workspace",
+    };
+  }
+  return { ok: true, abs: inside };
 }
 
 /**
@@ -353,11 +393,19 @@ async function dispatchMethod(
     }
     case "fs.read": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const abs = resolveWorkspacePath(cwd, rel);
-      if (!abs || !existsSync(abs)) return fail("not-found", "file missing");
+      const resolved = resolveReadablePath(cwd, rel);
+      if (!resolved.ok) {
+        return fail(
+          resolved.code === "outside-fence" ? "path" : resolved.code,
+          resolved.message,
+        );
+      }
+      if (!existsSync(resolved.abs)) {
+        return fail("not-found", "file missing");
+      }
       // better-sidebar TextEditor expects `{ kind: "text"|"binary", content?, head?, truncated }`.
       // Returning only `{ content }` leaves `kind !== "text"` → empty editor pane.
-      const buf = await readFile(abs);
+      const buf = await readFile(resolved.abs);
       const truncated = buf.byteLength > 2_000_000;
       const slice = truncated ? buf.subarray(0, 2_000_000) : buf;
       if (looksBinary(slice)) {
@@ -405,11 +453,19 @@ async function dispatchMethod(
     }
     case "fs.stat": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const abs = resolveWorkspacePath(cwd, rel);
-      if (!abs || !existsSync(abs)) return fail("not-found", "path missing");
-      const st = statSync(abs);
+      const resolved = resolveReadablePath(cwd, rel);
+      if (!resolved.ok) {
+        return fail(
+          resolved.code === "outside-fence" ? "path" : resolved.code,
+          resolved.message,
+        );
+      }
+      if (!existsSync(resolved.abs)) {
+        return fail("not-found", "path missing");
+      }
+      const st = statSync(resolved.abs);
       return ok({
-        path: abs,
+        path: resolved.abs,
         isDir: st.isDirectory(),
         isFile: st.isFile(),
         size: st.size,
@@ -479,10 +535,11 @@ async function dispatchMethod(
       );
       const stats: Array<{ path: string; mtimeMs: number; size: number }> = [];
       for (const raw of statPaths) {
-        const abs = resolveWorkspacePath(cwd, raw);
-        if (!abs || !existsSync(abs)) continue;
+        // Open editor tabs may point outside the session cwd (chat wake).
+        const resolved = resolveReadablePath(cwd, raw);
+        if (!resolved.ok || !existsSync(resolved.abs)) continue;
         try {
-          const info = await stat(abs);
+          const info = await stat(resolved.abs);
           stats.push({ path: raw, mtimeMs: info.mtimeMs, size: info.size });
         } catch {
           /* skip vanished paths */

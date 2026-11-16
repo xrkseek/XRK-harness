@@ -2487,43 +2487,81 @@ export function PreviewTabs({
               data-collapsed={presenceRailCompact ? '' : undefined}
               data-pending={!status?.companionBall ? '' : undefined}
               role="group"
-              aria-label={`${bossSeatLabel} ${t('preview.status.presenceDelegate')} ${childSeatLabel}`}
+              aria-label={`${
+                (status?.delegate?.parents?.length
+                  ? status.delegate.parents.map((p) => p.label?.trim() || bossSeatLabel).join(' → ')
+                  : bossSeatLabel)
+              } ${t('preview.status.presenceDelegate')} ${childSeatLabel}`}
             >
-              <PresenceBall
-                sessionId={status?.delegate?.parentSessionId ?? `${sessionId}:from`}
-                // Boss look is live Settings `ui-presence` (same as mood on office home) —
-                // do not freeze Face `parentCompanionBall` or Team edits wait on Status poll.
-                {...(parentMemberLook && !leftSeatLiveBossLook
-                  ? { memberLook: parentMemberLook }
-                  : {})}
-                {...(bossPresence ? { presence: bossPresence } : {})}
-                pairSeat
-                seat="from"
-                roleLabel={bossSeatLabel}
-                // Office Boss is user mood only — never mirror session busy/idle.
-                turnActive={officeBossSeat ? false : fromTurnActive}
-                runningJobs={0}
-                runningSubs={officeBossSeat ? 0 : fromSubs}
-                fleetHealth="ok"
-                queued={officeBossSeat ? 0 : fromQueued}
-                steering={officeBossSeat ? 0 : fromSteering}
-                activityAt={bossPresence?.updatedAt ?? 0}
-                compact={presenceRailCompact}
-                engineActive={Boolean(overviewOpen && presenceEngineReady && status)}
-                t={t as (key: string, params?: Record<string, string>) => string}
-                loadingLabel={t('preview.status.presenceLoading')}
-                errorLabel={t('preview.status.presenceError')}
-                clickHint={officeBossSeat
-                  ? t('preview.status.bossEditHint', { boss: bossSeatLabel })
-                  : t('preview.status.presenceClick')}
-                {...(officeBossSeat
-                  ? {
-                      onStageClick: () => {
-                        setBossEditorOpen((prev) => !prev)
-                      },
-                    }
-                  : {})}
-              />
+              <div
+                className={css.delegateFromStack}
+                data-count={String(
+                  Math.max(1, status?.delegate?.parents?.length ?? 1),
+                )}
+              >
+                {(status?.delegate?.parents?.length
+                  ? status.delegate.parents
+                  : [{
+                      sessionId: status?.delegate?.parentSessionId
+                        ?? `${sessionId}:from`,
+                      label: bossSeatLabel,
+                      ...(parentMemberId ? { memberId: parentMemberId } : {}),
+                    }]
+                ).map((parent, index, chain) => {
+                  const isLead = index === chain.length - 1
+                  const label = isLead
+                    ? bossSeatLabel
+                    : (parent.label?.trim() || t('preview.status.subagentRole.delegator'))
+                  return (
+                    <div
+                      key={parent.sessionId}
+                      className={css.delegateFromLayer}
+                      style={{ zIndex: index + 1 }}
+                    >
+                      <PresenceBall
+                        sessionId={parent.sessionId}
+                        // Lead (immediate parent): live Settings boss / Face parent look.
+                        // Ancestors: label-only compact seats (no frozen Team look chase).
+                        {...(isLead && parentMemberLook && !leftSeatLiveBossLook
+                          ? { memberLook: parentMemberLook }
+                          : {})}
+                        {...(isLead && bossPresence ? { presence: bossPresence } : {})}
+                        pairSeat
+                        seat="from"
+                        roleLabel={label}
+                        turnActive={isLead
+                          ? (officeBossSeat ? false : fromTurnActive)
+                          : false}
+                        runningJobs={0}
+                        runningSubs={isLead && !officeBossSeat ? fromSubs : 0}
+                        fleetHealth="ok"
+                        queued={isLead && !officeBossSeat ? fromQueued : 0}
+                        steering={isLead && !officeBossSeat ? fromSteering : 0}
+                        activityAt={isLead ? (bossPresence?.updatedAt ?? 0) : 0}
+                        compact={presenceRailCompact || !isLead}
+                        engineActive={Boolean(
+                          isLead && overviewOpen && presenceEngineReady && status,
+                        )}
+                        t={t as (key: string, params?: Record<string, string>) => string}
+                        loadingLabel={t('preview.status.presenceLoading')}
+                        errorLabel={t('preview.status.presenceError')}
+                        clickHint={isLead
+                          ? (officeBossSeat
+                            ? t('preview.status.bossEditHint', { boss: bossSeatLabel })
+                            : t('preview.status.presenceClick'))
+                          : t('preview.status.presenceClick')}
+                        {...(isLead && officeBossSeat
+                          ? {
+                              onStageClick: () => {
+                                setBossEditorOpen((prev) => !prev)
+                              },
+                            }
+                          : {})}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
               <div className={css.delegateArrow} aria-hidden>
                 <svg viewBox="0 0 48 28">
                   <path d="M2 16C12 16 16 6 24 6s12 10 22 10" />

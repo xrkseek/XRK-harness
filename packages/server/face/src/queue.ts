@@ -1,5 +1,5 @@
 import type { AdmitReceipt } from "@xrkseek/core-session";
-import { asContentBlocks } from "@xrkseek/protocol";
+import { asContentBlocks, type UserMessageSource } from "@xrkseek/protocol";
 
 /**
  * Authoritative `session/queue` item: id · placement · message.
@@ -33,10 +33,8 @@ export interface FaceQueueMessage {
         };
       }
   )[];
-  readonly source: {
-    readonly kind: "user";
-    readonly rpcId?: string;
-  };
+  /** Durable producer — pass through admit source; never forge `kind:"user"` for plugin steers. */
+  readonly source: UserMessageSource & { readonly rpcId?: string };
 }
 
 export interface FaceQueueItem {
@@ -53,6 +51,7 @@ export function toQueueItems(
     const rpcId =
       admitToRpc.get(a.admitId) ??
       (typeof a.rpcId === "string" && a.rpcId.length > 0 ? a.rpcId : undefined);
+    const base: UserMessageSource = a.source ?? { kind: "user" };
     return {
       id: a.admitId,
       placement: a.delivery === "steer" ? "steering" : "queued",
@@ -69,7 +68,7 @@ export function toQueueItems(
           return { type: "image" as const, attachment: { ...block.attachment } };
         }),
         source: {
-          kind: "user",
+          ...base,
           ...(rpcId !== undefined ? { rpcId } : {}),
         },
       },

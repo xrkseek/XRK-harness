@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ContextMessageNode } from '@xrkseek/client-runtime/client'
+import { projectTranscriptChrome } from '@xrkseek/client-runtime/client'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { DisclosureRow, IconBrowseOutlineRegular } from '@xrkseek/client-ui-primitives'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
@@ -34,6 +35,7 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
   // Resolved rather than declared: a form whose fields are unreadable renders
   // the opaque body, and the marker must say what the row actually shows.
   const { rendered, summary, body } = contextBody(form, { content, source, t })
+  const chrome = projectTranscriptChrome({ surface: 'context', source })
 
   // The auto-continue provenance label is a stable identifier, not a product
   // sentence: translating here keeps runtime dictionaries (and the merged log
@@ -43,37 +45,39 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
     : provenance.label
 
   return (
-    <DisclosureRow
-      className={css.root}
-      icon={provenance.role === 'recall'
-        ? <span data-context-recall-icon><ReferenceIcon kind="session" /></span>
-        : <IconBrowseOutlineRegular size={14} />}
-      chevronClassName={css.chevron}
-      title={t(provenance.role === 'recall' ? 'message.contextRecall' : 'message.contextInjection')}
-      collapsedContent={provenance.label === null ? undefined : (
-        /* ToolRow's separator shape: an aria-hidden dot, so the accessible name
-           stays the two readable parts and the two disclosure rows expose one
-           name shape. A source that names no producer drops the dot with it. */
-        <>
-          <span className={css.sep} aria-hidden />
-          <span className={css.source} data-context-source>{sourceLabel}</span>
-          {summary !== null && (
-            <>
-              <span className={css.sep} aria-hidden />
-              <span className={css.summary} data-context-summary>{summary}</span>
-            </>
-          )}
-        </>
-      )}
-      keepContentWhenOpen
-      open={open}
-      expandable
-      expandOnRowClick
-      onToggle={() => { setOpen(value => !value) }}
-    >
-      <div className={css.body} data-context-injection-body data-context-form={rendered ?? undefined}>
-        {body}
-      </div>
-    </DisclosureRow>
+    <div data-voice={chrome.voice} data-lane={chrome.lane}>
+      <DisclosureRow
+        className={css.root}
+        icon={provenance.role === 'recall'
+          ? <span data-context-recall-icon><ReferenceIcon kind="session" /></span>
+          : <IconBrowseOutlineRegular size={14} />}
+        chevronClassName={css.chevron}
+        title={t(provenance.role === 'recall' ? 'message.contextRecall' : 'message.contextInjection')}
+        collapsedContent={provenance.label === null ? undefined : (
+          /* ToolRow's separator shape: an aria-hidden dot, so the accessible name
+             stays the two readable parts and the two disclosure rows expose one
+             name shape. A source that names no producer drops the dot with it. */
+          <>
+            <span className={css.sep} aria-hidden />
+            <span className={css.source} data-context-source>{sourceLabel}</span>
+            {summary !== null && (
+              <>
+                <span className={css.sep} aria-hidden />
+                <span className={css.summary} data-context-summary>{summary}</span>
+              </>
+            )}
+          </>
+        )}
+        keepContentWhenOpen
+        open={open}
+        expandable
+        expandOnRowClick
+        onToggle={() => { setOpen(value => !value) }}
+      >
+        <div className={css.body} data-context-injection-body data-context-form={rendered ?? undefined}>
+          {body}
+        </div>
+      </DisclosureRow>
+    </div>
   )
 }

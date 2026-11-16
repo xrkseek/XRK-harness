@@ -28,6 +28,7 @@ export {
   promoteNextAdmit,
   promoteAdmitsForTurn,
   promotePendingSteers,
+  promotedUserMessageSource,
   type AdmitReceipt,
   type AdmitPromptOptions,
   type PromoteForTurnResult,

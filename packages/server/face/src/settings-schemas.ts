@@ -698,6 +698,14 @@ const WorkspaceDiscoveryConfig = Schema.object({
   maxActiveItems: Schema.number().step(1).min(1).max(100).default(16),
   /** 含休眠（includeInactive / query）时的硬上限。Hard cap when listing dormant / query hits. */
   maxListItems: Schema.number().step(1).min(1).max(200).default(40),
+  /** session_search: rank same-workspace hits first (still includes others). */
+  preferSameWorkspace: Schema.boolean().default(true),
+  /** session_search / peer tools: when false, peer discovery returns empty. */
+  peerSessionDiscovery: Schema.boolean().default(true),
+  /** Child squad board + thread_message: same-delegator siblings see each other; none = parent-only. */
+  siblingScope: Schema.union(["same-delegator", "none"]).default("same-delegator"),
+  /** team_graph view: clamp delegate BFS depth (root=0; 1 = direct children only). */
+  maxDepth: Schema.number().step(1).min(1).max(3).default(1),
 });
 
 const UiConversationConfig = Schema.object({
@@ -1049,6 +1057,10 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         activeWindowHours: 168,
         maxActiveItems: 16,
         maxListItems: 40,
+        preferSameWorkspace: true,
+        peerSessionDiscovery: true,
+        siblingScope: "same-delegator",
+        maxDepth: 1,
       },
       applies: "live",
     },

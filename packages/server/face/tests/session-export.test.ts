@@ -125,8 +125,21 @@ describe("session.export", () => {
     );
     expect(get.status).toBe(200);
     const buf = Buffer.from(await get.arrayBuffer());
-    expect(buf.toString("latin1")).toContain(`attachments/${ref.attachmentId}.png`);
+    // Colon in sha256:… must be sanitized — Windows/Android refuse such ZIP paths.
+    expect(buf.toString("latin1")).toContain(
+      `attachments/${ref.attachmentId.replaceAll(":", "_")}.png`,
+    );
+    expect(buf.toString("latin1")).not.toContain(
+      `attachments/${ref.attachmentId}.png`,
+    );
     await face.close();
+  });
+
+  it("zipEntryName strips Windows-illegal characters from leaves", () => {
+    expect(zipEntryName(`attachments/${"sha256:deadbeef"}.png`)).toBe(
+      "attachments/sha256_deadbeef.png",
+    );
+    expect(zipEntryName("a/b:c|d?.txt")).toBe("a/b_c_d_.txt");
   });
 
   it("buildStoredZip round-trips PK header", () => {

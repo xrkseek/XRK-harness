@@ -92,7 +92,9 @@ function toolCallCards(block: ToolCallBlock, cwd?: string, home?: string): ToolC
   // thumbs while still running, and read_image / file results are content
   // envelopes no card tag describes.
   if (wireName === undefined || wireName === 'image_generate') cards.image = imageGenCardModel(block)
-  if (cards.image === null && wireName === 'read_image') cards.image = imageCardModel(block, cwd, home)
+  if (cards.image === null && (wireName === 'read_image' || wireName === 'present')) {
+    cards.image = imageCardModel(block, cwd, home)
+  }
   if (settled && !block.isError) {
     cards.files = wireName === undefined || wireName === 'video_generate'
       ? videoFileCardModel(block) ?? fileCardModel(block)

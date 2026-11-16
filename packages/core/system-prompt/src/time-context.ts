@@ -27,9 +27,16 @@ export function shouldRefreshTimeContext(
   return false;
 }
 
-/** Test / Host teardown hook. */
-export function clearTimeContextRefreshState(): void {
-  lastInjectMs.clear();
+/**
+ * Drop last-inject stamp(s). Call on session delete / log cut, or from tests.
+ * Omit `sessionId` to clear the whole table.
+ */
+export function clearTimeContextRefreshState(sessionId?: string): void {
+  if (sessionId === undefined) {
+    lastInjectMs.clear();
+    return;
+  }
+  lastInjectMs.delete(sessionId.trim() || "_");
 }
 
 /** Record that time was injected (opening step volatile stamp). */

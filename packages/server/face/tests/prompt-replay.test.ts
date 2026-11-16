@@ -16,6 +16,7 @@ import { agentHomeDir, mintAgentHomeForMember } from "../src/agent-home.js";
 import { sessionCreate } from "../src/handlers/session.js";
 import { createSessionCapabilityFragmentProvider } from "../src/session-capability.js";
 import { createSessionPostureFragmentProvider } from "../src/session-posture.js";
+import { createSessionLanesFragmentProvider } from "../src/session-lanes.js";
 import { createBossStatusFragmentProvider } from "../src/boss-status-broadcast.js";
 import { createSeatIdentityFragmentProvider } from "../src/seat-identity.js";
 import { createCollabBoardFragmentProvider } from "../src/collab-board.js";
@@ -55,6 +56,7 @@ function collectTurnStart(
   const providers = [
     createSessionCapabilityFragmentProvider(runtime),
     createSessionPostureFragmentProvider(runtime),
+    createSessionLanesFragmentProvider(runtime),
     createBossStatusFragmentProvider(runtime),
     createSeatIdentityFragmentProvider(runtime),
     createCollabBoardFragmentProvider(runtime),

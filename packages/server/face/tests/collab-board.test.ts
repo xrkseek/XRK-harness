@@ -197,7 +197,7 @@ describe("formatTeamMateBoardText", () => {
     expect(text).toContain("todo_open=1");
     expect(text).toContain("sess_b");
     expect(text).toContain("改 collab");
-    expect(text).toContain("主线=n/a");
+    expect(text).toContain("主线=none");
     expect(text).toContain("thread_message");
     expect(text).toContain("your_task: task_1");
     expect(text).toContain("收集证据");

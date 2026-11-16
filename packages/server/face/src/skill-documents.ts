@@ -23,7 +23,9 @@ export type InjectDocumentKind =
   | "session-posture"
   | "boss-status"
   | "seat-identity"
-  | "collab-board";
+  | "collab-board"
+  | "session-lanes"
+  | "session-memory";
 
 /** One inject document row (exists in the live inject set). */
 export interface InjectDocumentEntry {

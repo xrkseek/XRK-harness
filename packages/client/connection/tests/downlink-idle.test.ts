@@ -3,10 +3,16 @@
  * quiet (half-open socket, wedged proxy) must fail instead of hanging, so the
  * connection layer can rebuild its generation. The server speaks every 15s
  * (`: keepalive`), so silence past three missed heartbeats is a dead channel.
+ *
+ * Covers both carriers: Desktop SSE (`xrk-app://`) and Mobile/Web WebSocket
+ * (`http:`), which previously had no client-side idle path.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WebApiClient } from "../src/client/web-api-client.ts";
+import {
+  WebApiClient,
+  WS_DOWNLINK_IDLE_TIMEOUT_MS,
+} from "../src/client/web-api-client.ts";
 
 /**
  * Stalled-then-chatty body: writes land before the generator reaches its fetch
@@ -136,6 +142,137 @@ describe("WebApiClient downlink idle watchdog", () => {
     const pending = iter.next();
     await vi.advanceTimersByTimeAsync(0);
     client.pushFrame(
+      JSON.stringify({
+        type: "server-request",
+        rpcId: "r1",
+        method: "events.host",
+        payload: { type: "host/session-status", sessionId: "s1", running: true },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    const next = await pending;
+    expect(next.value?.payload).toEqual({
+      type: "host/session-status",
+      sessionId: "s1",
+      running: true,
+    });
+    ac.abort();
+  });
+});
+
+type WebSocketGlobal = { WebSocket?: typeof WebSocket };
+
+class FakeWebSocket extends EventTarget {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+
+  readonly url: string;
+  readyState = FakeWebSocket.CONNECTING;
+
+  constructor(url: string | URL) {
+    super();
+    this.url = String(url);
+    fakeSockets.push(this);
+    queueMicrotask(() => {
+      if (this.readyState !== FakeWebSocket.CONNECTING) return;
+      this.readyState = FakeWebSocket.OPEN;
+      this.dispatchEvent(new Event("open"));
+    });
+  }
+
+  close(): void {
+    if (this.readyState === FakeWebSocket.CLOSED) return;
+    this.readyState = FakeWebSocket.CLOSED;
+    this.dispatchEvent(new Event("close"));
+  }
+
+  receive(data: unknown): void {
+    this.dispatchEvent(new MessageEvent("message", { data }));
+  }
+}
+
+const fakeSockets: FakeWebSocket[] = [];
+const originalWebSocket = globalThis.WebSocket;
+
+describe("WebApiClient WebSocket downlink idle watchdog", () => {
+  const previousLocation = globalThis.location;
+
+  function atHttpOrigin(): void {
+    Object.defineProperty(globalThis, "location", {
+      value: { origin: "http://127.0.0.1:8787", protocol: "http:", hostname: "127.0.0.1" },
+      configurable: true,
+    });
+  }
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, "location", {
+      value: previousLocation,
+      configurable: true,
+    });
+    fakeSockets.length = 0;
+    if (originalWebSocket === undefined) delete (globalThis as WebSocketGlobal).WebSocket;
+    else globalThis.WebSocket = originalWebSocket;
+    vi.useRealTimers();
+  });
+
+  it("fails a quiet WebSocket after three missed app keepalives", async () => {
+    atHttpOrigin();
+    vi.useFakeTimers();
+    ;(globalThis as WebSocketGlobal).WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    const client = new WebApiClient();
+    const ac = new AbortController();
+    let opened = false;
+    const iter = client.events.host({}, ac.signal, () => {
+      opened = true;
+    })[Symbol.asyncIterator]();
+    const pending = iter.next();
+    const failure = expect(pending).rejects.toThrow(/downlink idle/);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(opened).toBe(true);
+    expect(fakeSockets).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(WS_DOWNLINK_IDLE_TIMEOUT_MS + 1_000);
+    await failure;
+    ac.abort();
+  });
+
+  it("keeps a WebSocket that receives Face : keepalive text", async () => {
+    atHttpOrigin();
+    vi.useFakeTimers();
+    ;(globalThis as WebSocketGlobal).WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    const client = new WebApiClient();
+    const ac = new AbortController();
+    const iter = client.events.host({}, ac.signal)[Symbol.asyncIterator]();
+    const pending = iter.next();
+    let settled = false;
+    void pending.then(
+      () => { settled = true; },
+      () => { settled = true; },
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    const socket = fakeSockets[0];
+    expect(socket).toBeDefined();
+
+    for (let tick = 0; tick < 10; tick++) {
+      await vi.advanceTimersByTimeAsync(15_000);
+      socket!.receive(": keepalive");
+    }
+    expect(settled).toBe(false);
+    ac.abort();
+  });
+
+  it("yields host frames after open on the WebSocket path", async () => {
+    atHttpOrigin();
+    vi.useFakeTimers();
+    ;(globalThis as WebSocketGlobal).WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    const client = new WebApiClient();
+    const ac = new AbortController();
+    const iter = client.events.host({}, ac.signal)[Symbol.asyncIterator]();
+    const pending = iter.next();
+    await vi.advanceTimersByTimeAsync(0);
+    fakeSockets[0]!.receive(
       JSON.stringify({
         type: "server-request",
         rpcId: "r1",

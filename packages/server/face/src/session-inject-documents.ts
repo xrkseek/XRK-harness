@@ -16,6 +16,7 @@ import {
 import { formatCollabBoard } from "./collab-board.js";
 import { formatSeatIdentity } from "./seat-identity.js";
 import { formatSessionCapability } from "./session-capability.js";
+import { formatSessionLanes } from "./session-lanes.js";
 import { formatSessionPosture } from "./session-posture.js";
 import { readSeatTitles, readUiLocalePreference } from "./seat-titles.js";
 import type {
@@ -41,6 +42,15 @@ export const SESSION_SEAT_IDENTITY_PATH = "session://seat-identity";
 /** Logical path for the turn-start collab board fragment. */
 export const SESSION_COLLAB_PATH = "session://collab-board";
 
+/** Logical path for the turn-start `<session_lanes>` fragment. */
+export const SESSION_LANES_PATH = "session://lanes";
+
+/**
+ * Logical path for curated-memory discovery (pointer only — full rows via
+ * the `memory` tool; never dump the whole store into inject).
+ */
+export const SESSION_MEMORY_PATH = "session://memory";
+
 const instructionAuthorityRegistry = createInstructionAuthorityRegistry();
 
 function wrapAuthority(body: string): string {
@@ -61,6 +71,10 @@ function wrapBoss(body: string): string {
 
 function wrapSeat(body: string): string {
   return `<seat_identity>\n${body}\n</seat_identity>`;
+}
+
+function wrapLanes(body: string): string {
+  return `<session_lanes>\n${body}\n</session_lanes>`;
 }
 
 function entry(
@@ -128,6 +142,11 @@ export function listSessionInjectDocuments(
       entry(SESSION_POSTURE_PATH, "session-posture", wrapPosture(posture)),
     );
   }
+  // Priority order: posture (8.5) → lanes (8.25) → boss (8.2) → seat → collab (8).
+  const lanes = formatSessionLanes(runtime, sessionId);
+  if (lanes) {
+    out.push(entry(SESSION_LANES_PATH, "session-lanes", wrapLanes(lanes)));
+  }
   const boss = formatBossStatusDocument(runtime, sessionId);
   if (boss) {
     out.push(
@@ -150,7 +169,35 @@ export function listSessionInjectDocuments(
       ),
     );
   }
+  const memory = formatSessionMemoryDocument(runtime, sessionId);
+  if (memory) {
+    out.push(entry(SESSION_MEMORY_PATH, "session-memory", memory));
+  }
   return out;
+}
+
+/** Thin curated-memory card for Inject catalog / skill.read — tool-first. */
+function formatSessionMemoryDocument(
+  runtime: FaceRuntime,
+  sessionId: string,
+): string {
+  const snap = runtime.curatedMemoryConsolidate;
+  const lines = [
+    "<session_memory>",
+    "Curated memory is layered (global / workspace / session / agent).",
+    "Discover and mutate with the `memory` tool (list / add / replace / remove).",
+    "Do not expect a full dump in inject — this card is a pointer only.",
+  ];
+  if (snap && snap.sessionId === sessionId) {
+    lines.push(
+      `Last consolidate: phase1 +${snap.phase1Written}, phase2=${snap.phase2}` +
+        (snap.phase2Written ? ` +${snap.phase2Written}` : "") +
+        (snap.skipped ? ` (skipped: ${snap.skipped})` : "") +
+        ".",
+    );
+  }
+  lines.push("</session_memory>");
+  return lines.join("\n");
 }
 
 /**
@@ -194,6 +241,16 @@ export function readSessionInjectDocument(
       path: SESSION_COLLAB_PATH,
       content: `<external_collab_board>${body}</external_collab_board>`,
     };
+  }
+  if (logicalPath === SESSION_LANES_PATH) {
+    const body = formatSessionLanes(runtime, sessionId);
+    if (!body) return undefined;
+    return { path: SESSION_LANES_PATH, content: wrapLanes(body) };
+  }
+  if (logicalPath === SESSION_MEMORY_PATH) {
+    const body = formatSessionMemoryDocument(runtime, sessionId);
+    if (!body) return undefined;
+    return { path: SESSION_MEMORY_PATH, content: body };
   }
   return undefined;
 }

@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { projectTranscriptChrome } from '@xrkseek/client-runtime/client'
 import type { ChatNodeViewProps, TurnTailOwnerProps } from '../contract/slots.ts'
 import { stopLabelKey, turnAbortCause } from '../conversation-nodes/common.ts'
 import { AssistantMarkdown } from './AssistantMarkdown.tsx'
@@ -24,16 +25,19 @@ export const AssistantNodeView = memo(function AssistantNodeView({
   const interruptedLabelKey = data.status === 'interrupted'
     ? stopLabelKey(turnAbortCause(turn?.end))
     : undefined
+  const chrome = projectTranscriptChrome({ surface: 'assistant' })
   return (
-    <AssistantMarkdown
-      blocks={data.blocks}
-      streaming={data.status === 'running'}
-      interrupted={data.status === 'interrupted'}
-      stoppedLabelKey={interruptedLabelKey}
-      thinkPersistKey={`${data.turn}:${data.step}`}
-      renderMessageImages={renderMessageImages}
-      mentions={mentions}
-      t={t}
-    />
+    <div data-voice={chrome.voice} data-lane={chrome.lane}>
+      <AssistantMarkdown
+        blocks={data.blocks}
+        streaming={data.status === 'running'}
+        interrupted={data.status === 'interrupted'}
+        stoppedLabelKey={interruptedLabelKey}
+        thinkPersistKey={`${data.turn}:${data.step}`}
+        renderMessageImages={renderMessageImages}
+        mentions={mentions}
+        t={t}
+      />
+    </div>
   )
 })

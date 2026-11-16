@@ -452,6 +452,15 @@ export interface SessionStatusSnapshot {
     readonly childMemberId?: string;
     /** Roster id of the 委派方 when it is a Team seat (optional). */
     readonly parentMemberId?: string;
+    /**
+     * N 委派方 (root → … → immediate parent). UI paints left stack → 1 child.
+     * First entry is the furthest ancestor; last is `parentSessionId`.
+     */
+    readonly parents?: readonly {
+      readonly sessionId: string;
+      readonly label?: string;
+      readonly memberId?: string;
+    }[];
   };
   readonly timeline: SessionStatusTimeline;
   /** Prune → summary stage fold + live busy phase. */
@@ -1563,11 +1572,39 @@ export function buildSessionStatusSnapshotUncached(
       uiLocale,
       seatTitles,
     );
+    const parents: Array<{
+      sessionId: string;
+      label?: string;
+      memberId?: string;
+    }> = [];
+    let walkId: string | undefined = childLink.parentSessionId;
+    const seenParents = new Set<string>();
+    while (walkId && !seenParents.has(walkId) && parents.length < 4) {
+      seenParents.add(walkId);
+      const asChild = runtime.subagents.getByChild(walkId);
+      const walkSeat = resolveChildParentSeat(
+        runtime,
+        walkId,
+        seatTitles,
+        uiLocale,
+      );
+      const label =
+        walkId === childLink.parentSessionId
+          ? parentLabel
+          : asChild?.label?.trim() || walkSeat.label;
+      parents.unshift({
+        sessionId: walkId,
+        ...(label ? { label } : {}),
+        ...(walkSeat.memberId ? { memberId: walkSeat.memberId } : {}),
+      });
+      walkId = asChild?.parentSessionId;
+    }
     delegate = {
       parentSessionId: childLink.parentSessionId,
       childLabel: childPaint.childLabel,
       childSeat: childPaint.childSeat,
       parentLabel,
+      parents,
       ...(childPaint.childMemberId
         ? { childMemberId: childPaint.childMemberId }
         : {}),

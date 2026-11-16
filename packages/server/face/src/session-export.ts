@@ -60,6 +60,8 @@ function attachmentIdsFromEvents(events: readonly SessionEvent[]): string[] {
   for (const e of events) {
     if (e.type === "user/message" || e.type === "prompt/admitted") {
       for (const ref of listImageRefs(e.content)) ids.add(ref.attachmentId);
+    } else if (e.type === "tool/result") {
+      for (const ref of listImageRefs(e.result.content)) ids.add(ref.attachmentId);
     }
   }
   return [...ids];

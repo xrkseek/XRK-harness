@@ -15,6 +15,17 @@ export const FACE_WS_HEARTBEAT_INTERVAL_MS = 2_000;
  */
 export const FACE_WS_HEARTBEAT_MAX_MISSED = 5;
 
+/**
+ * App-level keepalive on mux/host WebSockets (text `: keepalive`). Browser
+ * clients cannot see protocol Ping/Pong as `message` events; without this,
+ * the client idle watchdog would either never fire or reconnect every quiet
+ * stretch. Same 15s cadence as SSE comment keepalives.
+ */
+export const FACE_WS_APP_KEEPALIVE_INTERVAL_MS = 15_000;
+
+/** Payload for {@link FACE_WS_APP_KEEPALIVE_INTERVAL_MS} (SSE uses the same). */
+export const FACE_WS_APP_KEEPALIVE_TEXT = ': keepalive';
+
 export interface WsHeartbeat {
   /** Arm Ping tracking for one accepted socket; starts the shared timer. */
   watch(ws: WebSocket): void;

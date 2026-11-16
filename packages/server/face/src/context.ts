@@ -198,6 +198,12 @@ export interface FaceRuntime {
    * member, not a subagent child.
    */
   readonly sessionIdentities: import("./session-identity-store.js").FaceSessionIdentityStore;
+  /**
+   * Session-collab report-back waiters (`thread_message` /
+   * `workspace_session_prompt`) — same one-channel discipline as subagent
+   * courier×handoff (idle completion vs stop; wait:true clears on success).
+   */
+  readonly peerCollabWaiters: import("./peer-collab-handoff.js").FacePeerCollabWaiters;
   /** Per-session Overview emotion-ball sticky state (`presence_set`). */
   readonly presence: FacePresenceStore;
   /** Session-scoped turn/step numbers for DSH wire events. */
@@ -430,9 +436,9 @@ export interface FaceRuntime {
   ): SessionRecord;
   /**
    * Host drain status hook. Continuable children notify the parent on idle
-   * (same wake budget as job completions). Idle notifies are epoch-scoped:
-   * a later `running:true` drops in-flight stale delivers; transient resolve
-   * failures retry once on the same idle stretch.
+   * (always wake). Idle notifies are epoch-scoped: a later `running:true`
+   * drops in-flight stale delivers; transient resolve failures retry once on
+   * the same idle stretch.
    */
   onSessionDrainStatus(sessionId: string, running: boolean): void;
   /**

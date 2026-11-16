@@ -1,5 +1,21 @@
-import type { SessionEvent, TurnEndReason } from "@xrkseek/protocol";
+import type { SessionEvent, TurnEndReason, UserMessageSource } from "@xrkseek/protocol";
 import type { FaceSubagentLink } from "../subagent-registry.js";
+
+/**
+ * Durable `user/message.source` for subagent completion / stop steers.
+ * Face / client project this as Voice `courier` · Lane `handoff`.
+ */
+export function subagentNoticeSource(link: FaceSubagentLink): UserMessageSource {
+  return {
+    kind: "plugin",
+    plugin: "subagent",
+    form: "notice",
+    childSessionId: link.childSessionId,
+    label: link.label,
+    ...(link.memberId !== undefined ? { memberId: link.memberId } : {}),
+    ...(link.appearance !== undefined ? { appearance: link.appearance } : {}),
+  };
+}
 
 /**
  * Child body text for parent-facing completion / tool results.

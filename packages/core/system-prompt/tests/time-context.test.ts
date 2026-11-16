@@ -30,4 +30,14 @@ describe("time-context refresh", () => {
     expect(shouldRefreshTimeContext("s1", 61_000, 60_000)).toBe(true);
     clearTimeContextRefreshState();
   });
+
+  it("clears one session without wiping siblings", () => {
+    clearTimeContextRefreshState();
+    noteTimeContextInjected("s1", 1000);
+    noteTimeContextInjected("s2", 1000);
+    clearTimeContextRefreshState("s1");
+    expect(shouldRefreshTimeContext("s1", 2000, 60_000)).toBe(true);
+    expect(shouldRefreshTimeContext("s2", 2000, 60_000)).toBe(false);
+    clearTimeContextRefreshState();
+  });
 });

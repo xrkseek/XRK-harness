@@ -25,6 +25,7 @@ import {
 import { buildSessionStatusSnapshot } from "./session-status.js";
 import { deriveSessionKind } from "./session-kind.js";
 import { sessionInspectDescription } from "./session-tool-copy.js";
+import { readWorkspaceDiscoverySettings } from "./workspace-discovery.js";
 
 export { SESSION_QUERY_ROUTING_PROMPT_TEXT };
 
@@ -119,22 +120,48 @@ export function createSessionSearchTool(
       const { runtime, parentSessionId } = options;
       const store = runtime.store;
       const cwd = callerCwd(runtime, parentSessionId);
-      const raw = searchSessions(store, query);
-      const items = raw.items
-        .filter(
-          (hit) =>
-            hit.sessionId !== parentSessionId &&
-            sameWorkspace(runtime, parentSessionId, hit.sessionId),
-        )
-        .slice(0, limit)
-        .map((hit) => ({
-          sessionId: hit.sessionId,
-          cwd: resolveSessionCwd(runtime, hit.sessionId),
-          snippet: truncateCodePoints(
-            hit.snippet,
-            SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
+      const discovery = readWorkspaceDiscoverySettings(runtime);
+      if (!discovery.peerSessionDiscovery) {
+        return {
+          content: JSON.stringify(
+            {
+              cwd,
+              query,
+              count: 0,
+              capped: false,
+              items: [],
+              hint: "peerSessionDiscovery is off in Settings → Workspace discovery.",
+            },
+            null,
+            2,
           ),
-        }));
+        };
+      }
+      const raw = searchSessions(store, query);
+      const filtered = raw.items.filter(
+        (hit) => hit.sessionId !== parentSessionId,
+      );
+      // preferSameWorkspace: same workspace first, then the rest (locale:
+      // "rank same-workspace sessions first" — not "hide other workspaces").
+      const ranked = discovery.preferSameWorkspace
+        ? [
+            ...filtered.filter((hit) =>
+              sameWorkspace(runtime, parentSessionId, hit.sessionId),
+            ),
+            ...filtered.filter(
+              (hit) =>
+                !sameWorkspace(runtime, parentSessionId, hit.sessionId),
+            ),
+          ]
+        : filtered;
+      const items = ranked.slice(0, limit).map((hit) => ({
+        sessionId: hit.sessionId,
+        cwd: resolveSessionCwd(runtime, hit.sessionId),
+        snippet: truncateCodePoints(
+          hit.snippet,
+          SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
+        ),
+      }));
       const capped = items.length >= limit || raw.hasMore;
       const body = {
         cwd,

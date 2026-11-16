@@ -15,7 +15,7 @@ AGENTS.md / skills catalog 不进 fragment；瞬时 env / recap 不进 inject。
 
 **窗内 last-wins：** 每轮仍 append 一条 `user/message`（日志全留）；进模型窗时，同 `fragmentId` 只留最新。权限、席位、工具路由这类活文案就不会叠成旧快照墙。
 
-**双轴：** 通道（system · durable · fragment · tools[] · derive）可以拆开；会变的说明文案按碎片语义管（稳定 id · 可重算 · last-wins）。`tools[]` 只留薄契约（name · 短 description · JSON schema），整份 catalog 别碎片化。分层草图见 Cursor Canvas `context-engineering-layers`。
+**双轴：** 通道（system · durable · fragment · tools[] · derive）可以拆开；会变的说明文案按碎片语义管（稳定 id · 可重算 · last-wins）。`tools[]` 只留薄契约（name · 短 description · JSON schema），整份 catalog 别碎片化——**也别**把 sibling / 名册行塞进 `dynamicSchema` description（会改工具声明前缀、打掉提供方 KV；见 [session-optimize](./session-optimize.md) §5 · [session-identity](./session-identity.md)「表面层工具」）。分层草图见 Cursor Canvas `context-engineering-layers`。
 
 ## 阶段
 
@@ -43,7 +43,7 @@ Harness：`createHarnessComposition({ contextFragmentProviders, contextFragmentB
 
 Chat 壳对 `fragmentKind: "additional_context"` 使用 `visibility: "hidden"`：模型仍从 session 日志可见，**不**再展开成「上下文注入」行。
 
-Host **turn-start**（priority 高→低）：`instruction_authority` · `session_capability`（`mcp_mount` / `ask:`）· `session_posture`（IM/奇创/harness·shallow；Frugal/Shell 空）· `boss_status` · `seat_identity` · `collab_board`（名册 ids + 近 24h 主线；同道一句，长派活链在 posture）。Settings → 插件 → Inject 的 `session://*` 与上列一一对应（`skill.list` / `skill.read`）。seed AGENTS / skills 仍走 inject。子会话不吃 posture/board 全板（authority / capability / seat 仍可有）。委派用 `subagent member_id`，别贴 playbook。
+Host **turn-start**（priority 高→低）：`instruction_authority` · `session_capability`（`mcp_mount` / `ask:`）· `session_posture`（IM/奇创/harness·shallow；Frugal/Shell 空）· `session_lanes`（本会话主线/支线/open todos + 完成后切换动词；长短会话每回合）· `boss_status` · `seat_identity` · `collab_board`（名册 ids + 近 24h 主线；同道一句，长派活链在 posture）。Settings → 插件 → Inject 的 `session://*` 与上列一一对应（`skill.list` / `skill.read`）。seed AGENTS / skills 仍走 inject。子会话不吃 posture 全板，但吃 `session_lanes`（authority / capability / seat 仍可有）。委派用 `subagent member_id`，别贴 playbook。
 
 **一事一处：** ask 只在 capability；MCP **用法**看 `mcp_mount`，**配置**仍在向阳。
 
@@ -74,7 +74,7 @@ Do not move AGENTS.md / skill catalogs into fragments; do not put ephemeral env 
 
 **In-window last-wins:** each turn still appends a `user/message` (full log retained); the model window keeps **only the latest** row per `fragmentId`, so permission / seat / routing copy does not stack stale snapshots.
 
-**Two axes:** delivery channels (system · durable · fragment · tools[] · derive) may differ; living prose uses fragment semantics (stable id · recompute · last-wins). Keep `tools[]` thin (name · short description · JSON schema)—do not fragment the whole catalog. Layer sketch: Cursor Canvas `context-engineering-layers`.
+**Two axes:** delivery channels (system · durable · fragment · tools[] · derive) may differ; living prose uses fragment semantics (stable id · recompute · last-wins). Keep `tools[]` thin (name · short description · JSON schema)—do not fragment the whole catalog, and **do not** stuff sibling / roster rows into `dynamicSchema` descriptions (that rewrites the tools prefix and busts provider KV; see [session-optimize](./session-optimize.md) §5 · [session-identity](./session-identity.md) “Scenario-bound tools”). Layer sketch: Cursor Canvas `context-engineering-layers`.
 
 ## Phases
 
@@ -102,9 +102,9 @@ Harness: `createHarnessComposition({ contextFragmentProviders, contextFragmentBu
 
 The chat shell marks `fragmentKind: "additional_context"` as `visibility: "hidden"`: still model-visible from the session log, **not** rendered as expandable 「上下文注入」 rows.
 
-Host **turn-start** (high→low): `instruction_authority` · `session_capability` (`mcp_mount` / `ask:`) · `session_posture` (IM/奇创/harness·shallow; empty for Frugal/Shell) · `boss_status` · `seat_identity` · `collab_board` (roster ids + recent 主线; one same-lane spout; long dispatch chains stay in posture). Settings → Plugins → Inject `session://*` mirrors that set (`skill.list` / `skill.read`). Seed AGENTS / skills stay on inject. Children skip full posture/board (authority / capability / seat may still appear). Spawn with `subagent member_id`; do not paste playbooks.
+Host **turn-start** (high→low): `instruction_authority` · `session_capability` (`mcp_mount` / `ask:`) · `session_posture` (IM/奇创/harness·shallow; empty for Frugal/Shell) · `session_lanes` (this session’s 主线 / 支线 / open todos + completion-switch verbs; every turn) · `boss_status` · `seat_identity` · `collab_board` (roster ids + recent 主线; one same-lane spout; long dispatch chains stay in posture). Settings → Plugins → Inject `session://*` mirrors that set (`skill.list` / `skill.read`). Seed AGENTS / skills stay on inject. Children skip full posture but still get `session_lanes` (authority / capability / seat may still appear). Spawn with `subagent member_id`; do not paste playbooks.
 
-**One fact one place:** ask stays on capability; MCP **usage** is `mcp_mount`, **config** stays on Xiangyang.
+**One fact one place:** ask → capability; MCP **usage** → `mcp_mount` (config on Xiangyang); 主线/支线/todo → `session_lanes` (not restated in posture); dispatch chains → posture; board → ids.
 
 **Tool pre-review (Auto-review)** is not fragment spam: `/permission auto` = no sandbox + per-call review. Host wires Settings / `/auto-review` to `createAutoReviewToolPre` (heuristic · HTTP · session LLM; deny defaults ask→approval; technical failures default `onClassifierError:'ask'`, or `'deny'` fail-closed). See [configuration.md](./configuration.md) · [status.md](./status.md).
 

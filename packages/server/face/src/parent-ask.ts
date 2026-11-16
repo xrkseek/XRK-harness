@@ -326,20 +326,9 @@ export function bindAnswerAskTool(
       required: ["ask_id", "answer"],
       additionalProperties: false,
     },
-    // Idle: omit dynamic text (static desc is enough). Pending: ids + Q tip only.
-    dynamicSchema: () => {
-      const pending = options.broker.listPending(options.parentSessionId);
-      if (pending.length === 0) return {};
-      const tip = pending
-        .map((p) => {
-          const q = p.questions[0]?.question?.trim() ?? "";
-          const short = q.length > 48 ? `${q.slice(0, 45)}…` : q;
-          const who = p.childLabel.trim() || p.childSessionId;
-          return short ? `${p.askId}←${who}: ${short}` : `${p.askId}←${who}`;
-        })
-        .join("; ");
-      return { description: `pending: ${tip}` };
-    },
+    // Keep tools[] byte-stable — live ask ids/Qs live on turn-start
+    // `child_ask_pending` (capability) and the <child_ask> notice, not here.
+    dynamicSchema: () => ({}),
     presentCall: (args) => ({
       card: "generic",
       title: "answer_ask",

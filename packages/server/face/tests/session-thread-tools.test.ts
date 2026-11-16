@@ -185,4 +185,149 @@ describe("thread_* tools", () => {
     expect(bind?.threadId).toBeTruthy();
     expect(runtime.sessionThreads.get(ws, bind!.threadId)?.title).toBe("远端施工");
   });
+
+  it("siblingScope=none blocks child↔child thread_message", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({ store });
+    newSession(store);
+    newSession(store);
+    newSession(store);
+    const [parent, a, b] = store.list();
+    const ws = runtime.workspaces.defaultId();
+    for (const id of [parent!, a!, b!]) {
+      runtime.workspaces.attachSession(id, ws);
+    }
+    runtime.subagents.attach({
+      childSessionId: a!,
+      parentSessionId: parent!,
+      role: "worker",
+      status: "idle",
+      startedAt: 0,
+      mode: "in-process",
+      toolSurface: "minimal",
+    } as never);
+    runtime.subagents.attach({
+      childSessionId: b!,
+      parentSessionId: parent!,
+      role: "worker",
+      status: "idle",
+      startedAt: 0,
+      mode: "in-process",
+      toolSurface: "minimal",
+    } as never);
+    runtime.agentTeams.recordDelegation({
+      childSessionId: a!,
+      parentSessionId: parent!,
+      role: "worker",
+      status: "idle",
+      startedAt: 0,
+      mode: "in-process",
+      toolSurface: "minimal",
+      label: "a",
+    } as never);
+    runtime.agentTeams.recordDelegation({
+      childSessionId: b!,
+      parentSessionId: parent!,
+      role: "worker",
+      status: "idle",
+      startedAt: 0,
+      mode: "in-process",
+      toolSurface: "minimal",
+      label: "b",
+    } as never);
+
+    Object.assign(runtime.settingsNamespaces.ensure("workspace-discovery").user, {
+      siblingScope: "none",
+    });
+
+    const tools = createToolRegistry();
+    bindSessionThreadTools(tools, {
+      runtime,
+      sessionId: a!,
+      ownLane: true,
+    });
+    const out = await tools.get("thread_message")!.execute({
+      session_id: b,
+      message: "hi sibling",
+      wait: false,
+    });
+    expect(out.isError).toBeTruthy();
+    expect(String(out.content)).toMatch(/siblingScope=none/);
+  });
+
+  it("ownLane children mint self pins but cannot revise or delete shared pins", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({ store });
+    newSession(store);
+    newSession(store);
+    const [parent, child] = store.list();
+    const ws = runtime.workspaces.defaultId();
+    runtime.workspaces.attachSession(parent!, ws);
+    runtime.workspaces.attachSession(child!, ws);
+    runtime.subagents.attach({
+      childSessionId: child!,
+      parentSessionId: parent!,
+      role: "worker",
+      status: "idle",
+      startedAt: 0,
+      mode: "in-process",
+      toolSurface: "minimal",
+    } as never);
+
+    const parentTools = createToolRegistry();
+    bindSessionThreadTools(parentTools, { runtime, sessionId: parent! });
+    const parentPin = await parentTools.get("thread_upsert")!.execute({
+      title: "父主线",
+      brief: "parent mission",
+    });
+    expect(parentPin.isError).toBeFalsy();
+    const parentThreadId = (
+      JSON.parse(String(parentPin.content)) as { thread: { id: string } }
+    ).thread.id;
+
+    const childTools = createToolRegistry();
+    bindSessionThreadTools(childTools, {
+      runtime,
+      sessionId: child!,
+      ownLane: true,
+    });
+    expect(childTools.get("thread_upsert")).toBeTruthy();
+    expect(childTools.get("thread_delete")).toBeTruthy();
+
+    const peerPin = await childTools.get("thread_upsert")!.execute({
+      title: "偷改父钉",
+      id: parentThreadId,
+    });
+    expect(peerPin.isError).toBeTruthy();
+    expect(String(peerPin.content)).toMatch(/own-lane may only revise/);
+
+    const foreignDelete = await childTools.get("thread_delete")!.execute({
+      id: parentThreadId,
+    });
+    expect(foreignDelete.isError).toBeTruthy();
+    expect(String(foreignDelete.content)).toMatch(/bound to/);
+
+    // Landing on the parent pin via switch must not unlock rewrite of a shared mission.
+    const switched = await childTools.get("thread_switch")!.execute({
+      id: parentThreadId,
+    });
+    expect(switched.isError).toBeFalsy();
+    const sharedRevise = await childTools.get("thread_upsert")!.execute({
+      title: "改共享主线",
+      id: parentThreadId,
+    });
+    expect(sharedRevise.isError).toBeTruthy();
+    expect(String(sharedRevise.content)).toMatch(/shared with other sessions/);
+
+    const own = await childTools.get("thread_upsert")!.execute({
+      title: "子主线",
+      brief: "child mission",
+    });
+    expect(own.isError).toBeFalsy();
+    const ownId = (
+      JSON.parse(String(own.content)) as { thread: { id: string } }
+    ).thread.id;
+    const deleted = await childTools.get("thread_delete")!.execute({ id: ownId });
+    expect(deleted.isError).toBeFalsy();
+  });
 });

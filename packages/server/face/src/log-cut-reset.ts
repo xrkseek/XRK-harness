@@ -6,7 +6,7 @@ import {
   readSessionEvents,
   sessionEventCount,
 } from "@xrkseek/core-session";
-import { forgetRequestHeaderCache } from "@xrkseek/core-agent-loop";
+import { forgetSessionProcessCaches } from "@xrkseek/core-agent-loop";
 import type { FaceRuntime } from "./context.js";
 
 export function resetFaceStateAfterLogCut(
@@ -21,12 +21,17 @@ export function resetFaceStateAfterLogCut(
     readSessionEvents(runtime.store, sessionId),
   );
   runtime.inboxWire.clear(sessionId);
+  // Mirror pathAllowlist: drop then re-seed from the *remaining* log so
+  // edit-resubmit / truncate does not leave expand empty until the next
+  // tool_search (hydrate only runs on first ToolRegistry bind).
   runtime.toolDisclosure.forget(sessionId);
+  runtime.toolDisclosure.hydrate(runtime.store, sessionId);
   runtime.pathAllowlist.forget(sessionId);
   runtime.pathAllowlist.hydrate(runtime.store, sessionId);
   runtime.listProjectionCache.forget(sessionId);
   runtime.projections.evictSession(sessionId);
   void runtime.projections.snapshot(sessionId);
-  forgetRequestHeaderCache(sessionId);
+  // Truncate breaks the provider prefix — drop series baseline + header cache.
+  forgetSessionProcessCaches(sessionId);
   return n;
 }

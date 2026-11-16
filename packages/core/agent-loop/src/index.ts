@@ -82,6 +82,12 @@ import {
   appendWorkspaceChangesFromDiffs,
   fileDiffsFromToolPresenters,
 } from "./workspace-changes-emit.js";
+import {
+  breakSeriesBaseline,
+  recallSeriesBaseline,
+  rememberSeriesBaseline,
+} from "./series-baseline.js";
+import { placeSystemOnWire } from "./place-system-on-wire.js";
 
 /** Context for a turn's persona (tool catalog after materialize / filter). */
 export interface AssemblePersonaContext {
@@ -539,47 +545,6 @@ async function invokeLlmBody(
   });
 }
 
-function placeSystemOnWire(input: {
-  systemText: string;
-  history: readonly ChatMessage[];
-  systemPromptUpdate?: SystemPromptUpdate;
-  seriesBaselineSystem?: string;
-}): {
-  messages: ChatMessage[];
-  /** Anchoring system text for the current KV-cache series (leading message). */
-  seriesBaselineSystem?: string;
-} {
-  const text = input.systemText;
-  if (!text.trim()) {
-    return {
-      messages: [...input.history],
-      ...(input.seriesBaselineSystem !== undefined
-        ? { seriesBaselineSystem: input.seriesBaselineSystem }
-        : {}),
-    };
-  }
-  const inHistory = input.systemPromptUpdate === "in-history";
-  if (
-    inHistory &&
-    input.seriesBaselineSystem !== undefined &&
-    input.seriesBaselineSystem !== text
-  ) {
-    // Keep message 0 byte-stable; append the new effective prompt after history.
-    return {
-      messages: [
-        { role: "system", content: input.seriesBaselineSystem },
-        ...input.history,
-        { role: "system", content: text },
-      ],
-      seriesBaselineSystem: input.seriesBaselineSystem,
-    };
-  }
-  return {
-    messages: [{ role: "system", content: text }, ...input.history],
-    seriesBaselineSystem: text,
-  };
-}
-
 async function buildModelRequest(input: {
   events: readonly SessionEvent[];
   sessionId: string;
@@ -592,8 +557,6 @@ async function buildModelRequest(input: {
   /** First LLM call in the turn still treats userText as skeleton user. */
   firstStep: boolean;
   userText: string;
-  /** Recipe instructions from slash expand (appended as workspace block). */
-  slashSystemExtra?: string;
   /** Model-declared mode; omit → always lead with system. */
   systemPromptUpdate?: SystemPromptUpdate;
   /** Leading system text retained for the current request series. */
@@ -606,6 +569,7 @@ async function buildModelRequest(input: {
 }> {
   const derived = deriveMessages(input.events);
 
+  // Lexicographic here; assemble path re-orders via toolOrder when present.
   const toolDefs = [...input.tools.list()]
     .map((t) => ({
       name: t.name,
@@ -708,16 +672,10 @@ async function buildModelRequest(input: {
     includeVolatileTime: input.firstStep === true,
     tools: toolDefs,
     ...(input.assemble?.toolOrder ? { toolOrder: input.assemble.toolOrder } : {}),
-    ...(input.assemble?.workspaceBlocks ||
-    input.slashSystemExtra ||
-    planActive ||
-    timeBlock
+    ...(input.assemble?.workspaceBlocks || planActive || timeBlock
       ? {
           workspaceBlocks: [
             ...(input.assemble?.workspaceBlocks ?? []),
-            ...(input.slashSystemExtra?.trim()
-              ? [`## Recipe\n${input.slashSystemExtra.trim()}`]
-              : []),
             ...(planActive ? [DEFAULT_PLAN_POLICY_SECTION] : []),
             ...(timeBlock ? [timeBlock] : []),
           ],
@@ -779,12 +737,16 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
   let toolFailed = 0;
   const compaction = resolveCompactionOptions(input.compaction);
   let overflowRecovered = false;
-  /** Leading system text for in-history KV-cache series within this turn. */
-  let seriesBaselineSystem: string | undefined;
+  /** Leading system text for in-history KV-cache series (turn + cross-turn). */
+  let seriesBaselineSystem: string | undefined = recallSeriesBaseline(
+    input.sessionId,
+    input.llm,
+  );
 
   let userText = input.userText;
   let userContent: MessageContent = input.userContent ?? input.userText;
-  let slashSystemExtra: string | undefined;
+  /** Slash recipe body — durable inject (not system) so series-baseline stays stable. */
+  let slashRecipe: string | undefined;
   if (input.assemble?.resolveSlash) {
     const resolved = await input.assemble.resolveSlash(userText);
     if (resolved) {
@@ -793,7 +755,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
         userContent = userText;
       }
       if (resolved.systemExtra?.trim()) {
-        slashSystemExtra = resolved.systemExtra;
+        slashRecipe = resolved.systemExtra.trim();
       }
     }
   }
@@ -883,6 +845,25 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
     preparedContexts = prepared.contexts;
   }
 
+  // Slash recipe as context inject (DSH: live guidance after cached system
+  // prefix). Same fragmentId last-wins — sticky until the next slash recipe
+  // replaces it (same as other additional_context fragments). Does not rewrite
+  // message-0.
+  if (slashRecipe) {
+    append(input.store, input.sessionId, {
+      type: "user/message",
+      ts: now(),
+      turnId,
+      messageId: newUserMessageId(),
+      content: `## Recipe\n${slashRecipe}`,
+      source: {
+        kind: "context-fragment",
+        form: "fragment",
+        fragmentId: "slash-recipe",
+        fragmentKind: "additional_context",
+      },
+    });
+  }
   append(input.store, input.sessionId, {
     type: "user/message",
     ts: now(),
@@ -954,6 +935,14 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
             ? { expandedToolNames: input.expandedToolNames() }
             : {}),
         });
+    /**
+     * Opening assemble (CURRENT_MESSAGE + volatile time) only on the first
+     * buildReq of step 1. Soft-budget / overflow rebuilds within the same step
+     * must not re-stamp those markers — they bust the conversation prefix.
+     */
+    let openingAssemble = steps === 1;
+    /** Soft-budget summary rewrote the window — force a request/header rewrite. */
+    let forceRequestHeader = false;
 
     const buildReq = async () => {
       ensureDurableImageOffloads(
@@ -976,11 +965,8 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           : {}),
         tools: table ?? { list: () => [] },
         nowIso: new Date(now()).toISOString(),
-        firstStep: steps === 1,
+        firstStep: openingAssemble,
         userText,
-        ...(slashSystemExtra !== undefined
-          ? { slashSystemExtra }
-          : {}),
         ...(input.llm.systemPromptUpdate !== undefined
           ? { systemPromptUpdate: input.llm.systemPromptUpdate }
           : {}),
@@ -988,8 +974,14 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           ? { seriesBaselineSystem }
           : {}),
       });
+      openingAssemble = false;
       if (built.seriesBaselineSystem !== undefined) {
         seriesBaselineSystem = built.seriesBaselineSystem;
+        rememberSeriesBaseline(
+          input.sessionId,
+          input.llm,
+          built.seriesBaselineSystem,
+        );
       }
       return built;
     };
@@ -1172,6 +1164,10 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
                 compactAttempts += 1;
                 // Compaction breaks the cached prefix → re-baseline system at head.
                 seriesBaselineSystem = undefined;
+                breakSeriesBaseline(input.sessionId);
+                // Assembled system changed — force request/header (auto path
+                // otherwise skips when route+tools are unchanged).
+                forceRequestHeader = true;
                 // Post-swap: provider sample is still the pre-window prompt;
                 // trust local estimate until the next usage stamp.
                 trustProjected = false;
@@ -1229,6 +1225,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
       turnId,
       llm: input.llm,
       now,
+      ...(forceRequestHeader ? { reason: "change" as const } : {}),
       ...(req.system?.trim() ? { system: req.system } : {}),
       ...(req.tools.length ? { tools: req.tools } : {}),
     });
@@ -1283,6 +1280,24 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
     };
     // EMPTY_RESPONSE ≥5 → force one compaction regardless of soft-budget /
     // strategy off / compaction:false. Same runCompaction path as overflow.
+    // If summarizer fails: hard-trim oversized tool results + visible notice
+    // so the streak does not latch on an unchanged context.
+    const rebuildAfterContextChange = async (): Promise<void> => {
+      seriesBaselineSystem = undefined;
+      breakSeriesBaseline(input.sessionId);
+      req = await buildReq();
+      assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
+      maybeAppendRequestHeader({
+        store: input.store,
+        sessionId: input.sessionId,
+        turnId,
+        llm: input.llm,
+        now,
+        reason: "change",
+        ...(req.system?.trim() ? { system: req.system } : {}),
+        ...(req.tools.length ? { tools: req.tools } : {}),
+      });
+    };
     const forceCompactAfterEmpty = async (): Promise<boolean> => {
       try {
         const did = await runCompaction({
@@ -1298,25 +1313,40 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           ...(input.signal ? { signal: input.signal } : {}),
           now,
         });
-        if (!did.compacted) return false;
-        seriesBaselineSystem = undefined;
-        req = await buildReq();
-        assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
-        maybeAppendRequestHeader({
-          store: input.store,
-          sessionId: input.sessionId,
-          turnId,
-          llm: input.llm,
-          now,
-          reason: "change",
-          ...(req.system?.trim() ? { system: req.system } : {}),
-          ...(req.tools.length ? { tools: req.tools } : {}),
-        });
-        return true;
+        if (did.compacted) {
+          await rebuildAfterContextChange();
+          return true;
+        }
       } catch (compactErr) {
         if (input.signal?.aborted) throw compactErr;
-        return false;
       }
+      // Hard-trim fallback: prune tool results so the next EMPTY attempt
+      // sees a smaller window (compaction failed / returned nothing).
+      const pruned = pruneOversizedToolResults(input.store, input.sessionId, {
+        now,
+        turnId,
+        stepId,
+        // Aggressive vs soft-budget prune — EMPTY path needs a real cut.
+        thresholdChars: 4_000,
+        headChars: 1_500,
+        tailChars: 1_500,
+      });
+      input.store.append(input.sessionId, {
+        type: "safety/notice",
+        ts: now(),
+        turnId,
+        kind: "api_error",
+        content:
+          pruned.pruned > 0
+            ? `EMPTY_RESPONSE ×${EMPTY_RESPONSE_FORCE_COMPACT_AFTER}: compaction failed; hard-trimmed ${pruned.pruned} oversized tool result(s) and retrying.`
+            : `EMPTY_RESPONSE ×${EMPTY_RESPONSE_FORCE_COMPACT_AFTER}: compaction failed; no oversized tool results to trim — retrying on the same window.`,
+      });
+      if (pruned.pruned > 0) {
+        await rebuildAfterContextChange();
+        return true;
+      }
+      // Still return true so llm-retry resets the EMPTY streak (avoids latch).
+      return true;
     };
     const emptyForceCompactOpts =
       llmRetryPolicy === false
@@ -1415,6 +1445,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           }
           if (!did.compacted) throw original;
           seriesBaselineSystem = undefined;
+          breakSeriesBaseline(input.sessionId);
           return retryAfterWindowChange();
         };
 
@@ -1815,3 +1846,12 @@ export {
   appendWorkspaceChangesFromDiffs,
   fileDiffsFromToolPresenters,
 } from "./workspace-changes-emit.js";
+export {
+  breakSeriesBaseline,
+  clearSeriesBaselineAnchors,
+  llmRouteKey,
+  recallSeriesBaseline,
+  rememberSeriesBaseline,
+} from "./series-baseline.js";
+export { placeSystemOnWire } from "./place-system-on-wire.js";
+export { forgetSessionProcessCaches } from "./session-process-caches.js";

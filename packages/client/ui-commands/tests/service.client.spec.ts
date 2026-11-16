@@ -212,10 +212,22 @@ describe('registration', () => {
 })
 
 describe('candidates', () => {
-  it('does not fetch Agent-bound commands for an addressed child', async () => {
-    const b = await bench({ addressed: sid('child') })
+  it('whitelists slash commands for an addressed child (never empty [])', async () => {
+    const b = await bench({
+      addressed: sid('child'),
+      commands: () => Promise.resolve({
+        commands: [
+          { name: 'status', description: 'ok' },
+          { name: 'plan', description: 'blocked on child' },
+          { name: 'compact', description: 'ok' },
+          { name: 'goal', description: 'blocked on child' },
+        ],
+      }),
+    })
     await expect(b.warm(proj('child'))).resolves.toBeUndefined()
-    expect(b.listCalls).toEqual([])
+    expect(b.listCalls).toEqual([{ sessionId: sid('child') }])
+    const list = await b.source.candidates(proj('child'), req(''))
+    expect(list.map((c) => c.name).sort()).toEqual(['compact', 'status'])
   })
 
   it('pulls the session catalog; fuzzy filter and hint mapping apply', async () => {

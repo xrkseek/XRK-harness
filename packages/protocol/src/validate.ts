@@ -729,6 +729,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         );
       }
       const rpcId = optString(value, "rpcId");
+      const source = parseUserMessageSource(value.source, `${type}.source`);
       return {
         type,
         ts,
@@ -738,6 +739,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         // persist queue explicitly if client sent it
         ...(delivery === "queue" ? { delivery: "queue" as const } : {}),
         ...(rpcId !== undefined ? { rpcId } : {}),
+        ...(source !== undefined ? { source } : {}),
       };
     }
     case "prompt/promoted":

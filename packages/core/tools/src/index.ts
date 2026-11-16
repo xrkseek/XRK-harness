@@ -28,6 +28,7 @@ export {
 } from "./tool-exposure.js";
 export {
   createToolSearchTool,
+  toolSearchDescription,
   type CreateToolSearchToolOptions,
   type ToolSearchState,
 } from "./tool-search.js";

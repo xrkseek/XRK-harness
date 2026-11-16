@@ -43,7 +43,7 @@ async function callApi(
   base: string,
   method: string,
   payload: Record<string, unknown>,
-): Promise<{ ok: boolean; value?: unknown; error?: { message: string } }> {
+): Promise<{ ok: boolean; value?: unknown; error?: { code?: string; message: string } }> {
   const res = await fetch(`${base}/sidebar/api/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -52,7 +52,7 @@ async function callApi(
   return (await res.json()) as {
     ok: boolean;
     value?: unknown;
-    error?: { message: string };
+    error?: { code?: string; message: string };
   };
 }
 
@@ -93,6 +93,49 @@ describe("sidebar fs mutations", () => {
         content: "yes",
       });
       expect(okWrite.ok).toBe(true);
+    });
+  });
+
+  it("fs.read previews absolute paths outside the workspace (chat wake)", async () => {
+    await withWorkspace(async (base, cwd) => {
+      const outside = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-read-"));
+      const file = path.join(outside, "notes.txt");
+      writeFileSync(file, "hello outside");
+      const body = await callApi(base, "fs.read", { path: file });
+      expect(body.ok).toBe(true);
+      const value = body.value as { kind: string; content?: string };
+      expect(value.kind).toBe("text");
+      expect(value.content).toBe("hello outside");
+      // Relative escape (`../…`) still refused — only absolute outsides preview.
+      const viaDotDot = await callApi(base, "fs.read", {
+        path: path.join("..", path.basename(outside), "notes.txt"),
+      });
+      expect(viaDotDot.ok).toBe(false);
+      expect(viaDotDot.error?.code).toBe("path");
+      expect(viaDotDot.error?.message).toMatch(/escapes workspace/i);
+
+      const empty = await callApi(base, "fs.read", { path: "   " });
+      expect(empty.ok).toBe(false);
+      expect(empty.error?.code).toBe("empty");
+
+      const missing = await callApi(base, "fs.read", {
+        path: path.join(cwd, "no-such-file.txt"),
+      });
+      expect(missing.ok).toBe(false);
+      expect(missing.error?.code).toBe("not-found");
+    });
+  });
+
+  it("fs.stat reports absolute paths outside the workspace", async () => {
+    await withWorkspace(async (base) => {
+      const outside = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-stat-"));
+      const file = path.join(outside, "blob.bin");
+      writeFileSync(file, "abc");
+      const body = await callApi(base, "fs.stat", { path: file });
+      expect(body.ok).toBe(true);
+      const value = body.value as { isFile: boolean; size: number };
+      expect(value.isFile).toBe(true);
+      expect(value.size).toBe(3);
     });
   });
 

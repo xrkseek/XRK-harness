@@ -1,5 +1,10 @@
 import { readSessionEvents } from "./seq.js";
-import type { SessionEvent, PromptDelivery, MessageContent } from "@xrkseek/protocol";
+import type {
+  SessionEvent,
+  PromptDelivery,
+  MessageContent,
+  UserMessageSource,
+} from "@xrkseek/protocol";
 import {
   flattenText,
   isHumanUserMessageSource,
@@ -30,6 +35,8 @@ export interface AdmitReceipt {
   readonly delivery: PromptDelivery;
   /** Client submission echo id when stamped on `prompt/admitted`. */
   readonly rpcId?: string;
+  /** Durable producer; stamped onto `user/message.source` on promote when set. */
+  readonly source?: UserMessageSource;
 }
 
 export interface AdmitPromptOptions {
@@ -39,6 +46,28 @@ export interface AdmitPromptOptions {
   readonly delivery?: PromptDelivery;
   /** Client echo id; survives Host restart via the session log. */
   readonly rpcId?: string;
+  /**
+   * Durable producer of this admit (plugin notices, …). Persisted on
+   * `prompt/admitted` and copied onto `user/message` when promoted.
+   */
+  readonly source?: UserMessageSource;
+}
+
+/**
+ * Source to stamp on the promoted `user/message`. Prefers the first non-human
+ * producer when steers coalesce; otherwise the first receipt's source (or
+ * undefined → caller defaults to `{ kind: "user" }`).
+ */
+export function promotedUserMessageSource(
+  receipts: readonly AdmitReceipt[],
+): UserMessageSource | undefined {
+  if (receipts.length === 0) return undefined;
+  for (const r of receipts) {
+    if (r.source !== undefined && !isHumanUserMessageSource(r.source)) {
+      return r.source;
+    }
+  }
+  return receipts[0]?.source;
 }
 
 function newAdmitId(): string {
@@ -91,6 +120,7 @@ export function admitPrompt(
     typeof options?.rpcId === "string" && options.rpcId.trim().length > 0
       ? options.rpcId.trim()
       : undefined;
+  const source = options?.source;
   store.append(sessionId, {
     type: "prompt/admitted",
     ts: now(),
@@ -98,6 +128,7 @@ export function admitPrompt(
     content,
     ...(delivery === "steer" ? { delivery: "steer" as const } : {}),
     ...(rpcId !== undefined ? { rpcId } : {}),
+    ...(source !== undefined ? { source } : {}),
   });
   return {
     admitId,
@@ -105,6 +136,7 @@ export function admitPrompt(
     content,
     delivery,
     ...(rpcId !== undefined ? { rpcId } : {}),
+    ...(source !== undefined ? { source } : {}),
   };
 }
 
@@ -133,6 +165,7 @@ export function listPendingAdmits(
       ...(typeof ev.rpcId === "string" && ev.rpcId.length > 0
         ? { rpcId: ev.rpcId }
         : {}),
+      ...(ev.source !== undefined ? { source: ev.source } : {}),
     });
   }
   return out;
@@ -199,6 +232,7 @@ export function listDanglingPromotedAdmits(
       ...(typeof ev.rpcId === "string" && ev.rpcId.length > 0
         ? { rpcId: ev.rpcId }
         : {}),
+      ...(ev.source !== undefined ? { source: ev.source } : {}),
     });
   }
   const out: AdmitReceipt[] = [];

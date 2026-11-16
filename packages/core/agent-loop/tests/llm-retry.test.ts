@@ -359,6 +359,46 @@ describe("invokeLlmWithRetry", () => {
     expect(compactCalls).toBe(1);
   });
 
+  it("resets EMPTY streak when force-compact hook returns true after failure path", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create("empty-hard-trim");
+    let compactCalls = 0;
+    let calls = 0;
+
+    const response = await invokeLlmWithRetry({
+      invoke: async () => {
+        calls += 1;
+        // 5 empty → hook (hard-trim) → 5 more empty would need another compact
+        // but emptyCompacted latches; after reset, 6th call succeeds.
+        if (calls <= 5) throw new EmptyResponseError();
+        return { content: "ok-after-hard-trim" };
+      },
+      flushChunk: () => {},
+      store,
+      sessionId: session.id,
+      turnId: "t",
+      stepId: "s",
+      now: () => 1,
+      policy: resolveRetryPolicy({
+        initialDelayMs: 0,
+        maxDelayMs: 0,
+        jitterRatio: 0,
+        maxRetries: 10,
+      }),
+      random: () => 0,
+      emptyResponseForceCompactAfter: 5,
+      onEmptyResponseForceCompact: async () => {
+        compactCalls += 1;
+        // Simulates index.ts hard-trim fallback returning true.
+        return true;
+      },
+    });
+
+    expect(response.content).toBe("ok-after-hard-trim");
+    expect(calls).toBe(6);
+    expect(compactCalls).toBe(1);
+  });
+
   it("does not force-compact before the EMPTY streak threshold", async () => {
     const store = createMemorySessionStore();
     const session = store.create("empty-under");

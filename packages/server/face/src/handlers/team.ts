@@ -52,6 +52,7 @@ import {
   sunflowerLockedNickname,
 } from "../catalog-seed-labels.js";
 import { liveMemberPlaybook } from "../agent-roster-tools.js";
+import { publishMemberIdentityPlaybook } from "../agent-identity-sync.js";
 import { captureSessionPlaybook } from "../capture-member-playbook.js";
 import { resolveSessionCwd } from "../session-cwd.js";
 import {
@@ -70,12 +71,9 @@ import { asRecord, remoteArgs, type FaceHandler } from "./types.js";
 import { sessionCreate, sessionPrompt } from "./session.js";
 import {
   mintAgentHomeForMember,
-  syncAgentHomePlaybook,
-  agentHomeDir,
   unbindAgentHomeForMember,
 } from "../agent-home.js";
 import { publishWorkspaceChanged } from "../workspace-member-look.js";
-import { resolveHarnessHome } from "../settings-document.js";
 
 function sessionIdOf(payload: unknown): string {
   const args = remoteArgs(payload);
@@ -440,11 +438,11 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
     ...(scope === "workspace" ? { workspaceId: canvasId } : {}),
   };
   if (existingHome) {
-    const abs = agentHomeDir(
-      member.id,
-      runtime.agentRoster.home ?? resolveHarnessHome(runtime),
-    );
-    syncAgentHomePlaybook(abs, liveMemberPlaybook(runtime, canvasId, listed));
+    publishMemberIdentityPlaybook(runtime, {
+      memberId: member.id,
+      playbook: liveMemberPlaybook(runtime, canvasId, listed),
+      source: "roster",
+    });
     if (hasAppearance) publishWorkspaceChanged(runtime, existingHome);
   }
   const presenceUser = runtime.settingsNamespaces.view("ui-presence")

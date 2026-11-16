@@ -235,6 +235,12 @@ export interface SessionStatusView {
     readonly childSeat?: 'manager' | 'agent' | 'sunflower'
     readonly childMemberId?: string
     readonly parentMemberId?: string
+    /** N 委派方 (root → … → immediate); UI left stack → 1 child. */
+    readonly parents?: readonly {
+      readonly sessionId: string
+      readonly label?: string
+      readonly memberId?: string
+    }[]
   }
   readonly timeline: {
     readonly total: number
@@ -1005,6 +1011,21 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       : undefined
     const childMemberId = str((delegateRaw as { childMemberId?: unknown }).childMemberId)
     const parentMemberId = str((delegateRaw as { parentMemberId?: unknown }).parentMemberId)
+    const parentsRaw = (delegateRaw as { parents?: unknown }).parents
+    const parents = Array.isArray(parentsRaw)
+      ? parentsRaw.flatMap((row) => {
+          if (!row || typeof row !== 'object') return []
+          const sessionId = str((row as { sessionId?: unknown }).sessionId)
+          if (!sessionId) return []
+          const label = str((row as { label?: unknown }).label)
+          const memberId = str((row as { memberId?: unknown }).memberId)
+          return [{
+            sessionId,
+            ...(label ? { label } : {}),
+            ...(memberId ? { memberId } : {}),
+          }]
+        })
+      : undefined
     if (parentSessionId && childLabel) {
       delegate = {
         parentSessionId,
@@ -1013,6 +1034,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
         ...(childSeat ? { childSeat } : {}),
         ...(childMemberId ? { childMemberId } : {}),
         ...(parentMemberId ? { parentMemberId } : {}),
+        ...(parents && parents.length > 0 ? { parents } : {}),
       }
     }
   }

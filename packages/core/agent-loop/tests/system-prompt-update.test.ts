@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createToolRegistry } from "@xrkseek/core-tools";
 import type { LlmAdapter } from "@xrkseek/llm";
 import type { ChatMessage } from "@xrkseek/protocol";
-import { runTurn } from "../src/index.js";
+import { clearSeriesBaselineAnchors, runTurn } from "../src/index.js";
+
+beforeEach(() => {
+  clearSeriesBaselineAnchors();
+});
+
 
 describe("systemPromptUpdate in-history", () => {
   it("appends a changed system prompt after cached history within a turn", async () => {
@@ -126,5 +131,60 @@ describe("systemPromptUpdate in-history", () => {
     const second = captured[1]!;
     expect(second.filter((m) => m.role === "system")).toHaveLength(1);
     expect(String(second[0]?.content)).toContain("new guidance");
+  });
+
+  it("keeps message-0 baseline across turns when the effective prompt changes (DSH series)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    let persona = "PersonaBase";
+    const captured: ChatMessage[][] = [];
+
+    const llm: LlmAdapter = {
+      id: "capture",
+      systemPromptUpdate: "in-history",
+      async chat(req) {
+        captured.push(req.messages.map((m) => ({ ...m })));
+        return { content: `ok-${captured.length}` };
+      },
+    };
+
+    await runTurn({
+      sessionId: session.id,
+      userText: "turn-one",
+      store,
+      llm,
+      tools,
+      assemble: { persona },
+      now: (() => {
+        let t = 0;
+        return () => ++t;
+      })(),
+    });
+
+    persona = "PersonaBase\n\n## Extra\nlater guidance";
+    await runTurn({
+      sessionId: session.id,
+      userText: "turn-two",
+      store,
+      llm,
+      tools,
+      assemble: { persona },
+      now: (() => {
+        let t = 100;
+        return () => ++t;
+      })(),
+    });
+
+    expect(captured).toHaveLength(2);
+    const first = captured[0]!;
+    const second = captured[1]!;
+    expect(first[0]?.role).toBe("system");
+    expect(String(first[0]?.content)).toBe("PersonaBase");
+    // Cross-turn: head stays the first baseline; new effective prompt appends.
+    expect(second[0]?.content).toBe(first[0]?.content);
+    const systems = second.filter((m) => m.role === "system");
+    expect(systems.length).toBeGreaterThanOrEqual(2);
+    expect(String(systems[systems.length - 1]?.content)).toContain("later guidance");
   });
 });

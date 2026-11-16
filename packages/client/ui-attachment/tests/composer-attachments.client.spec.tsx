@@ -32,7 +32,7 @@ const t = ((key: string, params?: Readonly<Record<string, unknown>>): string => 
     'image.dropBlocked': '当前无法添加附件',
     'image.dropTitle': '附件拖动到此处即可添加',
     'file.pending': '待发送文件',
-    'file.uploading': '上传中…',
+    'file.uploading': '准备中…',
     'file.failed': '上传失败',
     'file.retry': '重试',
   }

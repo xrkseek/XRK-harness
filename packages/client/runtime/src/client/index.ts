@@ -129,6 +129,7 @@ export {
 export { emptyAssistantBlock, toolCallBlockIndex } from './sessions/partial.ts'
 export { isTokenDelta, isDecodableSample, MIN_DECODE_SAMPLE_MS } from './sessions/assistant-timing.ts'
 export { contextForm, contextProvenance, sessionRecallLabels } from './sessions/context-provenance.ts'
+export { projectTranscriptChrome } from './sessions/transcript-chrome.ts'
 export { displayFailureMessage } from './sessions/failure-display.ts'
 export type {
   ConversationContext, ConversationContextOriginKind,
@@ -136,6 +137,9 @@ export type {
 export type {
   ContextProvenanceView, ContextRole, KnownContextForm,
 } from './sessions/context-provenance.ts'
+export type {
+  TranscriptChrome, TranscriptLane, TranscriptVoice,
+} from './sessions/transcript-chrome.ts'
 export type {
   ConversationPromptSnapshot, RequestInspectionSnapshot, RequestPromptChange, RequestView,
 } from './sessions/request-inspection.ts'

@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
 import type {
   ModelRetryNode, PendingSubmission, PendingSubmissionAttachment, TurnErrorNode, UserMessageNode,
 } from '@xrkseek/client-runtime/client'
+import { projectTranscriptChrome } from '@xrkseek/client-runtime/client'
 import type { FileAttachmentRef } from '@xrkseek/xrk-attachment'
 import {
   fileExtension, FileTypeIcon, fileSizeText, JsonBlock, MessageText, StateDot,
@@ -182,8 +183,14 @@ function ModelRetryItem({ node, active, t }: {
       : t('message.retry.scheduled')
   const seconds = active ? remainingSeconds : scheduledSeconds
 
+  const chrome = projectTranscriptChrome({ surface: 'retry' })
   return (
-    <details className={css.retryRow} data-active={active || undefined}>
+    <details
+      className={css.retryRow}
+      data-active={active || undefined}
+      data-voice={chrome.voice}
+      data-lane={chrome.lane}
+    >
       <summary className={css.retrySummary}>
         <span className={css.retryText} role="status">
           {t('message.retry.status', { label, retry: node.retry, maximum, seconds })}
@@ -214,8 +221,14 @@ function TurnErrorItem({ node, t }: {
   node: TurnErrorNode
   t: ChatViewSlotProps['t']
 }) {
+  const chrome = projectTranscriptChrome({ surface: 'turn-error' })
   return (
-    <div className={css.turnErrorRow} role="status">
+    <div
+      className={css.turnErrorRow}
+      role="status"
+      data-voice={chrome.voice}
+      data-lane={chrome.lane}
+    >
       <StateDot state="error" className={css.turnErrorDot} />
       <div className={css.turnErrorCopy}>
         <span className={css.turnErrorTitle}>{t('message.turnError')}</span>
@@ -335,7 +348,7 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
   content, renderMessageImages, renderMessageFiles, actions, steer = false, echo = false,
-  referenceLabels = [], previewAttachments, editing = false, t,
+  referenceLabels = [], previewAttachments, editing = false, source, t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -353,6 +366,8 @@ function UserStyleBubble({
   previewAttachments?: readonly PresentedAttachment[]
   /** Composer is staging an edit of this message. */
   editing?: boolean
+  /** Durable admit source (courier notice / peer relay / auto-continue). */
+  source?: unknown
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const { text, segments, attachments: contentAttachments, rest } = contentParts(content)
@@ -361,9 +376,16 @@ function UserStyleBubble({
   const truncated = (total: number): string => t('json.truncated', { total })
   const bodies = segments.length > 0 ? segments : (text !== '' || rest.length > 0 ? [text] : [])
   const showBubble = bodies.length > 0 || rest.length > 0
+  // Source overrides surface defaults (subagent notice → courier×handoff).
+  const chrome = projectTranscriptChrome({
+    surface: steer ? 'steering' : 'user',
+    source,
+  })
   return (
     <div
       className={css.userRow}
+      data-voice={chrome.voice}
+      data-lane={chrome.lane}
       data-pending-steering={steer || undefined}
       data-pending-send={!steer && echo ? true : undefined}
       data-submission-echo={echo || undefined}
@@ -572,6 +594,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       steer={liveSteer}
       echo={pendingSend}
       editing={editing}
+      source={data.source}
       t={t}
       actions={copyText => (
         <MessageIconActions

@@ -3,7 +3,7 @@
  * Coordinates are computed by replaying pending lists.
  */
 
-import type { MessageContent, SessionEvent } from "@xrkseek/protocol";
+import type { MessageContent, SessionEvent, UserMessageSource } from "@xrkseek/protocol";
 import { asContentBlocks } from "@xrkseek/protocol";
 
 export type InboxTarget = "next-turn" | "next-step";
@@ -34,10 +34,8 @@ export interface FaceWireUserMessage {
         };
       }
   )[];
-  readonly source: {
-    readonly kind: "user";
-    readonly rpcId?: string;
-  };
+  /** Pass through durable admit source (plugin notices must not look like human). */
+  readonly source: UserMessageSource & { readonly rpcId?: string };
 }
 
 export interface FaceInboxSplice {
@@ -57,7 +55,9 @@ function userMessage(
   id: string,
   content: MessageContent,
   rpcId?: string,
+  source?: UserMessageSource,
 ): FaceWireUserMessage {
+  const base: UserMessageSource = source ?? { kind: "user" };
   return {
     id,
     role: "user",
@@ -75,7 +75,7 @@ function userMessage(
       return { type: "image" as const, attachment: { ...block.attachment } };
     }),
     source: {
-      kind: "user",
+      ...base,
       ...(rpcId !== undefined && rpcId !== "" ? { rpcId } : {}),
     },
   };
@@ -103,7 +103,8 @@ export class FaceInboxWireProjector {
         const msg = userMessage(
           event.admitId,
           event.content,
-          this.admitToRpc.get(event.admitId),
+          this.admitToRpc.get(event.admitId) ?? event.rpcId,
+          event.source,
         );
         const start = list.length;
         list.push(msg);

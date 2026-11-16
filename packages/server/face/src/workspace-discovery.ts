@@ -19,12 +19,20 @@ export const WORKSPACE_DISCOVERY_DEFAULTS = {
   activeWindowHours: 168,
   maxActiveItems: 16,
   maxListItems: 40,
+  preferSameWorkspace: true,
+  peerSessionDiscovery: true,
+  siblingScope: "same-delegator" as const,
+  maxDepth: 1,
 } as const;
 
 export type WorkspaceDiscoverySettings = {
   readonly activeWindowHours: number;
   readonly maxActiveItems: number;
   readonly maxListItems: number;
+  readonly preferSameWorkspace: boolean;
+  readonly peerSessionDiscovery: boolean;
+  readonly siblingScope: "same-delegator" | "none";
+  readonly maxDepth: number;
 };
 
 /** Wire row for workspace_list — no lastActiveAt (sort-only, not model-facing). */
@@ -62,6 +70,8 @@ export function readWorkspaceDiscoverySettings(
   const hours = Number(raw.activeWindowHours);
   const maxActive = Number(raw.maxActiveItems);
   const maxList = Number(raw.maxListItems);
+  const maxDepthRaw = Number(raw.maxDepth);
+  const siblingRaw = raw.siblingScope;
   return {
     activeWindowHours:
       Number.isFinite(hours) && hours >= 1
@@ -75,6 +85,16 @@ export function readWorkspaceDiscoverySettings(
       Number.isFinite(maxList) && maxList >= 1
         ? Math.min(200, Math.floor(maxList))
         : WORKSPACE_DISCOVERY_DEFAULTS.maxListItems,
+    preferSameWorkspace: raw.preferSameWorkspace !== false,
+    peerSessionDiscovery: raw.peerSessionDiscovery !== false,
+    siblingScope:
+      siblingRaw === "none" || siblingRaw === "same-delegator"
+        ? siblingRaw
+        : WORKSPACE_DISCOVERY_DEFAULTS.siblingScope,
+    maxDepth:
+      Number.isFinite(maxDepthRaw) && maxDepthRaw >= 1
+        ? Math.min(3, Math.floor(maxDepthRaw))
+        : WORKSPACE_DISCOVERY_DEFAULTS.maxDepth,
   };
 }
 

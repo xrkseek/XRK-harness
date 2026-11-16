@@ -46,6 +46,7 @@
 | 遥测 / 标题 | `forwardOptional` · `basicRedactionRule` · seq=`readEvents.length` · 委托子跳过 title fallback |
 | Checkpoint / fork 血缘 | restore `chatSeq`/`chatAhead`/`truncateChat` · `FaceForkLink.atSeq` |
 | 基线已修（原体检 §2） | fork blank hint · archive hint 整行 · trimBeforeSeqCut · 任意轮分支 UI · FTS 双索引 · 投影 evict · shadow `reclaim` |
+| 提供方 KV 前缀 | `tools[]` 禁活表 · `tool_search` 稳定 · `series-baseline` · process-cache 生命周期 · recipe inject · expand 从 header 回灌 · deferred 跳过 dynamicSchema（见 §5） |
 
 假差距 / 定位差异（摘要）：live/persisted 枚举 · SOURCE_CONFLICT · Format V3 链 · 四分叉 derive · attempt settlement · `source.kind=provider` · 元数据必须进 sessions 表 · compaction 锁对。
 
@@ -96,3 +97,31 @@
 | 2 | **R6** `seedFromSession` SQL 拷前缀 | **已落地** |
 | 3 | **R8** history 冷首屏尾读 | **已落地** |
 | 4 | **R9** history 重键 durable cache | **已落地** |
+
+---
+
+## 5. 提供方 KV 前缀（对照 DSH · 成本面）
+
+> 基线：DSH agent-loop README「KV Cache effect」· `2026-09-20-dynamic-tool-updates` ·  
+> `2026-10-22-series-start-unchanged-prompt-prefix`（实测相邻步 ~99.9% vs 误重写头节点 0.16%）。  
+> 本仓目标：**降本且不减体验** — 活事实仍在 fragment / 工具结果里可见，只是不改 `tools[]` / message-0 前缀。
+
+| 判定 | 项 | 证据 / 落点 |
+|---|---|---|
+| **假差距** | 系统提示 in-history 追加（步内） | `placeSystemOnWire` + Flash `systemPromptUpdate` |
+| **假差距** | 动态上下文当 user 快照 | `additional_context` fragments（非改 system 前缀） |
+| **已收** | `dynamicSchema` 灌 sibling / 名册 | `session-tool-copy` 指针化；活 ids → board / 工具结果 |
+| **已收** | `tool_search` 描述塞 deferred catalog | 描述字节稳定；`list`/`*`/空查询浏览目录；关键词才 expand（体验不减） |
+| **已收** | 跨回合丢失 leading system baseline | `series-baseline.ts`：in-history 路由记住 message-0；提示词变了只追加（对齐 DSH 系列前缀） |
+| **已收** | 截断/删会话仍挂过期 baseline | `forgetSessionProcessCaches`：与 `request/header` 同批清 series-baseline + time-context（删会话 · log cut；LRU 驻留驱逐保留，会话可 remount） |
+| **已收** | LRU 误清 toolDisclosure | 驻留驱逐保留 expand 名（与 series-baseline 同姿态）；删会话 / log cut 仍清 |
+| **已收** | soft-budget 压缩后漏写 header | 压缩成功后 `reason:"change"` 强制 `request/header`；同步首建后再 rebuild 不再盖 `[current message]` |
+| **已收** | deferred 白跑 dynamicSchema | `materializeTools` 先 `listForModel` 再 merge schema |
+| **已收** | slash/recipe 进 system | 改 durable `context-fragment` inject（`## Recipe`）；message-0 不随配方变；模型仍可见 |
+| **已收** | Host 重启 / 截断丢失 expand | `hydrate` 从最新 `request/header.tools` 回灌；log cut = forget 后立刻 hydrate（编辑重发不再空窗） |
+| **真缺口** | `toolUpdate` / defer_loading | 本仓零命中；`tool_search` expand / Direct 工具增删仍整表重发 tools 段 |
+| **部分** | 其它 `workspaceBlocks` 进 system | plan/time 等仍可能拼进 system；压缩后才重基线 |
+| **定位差异** | DSH 系统节点进 session 日志 | 本仓 system 每请求装配 + 进程内 anchor；不靠日志 system 节点 |
+| **刻意不做** | 全 deferred / Messages `toolHistory` 照搬 | 伤 Direct 工具体验；DeepSeek Chat Completions 无 addition-only 半残 |
+
+**动手顺序（成本）：** ① 禁 `tools[]` 活表 ✅ → ② 跨回合 series baseline ✅ → ③ expand 回灌 + recipe inject ✅ → ④ DeepSeek `toolUpdate: addition-only`（大件）→ ⑤ 可选：live `cacheReadTokens` 探针。

@@ -1,8 +1,12 @@
 /**
  * 干员 home directories: `{XRK_HOME}/agent-homes/{memberId}/` plus a workspace
- * AGENTS.md that carries the live playbook for identity sessions.
+ * AGENTS.md that mirrors the live playbook for identity sessions.
+ *
+ * Bidirectional hot sync with roster (+ advanced pack playbook.md) lives in
+ * `agent-identity-sync.ts` — this helper is the disk write used by that fan-out
+ * and by mint.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveXrkHome } from "@xrkseek/server-config";
 import type { FaceRuntime } from "./context.js";
@@ -11,6 +15,10 @@ import { liveMemberPlaybook } from "./agent-roster-tools.js";
 import type { AgentRosterMember, ListedRosterMember } from "./agent-roster-store.js";
 import { resolveHarnessHome } from "./settings-document.js";
 import { publishWorkspaceChanged } from "./workspace-member-look.js";
+
+function normalizeAgentsMd(text: string): string {
+  return text.replace(/\r\n/g, "\n").trim();
+}
 
 /** Absolute home directory for one roster member. */
 export function agentHomeDir(
@@ -22,15 +30,24 @@ export function agentHomeDir(
   return path.join(root, "agent-homes", id);
 }
 
-/** Write / refresh workspace AGENTS.md from the member playbook. */
+/** Write / refresh workspace AGENTS.md from the member playbook (no-op if equal). */
 export function syncAgentHomePlaybook(
   absHome: string,
   playbook: string,
 ): void {
-  mkdirSync(absHome, { recursive: true });
-  const body = playbook.trim();
+  const body = normalizeAgentsMd(playbook);
   if (!body) return;
-  writeFileSync(path.join(absHome, "AGENTS.md"), `${body}\n`, "utf8");
+  mkdirSync(absHome, { recursive: true });
+  const file = path.join(absHome, "AGENTS.md");
+  try {
+    if (existsSync(file)) {
+      const prev = normalizeAgentsMd(readFileSync(file, "utf8"));
+      if (prev === body) return;
+    }
+  } catch {
+    // Fall through and write.
+  }
+  writeFileSync(file, `${body}\n`, "utf8");
 }
 
 /**

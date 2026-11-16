@@ -431,7 +431,9 @@ describe("external agent runtime", () => {
       timeout_ms: 2000,
     });
     expect(wait.isError).not.toBe(true);
-    expect(wait.content).toMatch(/ext-turn/);
+    // Status-only: answer travels via steer handoff, not the tool body.
+    expect(wait.content).toMatch(/wait_agent completed/);
+    expect(wait.content).toMatch(/idle/);
 
     const stopped = await tools.get("interrupt_agent")!.execute({
       agent_id: childId,

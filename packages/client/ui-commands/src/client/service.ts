@@ -32,6 +32,17 @@ import {
 } from './command-frecency.ts'
 import type { TranslateNS } from '@xrkseek/client-locale/client'
 
+/** Slash commands a child session may still open from + / (never an empty []). */
+const SUBAGENT_COMMAND_ALLOWLIST = new Set([
+  'status',
+  'compact',
+  'export',
+  'theme',
+  'feedback',
+  'skills',
+  'model',
+])
+
 declare module '@xrkseek/cordis' {
   interface Events {
     /**
@@ -168,9 +179,12 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     if (locale === undefined) throw new Error('ui-commands: locale service unavailable')
     this.t = locale.bind('command')
     this.directory = new CommandDirectory(async (sessionId) => {
-      if (this.sessions().subagentAddress(sessionId) !== undefined) return []
       const result = await ctx.remote.commands.list(sessionId)
       if (!result.ok) throw new Error(`command.list failed: ${result.error.code}: ${result.error.message}`)
+      // Child sessions: whitelist only — never an empty catalog (keeps + / usable).
+      if (this.sessions().subagentAddress(sessionId) !== undefined) {
+        return result.value.filter((cmd) => SUBAGENT_COMMAND_ALLOWLIST.has(cmd.name))
+      }
       return result.value
     })
     const inputTriggers = ctx.get('inputTriggers')

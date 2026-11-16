@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.0-rc.1',
+    date: '2026-11-16',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '协作回传一条纪律：子代理与会话互聊完成进 inbox；干员家可改自己；每回合主线/支线；Voice×Lane 时间线。',
+        en: 'One report-back discipline for subagents and peer chats; agent-home can revise itself; live 主线/支线; Voice×Lane chrome.',
+      },
+      {
+        zh: '长会话更省提供方缓存：改人设 / 斜杠配方 / MCP 目录时多数回合仍复用前缀；斜杠配方进上下文注入。',
+        en: 'Longer sessions keep provider cache warmer when persona / slash / MCP churn; slash recipes land as context injects.',
+      },
+      {
+        zh: '手机 / Web 半开 WebSocket 不再卡「思考中」；Host 应用层 keepalive；根网页加载中系统返回不再误退后台。',
+        en: 'Mobile/Web half-open WebSockets no longer stick on thinking chrome; Host app keepalive; root Web leave while loading no longer backgrounds the app.',
+      },
+      {
+        zh: '过程号 @rc（不接管 @latest；日常仍用 0.7.22）。',
+        en: 'Process number on @rc (does not take @latest; daily installs stay on 0.7.22).',
+      },
+    ],
+  },
+  {
     version: '0.7.22',
     date: '2026-11-14',
     title: {

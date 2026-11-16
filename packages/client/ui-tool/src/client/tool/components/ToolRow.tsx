@@ -224,7 +224,15 @@ export function ToolRow({
   const cardBody = variant === 'code' ? null : body
   const showSummarySlot = multiLinks || summaryText !== ''
   return (
-    <div className={css.root} data-variant={variant} data-tool={toolName} data-state={state}>
+    <div
+      className={css.root}
+      data-variant={variant}
+      data-tool={toolName}
+      data-state={state}
+      data-voice="seat"
+      data-lane="act"
+      data-force-expanded={forceExpanded || undefined}
+    >
       {status !== null && <span className={css.visuallyHidden}>{status}</span>}
       <DisclosureRow
         rowClassName={css.row}
