@@ -201,18 +201,34 @@ export function publishMemberIdentityPlaybook(
   if (listed.kind === "advanced" && input.source !== "pack") {
     const rosterWs =
       listed.scope === "global" ? GLOBAL_ROSTER_ID : listed.workspaceId!;
-    const disk = readMemberPackPlaybook({
+    const packOpts = {
       rosterWorkspaceId: rosterWs,
       memberId,
       productHome: runtime.agentRoster.home,
-    });
+    };
+    const disk = readMemberPackPlaybook(packOpts);
     if (normalizeIdentityPlaybook(disk ?? "") !== clipped) {
+      // agents-md must not overwrite a newer pack playbook.md (same-second CI
+      // clocks + omit-playbook team_save heal path).
+      let skipPack = false;
+      if (input.source === "agents-md") {
+        const inventory = listMemberPackInventory(packOpts);
+        const packPath =
+          inventory?.playbookPath ??
+          path.join(
+            memberPackDir(rosterWs, memberId, runtime.agentRoster.home),
+            "playbook.md",
+          );
+        const agentsPath = agentHomeAgentsMdPath(
+          agentHomeDir(memberId, productHomeOf(runtime)),
+        );
+        if (mtimeMs(packPath) > mtimeMs(agentsPath)) skipPack = true;
+      }
       if (
+        !skipPack &&
         syncMemberPackPlaybook({
-          rosterWorkspaceId: rosterWs,
-          memberId,
+          ...packOpts,
           playbook: clipped,
-          productHome: runtime.agentRoster.home,
         })
       ) {
         changed = true;
@@ -296,12 +312,17 @@ export function adoptLiveMemberIdentityPlaybook(
   candidates.sort(
     (a, b) => b.mtime - a.mtime || a.source.localeCompare(b.source),
   );
-  // Tie-break: prefer AGENTS.md (identity seat edits) when mtimes equal.
-  const topMtime = candidates[0]!.mtime;
-  const best =
-    candidates.find((c) => c.source === "agents-md" && c.mtime === topMtime) ??
-    candidates[0]!;
   const rosterText = normalizeIdentityPlaybook(row.playbook);
+  const topMtime = candidates[0]!.mtime;
+  const atTop = candidates.filter((c) => c.mtime === topMtime);
+  // Same-second mtimes (esp. CI): prefer a disk mirror that already diverged
+  // from roster so omit-playbook team_save / adopt cannot clobber a fresher
+  // pack playbook.md with a lagging AGENTS.md (or the reverse).
+  const diverged = atTop.filter((c) => c.text !== rosterText);
+  const pool = diverged.length > 0 ? diverged : atTop;
+  // Within the pool: prefer AGENTS.md (identity seat edits) when tied.
+  const best =
+    pool.find((c) => c.source === "agents-md") ?? pool[0]!;
   if (best.text === rosterText) {
     const published = publishMemberIdentityPlaybook(runtime, {
       memberId: row.id,
