@@ -24,7 +24,7 @@ establish then refreshes them like any other product seed.
 | `phone_*` tools | Mobile `PhoneToolCatalog` → guest plugin `xrk-mobile` |
 | Phone prompt section | Mobile asset `xrk-mobile-prompt` (while control on) |
 | Phone AGENTS inject | `PhoneGuest.AGENTS_SECTION` (while control on) |
-| Phone playbook skill | This tree → merge → `$XRK_HOME/skills/xrk-phone` |
+| Phone playbook skill | This tree → merge → `$XRK_HOME/skills/xrk-phone`（Host 远程桥 materialize 同一份） |
 
 **Hard rules:** do not put phone playbooks in universal `seeds/skills/` or
 standing `AGENTS.md`. Do not add `XRK_MOBILE_*` branches to establish.

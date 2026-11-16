@@ -46,7 +46,7 @@ Phone App is a **shell** around guest `xrkh`. Prefer **build-time merge**, not H
 | Layer | Where | Who |
 |---|---|---|
 | **Universal seeds** | `apps/cli/seeds/skills/` → establish | Desktop · CLI · Mobile |
-| **Phone-only seed sources** | `apps/cli/seeds/mobile/skills/` (e.g. `xrk-phone`) | Shipped in npm under `seeds/mobile/` but **not** established on Desktop/CLI |
+| **Phone playbook (`xrk-phone`)** | Guest: `seeds/mobile/` merge · Host bridge: materialize → `$XRK_HOME/skills/xrk-phone` | Same SKILL body; not a universal Desktop seed without bridge/guest |
 | **Mobile runtime build** | `build-runtime.sh` copies `seeds/mobile/skills/*` → `seeds/skills/` inside guest harness-cli | Phone guest establish (same fingerprint path — **no establish fork**) |
 | **App-shell HOWTO** | Flutter `assets/skills/xrk-guide` (+ `xrk-ui` …) managed install | Phone guest only |
 | **phone_* tools** | PhoneGuest → guest `{XRK_HOME}/plugins/xrk-mobile` | Phone guest |

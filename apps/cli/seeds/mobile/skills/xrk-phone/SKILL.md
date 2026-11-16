@@ -1,18 +1,19 @@
 ---
 name: xrk-phone
 description: >-
-  手机操控 playbook（仅 XRK Harness guest）：phone_* 顺序、设置页跳转、handoff。
+  手机操控 playbook：phone_* 顺序、设置页跳转、handoff。
   用户说点按、开应用、闹钟、导航、读屏、改 Wi‑Fi/显示、交接操作时加载。
-  App 设置路径（无障碍、悬浮条）→ skill xrk-guide。Desktop/CLI 不建此种子；
-  仅手机 runtime 构建 merge 进 seeds/skills/。
+  本机 guest 与 Host 远程桥（xrk-phone-bridge）共用同一套用法。
+  App 设置路径（无障碍、悬浮条）→ skill xrk-guide。
 ---
 
 # Phone control (`phone_*`)
 
-仅 **XRK Harness** guest。工具名 / schema 是契约；本 skill 是用法。  
+工具名 / schema 是契约；本 skill 是用法。  
+本机 guest 与已桥接的远程手机同一套 `phone_*`。  
 App 壳（设置 → 手机操控 → 无障碍）→ **`xrk-guide`**；排障 → **`xrk-support`**。
 
-操作前先 `skill` 加载本篇。目录里没有 `phone_*` 时不要硬开手机。
+操作前先 `skill` 加载本篇。目录里没有 `phone_*` 时，先确认本机操控已开或远程桥已在线。
 
 ## 工具（固定集）
 
@@ -41,6 +42,8 @@ App 壳（设置 → 手机操控 → 无障碍）→ **`xrk-guide`**；排障 �
 
 启动回话 ≠ 业务完成。结果未知先读屏，不盲目重试。
 
+读屏若返回「XRK 自己的界面」：当前前台是聊天壳，先让用户回到要操作的应用再 `phone_screen`。
+
 ## `phone_intent` · `settings`
 
 `kind: "settings"` + `page`（只打开系统页，**不直接改值**）：
@@ -50,7 +53,7 @@ App 壳（设置 → 手机操控 → 无障碍）→ **`xrk-guide`**；排障 �
 改亮度 / 主题等：先跳 `display`（或对应页），再读屏点选；没把握 → handoff。
 
 **工具会拒**：无障碍、开发者选项、应用权限页。  
-无障碍未开 → 请用户 **App 设置 → 手机操控** 入口开系统无障碍里的「XRK 手机操控」（见 `xrk-guide`）。勿说「去 XRK 里找无障碍开关」。
+无障碍未开 → 请用户走 **App 设置 → 手机操控** 开系统无障碍里的「XRK 手机操控」（见 `xrk-guide`）。
 
 其它 `kind`：`alarm` · `timer` · `calendar` · `dial` · `sms_draft` · `share` · `navigate`（字段见 schema）。
 
@@ -60,4 +63,4 @@ App 壳（设置 → 手机操控 → 无障碍）→ **`xrk-guide`**；排障 �
 - 银行 / 支付 App、密码与验证码框默认不碰；被拒 → handoff。
 - `isError` 带可执行说明 → 先修前置或 handoff。
 - 操作时保持亮屏、已解锁。
-- 勿用本 skill 代替 `xrk-guide` 的 App 设置说明。
+- App 设置 / 无障碍说明用 `xrk-guide`。

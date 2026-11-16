@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.0-rc.2',
+    date: '2026-11-16',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '远程手机桥与本机 guest 共用 xrk-phone playbook；在线即可 skill → phone_*。',
+        en: 'Remote phone-bridge and guest share one xrk-phone playbook; skill then phone_* when online.',
+      },
+      {
+        zh: '手机操控浮层收球交叉淡入、按压不再挤出首字；读屏拒因可读。',
+        en: 'Phone overlay fold-to-ball crossfades; press no longer clips glyphs out; screen refusals readable.',
+      },
+      {
+        zh: 'team_save 省略 playbook 时不再盖掉同秒更新的磁盘稿。',
+        en: 'Omitting playbook on team_save no longer clobbers a same-second fresher on-disk copy.',
+      },
+      {
+        zh: '过程号 @rc（不接管 @latest；日常仍用 0.7.22）。',
+        en: 'Process number on @rc (does not take @latest; daily installs stay on 0.7.22).',
+      },
+    ],
+  },
+  {
     version: '0.8.0-rc.1',
     date: '2026-11-16',
     title: {
