@@ -234,7 +234,6 @@ function loadBallScripts() {
 }
 
 async function mountBalls() {
-  if (isPhoneLayout()) return;
   const nodes = document.querySelectorAll("[data-ball]");
   if (!nodes.length) return;
   await loadBallScripts();
@@ -355,12 +354,8 @@ function renderList(filter = "") {
     const action = href
       ? `<a class="btn" href="${escapeHtml(href)}" download="${escapeHtml(downloadName)}" rel="noopener">${escapeHtml(L.download)}</a>`
       : `<span class="btn" aria-disabled="true">${escapeHtml(L.noUrl)}</span>`;
-    const tone = paint(color);
-    const avatar = isPhoneLayout()
-      ? `<span class="stage md member-dot" style="--dot:${escapeHtml(tone.body)}" aria-hidden="true"></span>`
-      : `<span class="stage md"><span class="mount" data-ball data-shape="${escapeHtml(shape)}" data-color="${escapeHtml(color)}"></span></span>`;
     article.innerHTML = `
-      ${avatar}
+      <span class="stage md"><span class="mount" data-ball data-shape="${escapeHtml(shape)}" data-color="${escapeHtml(color)}"></span></span>
       <div class="member-copy">
         <h3>${escapeHtml(memberLabel(m))}</h3>
         <p class="brief">${escapeHtml(memberBrief(m))}</p>

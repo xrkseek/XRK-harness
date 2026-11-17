@@ -613,12 +613,7 @@ html[data-theme="dark"] .copy:hover { filter: brightness(1.12); }
   }
   .dl-panel { border-radius: 14px; }
   .dl-row { padding: 12px; }
-  .dl-actions .btn {
-    height: 42px;
-    min-width: 0;
-    flex: 1 1 auto;
-    border-radius: 12px;
-  }
+  /* Phone .btn size comes from site-foundation.css (.dl-actions .btn). */
   .cli-line code { font-size: 13px; }
   .copy { height: 36px; border-radius: 10px; padding: 0 12px; }
 }

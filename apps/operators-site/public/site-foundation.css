@@ -377,17 +377,27 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
     flex-wrap: wrap;
     gap: 8px;
   }
-  .cta .btn {
+  /* One shared phone size for hero / catalog / download actions. */
+  .cta .btn,
+  .member-actions .btn,
+  .dl-actions .btn {
     height: 42px;
-    min-width: 0;
-    flex: 1 1 calc(50% - 4px);
+    min-width: 5.5rem;
+    padding: 0 14px;
     border-radius: 12px;
     font-size: 14px;
     font-weight: 600;
   }
+  .cta .btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+  }
   .cta .btn:only-child {
-    flex: 0 1 auto;
-    min-width: 9.5rem;
+    flex: 1 1 100%;
+  }
+  .member-actions .btn,
+  .dl-actions .btn {
+    flex: 0 0 auto;
   }
 
   .foot {
