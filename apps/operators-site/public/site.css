@@ -10,12 +10,12 @@
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
-.ghost:focus-visible, .lang:focus-visible, .theme:focus-visible,
+.ghost:focus-visible, .lang:focus-visible, .theme:focus-visible, .nav-menu:focus-visible,
 .btn:focus-visible, .sky-ball:focus-visible, .member:focus-within {
   outline: 2px solid var(--label);
   outline-offset: 2px;
 }
-#catalog { scroll-margin-top: 64px; }
+#catalog { scroll-margin-top: 72px; }
 
 .sky-copy { max-width: 40rem; }
 .constellation {
@@ -32,6 +32,7 @@
   cursor: pointer;
   border-radius: 16px;
   transition: transform 180ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
 .sky-ball:hover { transform: translateY(-4px); }
 .sky-ball:active { transform: scale(0.94); }
@@ -71,8 +72,9 @@
   font-size: 15px;
   font-weight: 600;
 }
+.search { flex: 1 1 180px; max-width: 280px; }
 .search input {
-  width: min(280px, 100%);
+  width: 100%;
   height: 34px;
   padding: 0 12px;
   border: 1px solid var(--border);
@@ -132,6 +134,10 @@
   color: var(--muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .member-actions { display: flex; align-items: center; }
 .member-actions .btn { min-width: 6.5rem; }
@@ -145,20 +151,68 @@
   border-radius: 14px;
 }
 
-@media (max-width: 960px) {
-  .constellation {
-    min-height: 200px;
-    order: -1;
+@media (max-width: 720px) {
+  /* Copy first; tiny decorative strip of balls under CTAs — not a full sky. */
+  .sky {
+    display: flex;
+    flex-direction: column;
   }
+  .sky-copy { order: 1; }
+  .constellation {
+    order: 2;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 2px;
+    min-height: 56px;
+    height: 56px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .sky-ball {
+    position: static;
+    flex: none;
+  }
+  .sky-ball:nth-child(n + 7) { display: none; }
+  .stage.lg, .stage.md { width: 44px; height: 44px; }
+  .stage.sm { width: 36px; height: 36px; }
+
+  .catalog-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .search { max-width: none; }
+  .search input {
+    height: var(--tap);
+    border-radius: 14px;
+    font-size: 16px; /* avoid iOS zoom */
+  }
+
+  .member-list { gap: 10px; }
   .member {
     grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px 12px;
+    padding: 14px;
+    border-radius: 16px;
   }
+  .member .stage.md { width: 48px; height: 48px; }
   .member-actions {
     grid-column: 1 / -1;
-    justify-content: flex-end;
   }
-  .search input { width: 100%; }
+  .member-actions .btn {
+    width: 100%;
+    height: var(--tap);
+    min-width: 0;
+    border-radius: 14px;
+    font-weight: 600;
+  }
+  .chip {
+    max-width: 11rem;
+  }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .btn, .sky-ball { transition: none; transform: none; }
 }

@@ -40,6 +40,28 @@ function wireSiblingLinks() {
   });
 }
 
+function wireNavMenu() {
+  const top = document.querySelector(".top");
+  const btn = document.querySelector("[data-nav-menu]");
+  if (!top || !btn) return;
+  const openLabel = btn.getAttribute("aria-label") || btn.textContent || "Menu";
+  const closeLabel = document.documentElement.lang?.startsWith("zh") ? "关闭" : "Close";
+  const setOpen = (open) => {
+    top.dataset.navOpen = open ? "true" : "false";
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.textContent = open ? closeLabel : openLabel;
+    btn.setAttribute("aria-label", open ? closeLabel : openLabel);
+  };
+  btn.addEventListener("click", () => {
+    setOpen(top.dataset.navOpen !== "true");
+  });
+  document.querySelectorAll(".nav a, .nav .theme").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (window.matchMedia("(max-width: 720px)").matches) setOpen(false);
+    });
+  });
+}
+
 function resolved(pref) {
   if (pref === "dark") return "dark";
   if (pref === "light") return "light";
@@ -301,6 +323,7 @@ document.querySelectorAll("[data-theme-id]").forEach((btn) => {
   });
 });
 wireSiblingLinks();
+wireNavMenu();
 
 document.querySelectorAll(".roster .ball").forEach((btn) => {
   btn.addEventListener("click", () => selectMember(btn.dataset.member || ""));

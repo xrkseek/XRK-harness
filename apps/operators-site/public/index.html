@@ -30,12 +30,13 @@
 </head>
 <body>
   <a class="skip" href="#catalog" data-i18n="skip">跳到干员列表</a>
-  <header class="top">
+  <header class="top" data-nav-open="false">
     <a class="brand" href="/" data-home>
       <span class="mark-wrap"><img class="mark" src="/logo-mark.svg" width="18" height="18" alt=""/></span>
       <span class="name" data-i18n="brand">XRK 干员</span>
     </a>
-    <nav class="nav" aria-label="XRK operators">
+    <button type="button" class="nav-menu" data-nav-menu data-i18n-aria="menu" aria-expanded="false" aria-controls="site-nav">菜单</button>
+    <nav class="nav" id="site-nav" aria-label="XRK operators">
       <a class="ghost" data-download-link href="https://xrk.indevs.in/" data-i18n="downloadSite">下载站</a>
       <a class="ghost" href="https://github.com/xrkseek/XRK-harness" data-i18n="github">GitHub</a>
       <button type="button" class="theme" data-theme-id="light" data-i18n-aria="light" aria-label="浅色">浅色</button>

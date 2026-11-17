@@ -29,6 +29,7 @@ test("non-China default is English with native GitHub download", async () => {
   const html = await res.text();
   assert.match(html, /lang="en"/);
   assert.match(html, /data-locale-hint="en"/);
+  assert.match(html, /data-nav-menu/);
   assert.match(html, /Researcher/);
   assert.match(html, new RegExp(`href="${GH_EXE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
   assert.match(html, new RegExp(`href="${GH_APK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));

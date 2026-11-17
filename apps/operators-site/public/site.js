@@ -31,6 +31,8 @@ const I18N = {
     light: "浅色",
     dark: "深色",
     system: "系统",
+    menu: "菜单",
+    closeMenu: "关闭",
     lang: "EN",
     title: "把干员交给朋友",
     lead: "下方可以挑选下载干员，直接发给向阳空间向日葵经理即可完成部署下载环境准备。",
@@ -56,6 +58,8 @@ const I18N = {
     light: "Light",
     dark: "Dark",
     system: "System",
+    menu: "Menu",
+    closeMenu: "Close",
     lang: "中文",
     title: "Hand operators to friends",
     lead: "Pick an operator below and send it to Xiangyang’s sunflower manager — they handle deploy and environment prep.",
@@ -329,6 +333,27 @@ function wireDownloadLinks() {
   });
 }
 
+function wireNavMenu() {
+  const top = document.querySelector(".top");
+  const btn = document.querySelector("[data-nav-menu]");
+  if (!top || !btn) return;
+  const setOpen = (open) => {
+    top.dataset.navOpen = open ? "true" : "false";
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    const L = t();
+    btn.textContent = open ? L.closeMenu : L.menu;
+    btn.setAttribute("aria-label", open ? L.closeMenu : L.menu);
+  };
+  btn.addEventListener("click", () => {
+    setOpen(top.dataset.navOpen !== "true");
+  });
+  document.querySelectorAll(".nav a, .nav .theme").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (window.matchMedia("(max-width: 720px)").matches) setOpen(false);
+    });
+  });
+}
+
 function normalizeCatalog(raw) {
   const base = raw && typeof raw === "object" ? raw : {};
   const list = Array.isArray(base.members) ? base.members : Array.isArray(base.items) ? base.items : [];
@@ -395,6 +420,7 @@ async function boot() {
   locale = detectLocale();
   applyI18n();
   applyTheme(preference());
+  wireNavMenu();
 
   document.querySelectorAll("[data-theme-id]").forEach((btn) => {
     btn.addEventListener("click", () => {

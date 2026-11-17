@@ -1,6 +1,6 @@
 /* Tokens + chrome: /site-foundation.css (linked from HTML). */
 
-.ghost:focus-visible, .lang:focus-visible, .theme:focus-visible,
+.ghost:focus-visible, .lang:focus-visible, .theme:focus-visible, .nav-menu:focus-visible,
 .btn:focus-visible, .ball:focus-visible, .copy:focus-visible,
 .sess:focus-visible, .dot:focus-visible, .hero-ball:focus-visible, .orbit-ball:focus-visible {
   outline: 2px solid var(--label);
@@ -565,12 +565,68 @@ html[data-theme="dark"] .copy:hover { filter: brightness(1.12); }
   }
 }
 @media (max-width: 960px) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; min-height: 0; }
-  .rail, .overview { border: 0; border-bottom: 1px solid var(--border); overflow: visible; }
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    height: auto;
+    min-height: 0;
+  }
+  .rail, .overview {
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
   .roster { flex: none; overflow: visible; }
   .pair { justify-content: flex-start; }
   .dl-row { grid-template-columns: 1fr; }
   .dl-actions, .dl-cmd { justify-self: start; }
+}
+/* Phone: one conversation surface — no stacked sidebars or floating roster balls. */
+@media (max-width: 720px) {
+  .pair {
+    justify-content: flex-start;
+    min-height: 0;
+    gap: 8px;
+  }
+  .pair .stage.lg { width: 56px; height: 56px; }
+  .play { margin-top: 20px; }
+  .shell {
+    display: block;
+    height: min(68vh, 560px);
+    min-height: 420px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .rail,
+  .overview,
+  .reel {
+    display: none;
+  }
+  .pane {
+    height: 100%;
+  }
+  .chrome {
+    padding: 10px 14px;
+  }
+  .thread {
+    padding: 10px 14px;
+  }
+  .composer {
+    width: calc(100% - 16px);
+    margin-bottom: 8px;
+    border-radius: 18px;
+  }
+  .cta .btn { flex: 1 1 auto; }
+  .dl-panel { border-radius: 16px; }
+  .dl-row { padding: 14px 12px; }
+  .dl-actions .btn {
+    height: var(--tap);
+    min-width: 0;
+    flex: 1 1 auto;
+    border-radius: 14px;
+  }
+  .cli-line code { font-size: 13px; }
+  .copy { height: var(--tap); border-radius: 12px; padding: 0 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .btn { filter: none; transform: none; }

@@ -98,6 +98,8 @@ const LABELS = {
     light: "浅色",
     dark: "深色",
     system: "系统",
+    menu: "菜单",
+    closeMenu: "关闭",
     get: "下载 Windows",
     getAndroid: "下载 Android",
     operators: "干员站",
@@ -176,6 +178,8 @@ const LABELS = {
     light: "Light",
     dark: "Dark",
     system: "System",
+    menu: "Menu",
+    closeMenu: "Close",
     get: "Download Windows",
     getAndroid: "Download Android",
     operators: "Operators",
@@ -530,12 +534,13 @@ function renderPage(catalog, env, zh, request) {
 </head>
 <body>
   <a class="skip" href="#play">${escapeHtml(t.skip)}</a>
-  <header class="top">
+  <header class="top" data-nav-open="false">
     <a class="brand" href="/${zh ? "" : "?lang=en"}">
       <span class="mark-wrap"><img class="mark" src="/logo-mark.svg" width="18" height="18" alt=""/></span>
       <span class="name">XRK Harness</span>
     </a>
-    <nav class="nav" aria-label="XRK Harness">
+    <button type="button" class="nav-menu" data-nav-menu aria-expanded="false" aria-controls="site-nav" aria-label="${escapeHtml(t.menu)}">${escapeHtml(t.menu)}</button>
+    <nav class="nav" id="site-nav" aria-label="XRK Harness">
       <a class="ghost" data-operators-link href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a>
       <a class="ghost" href="${GITHUB}">${escapeHtml(t.github)}</a>
       <a class="ghost" href="${DOCS}">${escapeHtml(t.docs)}</a>
