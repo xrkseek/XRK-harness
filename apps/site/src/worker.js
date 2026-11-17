@@ -100,6 +100,7 @@ const LABELS = {
     system: "系统",
     get: "下载 Windows",
     getAndroid: "下载 Android",
+    operators: "干员站",
     github: "GitHub",
     docs: "文档",
     npm: "npm",
@@ -177,6 +178,7 @@ const LABELS = {
     system: "System",
     get: "Download Windows",
     getAndroid: "Download Android",
+    operators: "Operators",
     github: "GitHub",
     docs: "Docs",
     npm: "npm",
@@ -220,6 +222,12 @@ const FLOW = {
 
 function origin(env) {
   return String(env.HARNESS_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, "");
+}
+
+/** Operators share site (Cloudflare Pages). Override with env OPERATORS_SITE. */
+function operatorsSite(env) {
+  const raw = String(env.OPERATORS_SITE || "https://xrk-operators.pages.dev").trim();
+  return raw.replace(/\/+$/, "") || "https://xrk-operators.pages.dev";
 }
 
 function unwrap(json) {
@@ -523,6 +531,7 @@ function renderPage(catalog, env, zh, request) {
       <span class="name">XRK Harness</span>
     </a>
     <nav class="nav" aria-label="XRK Harness">
+      <a class="ghost" href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a>
       <a class="ghost" href="${GITHUB}">${escapeHtml(t.github)}</a>
       <a class="ghost" href="${DOCS}">${escapeHtml(t.docs)}</a>
       <button type="button" class="theme" data-theme-id="light" aria-label="${escapeHtml(t.light)}">${escapeHtml(t.light)}</button>
@@ -688,6 +697,7 @@ function renderPage(catalog, env, zh, request) {
     </section>
     <footer class="foot">
       <span>${escapeHtml(t.mit)}</span>
+      <a href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a>
       <a href="${GITHUB}">${escapeHtml(t.github)}</a>
       <a href="${MOBILE_GITHUB}">${escapeHtml(zh ? "手机仓" : "Mobile")}</a>
       <a href="${NPM}">@xrkseek/harness-cli</a>

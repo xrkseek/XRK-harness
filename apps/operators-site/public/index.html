@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>XRK 干员分享</title>
+  <meta name="description" content="分享与下载 XRK Harness 干员包。列表在本站，zip/json 字节在 AGT。"/>
+  <link rel="icon" href="/logo-mark.svg" type="image/svg+xml"/>
+  <link rel="stylesheet" href="/site.css"/>
+  <script>
+    (function () {
+      try {
+        var p = localStorage.getItem("xrk-ops-theme") || "system";
+        var dark = p === "dark" || (p !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      } catch (e) {}
+      try {
+        var cn = new Date().getTimezoneOffset() === -480;
+        var hasLang = /(?:^|[?&])lang=/.test(location.search);
+        if (!hasLang && !cn) {
+          location.replace(location.pathname + "?lang=en" + location.hash);
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip" href="#catalog" data-i18n="skip">跳到干员列表</a>
+  <header class="top">
+    <a class="brand" href="/" data-home>
+      <span class="mark-wrap"><img class="mark" src="/logo-mark.svg" width="18" height="18" alt=""/></span>
+      <span class="name" data-i18n="brand">XRK 干员</span>
+    </a>
+    <nav class="nav" aria-label="XRK operators">
+      <a class="ghost" data-download-link href="https://xrk.siphot.com/" data-i18n="downloadSite">下载站</a>
+      <a class="ghost" href="https://github.com/xrkseek/XRK-harness" data-i18n="github">GitHub</a>
+      <button type="button" class="theme" data-theme-id="light" data-i18n-aria="light" aria-label="浅色">浅色</button>
+      <button type="button" class="theme" data-theme-id="dark" data-i18n-aria="dark" aria-label="深色">深色</button>
+      <button type="button" class="theme" data-theme-id="system" data-i18n-aria="system" aria-label="系统">系统</button>
+      <a class="lang" data-lang-toggle href="?lang=en">EN</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <section class="sky" aria-label="operators">
+      <div class="sky-copy">
+        <p class="eyebrow" data-i18n="eyebrow">干员分享</p>
+        <h1 data-i18n="title">把干员交给朋友</h1>
+        <p class="lead" data-i18n="lead">
+          上方是表情球天幕；下方是可下载的干员包。高级包是 zip，瘦卡是 json。
+          装进 Harness 后用「导入包」或 <code>team_import</code>。
+        </p>
+        <div class="cta">
+          <a class="btn" href="#catalog" data-i18n="browse">浏览列表</a>
+          <a class="btn btn-outline" data-download-link href="https://xrk.siphot.com/" data-i18n="getHarness">先装 Harness</a>
+        </div>
+      </div>
+      <div class="constellation" id="constellation" aria-hidden="true"></div>
+    </section>
+
+    <section class="catalog" id="catalog">
+      <div class="catalog-head">
+        <div>
+          <h2 data-i18n="listTitle">干员列表</h2>
+          <p class="hint" data-i18n="listHint">下载链直达 AGT。本站不存大文件。</p>
+        </div>
+        <label class="search">
+          <span class="sr" data-i18n="searchLabel">搜索</span>
+          <input type="search" id="filter" data-i18n-placeholder="searchPh" placeholder="搜名字或简介" autocomplete="off"/>
+        </label>
+      </div>
+      <div class="how" data-i18n-html="how">
+        <strong>怎么用</strong>
+        <ol>
+          <li>下载 <code>xrk-member-*.zip</code> 或 <code>.json</code></li>
+          <li>打开 Harness → Agent Team → 导入包（或对会话说导入）</li>
+          <li>高级包按 <code>env/SETUP.md</code> 就绪后 <code>team_ready</code></li>
+        </ol>
+      </div>
+      <div id="member-list" class="member-list" aria-live="polite"></div>
+      <p id="empty" class="empty" hidden data-i18n="empty">还没有公开包。AGT 上架后会出现在这里；预置干员已在天幕里。</p>
+    </section>
+
+    <footer class="foot">
+      <span data-i18n="mit">MIT</span>
+      <a data-download-link href="https://xrk.siphot.com/" data-i18n="downloadSite">下载站</a>
+      <a href="https://github.com/xrkseek/XRK-harness">GitHub</a>
+      <a href="https://www.npmjs.com/package/@xrkseek/harness-cli">@xrkseek/harness-cli</a>
+    </footer>
+  </main>
+
+  <script src="/presence/emotion-ball/rings.js"></script>
+  <script src="/presence/emotion-ball/emotions.js"></script>
+  <script src="/presence/emotion-ball/ball.js"></script>
+  <script src="/presence/emotion-ball/engine.js"></script>
+  <script src="/site.js"></script>
+</body>
+</html>

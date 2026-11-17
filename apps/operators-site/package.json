@@ -1,0 +1,6 @@
+{
+  "name": "@xrkseek/harness-operators-site",
+  "private": true,
+  "type": "module",
+  "description": "Static Cloudflare Pages shell for sharing 干员 packs (bytes on AGT)."
+}

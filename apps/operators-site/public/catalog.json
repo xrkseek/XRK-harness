@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "sites": {
+    "download": "https://xrk.siphot.com/",
+    "operators": "/"
+  },
+  "agt": {
+    "origin": "https://xrk.siphot.com",
+    "list": "/api/operators",
+    "downloadTemplate": "/api/operators/{id}/download"
+  },
+  "members": []
+}
