@@ -363,22 +363,27 @@ function normalizeCatalog(raw) {
 
 async function loadLiveCatalog(staticCatalog) {
   const origin = String(staticCatalog.agt?.origin || "").replace(/\/+$/, "");
-  const listPath = String(staticCatalog.agt?.list || "/api/operators");
+  const listPath = String(
+    staticCatalog.agt?.list || "/api/harness/operators",
+  );
   if (!origin) return staticCatalog;
   try {
-    const res = await fetch(`${origin}${listPath.startsWith("/") ? listPath : `/${listPath}`}`, {
-      headers: { Accept: "application/json" },
-    });
+    const res = await fetch(
+      `${origin}${listPath.startsWith("/") ? listPath : `/${listPath}`}`,
+      { headers: { Accept: "application/json" } },
+    );
     if (!res.ok) throw new Error("live");
     const json = await res.json();
     const data = json && json.data !== undefined ? json.data : json;
-    const live = normalizeCatalog(data);
-    if (!live.members.length && staticCatalog.members.length) {
-      return { ...staticCatalog, sites: { ...staticCatalog.sites, ...live.sites } };
-    }
+    const live = normalizeCatalog({
+      ...data,
+      // Live AGT may omit sites; keep Pages cross-link defaults.
+      sites: { ...staticCatalog.sites, ...(data?.sites || {}) },
+      agt: staticCatalog.agt,
+    });
     return {
       sites: { ...staticCatalog.sites, ...live.sites },
-      agt: { ...staticCatalog.agt, ...live.agt },
+      agt: staticCatalog.agt,
       members: live.members.length ? live.members : staticCatalog.members,
     };
   } catch {

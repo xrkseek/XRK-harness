@@ -6,8 +6,8 @@
   },
   "agt": {
     "origin": "https://xrk.siphot.com",
-    "list": "/api/operators",
-    "downloadTemplate": "/api/operators/{id}/download"
+    "list": "/api/harness/operators",
+    "downloadTemplate": "/api/harness/operators/{id}/download"
   },
   "members": []
 }

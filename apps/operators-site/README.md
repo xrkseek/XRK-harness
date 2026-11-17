@@ -37,22 +37,22 @@ Cloudflare **Pages 静态站**（与下载站 Worker `apps/site` **分开**）�
 瘦卡 = `xrk-member-<名>.json`（`kind: xrk-agent-member`）。  
 用户导入：壳内拖 zip / `team_import pack=` 或 `card=`。
 
-## AGT 落盘（建议）
+## AGT（并入 `harness-download-Core`，不另起 Core）
 
 ```text
-data/operator-share/
+data/harness-download/operators/
   catalog.json
-  packs/<id>.zip
-  cards/<id>.json
+  packs/<file>.zip
+  cards/<file>.json
 ```
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/api/operators` | 列表（可替代本站静态 `catalog.json`） |
-| `GET` | `/api/operators/:id/download` | 字节 |
-| `POST` | `/api/operators` | 上传（须鉴权） |
+| `GET` | `/api/harness/operators` | 列表 |
+| `GET` | `/api/harness/operators/:id/download` | 字节 |
+| `POST` | `/api/harness/operators` | 上传（systemAuth） |
 
-本站优先 `fetch(agtOrigin + list)`；失败回退 `catalog.json`。
+本站 `catalog.json` → `agt.list` = `/api/harness/operators`；优先 live fetch，失败回退静态 `members`。
 
 ## Cloudflare Pages 填法（照抄）
 
