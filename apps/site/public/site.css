@@ -432,12 +432,17 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   display: flex;
   flex-direction: column;
   padding: 10px 0 8px;
+  /* Host InputBar card: elevated surface + lv2 shadow; dark = bluish-850. */
   border: 1px solid var(--border);
   border-radius: 22px;
   background: var(--bg);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.06);
 }
-html[data-theme="dark"] .composer { box-shadow: 0 8px 28px rgb(0 0 0 / 0.45); }
+html[data-theme="dark"] .composer {
+  background: rgb(44, 44, 46);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+}
 .composer textarea {
   width: 100%;
   min-height: 36px;
