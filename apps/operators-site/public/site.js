@@ -349,7 +349,7 @@ function wireNavMenu() {
   });
   document.querySelectorAll(".nav a, .nav .theme").forEach((el) => {
     el.addEventListener("click", () => {
-      if (window.matchMedia("(max-width: 720px)").matches) setOpen(false);
+      if (window.matchMedia("(max-width: 860px)").matches) setOpen(false);
     });
   });
 }

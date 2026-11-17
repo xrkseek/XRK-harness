@@ -27,8 +27,7 @@
   --page-pad-x: 24px;
   --page-pad-y: 24px;
   --page-pad-bottom: 56px;
-  --top-min-h: 48px;
-  --top-pad-y: 6px;
+  --top-h: 48px;
   --top-pad-x: 16px;
   --mast-min-h: min(38vh, 380px);
   --mast-gap-y: 20px;
@@ -37,8 +36,6 @@
   --section-gap: 28px;
   --foot-gap-top: 56px;
   --tap: 44px;
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-x: max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: "SF Mono", "JetBrains Mono", Consolas, "Liberation Mono", Menlo,
@@ -91,34 +88,31 @@ a { color: inherit; }
   color: var(--btn-ink);
   text-decoration: none;
 }
-.skip:focus { top: calc(12px + var(--safe-top)); }
+.skip:focus { top: 12px; }
 
 .top {
   position: sticky;
   top: 0;
   z-index: 4;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
-  min-height: var(--top-min-h);
-  padding:
-    calc(var(--top-pad-y) + var(--safe-top))
-    max(var(--top-pad-x), env(safe-area-inset-right, 0px))
-    var(--top-pad-y)
-    max(var(--top-pad-x), env(safe-area-inset-left, 0px));
+  height: var(--top-h);
+  padding: 0 var(--top-pad-x);
+  padding-left: max(var(--top-pad-x), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--top-pad-x), env(safe-area-inset-right, 0px));
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--sidebar) 92%, transparent);
-  backdrop-filter: saturate(1.2) blur(10px);
-  -webkit-backdrop-filter: saturate(1.2) blur(10px);
+  background: var(--sidebar);
 }
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
   margin-right: auto;
+  min-width: 0;
+  height: 100%;
   text-decoration: none;
-  min-height: var(--tap);
 }
 .mark-wrap {
   width: 28px;
@@ -130,7 +124,14 @@ a { color: inherit; }
   flex: none;
 }
 .mark { width: 18px; height: 18px; display: block; }
-.name { font-size: 13px; font-weight: 600; }
+.name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .nav {
   display: flex;
   flex-wrap: wrap;
@@ -139,17 +140,23 @@ a { color: inherit; }
 }
 .nav-menu {
   display: none;
-  height: var(--tap);
-  min-width: var(--tap);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 52px;
   padding: 0 12px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--hover);
   color: var(--label);
-  font: inherit;
+  font-family: inherit;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 .ghost, .lang, .theme {
   height: 28px;
@@ -159,6 +166,7 @@ a { color: inherit; }
   background: transparent;
   color: var(--muted);
   font: inherit;
+  line-height: 1;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -225,7 +233,7 @@ a { color: inherit; }
   color: var(--btn-ink);
   text-decoration: none;
   font-size: 14px;
-  line-height: 22px;
+  line-height: 1;
   border: 0;
   cursor: pointer;
 }
@@ -258,7 +266,6 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
 .foot a { text-decoration: none; }
 .foot a:hover { color: var(--label); }
 
-/* Tablet */
 @media (max-width: 960px) {
   .page { --page-pad-x: 16px; }
   .hero,
@@ -268,27 +275,36 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   }
 }
 
-/* Phone — single task, thumb-friendly, less density */
-@media (max-width: 720px) {
+/* Phone */
+@media (max-width: 860px) {
   :root {
     --page-pad-x: 16px;
-    --page-pad-y: 18px;
-    --page-pad-bottom: 40px;
-    --section-gap: 22px;
-    --foot-gap-top: 36px;
+    --page-pad-y: 12px;
+    --page-pad-bottom: 32px;
+    --section-gap: 18px;
+    --foot-gap-top: 28px;
     --mast-min-h: 0;
-    --mast-visual-min: 88px;
-    --mast-gap-y: 16px;
+    --mast-visual-min: 0;
+    --mast-gap-y: 12px;
+    --top-h: 52px;
+    --top-pad-x: 12px;
   }
 
   .top {
-    gap: 6px 8px;
-    background: var(--sidebar);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: calc(var(--top-h) + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    row-gap: 0;
   }
-  .name { font-size: 14px; }
-  .nav-menu { display: inline-flex; }
+  .brand {
+    height: var(--top-h);
+  }
+  .nav-menu {
+    display: inline-flex;
+    height: 34px;
+    margin: 9px 0;
+  }
   .nav {
     display: none;
     order: 3;
@@ -296,59 +312,53 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
     flex-direction: column;
     align-items: stretch;
     gap: 2px;
-    padding: 4px 0 2px;
+    padding: 0 0 8px;
     border-top: 1px solid var(--border-l1);
   }
   .top[data-nav-open="true"] .nav { display: flex; }
   .nav .ghost,
   .nav .lang,
   .nav .theme {
-    height: var(--tap);
+    height: 42px;
     padding: 0 12px;
-    border-radius: 12px;
+    border-radius: 10px;
     justify-content: flex-start;
     font-size: 14px;
   }
 
   .hero,
   .sky {
-    gap: 14px;
-    padding: 4px 0 0;
+    gap: 12px;
+    padding: 0;
   }
   .hero h1,
   .sky h1 {
-    font-size: clamp(1.65rem, 8vw, 2.1rem);
-    letter-spacing: -0.025em;
+    font-size: 1.75rem;
+    line-height: 1.15;
   }
   .lead {
-    margin-top: 10px;
+    margin-top: 8px;
     font-size: 14px;
-    line-height: 22px;
+    line-height: 21px;
   }
   .cta {
-    margin-top: 14px;
+    margin-top: 12px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
   }
   .cta .btn {
-    height: var(--tap);
+    height: 42px;
     min-width: 0;
     width: 100%;
-    border-radius: 14px;
+    border-radius: 12px;
     font-size: 14px;
     font-weight: 600;
   }
 
   .foot {
-    gap: 10px 16px;
+    gap: 8px 14px;
     font-size: 12px;
-    line-height: 18px;
-  }
-  .foot a {
-    min-height: 32px;
-    display: inline-flex;
-    align-items: center;
   }
 }
 

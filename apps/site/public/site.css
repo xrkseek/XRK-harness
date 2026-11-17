@@ -582,19 +582,17 @@ html[data-theme="dark"] .copy:hover { filter: brightness(1.12); }
   .dl-actions, .dl-cmd { justify-self: start; }
 }
 /* Phone: one conversation surface — no stacked sidebars or floating roster balls. */
-@media (max-width: 720px) {
+@media (max-width: 860px) {
   .pair {
-    justify-content: flex-start;
-    min-height: 0;
-    gap: 8px;
+    display: none; /* hero balls are desktop decoration */
   }
-  .pair .stage.lg { width: 56px; height: 56px; }
-  .play { margin-top: 20px; }
+  .play { margin-top: 16px; }
+  .play .hint { margin-bottom: 8px; }
   .shell {
     display: block;
-    height: min(68vh, 560px);
-    min-height: 420px;
-    border-radius: 16px;
+    height: min(62vh, 480px);
+    min-height: 360px;
+    border-radius: 14px;
     overflow: hidden;
   }
   .rail,
@@ -602,30 +600,24 @@ html[data-theme="dark"] .copy:hover { filter: brightness(1.12); }
   .reel {
     display: none;
   }
-  .pane {
-    height: 100%;
-  }
-  .chrome {
-    padding: 10px 14px;
-  }
-  .thread {
-    padding: 10px 14px;
-  }
+  .pane { height: 100%; }
+  .chrome { padding: 10px 12px; }
+  .thread { padding: 10px 12px; }
   .composer {
     width: calc(100% - 16px);
     margin-bottom: 8px;
-    border-radius: 18px;
+    border-radius: 16px;
   }
-  .dl-panel { border-radius: 16px; }
-  .dl-row { padding: 14px 12px; }
+  .dl-panel { border-radius: 14px; }
+  .dl-row { padding: 12px; }
   .dl-actions .btn {
-    height: var(--tap);
+    height: 42px;
     min-width: 0;
     flex: 1 1 auto;
-    border-radius: 14px;
+    border-radius: 12px;
   }
   .cli-line code { font-size: 13px; }
-  .copy { height: var(--tap); border-radius: 12px; padding: 0 14px; }
+  .copy { height: 36px; border-radius: 10px; padding: 0 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .btn { filter: none; transform: none; }

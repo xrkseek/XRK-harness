@@ -474,7 +474,7 @@ function renderPage(catalog, env, zh, request) {
 <html lang="${zh ? "zh-CN" : "en"}" data-locale-hint="${preferProxy ? "zh" : "en"}">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <title>XRK Harness</title>
   <meta name="description" content="${escapeHtml(t.lead)}"/>
   <link rel="icon" href="/logo-mark.svg" type="image/svg+xml"/>
