@@ -35,7 +35,7 @@ const I18N = {
     closeMenu: "关闭",
     lang: "EN",
     title: "把干员交给朋友",
-    lead: "下方可以挑选下载干员，直接发给向阳空间向日葵经理即可完成部署下载环境准备。",
+    lead: "挑选干员下载，发给向阳空间向日葵经理即可部署。",
     browse: "浏览列表",
     getHarness: "先装 Harness",
     listTitle: "干员列表",
@@ -62,7 +62,7 @@ const I18N = {
     closeMenu: "Close",
     lang: "中文",
     title: "Hand operators to friends",
-    lead: "Pick an operator below and send it to Xiangyang’s sunflower manager — they handle deploy and environment prep.",
+    lead: "Pick an operator, download it, and send it to Xiangyang’s sunflower manager to deploy.",
     browse: "Browse list",
     getHarness: "Get Harness first",
     listTitle: "Operator catalog",
@@ -304,7 +304,7 @@ function renderList(filter = "") {
     const chips = [
       `<span class="chip">${escapeHtml(kindChip(m.kind))}</span>`,
       size ? `<span class="chip">${escapeHtml(size)}</span>` : "",
-      file ? `<span class="chip">${escapeHtml(file)}</span>` : "",
+      file ? `<span class="chip chip-file">${escapeHtml(file)}</span>` : "",
       ...skills.map((s) => `<span class="chip">${escapeHtml(s)}</span>`),
     ]
       .filter(Boolean)

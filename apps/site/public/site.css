@@ -616,7 +616,6 @@ html[data-theme="dark"] .copy:hover { filter: brightness(1.12); }
     margin-bottom: 8px;
     border-radius: 18px;
   }
-  .cta .btn { flex: 1 1 auto; }
   .dl-panel { border-radius: 16px; }
   .dl-row { padding: 14px 12px; }
   .dl-actions .btn {

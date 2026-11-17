@@ -208,9 +208,7 @@
     border-radius: 14px;
     font-weight: 600;
   }
-  .chip {
-    max-width: 11rem;
-  }
+  .chip-file { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -327,12 +327,14 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   }
   .cta {
     margin-top: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
   }
   .cta .btn {
     height: var(--tap);
     min-width: 0;
-    flex: 1 1 calc(50% - 5px);
+    width: 100%;
     border-radius: 14px;
     font-size: 14px;
     font-weight: 600;
