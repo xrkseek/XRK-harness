@@ -398,7 +398,6 @@
 .task { padding: 10px; border-radius: 10px; background: var(--hover); }
 .task p { margin: 6px 0 8px; color: var(--muted); font-size: 12px; }
 .seed { font-size: 11px; color: var(--tertiary); }
-.reel { /* spacing from shared .play/.reel/.download rule */ }
 .film { min-height: 0; }
 .orbit {
   display: flex;
