@@ -575,16 +575,8 @@ function renderPage(catalog, env, zh, request) {
         data-assigned="${escapeHtml(t.assigned)}"
         data-stop="${escapeHtml(t.stop)}"
       >
-        <div class="deskbar" aria-hidden="true">XRK Harness</div>
         <aside class="rail">
           <p class="ws">${escapeHtml(t.workspace)} · XRK-harness</p>
-          <p class="rail-k">${escapeHtml(t.team)}</p>
-          <p class="quota">${escapeHtml(t.quota)}</p>
-          <div class="roster">${roster}</div>
-          <div class="rail-end">
-          <p class="who" id="pick-name">${escapeHtml(firstName)}</p>
-          <p id="pick-brief">${escapeHtml(firstBrief)}</p>
-          <button type="button" class="btn" id="delegate-btn">${escapeHtml(t.assign)}</button>
           <p class="rail-k">${escapeHtml(t.sessions)}</p>
           <button type="button" class="sess on" data-session="trunk" aria-pressed="true">
             <strong>${escapeHtml(t.trunkTitle)}</strong>
@@ -595,6 +587,13 @@ function renderPage(catalog, env, zh, request) {
             <span>${escapeHtml(t.branch)}</span>
           </button>
           <button type="button" class="ghost new-sess" id="new-sess">${escapeHtml(t.newSession)}</button>
+          <div class="rail-end">
+            <p class="rail-k">${escapeHtml(t.team)}</p>
+            <p class="quota">${escapeHtml(t.quota)}</p>
+            <div class="roster">${roster}</div>
+            <p class="who" id="pick-name">${escapeHtml(firstName)}</p>
+            <p id="pick-brief">${escapeHtml(firstBrief)}</p>
+            <button type="button" class="btn" id="delegate-btn">${escapeHtml(t.assign)}</button>
           </div>
         </aside>
         <div class="pane">

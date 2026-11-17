@@ -1,5 +1,5 @@
 :root {
-  /* Align with product shell (ui-theme design-platform neutrals / deepseek). */
+  /* Host design-platform neutrals (ui-theme) — keep mock shell on the same tokens. */
   --bg: rgb(255, 255, 255);
   --layer: rgb(249, 250, 251);
   --sidebar: rgb(249, 250, 251);
@@ -7,14 +7,18 @@
   --muted: rgb(97, 102, 107);
   --tertiary: rgb(129, 133, 140);
   --border: rgba(0, 0, 0, 0.1);
+  --border-l1: rgba(0, 0, 0, 0.04);
+  --border-thin: rgba(0, 0, 0, 0.1);
   --hover: rgba(38, 49, 72, 0.06);
   --bubble: rgb(237, 243, 254);
+  --input: rgb(255, 255, 255);
   --send: rgb(65, 118, 230);
   --send-hover: rgb(103, 158, 254);
   --add: rgb(245, 246, 247);
   --btn: rgb(15, 17, 21);
   --btn-ink: rgb(255, 255, 255);
   --chip: color-mix(in srgb, var(--muted) 12%, transparent);
+  --shadow-lv2: 0 4px 12px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.04);
   --radius: 12px;
   --radius-sm: 8px;
   --radius-pill: 999px;
@@ -31,14 +35,18 @@ html[data-theme="dark"] {
   --muted: rgb(207, 211, 214);
   --tertiary: rgb(173, 178, 184);
   --border: rgba(255, 255, 255, 0.12);
+  --border-l1: rgba(255, 255, 255, 0.06);
+  --border-thin: rgba(255, 255, 255, 0.06);
   --hover: rgba(255, 255, 255, 0.08);
   --bubble: rgb(44, 44, 46);
+  --input: rgb(44, 44, 46);
   --send: rgb(103, 158, 254);
   --send-hover: rgb(65, 118, 230);
   --add: rgb(53, 54, 56);
   --btn: rgb(249, 250, 251);
   --btn-ink: rgb(15, 17, 21);
   --chip: color-mix(in srgb, var(--muted) 18%, transparent);
+  --shadow-lv2: 0 8px 28px rgb(0 0 0 / 0.45);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
@@ -220,27 +228,16 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   margin-top: 10px;
   display: grid;
   grid-template-columns: 220px minmax(280px, 1fr) minmax(220px, 280px);
-  grid-template-rows: 36px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: min(72vh, 760px);
   min-height: 560px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-thin);
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg);
+  box-shadow: var(--shadow-lv2);
   pointer-events: none;
   user-select: none;
-}
-.deskbar {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  border-bottom: 1px solid var(--border);
-  background: var(--sidebar);
 }
 .rail, .overview {
   padding: 10px 10px 12px;
@@ -251,8 +248,8 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   display: flex;
   flex-direction: column;
 }
-.rail { border-right: 1px solid var(--border); }
-.overview { border-left: 1px solid var(--border); }
+.rail { border-right: 1px solid var(--border-l1); }
+.overview { border-left: 1px solid var(--border-l1); }
 .roster {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -262,10 +259,13 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   overflow-y: auto;
 }
 .rail-end {
-  flex: none;
+  flex: 1 1 0;
+  min-height: 0;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-l1);
+  display: flex;
+  flex-direction: column;
 }
 #delegate-btn { width: 100%; height: 32px; min-width: 0; }
 .who { margin: 0 0 2px; font-weight: 600; }
@@ -432,16 +432,11 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   display: flex;
   flex-direction: column;
   padding: 10px 0 8px;
-  /* Host InputBar card: elevated surface + lv2 shadow; dark = bluish-850. */
-  border: 1px solid var(--border);
+  /* Host InputBar card: elevated surface + lv2 shadow. */
+  border: 1px solid var(--border-thin);
   border-radius: 22px;
-  background: var(--bg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.06);
-}
-html[data-theme="dark"] .composer {
-  background: rgb(44, 44, 46);
-  border-color: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+  background: var(--input);
+  box-shadow: var(--shadow-lv2);
 }
 .composer textarea {
   width: 100%;

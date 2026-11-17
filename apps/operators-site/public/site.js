@@ -37,7 +37,6 @@ const I18N = {
     browse: "浏览列表",
     getHarness: "先装 Harness",
     listTitle: "干员列表",
-    listHint: "下载直达 AGT，本站不存大文件。",
     searchLabel: "搜索",
     searchPh: "搜名字或简介",
     empty: "还没有公开包。上架后会出现在这里；天幕里是预置干员。",
@@ -63,7 +62,6 @@ const I18N = {
     browse: "Browse list",
     getHarness: "Get Harness first",
     listTitle: "Operator catalog",
-    listHint: "Downloads go straight to AGT. This site does not host large files.",
     searchLabel: "Search",
     searchPh: "Search name or brief",
     empty: "No public packs yet. They show up after publish; seeded operators fill the sky.",
@@ -313,7 +311,7 @@ function renderList(filter = "") {
 }
 
 function wireDownloadLinks() {
-  const href = String(catalog.sites?.download || "https://xrk.siphot.com/").trim();
+  const href = String(catalog.sites?.download || "https://xrk.indevs.in/").trim();
   document.querySelectorAll("[data-download-link]").forEach((a) => {
     a.href = href;
   });

@@ -85,7 +85,7 @@ data/harness-download/operators/
   "shape": "blob",
   "color": "sage",
   "filename": "xrk-member-示例干员.zip",
-  "downloadUrl": "https://xrk.siphot.com/api/operators/mem_example/download",
+  "downloadUrl": "https://xrk.indevs.in/api/harness/operators/mem_example/download",
   "sizeBytes": 12000,
   "skills": ["xrk-example"]
 }

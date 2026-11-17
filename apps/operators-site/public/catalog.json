@@ -1,11 +1,11 @@
 {
   "version": 1,
   "sites": {
-    "download": "https://xrk.siphot.com/",
+    "download": "https://xrk.indevs.in/",
     "operators": "/"
   },
   "agt": {
-    "origin": "https://xrk.siphot.com",
+    "origin": "https://xrk.indevs.in",
     "list": "/api/harness/operators",
     "downloadTemplate": "/api/harness/operators/{id}/download"
   },
