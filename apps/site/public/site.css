@@ -44,14 +44,19 @@
 }
 .mount[data-ready] { opacity: 1; }
 .mount svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.play { margin-top: var(--section-gap); }
-.play h2, .reel h2, .download h2 {
+.play,
+.reel,
+.download,
+#flow {
+  margin-top: var(--section-gap);
+}
+.play h2, .reel h2, .download h2, #flow > h2 {
   margin: 0 0 6px;
   font-size: 15px;
   font-weight: 600;
   text-wrap: balance;
 }
-.hint { margin: 0 0 10px; color: var(--tertiary); max-width: 40rem; }
+.hint { margin: 0 0 8px; color: var(--tertiary); max-width: 40rem; line-height: 20px; }
 .shell {
   margin-top: 10px;
   display: grid;
@@ -393,7 +398,7 @@
 .task { padding: 10px; border-radius: 10px; background: var(--hover); }
 .task p { margin: 6px 0 8px; color: var(--muted); font-size: 12px; }
 .seed { font-size: 11px; color: var(--tertiary); }
-.reel { margin-top: 20px; }
+.reel { /* spacing from shared .play/.reel/.download rule */ }
 .film { min-height: 0; }
 .orbit {
   display: flex;
@@ -422,7 +427,6 @@
   cursor: pointer;
 }
 .dots .dot.on { background: var(--label); }
-.download { margin-top: var(--section-gap); }
 .dl-panel {
   margin-top: 10px;
   border: 1px solid var(--border);
@@ -590,8 +594,8 @@ html[data-theme="dark"] .copy:hover { filter: brightness(1.12); }
   .play .hint { margin-bottom: 8px; }
   .shell {
     display: block;
-    height: min(62vh, 480px);
-    min-height: 360px;
+    height: min(58vh, 440px);
+    min-height: 320px;
     border-radius: 14px;
     overflow: hidden;
   }

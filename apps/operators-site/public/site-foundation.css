@@ -30,11 +30,11 @@
   --top-h: 48px;
   --top-pad-x: 16px;
   --mast-min-h: 0;
-  --mast-gap-y: 16px;
-  --mast-gap-x: 32px;
-  --mast-visual-min: 240px;
-  --section-gap: 24px;
-  --foot-gap-top: 56px;
+  --mast-gap-y: 14px;
+  --mast-gap-x: 28px;
+  --mast-visual-min: 220px;
+  --section-gap: 20px;
+  --foot-gap-top: 40px;
   --tap: 44px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -216,13 +216,18 @@ a { color: inherit; }
 .hero,
 .sky {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(var(--mast-visual-min), 0.95fr);
   gap: var(--mast-gap-y) var(--mast-gap-x);
   align-items: center;
   padding: 4px 0 0;
 }
-/* Only the operators sky needs a tall visual column; download hero stays tight. */
-.sky { min-height: var(--mast-min-h); }
+/* Download hero: content-sized right column — no fake empty plane. */
+.hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+/* Operators sky: keep a real visual column for the constellation. */
+.sky {
+  grid-template-columns: minmax(0, 1.05fr) minmax(var(--mast-visual-min), 0.95fr);
+}
 .hero h1,
 .sky h1 {
   margin: 0;

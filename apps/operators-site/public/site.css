@@ -21,8 +21,9 @@
 .constellation {
   position: relative;
   width: 100%;
-  min-height: var(--mast-visual-min);
+  min-height: min(280px, 36vh);
   height: 100%;
+  align-self: stretch;
 }
 .sky-ball {
   position: absolute;
