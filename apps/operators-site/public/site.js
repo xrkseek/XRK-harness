@@ -32,25 +32,22 @@ const I18N = {
     dark: "深色",
     system: "系统",
     lang: "EN",
-    eyebrow: "干员分享",
     title: "把干员交给朋友",
-    lead: "上方是表情球天幕；下方是可下载的干员包。高级包是 zip，瘦卡是 json。装进 Harness 后用「导入包」或 <code>team_import</code>。",
+    lead: "下方可以挑选下载干员，直接发给向阳空间向日葵经理即可完成部署下载环境准备。",
     browse: "浏览列表",
     getHarness: "先装 Harness",
     listTitle: "干员列表",
-    listHint: "下载链直达 AGT。本站不存大文件。",
+    listHint: "下载直达 AGT，本站不存大文件。",
     searchLabel: "搜索",
     searchPh: "搜名字或简介",
-    how: "<strong>怎么用</strong><ol><li>下载 <code>xrk-member-*.zip</code> 或 <code>.json</code></li><li>打开 Harness → Agent Team → 导入包（或对会话说导入）</li><li>高级包按 <code>env/SETUP.md</code> 就绪后 <code>team_ready</code></li></ol>",
-    empty: "还没有公开包。AGT 上架后会出现在这里；预置干员已在天幕里。",
+    empty: "还没有公开包。上架后会出现在这里；天幕里是预置干员。",
     mit: "MIT",
     download: "下载",
-    builtin: "预置",
     advanced: "高级包",
     thin: "瘦卡",
     noUrl: "暂无链接",
     clickPlay: "点击互动",
-    documentTitle: "XRK 干员分享",
+    documentTitle: "XRK 干员",
   },
   en: {
     skip: "Skip to catalog",
@@ -61,25 +58,22 @@ const I18N = {
     dark: "Dark",
     system: "System",
     lang: "中文",
-    eyebrow: "Operator share",
     title: "Hand operators to friends",
-    lead: "Emotion balls fill the sky; downloadable packs sit below. Advanced = zip, thin = json. Import in Harness Team UI or via <code>team_import</code>.",
+    lead: "Pick an operator below and send it to Xiangyang’s sunflower manager — they handle deploy and environment prep.",
     browse: "Browse list",
     getHarness: "Get Harness first",
     listTitle: "Operator catalog",
-    listHint: "Download links hit AGT. This site does not host large files.",
+    listHint: "Downloads go straight to AGT. This site does not host large files.",
     searchLabel: "Search",
     searchPh: "Search name or brief",
-    how: "<strong>How to use</strong><ol><li>Download <code>xrk-member-*.zip</code> or <code>.json</code></li><li>Harness → Agent Team → Import pack (or ask the session)</li><li>For advanced packs, follow <code>env/SETUP.md</code> then <code>team_ready</code></li></ol>",
-    empty: "No public packs yet. They appear after AGT publish; seeded operators already fill the sky.",
+    empty: "No public packs yet. They show up after publish; seeded operators fill the sky.",
     mit: "MIT",
     download: "Download",
-    builtin: "Built-in",
     advanced: "Advanced",
     thin: "Thin card",
     noUrl: "No link",
     clickPlay: "Click to play",
-    documentTitle: "XRK operator share",
+    documentTitle: "XRK Operators",
   },
 };
 
@@ -162,10 +156,6 @@ function applyI18n() {
     const key = el.getAttribute("data-i18n");
     if (key && L[key] != null) el.textContent = L[key];
   });
-  document.querySelectorAll("[data-i18n-html]").forEach((el) => {
-    const key = el.getAttribute("data-i18n-html");
-    if (key && L[key] != null) el.innerHTML = L[key];
-  });
   document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
     const key = el.getAttribute("data-i18n-aria");
     if (key && L[key] != null) {
@@ -189,6 +179,7 @@ function applyI18n() {
 function applyTheme(pref) {
   const mode = resolved(pref);
   document.documentElement.dataset.theme = mode;
+  document.body.toggleAttribute("data-ds-dark-theme", mode === "dark");
   document.querySelectorAll("[data-theme-id]").forEach((btn) => {
     btn.setAttribute("aria-pressed", btn.dataset.themeId === pref ? "true" : "false");
   });
@@ -268,9 +259,7 @@ function renderConstellation() {
 
 function kindChip(kind) {
   const L = t();
-  if (kind === "thin") return L.thin;
-  if (kind === "builtin") return L.builtin;
-  return L.advanced;
+  return kind === "thin" ? L.thin : L.advanced;
 }
 
 function renderList(filter = "") {

@@ -1,3 +1,4 @@
+/* Align with apps/site + Host design-platform neutrals. */
 :root {
   --bg: rgb(255, 255, 255);
   --layer: rgb(249, 250, 251);
@@ -43,13 +44,6 @@ body {
 }
 a { color: inherit; }
 ::selection { background: rgb(65, 118, 230); color: #fff; }
-code {
-  font-family: var(--mono);
-  font-size: 0.92em;
-  padding: 0.08em 0.35em;
-  border-radius: 6px;
-  background: var(--chip);
-}
 .sr {
   position: absolute;
   width: 1px;
@@ -93,6 +87,7 @@ code {
   margin-right: auto;
   text-decoration: none;
 }
+/* White petals need a black tile in both themes (same as download site). */
 .mark-wrap {
   width: 28px;
   height: 28px;
@@ -100,8 +95,8 @@ code {
   place-items: center;
   border-radius: 8px;
   background: rgb(21, 21, 23);
+  flex: none;
 }
-html[data-theme="dark"] .mark-wrap { background: rgb(249, 250, 251); }
 .mark { width: 18px; height: 18px; display: block; }
 .name { font-size: 13px; font-weight: 600; }
 .nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
@@ -128,32 +123,18 @@ html[data-theme="dark"] .mark-wrap { background: rgb(249, 250, 251); }
 
 .page { max-width: 1120px; margin: 0 auto; padding: 24px 24px 56px; }
 
-/* Open hero like download site — no frosted panel, no glass. */
 .sky {
-  position: relative;
-  min-height: min(48vh, 480px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 1.15fr);
-  gap: 24px 36px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 1.05fr);
+  gap: 20px 32px;
   align-items: center;
-  padding: 8px 0 12px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  overflow: visible;
+  min-height: min(42vh, 420px);
+  padding: 8px 0 4px;
 }
-.sky-copy { position: relative; z-index: 1; max-width: 34rem; }
-.eyebrow {
-  margin: 0 0 10px;
-  color: var(--tertiary);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
+.sky-copy { max-width: 36rem; }
 .sky h1 {
   margin: 0;
-  font-size: clamp(2rem, 4.8vw, 3.25rem);
+  font-size: clamp(2rem, 5vw, 3.25rem);
   line-height: 1.08;
   font-weight: 600;
   letter-spacing: -0.03em;
@@ -167,7 +148,7 @@ html[data-theme="dark"] .mark-wrap { background: rgb(249, 250, 251); }
   text-wrap: pretty;
   max-width: 40rem;
 }
-.cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -183,7 +164,6 @@ html[data-theme="dark"] .mark-wrap { background: rgb(249, 250, 251); }
   line-height: 22px;
   border: 0;
   cursor: pointer;
-  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1), filter 160ms ease;
 }
 .btn:active:not([aria-disabled="true"]) { transform: scale(0.96); }
 .btn:hover { filter: brightness(1.08); }
@@ -203,8 +183,7 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
 
 .constellation {
   position: relative;
-  z-index: 0;
-  min-height: 300px;
+  min-height: 280px;
   height: 100%;
 }
 .sky-ball {
@@ -214,19 +193,10 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   background: transparent;
   cursor: pointer;
   border-radius: 16px;
-  transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
-  animation: float-in 520ms cubic-bezier(0.2, 0, 0, 1) both;
+  transition: transform 180ms ease;
 }
-.sky-ball:hover { transform: translateY(-6px) scale(1.04); }
+.sky-ball:hover { transform: translateY(-4px); }
 .sky-ball:active { transform: scale(0.94); }
-@keyframes float-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.92); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sky-ball { animation: none; }
-  .btn, .sky-ball, .stage { transition: none; }
-}
 
 .stage {
   position: relative;
@@ -259,13 +229,13 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   margin-bottom: 14px;
 }
 .catalog h2 {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   font-size: 15px;
   font-weight: 600;
 }
 .hint { margin: 0; color: var(--tertiary); max-width: 36rem; }
 .search input {
-  width: min(280px, 100vw - 48px);
+  width: min(280px, 100%);
   height: 34px;
   padding: 0 12px;
   border: 1px solid var(--border);
@@ -279,22 +249,7 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   outline-offset: 1px;
 }
 
-.how {
-  margin: 0 0 16px;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  background: var(--layer);
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
-.how strong { display: block; color: var(--label); margin-bottom: 6px; }
-.how ol { margin: 0; padding-left: 1.2rem; }
-.how li { margin: 4px 0; }
-
-.member-list {
-  display: grid;
-  gap: 8px;
-}
+.member-list { display: grid; gap: 8px; }
 .member {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -304,7 +259,6 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg);
-  transition: background 160ms ease;
 }
 .member:hover { background: var(--layer); }
 .member-copy { min-width: 0; }
@@ -342,12 +296,7 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-.member-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: stretch;
-}
+.member-actions { display: flex; align-items: center; }
 .member-actions .btn { min-width: 6.5rem; }
 
 .empty {
@@ -357,16 +306,15 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   color: var(--tertiary);
   border: 1px dashed var(--border);
   border-radius: 14px;
-  background: transparent;
 }
 
 .foot {
-  margin-top: 48px;
+  margin-top: 56px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 12px 20px;
   color: var(--tertiary);
   font-size: 12px;
 }
@@ -374,12 +322,13 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
 .foot a:hover { color: var(--label); }
 
 @media (max-width: 860px) {
+  .page { padding: 24px 16px 56px; }
   .sky {
     grid-template-columns: 1fr;
     min-height: 0;
   }
   .constellation {
-    min-height: 220px;
+    min-height: 200px;
     order: -1;
   }
   .member {
@@ -387,7 +336,10 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   }
   .member-actions {
     grid-column: 1 / -1;
-    flex-direction: row;
     justify-content: flex-end;
   }
+  .search input { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn, .sky-ball { transition: none; transform: none; }
 }

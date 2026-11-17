@@ -545,7 +545,7 @@ function renderPage(catalog, env, zh, request) {
       <div>
         <h1>${escapeHtml(t.tagline)}</h1>
         <p class="lead">${escapeHtml(t.lead)}</p>
-        <div class="cta">${cta}<a class="btn btn-outline" href="${GITHUB}">${escapeHtml(t.github)}</a></div>
+        <div class="cta">${cta}<a class="btn btn-outline" href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a><a class="btn btn-outline" href="${GITHUB}">${escapeHtml(t.github)}</a></div>
       </div>
       <div class="pair">
         ${SEEDS.slice(0, 2).map((m) =>

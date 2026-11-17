@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>XRK 干员分享</title>
-  <meta name="description" content="分享与下载 XRK Harness 干员包。列表在本站，zip/json 字节在 AGT。"/>
+  <title>XRK 干员</title>
+  <meta name="description" content="挑选并下载 XRK Harness 干员包，发给向阳空间向日葵经理即可部署。"/>
   <link rel="icon" href="/logo-mark.svg" type="image/svg+xml"/>
   <link rel="stylesheet" href="/site.css"/>
   <script>
@@ -16,8 +16,7 @@
       } catch (e) {}
       try {
         var cn = new Date().getTimezoneOffset() === -480;
-        var hasLang = /(?:^|[?&])lang=/.test(location.search);
-        if (!hasLang && !cn) {
+        if (!/(?:^|[?&])lang=/.test(location.search) && !cn) {
           location.replace(location.pathname + "?lang=en" + location.hash);
         }
       } catch (e) {}
@@ -42,14 +41,10 @@
   </header>
 
   <main class="page">
-    <section class="sky" aria-label="operators">
+    <section class="sky">
       <div class="sky-copy">
-        <p class="eyebrow" data-i18n="eyebrow">干员分享</p>
         <h1 data-i18n="title">把干员交给朋友</h1>
-        <p class="lead" data-i18n="lead">
-          上方是表情球天幕；下方是可下载的干员包。高级包是 zip，瘦卡是 json。
-          装进 Harness 后用「导入包」或 <code>team_import</code>。
-        </p>
+        <p class="lead" data-i18n="lead">下方可以挑选下载干员，直接发给向阳空间向日葵经理即可完成部署下载环境准备。</p>
         <div class="cta">
           <a class="btn" href="#catalog" data-i18n="browse">浏览列表</a>
           <a class="btn btn-outline" data-download-link href="https://xrk.siphot.com/" data-i18n="getHarness">先装 Harness</a>
@@ -62,23 +57,15 @@
       <div class="catalog-head">
         <div>
           <h2 data-i18n="listTitle">干员列表</h2>
-          <p class="hint" data-i18n="listHint">下载链直达 AGT。本站不存大文件。</p>
+          <p class="hint" data-i18n="listHint">下载直达 AGT，本站不存大文件。</p>
         </div>
         <label class="search">
           <span class="sr" data-i18n="searchLabel">搜索</span>
           <input type="search" id="filter" data-i18n-placeholder="searchPh" placeholder="搜名字或简介" autocomplete="off"/>
         </label>
       </div>
-      <div class="how" data-i18n-html="how">
-        <strong>怎么用</strong>
-        <ol>
-          <li>下载 <code>xrk-member-*.zip</code> 或 <code>.json</code></li>
-          <li>打开 Harness → Agent Team → 导入包（或对会话说导入）</li>
-          <li>高级包按 <code>env/SETUP.md</code> 就绪后 <code>team_ready</code></li>
-        </ol>
-      </div>
       <div id="member-list" class="member-list" aria-live="polite"></div>
-      <p id="empty" class="empty" hidden data-i18n="empty">还没有公开包。AGT 上架后会出现在这里；预置干员已在天幕里。</p>
+      <p id="empty" class="empty" hidden data-i18n="empty">还没有公开包。上架后会出现在这里；天幕里是预置干员。</p>
     </section>
 
     <footer class="foot">
