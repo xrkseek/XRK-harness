@@ -370,7 +370,8 @@ async function loadLiveCatalog(staticCatalog) {
       `${origin}${listPath.startsWith("/") ? listPath : `/${listPath}`}`,
       { headers: { Accept: "application/json" } },
     );
-    if (!res.ok) throw new Error("live");
+    // 503 empty catalog = Worker soft-fail while AGT is down; keep Pages samples.
+    if (!res.ok && res.status !== 503) throw new Error("live");
     const json = await res.json();
     const data = json && json.data !== undefined ? json.data : json;
     const live = normalizeCatalog({

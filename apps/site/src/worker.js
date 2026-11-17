@@ -717,6 +717,25 @@ function renderPage(catalog, env, zh, request) {
 </html>`;
 }
 
+function corsJson(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "cache-control": "public, max-age=30",
+    },
+  });
+}
+
+/** Empty operators catalog when AGT origin is down — Pages can keep serving samples. */
+function emptyOperatorsCatalog() {
+  return corsJson({
+    ok: true,
+    data: { version: 1, sites: {}, members: [] },
+  }, 503);
+}
+
 async function proxyHarness(request, env) {
   const incoming = new URL(request.url);
   const upstream = `${origin(env)}${incoming.pathname}${incoming.search}`;
@@ -733,10 +752,31 @@ async function proxyHarness(request, env) {
   const headers = new Headers();
   const accept = request.headers.get("Accept");
   if (accept) headers.set("Accept", accept);
-  const res = await fetch(upstream, { method: request.method, headers, redirect: "follow" });
-  const out = new Headers(res.headers);
-  out.set("Access-Control-Allow-Origin", "*");
-  return new Response(res.body, { status: res.status, headers: out });
+  const isOperatorsList =
+    request.method === "GET" &&
+    (incoming.pathname === "/api/harness/operators" ||
+      incoming.pathname === "/api/harness/operators/");
+  try {
+    const res = await fetch(upstream, {
+      method: request.method,
+      headers,
+      redirect: "follow",
+      signal: AbortSignal.timeout(12_000),
+    });
+    // CF / dead origin often returns HTML "error code: 1003" — keep JSON contract.
+    if (isOperatorsList && (res.status >= 500 || res.status === 403 || res.status === 502)) {
+      return emptyOperatorsCatalog();
+    }
+    const out = new Headers(res.headers);
+    out.set("Access-Control-Allow-Origin", "*");
+    return new Response(res.body, { status: res.status, headers: out });
+  } catch {
+    if (isOperatorsList) return emptyOperatorsCatalog();
+    return new Response("upstream unavailable", {
+      status: 502,
+      headers: { "access-control-allow-origin": "*" },
+    });
+  }
 }
 
 export default {

@@ -71,6 +71,8 @@ data/harness-download/operators/
 **不要**建 Worker。本站是纯静态 Pages。  
 部署后把真实 `https://xrk-operators.pages.dev`（或自定义域）写进下载站 env `OPERATORS_SITE`，并把本站 `public/catalog.json` 里 `sites.download` 指回下载站。
 
+`public/samples/` 放可直接下载的瘦卡样例（AGT 未上线时列表仍可用）。AGT `harness-download` 恢复后跑 `scripts/_sync-agt-harness-download-core.py --restart` 再切回 `/api/harness/operators` 真源。
+
 本地预览：任意静态服务器指到 `public/`。
 
 ## 目录条目

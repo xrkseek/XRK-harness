@@ -9,5 +9,34 @@
     "list": "/api/harness/operators",
     "downloadTemplate": "/api/harness/operators/{id}/download"
   },
-  "members": []
+  "members": [
+    {
+      "id": "sample_researcher",
+      "name": "调研示例",
+      "nameEn": "Research sample",
+      "brief": "只读调研瘦卡。发给向日葵经理即可部署。",
+      "briefEn": "Read-only research thin card. Send it to the sunflower manager.",
+      "kind": "thin",
+      "shape": "blob",
+      "color": "mist",
+      "filename": "xrk-member-调研示例.json",
+      "downloadUrl": "/samples/xrk-member-调研示例.json",
+      "sizeBytes": 433,
+      "skills": []
+    },
+    {
+      "id": "sample_docs",
+      "name": "文书示例",
+      "nameEn": "Docs sample",
+      "brief": "诚实文档瘦卡。不编未做能力。",
+      "briefEn": "Honest docs thin card. No invented APIs.",
+      "kind": "thin",
+      "shape": "squircle",
+      "color": "butter",
+      "filename": "xrk-member-文书示例.json",
+      "downloadUrl": "/samples/xrk-member-文书示例.json",
+      "sizeBytes": 422,
+      "skills": []
+    }
+  ]
 }

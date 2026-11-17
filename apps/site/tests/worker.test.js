@@ -152,3 +152,22 @@ test("installer API paths still redirect to AGT update origin", async () => {
     "http://103.236.89.174:6969/api/harness/download/win-x64",
   );
 });
+
+test("operators list soft-fails to empty JSON when AGT origin is down", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new TypeError("fetch failed");
+  };
+  try {
+    const res = await worker.fetch(
+      new Request("https://example.test/api/harness/operators"),
+      env,
+    );
+    assert.equal(res.status, 503);
+    const json = await res.json();
+    assert.equal(json.ok, true);
+    assert.deepEqual(json.data.members, []);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
