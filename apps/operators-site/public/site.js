@@ -36,6 +36,7 @@ const I18N = {
     lang: "EN",
     title: "把干员交给朋友",
     lead: "挑选干员下载，发给向阳空间向日葵经理即可部署。",
+    getHarness: "先装 Harness",
     listTitle: "干员列表",
     searchLabel: "搜索",
     searchPh: "搜名字或简介",
@@ -61,6 +62,7 @@ const I18N = {
     lang: "中文",
     title: "Hand operators to friends",
     lead: "Pick an operator, download it, and send it to Xiangyang’s sunflower manager to deploy.",
+    getHarness: "Get Harness first",
     listTitle: "Operator catalog",
     searchLabel: "Search",
     searchPh: "Search name or brief",
@@ -186,6 +188,10 @@ function applyI18n() {
   if (home) home.href = locale === "zh" ? "/" : "/?lang=en";
 }
 
+function isPhoneLayout() {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
 function applyTheme(pref) {
   const mode = resolved(pref);
   document.documentElement.dataset.theme = mode;
@@ -193,15 +199,50 @@ function applyTheme(pref) {
   document.querySelectorAll("[data-theme-id]").forEach((btn) => {
     btn.setAttribute("aria-pressed", btn.dataset.themeId === pref ? "true" : "false");
   });
-  mountBalls();
+  void mountBalls();
 }
 
-function mountBalls() {
+let ballScriptsPromise = null;
+
+function loadBallScripts() {
+  if (window.EmotionBall && window.EmotionBall.create) return Promise.resolve();
+  if (ballScriptsPromise) return ballScriptsPromise;
+  const files = [
+    "/presence/emotion-ball/rings.js",
+    "/presence/emotion-ball/emotions.js",
+    "/presence/emotion-ball/ball.js",
+    "/presence/emotion-ball/engine.js",
+  ];
+  ballScriptsPromise = files.reduce(
+    (chain, src) =>
+      chain.then(
+        () =>
+          new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = src;
+            s.async = false;
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error(src));
+            document.head.appendChild(s);
+          }),
+      ),
+    Promise.resolve(),
+  );
+  return ballScriptsPromise.catch(() => {
+    ballScriptsPromise = null;
+  });
+}
+
+async function mountBalls() {
+  if (isPhoneLayout()) return;
+  const nodes = document.querySelectorAll("[data-ball]");
+  if (!nodes.length) return;
+  await loadBallScripts();
   const create = window.EmotionBall && window.EmotionBall.create;
-  document.querySelectorAll("[data-ball]").forEach((el) => {
+  if (!create) return;
+  nodes.forEach((el) => {
     if (el._ball && el._ball.destroy) el._ball.destroy();
     el.replaceChildren();
-    if (!create) return;
     const tone = paint(el.dataset.color);
     el._ball = create(el, {
       emotion: el.dataset.emotion || "02",
@@ -242,6 +283,10 @@ function skyMembers() {
 function renderConstellation() {
   const root = document.getElementById("constellation");
   if (!root) return;
+  if (isPhoneLayout()) {
+    root.replaceChildren();
+    return;
+  }
   const L = t();
   const items = skyMembers();
   root.replaceChildren();
@@ -264,7 +309,7 @@ function renderConstellation() {
     });
     root.appendChild(btn);
   });
-  mountBalls();
+  void mountBalls();
 }
 
 function kindChip(kind) {
@@ -310,8 +355,12 @@ function renderList(filter = "") {
     const action = href
       ? `<a class="btn" href="${escapeHtml(href)}" download="${escapeHtml(downloadName)}" rel="noopener">${escapeHtml(L.download)}</a>`
       : `<span class="btn" aria-disabled="true">${escapeHtml(L.noUrl)}</span>`;
+    const tone = paint(color);
+    const avatar = isPhoneLayout()
+      ? `<span class="stage md member-dot" style="--dot:${escapeHtml(tone.body)}" aria-hidden="true"></span>`
+      : `<span class="stage md"><span class="mount" data-ball data-shape="${escapeHtml(shape)}" data-color="${escapeHtml(color)}"></span></span>`;
     article.innerHTML = `
-      <span class="stage md"><span class="mount" data-ball data-shape="${escapeHtml(shape)}" data-color="${escapeHtml(color)}"></span></span>
+      ${avatar}
       <div class="member-copy">
         <h3>${escapeHtml(memberLabel(m))}</h3>
         <p class="brief">${escapeHtml(memberBrief(m))}</p>
@@ -320,7 +369,7 @@ function renderList(filter = "") {
       <div class="member-actions">${action}</div>`;
     root.appendChild(article);
   }
-  mountBalls();
+  void mountBalls();
 }
 
 function wireDownloadLinks() {
@@ -387,10 +436,18 @@ async function loadLiveCatalog(staticCatalog) {
     staticCatalog.agt?.list || "/api/harness/operators",
   );
   if (!origin) return staticCatalog;
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer =
+    ctrl && typeof setTimeout === "function"
+      ? setTimeout(() => ctrl.abort(), 2500)
+      : null;
   try {
     const res = await fetch(
       `${origin}${listPath.startsWith("/") ? listPath : `/${listPath}`}`,
-      { headers: { Accept: "application/json" } },
+      {
+        headers: { Accept: "application/json" },
+        signal: ctrl ? ctrl.signal : undefined,
+      },
     );
     // 503 empty catalog = Worker soft-fail while AGT is down; keep Pages samples.
     if (!res.ok && res.status !== 503) throw new Error("live");
@@ -409,7 +466,16 @@ async function loadLiveCatalog(staticCatalog) {
     };
   } catch {
     return staticCatalog;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
+}
+
+function paintCatalog(filterValue) {
+  members = catalog.members;
+  wireDownloadLinks();
+  renderConstellation();
+  renderList(filterValue || "");
 }
 
 async function boot() {
@@ -417,6 +483,7 @@ async function boot() {
   applyI18n();
   applyTheme(preference());
   wireNavMenu();
+  wireDownloadLinks();
 
   document.querySelectorAll("[data-theme-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -443,11 +510,20 @@ async function boot() {
   } catch {
     /* keep empty */
   }
-  catalog = await loadLiveCatalog(staticCatalog);
-  members = catalog.members;
-  wireDownloadLinks();
-  renderConstellation();
-  renderList(filter?.value || "");
+  // First paint from local samples — never wait on the live Worker/AGT hop.
+  catalog = staticCatalog;
+  paintCatalog(filter?.value || "");
+
+  void loadLiveCatalog(staticCatalog).then((live) => {
+    const before = JSON.stringify(catalog.members.map((m) => m.id));
+    const after = JSON.stringify(live.members.map((m) => m.id));
+    catalog = live;
+    if (before === after) {
+      wireDownloadLinks();
+      return;
+    }
+    paintCatalog(filter?.value || "");
+  });
 }
 
 boot();

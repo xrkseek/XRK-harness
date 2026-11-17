@@ -72,15 +72,55 @@ function paint(color) {
   return document.documentElement.dataset.theme === "dark" ? pal.dark : pal.light;
 }
 
-function mountBalls() {
+function isPhoneLayout() {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
+let ballScriptsPromise = null;
+
+function loadBallScripts() {
+  if (window.EmotionBall && window.EmotionBall.create) return Promise.resolve();
+  if (ballScriptsPromise) return ballScriptsPromise;
+  const files = [
+    "/presence/emotion-ball/rings.js",
+    "/presence/emotion-ball/emotions.js",
+    "/presence/emotion-ball/ball.js",
+    "/presence/emotion-ball/engine.js",
+  ];
+  ballScriptsPromise = files.reduce(
+    (chain, src) =>
+      chain.then(
+        () =>
+          new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = src;
+            s.async = false;
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error(src));
+            document.head.appendChild(s);
+          }),
+      ),
+    Promise.resolve(),
+  );
+  return ballScriptsPromise.catch(() => {
+    ballScriptsPromise = null;
+  });
+}
+
+async function mountBalls() {
+  // Phone hides hero / rail / orbit balls — skip ~210KB SVG runtime.
+  if (isPhoneLayout()) return;
+  const nodes = document.querySelectorAll("[data-ball]");
+  if (!nodes.length) return;
+  await loadBallScripts();
   const create = window.EmotionBall && window.EmotionBall.create;
-  document.querySelectorAll("[data-ball]").forEach((el) => {
+  if (!create) return;
+  nodes.forEach((el) => {
     if (el._ball && el._ball.destroy) el._ball.destroy();
     el.replaceChildren();
-    if (!create) return;
     const tone = paint(el.dataset.color);
     el._ball = create(el, {
-      emotion: "02",
+      emotion: el.dataset.emotion || "02",
       idle: true,
       lite: true,
       eyeScale: 1.15,
@@ -99,7 +139,7 @@ function applyTheme(pref) {
   document.querySelectorAll("[data-theme-id]").forEach((btn) => {
     btn.setAttribute("aria-pressed", btn.dataset.themeId === pref ? "true" : "false");
   });
-  mountBalls();
+  void mountBalls();
 }
 
 function selectMember(id) {
@@ -371,10 +411,13 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 });
 const first = document.querySelector(".roster .ball");
 if (first) selectMember(first.dataset.member || "");
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => { mountBalls(); bindPlayBalls(); runDesk(); });
-} else {
-  mountBalls();
-  bindPlayBalls();
+function startUi() {
+  void mountBalls();
+  if (!isPhoneLayout()) bindPlayBalls();
   runDesk();
+}
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startUi);
+} else {
+  startUi();
 }

@@ -555,7 +555,7 @@ function renderPage(catalog, env, zh, request) {
       <div>
         <h1>${escapeHtml(t.tagline)}</h1>
         <p class="lead">${escapeHtml(t.lead)}</p>
-        <div class="cta">${cta}</div>
+        <div class="cta">${cta}<a class="btn btn-outline" data-operators-link href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a><a class="btn btn-outline" href="${GITHUB}">${escapeHtml(t.github)}</a></div>
       </div>
       <div class="pair">
         ${SEEDS.slice(0, 2).map((m) =>
@@ -713,11 +713,7 @@ function renderPage(catalog, env, zh, request) {
       <a href="${DOCS}">${escapeHtml(t.docs)}</a>
     </footer>
   </main>
-  <script src="/presence/emotion-ball/rings.js"></script>
-  <script src="/presence/emotion-ball/emotions.js"></script>
-  <script src="/presence/emotion-ball/ball.js"></script>
-  <script src="/presence/emotion-ball/engine.js"></script>
-  <script src="/site.js"></script>
+  <script src="/site.js" defer></script>
 </body>
 </html>`;
 }
