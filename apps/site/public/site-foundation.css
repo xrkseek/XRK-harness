@@ -373,17 +373,21 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   }
   .cta {
     margin-top: 12px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-wrap: wrap;
     gap: 8px;
   }
   .cta .btn {
     height: 42px;
     min-width: 0;
-    width: 100%;
+    flex: 1 1 calc(50% - 4px);
     border-radius: 12px;
     font-size: 14px;
     font-weight: 600;
+  }
+  .cta .btn:only-child {
+    flex: 0 1 auto;
+    min-width: 9.5rem;
   }
 
   .foot {
