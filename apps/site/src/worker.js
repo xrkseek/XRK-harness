@@ -48,7 +48,7 @@ const LABELS = {
   zh: {
     lead: "本地优先的 AI 编程工作台。对话留在会话里，干员能接手任务，模型和 MCP 在设置里接好就能用。",
     tagline: "向阳而生，驭光而行",
-    skip: "跳到干员",
+    skip: "跳到工作台",
     play: "工作台",
     playHint: "工作台只播、不能点。点球可弹跳换表情，不改预览。",
     you: "你",
@@ -128,7 +128,7 @@ const LABELS = {
   en: {
     lead: "A local-first AI coding workbench. Sessions keep the thread, operators take work you hand off, and models plus MCP live in Settings.",
     tagline: "Grow toward the sun. Steer the light.",
-    skip: "Skip to operators",
+    skip: "Skip to workbench",
     play: "Workbench",
     playHint: "The demo plays by itself. Tap a ball to bounce and change expression — it does not steer the preview.",
     you: "You",
@@ -555,7 +555,7 @@ function renderPage(catalog, env, zh, request) {
       <div>
         <h1>${escapeHtml(t.tagline)}</h1>
         <p class="lead">${escapeHtml(t.lead)}</p>
-        <div class="cta">${cta}<a class="btn btn-outline" data-operators-link href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a><a class="btn btn-outline" href="${GITHUB}">${escapeHtml(t.github)}</a></div>
+        <div class="cta">${cta}</div>
       </div>
       <div class="pair">
         ${SEEDS.slice(0, 2).map((m) =>

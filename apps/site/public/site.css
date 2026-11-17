@@ -589,7 +589,7 @@ html[data-theme="dark"] .copy:hover { filter: brightness(1.12); }
   .pair {
     display: none; /* hero balls are desktop decoration */
   }
-  .play { margin-top: 16px; }
+  .play { margin-top: var(--section-gap); }
   .play .hint { margin-bottom: 8px; }
   .shell {
     display: block;
