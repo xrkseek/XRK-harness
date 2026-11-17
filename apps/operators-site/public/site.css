@@ -10,9 +10,6 @@
   --btn: rgb(15, 17, 21);
   --btn-ink: rgb(255, 255, 255);
   --chip: color-mix(in srgb, var(--muted) 12%, transparent);
-  --sky: radial-gradient(ellipse 90% 70% at 70% 20%, color-mix(in srgb, #D4E0EC 55%, transparent), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 20% 80%, color-mix(in srgb, #E5D4E8 40%, transparent), transparent 55%),
-    var(--bg);
   --radius: 12px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -31,9 +28,6 @@ html[data-theme="dark"] {
   --btn: rgb(249, 250, 251);
   --btn-ink: rgb(15, 17, 21);
   --chip: color-mix(in srgb, var(--muted) 18%, transparent);
-  --sky: radial-gradient(ellipse 90% 70% at 70% 18%, color-mix(in srgb, #9AABB8 28%, transparent), transparent 58%),
-    radial-gradient(ellipse 55% 45% at 18% 78%, color-mix(in srgb, #B098B8 22%, transparent), transparent 55%),
-    var(--bg);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
@@ -90,8 +84,7 @@ code {
   min-height: 48px;
   padding: 6px 16px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--sidebar) 88%, transparent);
-  backdrop-filter: blur(10px);
+  background: var(--sidebar);
 }
 .brand {
   display: flex;
@@ -133,22 +126,23 @@ html[data-theme="dark"] .mark-wrap { background: rgb(249, 250, 251); }
   outline-offset: 2px;
 }
 
-.page { max-width: 1120px; margin: 0 auto; padding: 20px 24px 56px; }
+.page { max-width: 1120px; margin: 0 auto; padding: 24px 24px 56px; }
 
+/* Open hero like download site — no frosted panel, no glass. */
 .sky {
   position: relative;
-  min-height: min(52vh, 520px);
+  min-height: min(48vh, 480px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 1.1fr);
-  gap: 20px 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 1.15fr);
+  gap: 24px 36px;
   align-items: center;
-  padding: 28px 24px 20px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: var(--sky);
-  overflow: hidden;
+  padding: 8px 0 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
 }
-.sky-copy { position: relative; z-index: 1; max-width: 32rem; }
+.sky-copy { position: relative; z-index: 1; max-width: 34rem; }
 .eyebrow {
   margin: 0 0 10px;
   color: var(--tertiary);
@@ -159,18 +153,19 @@ html[data-theme="dark"] .mark-wrap { background: rgb(249, 250, 251); }
 }
 .sky h1 {
   margin: 0;
-  font-size: clamp(2rem, 4.8vw, 3.1rem);
+  font-size: clamp(2rem, 4.8vw, 3.25rem);
   line-height: 1.08;
   font-weight: 600;
   letter-spacing: -0.03em;
   text-wrap: balance;
 }
 .lead {
-  margin: 14px 0 0;
+  margin: 16px 0 0;
   color: var(--muted);
   font-size: 15px;
   line-height: 24px;
   text-wrap: pretty;
+  max-width: 40rem;
 }
 .cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .btn {
@@ -209,7 +204,7 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
 .constellation {
   position: relative;
   z-index: 0;
-  min-height: 320px;
+  min-height: 300px;
   height: 100%;
 }
 .sky-ball {
@@ -240,9 +235,9 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   display: block;
   overflow: visible;
   border-radius: 14px;
-  background: radial-gradient(ellipse 70% 60% at 50% 45%, color-mix(in srgb, var(--tertiary) 18%, transparent), transparent 70%);
+  background: transparent;
 }
-.stage.lg { width: 76px; height: 76px; }
+.stage.lg { width: 80px; height: 80px; }
 .stage.md { width: 64px; height: 64px; }
 .stage.sm { width: 44px; height: 44px; }
 .mount {
@@ -254,7 +249,7 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
 .mount[data-ready] { opacity: 1; }
 .mount svg { width: 100%; height: 100%; display: block; overflow: visible; }
 
-.catalog { margin-top: 36px; }
+.catalog { margin-top: 28px; }
 .catalog-head {
   display: flex;
   flex-wrap: wrap;
@@ -275,7 +270,7 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 17px;
-  background: var(--layer);
+  background: var(--bg);
   color: var(--label);
   font: inherit;
 }
@@ -309,7 +304,7 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg);
-  transition: background 160ms ease, border-color 160ms ease;
+  transition: background 160ms ease;
 }
 .member:hover { background: var(--layer); }
 .member-copy { min-width: 0; }
@@ -356,12 +351,13 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
 .member-actions .btn { min-width: 6.5rem; }
 
 .empty {
-  margin: 24px 0 0;
+  margin: 8px 0 0;
   padding: 28px 16px;
   text-align: center;
   color: var(--tertiary);
   border: 1px dashed var(--border);
   border-radius: 14px;
+  background: transparent;
 }
 
 .foot {
