@@ -29,11 +29,11 @@
   --page-pad-bottom: 56px;
   --top-h: 48px;
   --top-pad-x: 16px;
-  --mast-min-h: min(38vh, 380px);
-  --mast-gap-y: 20px;
+  --mast-min-h: 0;
+  --mast-gap-y: 16px;
   --mast-gap-x: 32px;
-  --mast-visual-min: 280px;
-  --section-gap: 28px;
+  --mast-visual-min: 240px;
+  --section-gap: 24px;
   --foot-gap-top: 56px;
   --tap: 44px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
@@ -219,9 +219,10 @@ a { color: inherit; }
   grid-template-columns: minmax(0, 1.05fr) minmax(var(--mast-visual-min), 0.95fr);
   gap: var(--mast-gap-y) var(--mast-gap-x);
   align-items: center;
-  min-height: var(--mast-min-h);
-  padding: 8px 0 4px;
+  padding: 4px 0 0;
 }
+/* Only the operators sky needs a tall visual column; download hero stays tight. */
+.sky { min-height: var(--mast-min-h); }
 .hero h1,
 .sky h1 {
   margin: 0;

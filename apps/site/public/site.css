@@ -12,8 +12,8 @@
   gap: 12px;
   align-items: center;
   justify-content: flex-end;
-  min-height: var(--mast-visual-min);
   width: 100%;
+  align-self: center;
 }
 .hero-ball {
   padding: 0;
