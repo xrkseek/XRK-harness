@@ -173,7 +173,8 @@ function applyI18n() {
     const key = el.getAttribute("data-i18n-aria");
     if (key && L[key] != null) {
       el.setAttribute("aria-label", L[key]);
-      el.textContent = L[key];
+      // Icon-only controls keep children; theme pills still show the label.
+      if (!el.classList.contains("nav-menu")) el.textContent = L[key];
     }
   });
   document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
@@ -341,7 +342,6 @@ function wireNavMenu() {
     top.dataset.navOpen = open ? "true" : "false";
     btn.setAttribute("aria-expanded", open ? "true" : "false");
     const L = t();
-    btn.textContent = open ? L.closeMenu : L.menu;
     btn.setAttribute("aria-label", open ? L.closeMenu : L.menu);
   };
   btn.addEventListener("click", () => {

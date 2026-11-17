@@ -44,12 +44,11 @@ function wireNavMenu() {
   const top = document.querySelector(".top");
   const btn = document.querySelector("[data-nav-menu]");
   if (!top || !btn) return;
-  const openLabel = btn.getAttribute("aria-label") || btn.textContent || "Menu";
+  const openLabel = btn.getAttribute("aria-label") || "Menu";
   const closeLabel = document.documentElement.lang?.startsWith("zh") ? "关闭" : "Close";
   const setOpen = (open) => {
     top.dataset.navOpen = open ? "true" : "false";
     btn.setAttribute("aria-expanded", open ? "true" : "false");
-    btn.textContent = open ? closeLabel : openLabel;
     btn.setAttribute("aria-label", open ? closeLabel : openLabel);
   };
   btn.addEventListener("click", () => {

@@ -539,7 +539,7 @@ function renderPage(catalog, env, zh, request) {
       <span class="mark-wrap"><img class="mark" src="/logo-mark.svg" width="18" height="18" alt=""/></span>
       <span class="name">XRK Harness</span>
     </a>
-    <button type="button" class="nav-menu" data-nav-menu aria-expanded="false" aria-controls="site-nav" aria-label="${escapeHtml(t.menu)}">${escapeHtml(t.menu)}</button>
+    <button type="button" class="nav-menu" data-nav-menu aria-expanded="false" aria-controls="site-nav" aria-label="${escapeHtml(t.menu)}"><span class="nav-menu-icon" aria-hidden="true"><span></span></span></button>
     <nav class="nav" id="site-nav" aria-label="XRK Harness">
       <a class="ghost" data-operators-link href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a>
       <a class="ghost" href="${GITHUB}">${escapeHtml(t.github)}</a>
