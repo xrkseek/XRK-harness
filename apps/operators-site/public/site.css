@@ -1,49 +1,5 @@
-/* Align with apps/site + Host design-platform neutrals. */
-:root {
-  --bg: rgb(255, 255, 255);
-  --layer: rgb(249, 250, 251);
-  --sidebar: rgb(249, 250, 251);
-  --label: rgb(15, 17, 21);
-  --muted: rgb(97, 102, 107);
-  --tertiary: rgb(129, 133, 140);
-  --border: rgba(0, 0, 0, 0.1);
-  --hover: rgba(38, 49, 72, 0.06);
-  --btn: rgb(15, 17, 21);
-  --btn-ink: rgb(255, 255, 255);
-  --chip: color-mix(in srgb, var(--muted) 12%, transparent);
-  --radius: 12px;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --mono: "SF Mono", "JetBrains Mono", Consolas, "Liberation Mono", Menlo,
-    "PingFang SC", "Microsoft YaHei";
-}
-html[data-theme="dark"] {
-  --bg: rgb(21, 21, 23);
-  --layer: rgb(35, 35, 36);
-  --sidebar: rgb(27, 27, 28);
-  --label: rgb(249, 250, 251);
-  --muted: rgb(207, 211, 214);
-  --tertiary: rgb(173, 178, 184);
-  --border: rgba(255, 255, 255, 0.12);
-  --hover: rgba(255, 255, 255, 0.08);
-  --btn: rgb(249, 250, 251);
-  --btn-ink: rgb(15, 17, 21);
-  --chip: color-mix(in srgb, var(--muted) 18%, transparent);
-}
-* { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; }
-html { color-scheme: light; }
-html[data-theme="dark"] { color-scheme: dark; }
-body {
-  background: var(--bg);
-  color: var(--label);
-  font-family: var(--font);
-  font-size: 13px;
-  line-height: 18px;
-  -webkit-font-smoothing: antialiased;
-}
-a { color: inherit; }
-::selection { background: rgb(65, 118, 230); color: #fff; }
+/* Tokens + chrome: /site-foundation.css (linked from HTML). */
+
 .sr {
   position: absolute;
   width: 1px;
@@ -54,136 +10,18 @@ a { color: inherit; }
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
-.skip {
-  position: absolute;
-  left: 12px;
-  top: -40px;
-  z-index: 8;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--btn);
-  color: var(--btn-ink);
-  text-decoration: none;
-}
-.skip:focus { top: 12px; }
-#catalog { scroll-margin-top: 64px; }
-
-.top {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--sidebar);
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-right: auto;
-  text-decoration: none;
-}
-/* White petals need a black tile in both themes (same as download site). */
-.mark-wrap {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  background: rgb(21, 21, 23);
-  flex: none;
-}
-.mark { width: 18px; height: 18px; display: block; }
-.name { font-size: 13px; font-weight: 600; }
-.nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.ghost, .lang, .theme {
-  height: 28px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 14px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-}
-.ghost:hover, .lang:hover, .theme:hover { background: var(--hover); color: var(--label); }
-.theme[aria-pressed="true"] { background: var(--hover); color: var(--label); }
 .ghost:focus-visible, .lang:focus-visible, .theme:focus-visible,
 .btn:focus-visible, .sky-ball:focus-visible, .member:focus-within {
   outline: 2px solid var(--label);
   outline-offset: 2px;
 }
+#catalog { scroll-margin-top: 64px; }
 
-.page { max-width: 1120px; margin: 0 auto; padding: 24px 24px 56px; }
-
-.sky {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 1.05fr);
-  gap: 20px 32px;
-  align-items: center;
-  min-height: min(42vh, 420px);
-  padding: 8px 0 4px;
-}
-.sky-copy { max-width: 36rem; }
-.sky h1 {
-  margin: 0;
-  font-size: clamp(2rem, 5vw, 3.25rem);
-  line-height: 1.08;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  text-wrap: balance;
-}
-.lead {
-  margin: 16px 0 0;
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 24px;
-  text-wrap: pretty;
-  max-width: 40rem;
-}
-.cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 36px;
-  min-width: 5.5rem;
-  padding: 0 14px;
-  border-radius: 18px;
-  background: var(--btn);
-  color: var(--btn-ink);
-  text-decoration: none;
-  font-size: 14px;
-  line-height: 22px;
-  border: 0;
-  cursor: pointer;
-}
-.btn:active:not([aria-disabled="true"]) { transform: scale(0.96); }
-.btn:hover { filter: brightness(1.08); }
-html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
-.btn-outline {
-  background: transparent;
-  color: var(--label);
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-.btn[aria-disabled="true"] {
-  background: transparent;
-  color: var(--tertiary);
-  box-shadow: inset 0 0 0 1px var(--border);
-  pointer-events: none;
-  filter: none;
-}
-
+.sky-copy { max-width: 40rem; }
 .constellation {
   position: relative;
-  min-height: 280px;
+  width: 100%;
+  min-height: var(--mast-visual-min);
   height: 100%;
 }
 .sky-ball {
@@ -219,7 +57,7 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
 .mount[data-ready] { opacity: 1; }
 .mount svg { width: 100%; height: 100%; display: block; overflow: visible; }
 
-.catalog { margin-top: 28px; }
+.catalog { margin-top: var(--section-gap); }
 .catalog-head {
   display: flex;
   flex-wrap: wrap;
@@ -307,25 +145,7 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
   border-radius: 14px;
 }
 
-.foot {
-  margin-top: 56px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 20px;
-  color: var(--tertiary);
-  font-size: 12px;
-}
-.foot a { text-decoration: none; }
-.foot a:hover { color: var(--label); }
-
-@media (max-width: 860px) {
-  .page { padding: 24px 16px 56px; }
-  .sky {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
+@media (max-width: 960px) {
   .constellation {
     min-height: 200px;
     order: -1;

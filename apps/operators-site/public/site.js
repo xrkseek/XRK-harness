@@ -1,4 +1,4 @@
-const THEME_KEY = "xrk-ops-theme";
+const THEME_KEY = "xrk-site-theme";
 
 /** Built-in roster seeds — appearance lives on the site only (packs never round-trip shape/color). */
 const SEEDS = [
@@ -107,10 +107,21 @@ function systemDark() {
 
 function preference() {
   try {
+    const q = new URLSearchParams(location.search).get("theme");
+    if (q === "light" || q === "dark" || q === "system") return q;
     return localStorage.getItem(THEME_KEY) || "system";
   } catch {
     return "system";
   }
+}
+
+/** Keep lang + theme when hopping to the download Worker site. */
+function withChromeParams(href) {
+  const u = new URL(href, location.href);
+  const lang = locale === "en" || locale === "zh" ? locale : new URLSearchParams(location.search).get("lang");
+  if (lang === "en" || lang === "zh") u.searchParams.set("lang", lang);
+  u.searchParams.set("theme", preference());
+  return u.toString();
 }
 
 function resolved(pref) {
@@ -311,9 +322,9 @@ function renderList(filter = "") {
 }
 
 function wireDownloadLinks() {
-  const href = String(catalog.sites?.download || "https://xrk.indevs.in/").trim();
+  const base = String(catalog.sites?.download || "https://xrk.indevs.in/").trim();
   document.querySelectorAll("[data-download-link]").forEach((a) => {
-    a.href = href;
+    a.href = withChromeParams(base);
   });
 }
 
@@ -392,6 +403,7 @@ async function boot() {
         /* ignore */
       }
       applyTheme(id);
+      wireDownloadLinks();
     });
   });
 

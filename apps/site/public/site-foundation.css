@@ -1,0 +1,241 @@
+/* Shared chrome for download (Worker) + operators (Pages).
+   Keep both copies identical: apps/site + apps/operators-site public/. */
+:root {
+  --bg: rgb(255, 255, 255);
+  --layer: rgb(249, 250, 251);
+  --sidebar: rgb(249, 250, 251);
+  --label: rgb(15, 17, 21);
+  --muted: rgb(97, 102, 107);
+  --tertiary: rgb(129, 133, 140);
+  --border: rgba(0, 0, 0, 0.1);
+  --border-l1: rgba(0, 0, 0, 0.04);
+  --border-thin: rgba(0, 0, 0, 0.1);
+  --hover: rgba(38, 49, 72, 0.06);
+  --bubble: rgb(237, 243, 254);
+  --input: rgb(255, 255, 255);
+  --send: rgb(65, 118, 230);
+  --send-hover: rgb(103, 158, 254);
+  --add: rgb(245, 246, 247);
+  --btn: rgb(15, 17, 21);
+  --btn-ink: rgb(255, 255, 255);
+  --chip: color-mix(in srgb, var(--muted) 12%, transparent);
+  --shadow-lv2: 0 4px 12px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.04);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+  /* Shared page frame — switching sites should not reflow the chrome. */
+  --page-max: 1400px;
+  --page-pad-x: 24px;
+  --page-pad-y: 24px;
+  --page-pad-bottom: 56px;
+  --top-min-h: 48px;
+  --top-pad-y: 6px;
+  --top-pad-x: 16px;
+  --mast-min-h: min(38vh, 380px);
+  --mast-gap-y: 20px;
+  --mast-gap-x: 32px;
+  --mast-visual-min: 280px;
+  --section-gap: 28px;
+  --foot-gap-top: 56px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: "SF Mono", "JetBrains Mono", Consolas, "Liberation Mono", Menlo,
+    "PingFang SC", "Microsoft YaHei";
+}
+html[data-theme="dark"] {
+  --bg: rgb(21, 21, 23);
+  --layer: rgb(35, 35, 36);
+  --sidebar: rgb(27, 27, 28);
+  --label: rgb(249, 250, 251);
+  --muted: rgb(207, 211, 214);
+  --tertiary: rgb(173, 178, 184);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-l1: rgba(255, 255, 255, 0.06);
+  --border-thin: rgba(255, 255, 255, 0.06);
+  --hover: rgba(255, 255, 255, 0.08);
+  --bubble: rgb(44, 44, 46);
+  --input: rgb(44, 44, 46);
+  --send: rgb(103, 158, 254);
+  --send-hover: rgb(65, 118, 230);
+  --add: rgb(53, 54, 56);
+  --btn: rgb(249, 250, 251);
+  --btn-ink: rgb(15, 17, 21);
+  --chip: color-mix(in srgb, var(--muted) 18%, transparent);
+  --shadow-lv2: 0 8px 28px rgb(0 0 0 / 0.45);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+html { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+body {
+  background: var(--bg);
+  color: var(--label);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 18px;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+::selection { background: rgb(65, 118, 230); color: rgb(255, 255, 255); }
+
+.skip {
+  position: absolute;
+  left: 12px;
+  top: -40px;
+  z-index: 8;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--btn);
+  color: var(--btn-ink);
+  text-decoration: none;
+}
+.skip:focus { top: 12px; }
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--top-min-h);
+  padding: var(--top-pad-y) var(--top-pad-x);
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+  text-decoration: none;
+}
+/* White petals need a black tile in both themes. */
+.mark-wrap {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgb(21, 21, 23);
+  flex: none;
+}
+.mark { width: 18px; height: 18px; display: block; }
+.name { font-size: 13px; font-weight: 600; }
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.ghost, .lang, .theme {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.ghost:hover, .lang:hover, .theme:hover { background: var(--hover); color: var(--label); }
+.theme[aria-pressed="true"] { background: var(--hover); color: var(--label); }
+
+.page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--page-pad-y) var(--page-pad-x) var(--page-pad-bottom);
+}
+
+/* First viewport: same columns + height on both sites. */
+.hero,
+.sky {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(var(--mast-visual-min), 0.95fr);
+  gap: var(--mast-gap-y) var(--mast-gap-x);
+  align-items: center;
+  min-height: var(--mast-min-h);
+  padding: 8px 0 4px;
+}
+.hero h1,
+.sky h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.lead {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 24px;
+  text-wrap: pretty;
+  max-width: 40rem;
+}
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  min-width: 5.5rem;
+  padding: 0 14px;
+  border-radius: 18px;
+  background: var(--btn);
+  color: var(--btn-ink);
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 22px;
+  border: 0;
+  cursor: pointer;
+}
+.btn:active:not([aria-disabled="true"]) { transform: scale(0.96); }
+.btn:hover { filter: brightness(1.08); }
+html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
+.btn-outline {
+  background: transparent;
+  color: var(--label);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.btn[aria-disabled="true"] {
+  background: transparent;
+  color: var(--tertiary);
+  box-shadow: inset 0 0 0 1px var(--border);
+  pointer-events: none;
+  filter: none;
+}
+
+.foot {
+  margin-top: var(--foot-gap-top);
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  color: var(--tertiary);
+  font-size: 12px;
+}
+.foot a { text-decoration: none; }
+.foot a:hover { color: var(--label); }
+
+@media (max-width: 960px) {
+  .page {
+    --page-pad-x: 16px;
+  }
+  .hero,
+  .sky {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+}

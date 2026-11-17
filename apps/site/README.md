@@ -15,6 +15,7 @@ Cloudflare **Worker**（不是 Pages 静态站）：`GET /` 渲染产品壳。
 发版后改 [`releases.json`](./releases.json) 的 `version` / `filename`（桌面与手机同号时两边都改），**push 到本仓 `main`** 即可——Worker **跟随 GitHub**（Cloudflare 连仓自动部署），日常发版**不必**本机 `wrangler deploy`。
 
 控制台选 **Workers**，项目名 `xrk-harness`（`wrangler.toml` 的 `name`）；构建根目录 `apps/site`。可选 env：`HARNESS_ORIGIN`（更新源 / 目录）、`GITHUB_PROXY_PREFIX`（默认 `https://ghfast.top/`）、`OPERATORS_SITE`（干员分享站，默认 `https://xrk-operators.pages.dev`）。
+版心与顶栏真源：`public/site-foundation.css`（与 `apps/operators-site/public/site-foundation.css` 同文）；跨站链接触发时带 `theme` + `lang`。
 
 干员分享站是 **另一套** Cloudflare **Pages**（`apps/operators-site`），不经本 Worker。
 
@@ -37,5 +38,6 @@ Cloudflare **Worker** (not Pages).
 After a release, bump `version` / `filename` in [`releases.json`](./releases.json) (desktop and phone when they share a number) and **push `main`**. The Worker **tracks this GitHub repo** (Cloudflare connected deploy); day-to-day releases do **not** need a local `wrangler deploy`.
 
 Workers project name `xrk-harness`. Build root `apps/site`. Optional env: `HARNESS_ORIGIN`, `GITHUB_PROXY_PREFIX` (default `https://ghfast.top/`), `OPERATORS_SITE` (operators Pages site, default `https://xrk-operators.pages.dev`).
+Shared page chrome: `public/site-foundation.css` (keep identical to `apps/operators-site/public/site-foundation.css`); cross-site links carry `theme` + `lang`.
 
 The operators share site is a separate Cloudflare **Pages** app (`apps/operators-site`), not this Worker.

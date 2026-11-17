@@ -21,6 +21,25 @@ function preference() {
   }
 }
 
+/** Keep lang + theme when hopping to the operators Pages site. */
+function withChromeParams(href) {
+  const u = new URL(href, location.href);
+  const lang = new URLSearchParams(location.search).get("lang");
+  if (lang === "en" || lang === "zh") u.searchParams.set("lang", lang);
+  else if ((document.documentElement.lang || "").toLowerCase().startsWith("zh")) u.searchParams.delete("lang");
+  else u.searchParams.set("lang", "en");
+  u.searchParams.set("theme", preference());
+  return u.toString();
+}
+
+function wireSiblingLinks() {
+  document.querySelectorAll("[data-operators-link]").forEach((a) => {
+    const base = a.getAttribute("href");
+    if (!base) return;
+    a.href = withChromeParams(base);
+  });
+}
+
 function resolved(pref) {
   if (pref === "dark") return "dark";
   if (pref === "light") return "light";
@@ -278,8 +297,10 @@ document.querySelectorAll("[data-theme-id]").forEach((btn) => {
     const id = btn.dataset.themeId || "system";
     try { localStorage.setItem(THEME_KEY, id); } catch { /* private */ }
     applyTheme(id);
+    wireSiblingLinks();
   });
 });
+wireSiblingLinks();
 
 document.querySelectorAll(".roster .ball").forEach((btn) => {
   btn.addEventListener("click", () => selectMember(btn.dataset.member || ""));

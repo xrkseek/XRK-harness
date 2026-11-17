@@ -474,11 +474,16 @@ function renderPage(catalog, env, zh, request) {
   <title>XRK Harness</title>
   <meta name="description" content="${escapeHtml(t.lead)}"/>
   <link rel="icon" href="/logo-mark.svg" type="image/svg+xml"/>
+  <link rel="stylesheet" href="/site-foundation.css"/>
   <link rel="stylesheet" href="/site.css"/>
   <script>
     (function () {
       try {
-        var p = localStorage.getItem("xrk-site-theme") || "system";
+        var q = new URLSearchParams(location.search).get("theme");
+        var p = (q === "light" || q === "dark" || q === "system") ? q : (localStorage.getItem("xrk-site-theme") || "system");
+        if (q === "light" || q === "dark" || q === "system") {
+          try { localStorage.setItem("xrk-site-theme", p); } catch (e2) {}
+        }
         var dark = p === "dark" || (p !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.dataset.theme = dark ? "dark" : "light";
       } catch (e) {}
@@ -531,7 +536,7 @@ function renderPage(catalog, env, zh, request) {
       <span class="name">XRK Harness</span>
     </a>
     <nav class="nav" aria-label="XRK Harness">
-      <a class="ghost" href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a>
+      <a class="ghost" data-operators-link href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a>
       <a class="ghost" href="${GITHUB}">${escapeHtml(t.github)}</a>
       <a class="ghost" href="${DOCS}">${escapeHtml(t.docs)}</a>
       <button type="button" class="theme" data-theme-id="light" aria-label="${escapeHtml(t.light)}">${escapeHtml(t.light)}</button>
@@ -545,7 +550,7 @@ function renderPage(catalog, env, zh, request) {
       <div>
         <h1>${escapeHtml(t.tagline)}</h1>
         <p class="lead">${escapeHtml(t.lead)}</p>
-        <div class="cta">${cta}<a class="btn btn-outline" href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a><a class="btn btn-outline" href="${GITHUB}">${escapeHtml(t.github)}</a></div>
+        <div class="cta">${cta}<a class="btn btn-outline" data-operators-link href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a><a class="btn btn-outline" href="${GITHUB}">${escapeHtml(t.github)}</a></div>
       </div>
       <div class="pair">
         ${SEEDS.slice(0, 2).map((m) =>
@@ -696,7 +701,7 @@ function renderPage(catalog, env, zh, request) {
     </section>
     <footer class="foot">
       <span>${escapeHtml(t.mit)}</span>
-      <a href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a>
+      <a data-operators-link href="${escapeHtml(operatorsSite(env))}${zh ? "" : "?lang=en"}">${escapeHtml(t.operators)}</a>
       <a href="${GITHUB}">${escapeHtml(t.github)}</a>
       <a href="${MOBILE_GITHUB}">${escapeHtml(zh ? "手机仓" : "Mobile")}</a>
       <a href="${NPM}">@xrkseek/harness-cli</a>

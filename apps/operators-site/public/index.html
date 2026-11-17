@@ -6,11 +6,16 @@
   <title>XRK 干员</title>
   <meta name="description" content="挑选并下载 XRK Harness 干员包，发给向阳空间向日葵经理即可部署。"/>
   <link rel="icon" href="/logo-mark.svg" type="image/svg+xml"/>
+  <link rel="stylesheet" href="/site-foundation.css"/>
   <link rel="stylesheet" href="/site.css"/>
   <script>
     (function () {
       try {
-        var p = localStorage.getItem("xrk-ops-theme") || "system";
+        var q = new URLSearchParams(location.search).get("theme");
+        var p = (q === "light" || q === "dark" || q === "system") ? q : (localStorage.getItem("xrk-site-theme") || "system");
+        if (q === "light" || q === "dark" || q === "system") {
+          try { localStorage.setItem("xrk-site-theme", p); } catch (e2) {}
+        }
         var dark = p === "dark" || (p !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.dataset.theme = dark ? "dark" : "light";
       } catch (e) {}

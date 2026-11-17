@@ -11,6 +11,7 @@ Cloudflare **Pages 静态站**（与下载站 Worker `apps/site` **分开**）�
 | 干员站 | Cloudflare **Pages** `xrk-operators` | `apps/operators-site` |
 
 两站顶栏互相链（本站读 `catalog.json` 的 `sites.download`；下载站用 env `OPERATORS_SITE`）。
+版心 / 顶栏 / 首屏比例共用 `public/site-foundation.css`（与 `apps/site/public/site-foundation.css` **保持同文**）；跨站链接会带上 `theme` + `lang`。
 
 ## 表情球
 
