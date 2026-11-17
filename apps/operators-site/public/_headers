@@ -1,0 +1,4 @@
+# Force sample thin cards to download instead of rendering in the tab.
+/samples/*
+  Content-Disposition: attachment
+  X-Content-Type-Options: nosniff

@@ -305,8 +305,9 @@ function renderList(filter = "") {
     ]
       .filter(Boolean)
       .join("");
+    const downloadName = file || href.split("/").pop() || "operator.json";
     const action = href
-      ? `<a class="btn" href="${escapeHtml(href)}" rel="noopener">${escapeHtml(L.download)}</a>`
+      ? `<a class="btn" href="${escapeHtml(href)}" download="${escapeHtml(downloadName)}" rel="noopener">${escapeHtml(L.download)}</a>`
       : `<span class="btn" aria-disabled="true">${escapeHtml(L.noUrl)}</span>`;
     article.innerHTML = `
       <span class="stage md"><span class="mount" data-ball data-shape="${escapeHtml(shape)}" data-color="${escapeHtml(color)}"></span></span>
