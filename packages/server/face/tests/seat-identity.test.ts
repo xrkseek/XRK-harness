@@ -124,6 +124,9 @@ describe("seat-identity", () => {
 
   it("agent-home identity + subagent seats", async () => {
     const runtime = createBareFaceRuntime();
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
     const member = runtime.agentRoster.upsertAtScope(
       runtime.workspaces.defaultId(),
       "global",

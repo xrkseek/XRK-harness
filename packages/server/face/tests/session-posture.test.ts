@@ -38,6 +38,9 @@ describe("session_posture", () => {
           throw new Error("unused");
         },
       });
+      Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+        preference: "zh",
+      });
 
       const codingRoot = path.join(home, "code-proj");
       const { workspace: codingWs } = runtime.workspaces.create(codingRoot);

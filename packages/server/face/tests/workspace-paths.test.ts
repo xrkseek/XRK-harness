@@ -40,16 +40,25 @@ describe("outsideWorkspaceJobNotice", () => {
   });
 
   it("stays quiet when paths stay inside the workspace", () => {
+    // path.resolve is platform-native — Windows-shaped roots only assert on win32.
+    if (process.platform === "win32") {
+      expect(
+        outsideWorkspaceJobNotice(
+          "C:\\Users\\xrkseek\\Desktop\\主仓库\\XRK-harness",
+          "edit C:\\Users\\xrkseek\\Desktop\\主仓库\\XRK-harness\\packages\\core\\agent-loop\\src\\index.ts",
+        ),
+      ).toBeUndefined();
+    }
     expect(
       outsideWorkspaceJobNotice(
-        "C:\\Users\\xrkseek\\Desktop\\主仓库\\XRK-harness",
-        "edit C:\\Users\\xrkseek\\Desktop\\主仓库\\XRK-harness\\packages\\core\\agent-loop\\src\\index.ts",
+        "/Users/me/proj",
+        "relative path only: packages/foo",
       ),
     ).toBeUndefined();
     expect(
       outsideWorkspaceJobNotice(
         "/Users/me/proj",
-        "relative path only: packages/foo",
+        "edit /Users/me/proj/packages/core/agent-loop/src/index.ts",
       ),
     ).toBeUndefined();
   });
