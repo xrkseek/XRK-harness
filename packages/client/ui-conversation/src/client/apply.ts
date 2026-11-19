@@ -698,11 +698,13 @@ export function apply(ctx: Context): void {
             (p) => workspaces.openPath(p),
             (p) => {
               // type editor → community side workbench (never bottom pane).
+              // Path-stable id matches sidebar openFile — bare type id
+              // "editor" reactivated the first file tab on every wake.
               const face = ctx.get('betterSidebar') as {
-                openTab?(seed: { type: string; path?: string }): void
+                openTab?(seed: { type: string; path?: string; id?: string }): void
               } | undefined
               if (face?.openTab === undefined) return false
-              face.openTab({ type: 'editor', path: p })
+              face.openTab({ type: 'editor', path: p, id: `editor:${p}` })
               return true
             },
             {
