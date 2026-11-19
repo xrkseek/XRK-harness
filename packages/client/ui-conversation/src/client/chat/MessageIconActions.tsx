@@ -45,11 +45,11 @@ export interface MessageIconActionsProps {
    */
   branchUnavailable?: boolean | undefined
   /**
-   * Regenerate / restore rewrite the transcript tail in place, so they stay
-   * unavailable while later turns exist. Branch does not need the tail: the
-   * Host anchors a turn-cut fork on the first `turn/end` at or after the seq.
-   * Defaults to `branchUnavailable` so callers that gate everything at once
-   * keep their previous behaviour.
+   * Regenerate / restore stay unavailable while later same-turn chat nodes
+   * exist (tip of a settled turn). Restore is files-only; regenerate cuts the
+   * log. Branch does not need the tip: Host anchors a turn-cut fork on the
+   * first `turn/end` at or after the seq. Defaults to `branchUnavailable` so
+   * callers that gate everything at once keep their previous behaviour.
    */
   tipUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */

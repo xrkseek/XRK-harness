@@ -246,6 +246,7 @@ export const ProjectRowItem = memo(function ProjectRowItem(
       )}
       style={reorder.touchAction === undefined ? undefined : { touchAction: reorder.touchAction }}
       role="treeitem"
+      aria-label={label}
       aria-expanded={row.expanded}
       onClick={(e) => {
         if (reorder.consumeClickSuppression()) {
@@ -670,6 +671,7 @@ export const SessionNodeItem = memo(function SessionNodeItem(
       )}
       style={reorder.touchAction === undefined ? undefined : { touchAction: reorder.touchAction }}
       role="treeitem"
+      aria-label={title}
       aria-selected={selected}
       data-session-id={node.id}
       onClick={() => {

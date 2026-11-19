@@ -111,11 +111,27 @@ async function bench() {
   ctx.provide('locale', new LocaleRuntime(ctx))
   const scopes = new Map<SessionId, Context>()
   const addressed = new Set<SessionId>()
+  type ProvideDescriptor = {
+    hooks?: readonly string[]
+    props?: readonly string[]
+    resolve: (binding: { sessionId: SessionId }) => {
+      hooks?: Record<string, { getSnapshot: () => unknown; subscribe: (fn: () => void) => () => void }>
+      props?: Record<string, unknown>
+    }
+  }
+  const provides: ProvideDescriptor[] = []
   ctx.provide('sessions', {
     scope: (id: SessionId) => scopes.get(id),
     subagentAddress: (id: SessionId) => addressed.has(id)
       ? { parentSessionId: sid('parent'), childSessionId: id, mode: 'continuable' as const }
       : undefined,
+    provide: (descriptor: ProvideDescriptor) => {
+      provides.push(descriptor)
+      return () => {
+        const at = provides.indexOf(descriptor)
+        if (at >= 0) provides.splice(at, 1)
+      }
+    },
   })
   new TestRemote(ctx)
   const fiber = ctx.plugin({ inject: [...inject], apply })
@@ -127,7 +143,7 @@ async function bench() {
     return handle
   }
   return {
-    ctx, fiber, mint, calls,
+    ctx, fiber, mint, calls, provides,
     contribution: () => decoration!,
     seat: () => seats.get('conversation.input.model')!,
     hostCurrent: () => current,
@@ -148,6 +164,59 @@ describe('ui-model-selection dual entry', () => {
     expect(b.seat().inject).toBeTypeOf('function')
     // Copy rides the standard locale seat.
     expect(b.seat().locale).toBe('model')
+  })
+
+  it('exposes the shared directory on the session standard kit as modelSelection', async () => {
+    const b = await bench()
+    const descriptor = b.provides.find(entry => entry.hooks?.includes('modelSelection'))
+    expect(descriptor).toBeDefined()
+    expect(descriptor!.props).toEqual(['modelSelectionActions'])
+    b.mint('s1')
+    const contribution = descriptor!.resolve({ sessionId: sid('s1') })
+    const store = contribution.hooks?.modelSelection
+    expect(store).toBeDefined()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(store!.getSnapshot()).toMatchObject({
+      current: { provider: 'deepseek-official', model: 'deepseek-flash' },
+      status: 'ready',
+    })
+    // Same instance the composer seat injects — one shared fact for input.right plugins.
+    expect(store).toBe(b.seat().inject!(sid('s1')).directory)
+    const actions = contribution.props?.modelSelectionActions as {
+      available: boolean
+      select: (selection: ModelSelection) => Promise<boolean>
+    }
+    expect(actions.available).toBe(true)
+    expect(await actions.select({
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-pro',
+      reasoningEffort: 'max',
+    })).toBe(true)
+    expect(b.hostCurrent()).toEqual({
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-pro',
+      reasoningEffort: 'max',
+    })
+    expect(store!.getSnapshot().current).toEqual(b.hostCurrent())
+  })
+
+  it('standard-kit modelSelectionActions refuse switch on addressed subagent seats', async () => {
+    const b = await bench()
+    const descriptor = b.provides.find(entry => entry.hooks?.includes('modelSelection'))
+    b.mint('child')
+    b.address(sid('child'))
+    const contribution = descriptor!.resolve({ sessionId: sid('child') })
+    const actions = contribution.props?.modelSelectionActions as {
+      available: boolean
+      select: (selection: ModelSelection) => Promise<boolean>
+    }
+    expect(actions.available).toBe(false)
+    expect(await actions.select({
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-pro',
+    })).toBe(false)
+    expect(b.calls.select).toBe(0)
   })
 
   it('popup options mark the host current active with the provider group in the detail', async () => {

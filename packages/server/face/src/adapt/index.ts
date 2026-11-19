@@ -38,6 +38,7 @@ export {
 export {
   jobViews,
   formatJobCompletionNotice,
+  jobCompletionNoticeSummary,
   isSettledJobStatus,
   JOB_COMPLETION_MAX_WAKES,
   type FaceJobsSource,

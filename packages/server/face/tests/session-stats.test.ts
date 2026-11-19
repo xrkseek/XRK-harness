@@ -165,6 +165,56 @@ describe("Face sessionStats projection", () => {
     });
   });
 
+  it("surfaces the open step in the wire view before step/end", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createSessionStatsProjectionUnit());
+
+    store.append(session.id, { type: "turn/start", ts: 1, turnId: "t1" });
+    store.append(session.id, {
+      type: "step/start",
+      ts: 10,
+      turnId: "t1",
+      stepId: "s1",
+    });
+    registry.drive(session.id, store.get(session.id).events[0]!, 1);
+    registry.drive(session.id, store.get(session.id).events[1]!, 2);
+    expect(registry.snapshot(session.id).values.sessionStats).toMatchObject({
+      turns: 1,
+      steps: 1,
+    });
+
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 40,
+      turnId: "t1",
+      stepId: "s1",
+      content: "hi",
+    });
+    registry.drive(session.id, store.get(session.id).events[2]!, 3);
+    // No dip between assemble and step/end.
+    expect(registry.snapshot(session.id).values.sessionStats).toMatchObject({
+      turns: 1,
+      steps: 1,
+      llmMs: 30,
+    });
+
+    store.append(session.id, {
+      type: "step/end",
+      ts: 41,
+      turnId: "t1",
+      stepId: "s1",
+    });
+    registry.drive(session.id, store.get(session.id).events[3]!, 4);
+    expect(registry.snapshot(session.id).values.sessionStats).toMatchObject({
+      turns: 1,
+      steps: 1,
+    });
+  });
+
   it("does not count cancelled stream time without assistant/message", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);

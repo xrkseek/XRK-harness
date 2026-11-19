@@ -36,6 +36,7 @@ import {
   ensureSessionWorkingDirectory,
   resolveSessionCwd,
 } from "./session-cwd.js";
+import { outsideWorkspaceJobNotice } from "./workspace-paths.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { refuseCrossAgentHomeLane } from "./agent-home-boundary.js";
 import { orchestratorSurface } from "./session-kind.js";
@@ -639,14 +640,16 @@ function createSubagentTool(
         workspace_id: {
           type: "string",
           description:
-            "Face workspace id for the child (from workspace_list). Overrides parent workspace inheritance. " +
-            "Requires inherit_context=false. Prefer this over cwd when the workspace already exists.",
+            "IM only (ws_im): Face workspace id for the child (from workspace_list). " +
+            "Coding parents cannot retarget — children inherit this session's workspace/cwd. " +
+            "Requires inherit_context=false. Prefer over cwd when the workspace already exists. " +
+            "Use when the IM job's files live in another workspace (otherwise the child inherits IM cwd / instructions).",
         },
         cwd: {
           type: "string",
           description:
-            "Absolute path for the child workspace when workspace_id is omitted (adopt/create by path). " +
-            "Requires inherit_context=false. Ignored when workspace_id is set.",
+            "IM only (ws_im): absolute path to adopt/create when workspace_id is omitted. " +
+            "Coding parents cannot retarget. Requires inherit_context=false. Ignored when workspace_id is set.",
         },
         agent_preset: {
           type: "string",
@@ -662,7 +665,7 @@ function createSubagentTool(
         role: {
           type: "string",
           description:
-            "Spawn role template: default | worker | researcher | reviewer | lead (alias: agent_type).",
+            "default | worker | researcher | reviewer | lead (alias: agent_type). Prefer member_id when set.",
         },
         agent_type: {
           type: "string",
@@ -1433,6 +1436,9 @@ function createSubagentTool(
           {
             sessionId: childId,
             mode: "queue",
+            // First long message = 委派方 speech (经理 / nested 干员), not 老板.
+            seatChannel: "parent",
+            fromSessionId: options.parentSessionId,
             content: [{ type: "text", text: childPrompt }],
           },
         );
@@ -1459,6 +1465,7 @@ function createSubagentTool(
       }
       // Spawn accepted — the child is no longer a half-made shell.
       started = true;
+      const outsideJob = outsideWorkspaceJobNotice(spawnCwd, prompt);
       if (background) {
         return {
           content: [
@@ -1474,6 +1481,7 @@ function createSubagentTool(
             childRouteReceipt(options.runtime, childId),
             childResumeHint(childId),
             worktreeLine(true) || undefined,
+            outsideJob,
           ]
             .filter(Boolean)
             .join("\n"),
@@ -1552,6 +1560,8 @@ function createSubagentTool(
             {
               sessionId: childId,
               mode: "queue",
+              seatChannel: "parent",
+              fromSessionId: options.parentSessionId,
               content: [
                 {
                   type: "text",
@@ -1601,6 +1611,7 @@ function createSubagentTool(
             `(subagent ${childId} finished with no assistant text)`,
             childRouteReceipt(options.runtime, childId),
             extra,
+            outsideJob,
           ]
             .filter(Boolean)
             .join("\n"),
@@ -1618,6 +1629,7 @@ function createSubagentTool(
           schemaLine,
           childRouteReceipt(options.runtime, childId),
           extra,
+          outsideJob,
         ]
           .filter(Boolean)
           .join("\n"),

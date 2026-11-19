@@ -114,6 +114,68 @@ describe("Face turnOutline projection", () => {
     ]);
   });
 
+  it("job-completion wake notice opens the next 轮次", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createTurnOutlineProjectionUnit());
+
+    store.append(session.id, { type: "turn/start", ts: 1, turnId: "t1" });
+    store.append(session.id, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t1",
+      content: "run background",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 3,
+      turnId: "t1",
+      stepId: "s1",
+      content: "started",
+    });
+    store.append(session.id, {
+      type: "turn/end",
+      ts: 4,
+      turnId: "t1",
+      reason: { kind: "completed" },
+    });
+    store.append(session.id, { type: "turn/start", ts: 5, turnId: "t2" });
+    store.append(session.id, {
+      type: "user/message",
+      ts: 6,
+      turnId: "t2",
+      content: "background job bash-2 finished.",
+      source: {
+        kind: "plugin",
+        plugin: "job-completion",
+        form: "notice",
+        summary: "bash-2 [completed]",
+      },
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 7,
+      turnId: "t2",
+      stepId: "s2",
+      content: "all done",
+    });
+    store.append(session.id, {
+      type: "turn/end",
+      ts: 8,
+      turnId: "t2",
+      reason: { kind: "completed" },
+    });
+    driveAll(registry, session.id, store);
+
+    expect(registry.snapshot(session.id).values.turnOutline).toEqual([
+      { turn: 1, seq: 1, round: 1, prompt: "run background", response: "started" },
+      { turn: 2, seq: 5, round: 2, prompt: "bash-2 [completed]", response: "all done" },
+    ]);
+  });
+
   it("numbers turns by first-seen turnId order", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);

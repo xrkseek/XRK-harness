@@ -89,86 +89,36 @@ test("english query lists desktop and phone groups; mac stays unavailable", asyn
   assert.match(html, /XRK-harness-mobile/);
 });
 
-test("mac stays listed even if the live catalog marks it available", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        products: [
-          {
-            target: "mac-arm64",
-            available: true,
-            download: "/api/harness/download/mac-arm64",
-          },
-        ],
-      }),
-      { status: 200 },
-    );
-  try {
-    const res = await worker.fetch(new Request("https://example.test/?lang=en"), env);
-    const html = await res.text();
-    assert.match(html, />macOS</);
-    assert.match(html, /Open with xrkh web on the command line/);
-    assert.doesNotMatch(html, /download\/mac-/);
-  } finally {
-    globalThis.fetch = original;
-  }
+test("mac stays unavailable from releases.json only", async () => {
+  const res = await worker.fetch(new Request("https://example.test/?lang=en"), env);
+  const html = await res.text();
+  assert.match(html, />macOS</);
+  assert.match(html, /Open with xrkh web on the command line/);
+  assert.doesNotMatch(html, /download\/mac-/);
 });
 
-test("live AGT cannot invent or override Android APK marketing row", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        products: [
-          {
-            target: "android-arm64",
-            available: false,
-            version: "9.9.9",
-            filename: "spoof.apk",
-          },
-        ],
-      }),
-      { status: 200 },
-    );
-  try {
-    const res = await worker.fetch(new Request("https://example.test/?lang=en"), env);
-    const html = await res.text();
-    assert.match(html, new RegExp(`href="${GH_APK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
-    assert.doesNotMatch(html, /spoof\.apk/);
-    assert.doesNotMatch(html, /9\.9\.9/);
-  } finally {
-    globalThis.fetch = original;
-  }
+test("Android marketing row comes from releases.json GitHub assets", async () => {
+  const res = await worker.fetch(new Request("https://example.test/?lang=en"), env);
+  const html = await res.text();
+  assert.match(html, new RegExp(`href="${GH_APK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
 });
 
-test("installer API paths still redirect to AGT update origin", async () => {
+test("legacy harness-download API paths are retired (410)", async () => {
   const res = await worker.fetch(
     new Request("https://example.test/api/harness/download/win-x64"),
-    { HARNESS_ORIGIN: "http://103.236.89.174:6969" },
+    env,
   );
-  assert.equal(res.status, 302);
-  assert.equal(
-    res.headers.get("location"),
-    "http://103.236.89.174:6969/api/harness/download/win-x64",
-  );
+  assert.equal(res.status, 410);
+  const json = await res.json();
+  assert.equal(json.error, "retired");
 });
 
-test("operators list soft-fails to empty JSON when AGT origin is down", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = async () => {
-    throw new TypeError("fetch failed");
-  };
-  try {
-    const res = await worker.fetch(
-      new Request("https://example.test/api/harness/operators"),
-      env,
-    );
-    assert.equal(res.status, 503);
-    const json = await res.json();
-    assert.equal(json.ok, true);
-    assert.deepEqual(json.data.members, []);
-  } finally {
-    globalThis.fetch = original;
-  }
+test("operators AGT proxy is retired (410)", async () => {
+  const res = await worker.fetch(
+    new Request("https://example.test/api/harness/operators"),
+    env,
+  );
+  assert.equal(res.status, 410);
+  const json = await res.json();
+  assert.equal(json.error, "retired");
 });

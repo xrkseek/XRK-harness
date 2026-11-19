@@ -41,6 +41,36 @@ export interface TurnOutlineEntry {
   readonly response: string;
 }
 
+/**
+ * Whether a durable `user/message` source may open a 轮次 without a human
+ * composer (job-completion / handoff wake). Catalog / instruction injects stay
+ * silent so they never steal the human prompt slot.
+ */
+export function isWakeRoundOpenerSource(source: unknown): boolean {
+  if (source === undefined || source === null || typeof source !== "object") {
+    return false;
+  }
+  const record = source as Record<string, unknown>;
+  const kind = typeof record.kind === "string" ? record.kind : null;
+  const form = typeof record.form === "string" ? record.form : null;
+  if (kind === "handoff") return true;
+  return kind === "plugin" && form === "notice";
+}
+
+/** One-line rail prompt from a wake notice (`summary` preferred). */
+function wakePromptPreview(
+  content: MessageContent,
+  source: unknown,
+): string {
+  if (source !== null && typeof source === "object") {
+    const summary = (source as { summary?: unknown }).summary;
+    if (typeof summary === "string" && summary.trim() !== "") {
+      return previewFromString(summary, PROMPT_PREVIEW_LIMIT);
+    }
+  }
+  return previewFromBlocks(content, PROMPT_PREVIEW_LIMIT);
+}
+
 /** Published ladder: drop Host turns with no opener, then number 轮次. */
 export function publishedTurnOutline(
   turns: readonly TurnOutlineFoldEntry[],
@@ -198,10 +228,21 @@ export function createTurnOutlineProjectionUnit(): ProjectionDefinition<
           };
         }
         case "user/message": {
-          if (!isHumanUserMessageSource(event.source)) return state;
           const last = state.turns.at(-1);
           if (last === undefined || last.prompt !== "") return state;
-          const prompt = previewFromBlocks(event.content, PROMPT_PREVIEW_LIMIT);
+          if (isHumanUserMessageSource(event.source)) {
+            const prompt = previewFromBlocks(event.content, PROMPT_PREVIEW_LIMIT);
+            if (prompt === "") return state;
+            return {
+              turns: [...state.turns.slice(0, -1), { ...last, prompt }],
+              draft: state.draft,
+              seenTurnIds: state.seenTurnIds,
+            };
+          }
+          // Background job / handoff wake: first notice in an empty-prompt Host
+          // turn opens the next 轮次 (not jammed under the prior human ask).
+          if (!isWakeRoundOpenerSource(event.source)) return state;
+          const prompt = wakePromptPreview(event.content, event.source);
           if (prompt === "") return state;
           return {
             turns: [...state.turns.slice(0, -1), { ...last, prompt }],

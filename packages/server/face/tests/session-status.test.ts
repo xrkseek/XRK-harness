@@ -383,20 +383,20 @@ describe("session status snapshot", () => {
       kit: "bow",
       kitHat: "bow",
     });
-    expect(buildSessionStatusSnapshot(runtime, untitled).delegate).toEqual({
+    const untitledDelegate = buildSessionStatusSnapshot(runtime, untitled).delegate;
+    expect(untitledDelegate).toMatchObject({
       parentSessionId: parent,
       childLabel: "untitled",
-      parentLabel: "向日葵（xrkseek）",
       parentMemberId: "mem_seed_xrkseek",
       childSeat: "agent",
-      parents: [
-        {
-          sessionId: parent,
-          label: "向日葵（xrkseek）",
-          memberId: "mem_seed_xrkseek",
-        },
-      ],
     });
+    expect(untitledDelegate?.parentLabel).toContain("向日葵");
+    expect(untitledDelegate?.parents?.[0]).toMatchObject({
+      sessionId: parent,
+      memberId: "mem_seed_xrkseek",
+      kind: "opener",
+    });
+    expect(untitledDelegate?.parents?.[0]?.label).toContain("向日葵");
     // Xiangyang-spawned child: left seat is 向日葵（xrkseek）, not 老板.
     expect(buildSessionStatusSnapshot(runtime, untitled).parentCompanionBall).toEqual(
       parentSnap.companionBall,
@@ -457,19 +457,17 @@ describe("session status snapshot", () => {
       buildSessionStatusSnapshot(runtime, home).companionBall,
     );
     expect(midSnap.companionBall).toEqual({ shape: "wedge", color: "sage" });
-    expect(midSnap.delegate).toEqual({
+    expect(midSnap.delegate).toMatchObject({
       parentSessionId: home,
       childLabel: "发版员",
-      parentLabel: "向日葵（xrkseek）",
       parentMemberId: "mem_seed_xrkseek",
       childSeat: "agent",
-      parents: [
-        {
-          sessionId: home,
-          label: "向日葵（xrkseek）",
-          memberId: "mem_seed_xrkseek",
-        },
-      ],
+    });
+    expect(midSnap.delegate?.parentLabel).toContain("向日葵");
+    expect(midSnap.delegate?.parents?.[0]).toMatchObject({
+      sessionId: home,
+      memberId: "mem_seed_xrkseek",
+      kind: "opener",
     });
     const leafSnap = buildSessionStatusSnapshot(runtime, leaf);
     expect(leafSnap.parentCompanionBall).toEqual({ shape: "wedge", color: "sage" });
@@ -479,25 +477,27 @@ describe("session status snapshot", () => {
       kit: "cap",
       kitHat: "cap",
     });
-    expect(leafSnap.delegate).toEqual({
+    expect(leafSnap.delegate).toMatchObject({
       parentSessionId: mid,
       childLabel: "调研员",
-      parentLabel: "发版员",
       childSeat: "agent",
       childMemberId: "mem_seed_researcher",
-      parents: [
-        {
-          sessionId: home,
-          label: "向日葵（xrkseek）",
-          memberId: "mem_seed_xrkseek",
-        },
-        {
-          sessionId: mid,
-          label: "发版员",
-        },
-      ],
     });
-    expect(formatSessionStatusText(leafSnap)).toContain("delegate: 发版员 → 调研员");
+    expect(leafSnap.delegate?.parentLabel).toContain("发版员");
+    expect(leafSnap.delegate?.parents?.map((p) => p.sessionId)).toEqual([
+      home,
+      mid,
+    ]);
+    expect(leafSnap.delegate?.parents?.[0]).toMatchObject({
+      sessionId: home,
+      kind: "ancestor",
+    });
+    expect(leafSnap.delegate?.parents?.[1]).toMatchObject({
+      sessionId: mid,
+      kind: "opener",
+      look: { shape: "wedge", color: "sage" },
+    });
+    expect(formatSessionStatusText(leafSnap)).toMatch(/delegate: .*发版员.* → 调研员/);
   });
 
   it("attaches last-turn outcome so a parent abort is not a finished child", async () => {
@@ -665,5 +665,267 @@ describe("session status snapshot", () => {
     expect(formatPermissionStatusLabel("workspace-write")).toBe(
       "workspace-write",
     );
+  });
+
+  it("office session opened from 向日葵 paints 向日葵 as 委派方; boss stacks after human spoke", async () => {
+    const runtime = bareRuntime();
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    const xy = await dispatchFaceMethod(runtime, "session.create", "xy", {});
+    if (!xy.result.ok) throw new Error("create xy");
+    const xyId = (xy.result.value as { sessionId: string }).sessionId;
+    const codingId = await createCodingSession(runtime, {
+      inheritFrom: xyId,
+    }, "code-from-xy");
+
+    expect(runtime.sessionOpeners.get(codingId)).toEqual({
+      memberId: "mem_seed_xrkseek",
+      sourceSessionId: xyId,
+    });
+    const opened = buildSessionStatusSnapshot(runtime, codingId);
+    expect(opened.delegate?.parentMemberId).toBe("mem_seed_xrkseek");
+    // Real source session id — two managers stay distinguishable by sessionId.
+    expect(opened.delegate?.parentSessionId).toBe(xyId);
+    expect(opened.delegate?.parents).toHaveLength(1);
+    expect(opened.delegate?.parents?.[0]).toMatchObject({
+      sessionId: xyId,
+      memberId: "mem_seed_xrkseek",
+      kind: "opener",
+    });
+    expect(opened.delegate?.parents?.[0]?.label).toContain("向日葵");
+    expect(opened.delegate?.parents?.[0]?.label).toContain(xyId.slice(-8));
+    expect(opened.delegate?.parents?.[0]?.look?.shape).toBeTruthy();
+    // Opener-led seat syncs the source session ball — not Settings boss mood.
+    runtime.presence.set(xyId, {
+      emotionId: "31",
+      tips: "向日葵支线巡演",
+    });
+    const synced = buildSessionStatusSnapshot(runtime, codingId);
+    expect(synced.parentPresence).toMatchObject({
+      emotionId: "31",
+      tips: "向日葵支线巡演",
+      source: "tool",
+    });
+    expect(synced.delegate?.parents?.[0]?.presence).toMatchObject({
+      emotionId: "31",
+      tips: "向日葵支线巡演",
+    });
+
+    runtime.sessionHumanSpoke.add(codingId);
+    const afterBoss = buildSessionStatusSnapshot(runtime, codingId);
+    expect(afterBoss.delegate?.parents?.[0]).toMatchObject({
+      sessionId: `${codingId}:boss`,
+      label: "老板",
+      kind: "boss",
+    });
+    expect(afterBoss.delegate?.parents?.[1]?.sessionId).toBe(xyId);
+    expect(afterBoss.delegate?.parents?.[1]?.memberId).toBe("mem_seed_xrkseek");
+  });
+
+  it("manager A → manager B (same roster member) still paints A as B's opener 委派方", async () => {
+    const runtime = bareRuntime();
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    const a = await createCodingSession(runtime, {}, "paint-a");
+    const b = await createCodingSession(runtime, { inheritFrom: a }, "paint-b");
+    expect(runtime.sessionOpeners.get(b)?.sourceSessionId).toBe(a);
+
+    const snapB = buildSessionStatusSnapshot(runtime, b);
+    // Same MANAGER_MEMBER_ID on both seats must not drop opener.
+    expect(snapB.delegate?.parentSessionId).toBe(a);
+    expect(snapB.delegate?.parents?.[0]).toMatchObject({
+      sessionId: a,
+      kind: "opener",
+    });
+    expect(snapB.delegate?.childSeat).toBe("manager");
+
+    // B reports back → A gains B as peer 委派方 (left stack); right ball stays A.
+    runtime.agentTeams.linkPeers(a, b, "collab");
+    const snapA = buildSessionStatusSnapshot(runtime, a);
+    expect(snapA.delegate?.parents?.some((p) => p.sessionId === b && p.kind === "peer")).toBe(
+      true,
+    );
+
+    // Boss speaks in B → second 委派方 ahead of A.
+    runtime.sessionHumanSpoke.add(b);
+    const snapBBoss = buildSessionStatusSnapshot(runtime, b);
+    expect(snapBBoss.delegate?.parents?.map((p) => p.kind)).toEqual([
+      "boss",
+      "opener",
+    ]);
+    expect(snapBBoss.delegate?.parents?.[0]?.sessionId).toBe(`${b}:boss`);
+    expect(snapBBoss.delegate?.parents?.at(-1)?.sessionId).toBe(a);
+  });
+
+  it("collab peers paint mutual 委派方; boss stacks when human spoke", async () => {
+    const runtime = bareRuntime();
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    const a = await createCodingSession(runtime, {}, "collab-a");
+    const b = await createCodingSession(runtime, {}, "collab-b");
+    runtime.agentTeams.linkPeers(a, b, "collab");
+
+    const snapA = buildSessionStatusSnapshot(runtime, a);
+    const snapB = buildSessionStatusSnapshot(runtime, b);
+    expect(snapA.delegate?.parentSessionId).toBe(b);
+    expect(snapB.delegate?.parentSessionId).toBe(a);
+    expect(snapA.delegate?.parents?.[0]?.kind).toBe("peer");
+    expect(snapA.delegate?.parents?.[0]?.sessionId).toBe(b);
+    expect(snapB.delegate?.parents?.[0]?.sessionId).toBe(a);
+
+    runtime.sessionHumanSpoke.add(a);
+    const afterBoss = buildSessionStatusSnapshot(runtime, a);
+    expect(afterBoss.delegate?.parents?.map((p) => p.kind)).toEqual([
+      "boss",
+      "peer",
+    ]);
+    expect(afterBoss.delegate?.parents?.[0]?.sessionId).toBe(`${a}:boss`);
+    expect(afterBoss.delegate?.parentSessionId).toBe(b);
+  });
+
+  it("session.prompt seatChannel peer arms collab edge for Overview", async () => {
+    const runtime = bareRuntime();
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    const a = await createCodingSession(runtime, {}, "peer-prompt-a");
+    const b = await createCodingSession(runtime, {}, "peer-prompt-b");
+
+    const prompt = await dispatchFaceMethod(runtime, "session.prompt", "pp", {
+      sessionId: b,
+      mode: "queue",
+      seatChannel: "peer",
+      fromSessionId: a,
+      content: [{ type: "text", text: "peer hello" }],
+    });
+    expect(prompt.result).toEqual({ ok: true, value: { accepted: true } });
+
+    const hops = runtime.agentTeams.neighbors(b, "peer");
+    expect(hops.some((h) => h.id === a && h.label === "collab")).toBe(true);
+
+    const snapA = buildSessionStatusSnapshot(runtime, a);
+    const snapB = buildSessionStatusSnapshot(runtime, b);
+    expect(snapA.delegate?.parents?.[0]).toMatchObject({
+      sessionId: b,
+      kind: "peer",
+    });
+    expect(snapB.delegate?.parents?.[0]).toMatchObject({
+      sessionId: a,
+      kind: "peer",
+    });
+  });
+
+  it("session.prompt peer does not collab-link a true parent↔child pair", async () => {
+    const runtime = bareRuntime();
+    const parent = await createCodingSession(runtime, {}, "peer-skip-parent");
+    const child = await createCodingSession(runtime, {}, "peer-skip-child");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "continuable",
+      label: "调研员",
+    });
+
+    const prompt = await dispatchFaceMethod(runtime, "session.prompt", "ps", {
+      sessionId: child,
+      mode: "queue",
+      seatChannel: "peer",
+      fromSessionId: parent,
+      content: [{ type: "text", text: "should stay delegation" }],
+    });
+    expect(prompt.result).toEqual({ ok: true, value: { accepted: true } });
+
+    const hops = runtime.agentTeams.neighbors(child, "peer");
+    expect(hops.some((h) => h.id === parent && h.label === "collab")).toBe(
+      false,
+    );
+
+    const snap = buildSessionStatusSnapshot(runtime, child);
+    expect(snap.delegate?.parentSessionId).toBe(parent);
+    expect(snap.delegate?.parents?.some((p) => p.kind === "peer")).toBe(false);
+  });
+
+  it("readSessionOpener purges corrupt legacy map values", async () => {
+    const runtime = bareRuntime();
+    const id = await createCodingSession(runtime, {}, "opener-corrupt");
+    // Legacy runtimes stored a bare memberId string.
+    (runtime.sessionOpeners as Map<string, unknown>).set(
+      id,
+      "mem_seed_manager",
+    );
+    const { readSessionOpener } = await import("../src/session-opener.js");
+    expect(readSessionOpener(runtime, id)).toBeUndefined();
+    expect(runtime.sessionOpeners.has(id)).toBe(false);
+  });
+
+  it("walks nested subagent parents (N>2) with per-layer look; caps at 4 with boss", async () => {
+    const runtime = bareRuntime();
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    const create = async (requestId: string): Promise<string> => {
+      const created = await dispatchFaceMethod(runtime, "session.create", requestId, {});
+      if (!created.result.ok) throw new Error("create");
+      return (created.result.value as { sessionId: string }).sessionId;
+    };
+    const root = await create("nest-root");
+    const midA = await create("nest-mid-a");
+    const midB = await create("nest-mid-b");
+    const leaf = await create("nest-leaf");
+    runtime.subagents.attach({
+      parentSessionId: root,
+      childSessionId: midA,
+      mode: "continuable",
+      label: "发版员",
+      appearance: { shape: "wedge", color: "sage", kit: "bow" },
+    });
+    runtime.subagents.attach({
+      parentSessionId: midA,
+      childSessionId: midB,
+      mode: "continuable",
+      label: "协调员",
+      appearance: { shape: "pill", color: "rose" },
+    });
+    runtime.subagents.attach({
+      parentSessionId: midB,
+      childSessionId: leaf,
+      mode: "continuable",
+      label: "调研员",
+      appearance: { shape: "squircle", color: "sky" },
+    });
+
+    const snap = buildSessionStatusSnapshot(runtime, leaf);
+    expect(snap.delegate?.parents?.map((p) => p.sessionId)).toEqual([
+      root,
+      midA,
+      midB,
+    ]);
+    expect(snap.delegate?.parents?.[1]?.label).toContain("发版员");
+    expect(snap.delegate?.parents?.[1]?.look).toMatchObject({
+      shape: "wedge",
+      color: "sage",
+    });
+    expect(snap.delegate?.parents?.[2]?.label).toContain("协调员");
+    expect(snap.delegate?.parents?.[2]?.look).toMatchObject({
+      shape: "pill",
+      color: "rose",
+    });
+    expect(snap.delegate?.parentSessionId).toBe(midB);
+
+    runtime.sessionHumanSpoke.add(leaf);
+    const withBoss = buildSessionStatusSnapshot(runtime, leaf);
+    // :boss + 3 AI = 4; walk already capped AI at 3 before boss.
+    expect(withBoss.delegate?.parents?.length).toBe(4);
+    expect(withBoss.delegate?.parents?.[0]?.sessionId).toBe(`${leaf}:boss`);
+    expect(withBoss.delegate?.parents?.at(-1)?.sessionId).toBe(midB);
+    expect(withBoss.delegate?.parents?.map((p) => p.sessionId)).toEqual([
+      `${leaf}:boss`,
+      root,
+      midA,
+      midB,
+    ]);
   });
 });

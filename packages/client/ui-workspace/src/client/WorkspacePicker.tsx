@@ -268,8 +268,12 @@ export function WorkspacePickFlow({
               className={css.pickerSearch}
               type="search"
               value={query}
-              placeholder={resolvedKind === 'agent-home' ? t('search.agents.placeholder') : t('picker.search')}
-              aria-label={resolvedKind === 'agent-home' ? t('search.agents.aria') : t('picker.searchAria')}
+              placeholder={resolvedKind === 'agent-home'
+                ? t('search.agents.placeholder', { agent: seatAgent })
+                : t('picker.search')}
+              aria-label={resolvedKind === 'agent-home'
+                ? t('search.agents.aria', { agent: seatAgent })
+                : t('picker.searchAria')}
               autoFocus
               onChange={(event) => { setQuery(event.target.value) }}
               onKeyDown={(event) => { event.stopPropagation() }}

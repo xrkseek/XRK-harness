@@ -21,8 +21,10 @@ import {
 } from "./peer-session-wait.js";
 import {
   armPeerCollabAfterPrompt,
+  breakMutualPeerSyncWait,
   clearPeerCollabAfterSyncReply,
-  flushPeerCollabIfPeerIdle,
+  formatMutualPeerWaitAsyncNotice,
+  promoteFailedSyncPeerWait,
 } from "./peer-collab-handoff.js";
 import {
   formatPeerCollabPrompt,
@@ -262,6 +264,9 @@ export function bindSessionThreadTools(
         {
           sessionId: targetId,
           mode: "steer",
+          // Collaboration speech — mutual 委派方; never forge kind:user / 老板.
+          seatChannel: "peer",
+          fromSessionId: sessionId,
           content: [
             {
               type: "text",
@@ -289,14 +294,49 @@ export function bindSessionThreadTools(
       if (!wait) {
         return { content: `delivered to ${targetId} (steer)` };
       }
+      // Peer already wait:true on us → blocking would deadlock both drains.
+      if (
+        breakMutualPeerSyncWait({
+          runtime,
+          peerSessionId: targetId,
+          waiterSessionId: sessionId,
+        })
+      ) {
+        return { content: formatMutualPeerWaitAsyncNotice(targetId) };
+      }
       const timeoutMs = clampPeerWaitMs(a.timeout_ms);
-      const waited = await waitForPeerAssistantReply(
-        runtime,
-        targetId,
-        seqAtSend,
-        timeoutMs,
-        signal,
-      );
+      let waited: Awaited<ReturnType<typeof waitForPeerAssistantReply>>;
+      try {
+        waited = await waitForPeerAssistantReply(
+          runtime,
+          targetId,
+          seqAtSend,
+          timeoutMs,
+          signal,
+          {
+            shouldBreak: () =>
+              breakMutualPeerSyncWait({
+                runtime,
+                peerSessionId: targetId,
+                waiterSessionId: sessionId,
+              }),
+          },
+        );
+      } catch (err) {
+        // Turn cancelled mid-wait (user 「？」 / Stop): keep the courier channel
+        // as async so the peer reply still lands as [会话协作] handoff.
+        if (err instanceof Error && err.name === "AbortError") {
+          promoteFailedSyncPeerWait({
+            runtime,
+            peerSessionId: targetId,
+            waiterSessionId: sessionId,
+          });
+        }
+        throw err;
+      }
+      if ("mutualWait" in waited) {
+        return { content: formatMutualPeerWaitAsyncNotice(targetId) };
+      }
       if ("reply" in waited) {
         clearPeerCollabAfterSyncReply({
           runtime,
@@ -311,8 +351,12 @@ export function bindSessionThreadTools(
           )}`,
         };
       }
-      // Timeout / peer quiet — keep the arm; if already idle, flush now.
-      flushPeerCollabIfPeerIdle(runtime, targetId);
+      // Timeout / quiet peer — promote leftover sync arm (peer may still run).
+      promoteFailedSyncPeerWait({
+        runtime,
+        peerSessionId: targetId,
+        waiterSessionId: sessionId,
+      });
       return { content: `thread_message: ${waited.error}`, isError: true };
     },
   });

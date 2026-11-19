@@ -47,11 +47,11 @@ MP4 **不内联进工具文本**；Host 配了 `AttachmentStore` 时经 `saveFil
 | **Credentials** | openai · fal · xai · openrouter · deepinfra 槽（各有公开 env 回落） |
 | **仅 env** | `XRK_VIDEO_GEN=memory` · `=1` / `openai` / `fal` / `xai` / `openrouter` / `deepinfra` |
 
-保存 Settings 后热切换。非空 `XRK_VIDEO_GEN` 为 CI 旁路。
+**热挂载**：Settings → Plugins → **视频生成** + Credentials 填钥 → `settings/document-updated`（`video-gen`）/ `credentials/updated` → Host `invalidateAgents`，下一轮起挂上 `video_generate`。非空 `XRK_VIDEO_GEN` 为 CI 旁路。
 
 | Settings / env | 行为 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| （未设 / 关） | 工具仍登记；execute **诚实失败** |
+| （未设 / 关 / 无密钥） | **不登记** `video_generate`（省 catalog + 引导句） |
 | `memory`（仅 env） | 内存 Provider（确定性作业生命周期 + 24 字节 `ftyp` MP4） |
 | `1` / openai | OpenAI Videos；默认 `sora-2` |
 | `fal` | FAL queue（Hermes 满编 family：pixverse · veo · kling · wan · seedance · minimax · …） |
@@ -118,11 +118,11 @@ Precedence: **Settings (product SoT)** → **Credentials (secrets)** → **env (
 | **Credentials** | openai · fal · xai · openrouter · deepinfra slots (with public env fallbacks) |
 | **Env-only** | `XRK_VIDEO_GEN=memory` · `=1` / `openai` / `fal` / `xai` / `openrouter` / `deepinfra` |
 
-Live after the next agent rebuild. Non-empty `XRK_VIDEO_GEN` is the CI bypass.
+**Hot remount**: Settings → Plugins → **Video gen** + Credentials → `video-gen` / `credentials/updated` → Host `invalidateAgents`; next turn mounts `video_generate`. Non-empty `XRK_VIDEO_GEN` is the CI bypass.
 
 | `XRK_VIDEO_GEN` / Settings | Behavior |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| (unset / off) | Tool still registers; execute **fails honestly** |
+| (unset / off / no key) | **Does not register** `video_generate` |
 | `memory` (env only) | In-memory Provider |
 | `1` / openai | OpenAI Videos; default `sora-2` |
 | `fal` | FAL queue (Hermes-scale families: pixverse · veo · kling · wan · seedance · minimax · …) |

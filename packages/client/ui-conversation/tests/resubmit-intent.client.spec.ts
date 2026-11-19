@@ -143,30 +143,40 @@ describe('confirmAndExecuteResubmit', () => {
     truncate: Array<{ sessionId: string; beforeSeq: number }>
     prompt: string[]
     rollback: string[]
-  }) {
+    beginSubmission: number
+  }, mapBeforeSeq?: (wireSeq: number) => number) {
     const session = {
       getSnapshot: () => idleTailSnapshot,
       cancel: async () => undefined,
       command: async (line: string) => {
         calls.rollback.push(line)
       },
-      prompt: async (content: readonly { type: string; text: string }[]) => {
-        calls.prompt.push(content.map((c) => c.text).join(''))
+      beginSubmission: () => {
+        calls.beginSubmission += 1
+        return {
+          requestId: `rpc-${calls.beginSubmission}`,
+          abandon: () => undefined,
+        }
+      },
+      prompt: async (content: readonly { type: string; text?: string }[]) => {
+        calls.prompt.push(content.map((c) => ('text' in c ? c.text ?? '' : '')).join(''))
+        return { ok: true as const, value: { accepted: true as const } }
+      },
+      reportError: () => undefined,
+      exclusiveBeforeSeqForWireSeq: (wireSeq: number) => (
+        mapBeforeSeq?.(wireSeq) ?? Math.max(0, wireSeq - 1)
+      ),
+    }
+    return {
+      binding: () => ({ session }),
+      truncate: async (opts: { sessionId: string; beforeSeq: number }) => {
+        calls.truncate.push(opts)
       },
     }
-      return {
-        binding: () => ({ session }),
-        truncate: async (opts: { sessionId: string; beforeSeq: number }) => {
-          calls.truncate.push(opts)
-          // The real contract returns RpcResult; the executor now checks `ok`
-          // before re-prompting, so returning void here would crash it.
-          return { ok: true as const, value: { sessionId: opts.sessionId, eventCount: 0 } }
-        },
-      }
   }
 
   it('regenerate always opens keep/revert confirm even on idle tip', async () => {
-    const calls = { truncate: [], prompt: [], rollback: [] as string[] }
+    const calls = { truncate: [], prompt: [], rollback: [] as string[], beginSubmission: 0 }
     const sessions = mockSessions(calls)
     const pending = confirmAndExecuteResubmit(sessions as never, {
       sessionId: 's1',
@@ -178,12 +188,13 @@ describe('confirmAndExecuteResubmit', () => {
     completeResubmitConfirm('keep-files')
     await expect(pending).resolves.toBe('done')
     expect(calls.truncate).toEqual([{ sessionId: 's1', beforeSeq: 0 }])
+    expect(calls.beginSubmission).toBe(1)
     expect(calls.prompt).toEqual(['hi'])
     expect(calls.rollback).toEqual([])
   })
 
-  it('edit skips confirm on idle tip and still truncates+prompts', async () => {
-    const calls = { truncate: [], prompt: [], rollback: [] as string[] }
+  it('edit skips confirm on idle tip and still truncates+prompts with echo', async () => {
+    const calls = { truncate: [], prompt: [], rollback: [] as string[], beginSubmission: 0 }
     const sessions = mockSessions(calls)
     await expect(confirmAndExecuteResubmit(sessions as never, {
       sessionId: 's1',
@@ -193,6 +204,23 @@ describe('confirmAndExecuteResubmit', () => {
     })).resolves.toBe('done')
     expect(getResubmitIntent()).toBeNull()
     expect(calls.truncate).toEqual([{ sessionId: 's1', beforeSeq: 0 }])
+    expect(calls.beginSubmission).toBe(1)
     expect(calls.prompt).toEqual(['edited'])
+  })
+
+  it('regenerate uses log-index beforeSeq after a post-truncate mux jump', async () => {
+    const calls = { truncate: [], prompt: [], rollback: [] as string[], beginSubmission: 0 }
+    // Kept prefix length 10; jumped human wire seq 78 → exclusive beforeSeq 10.
+    const sessions = mockSessions(calls, (wireSeq) => (wireSeq === 78 ? 10 : wireSeq - 1))
+    const pending = confirmAndExecuteResubmit(sessions as never, {
+      sessionId: 's1',
+      seq: 78,
+      text: 'again',
+      kind: 'regenerate',
+    })
+    completeResubmitConfirm('keep-files')
+    await expect(pending).resolves.toBe('done')
+    expect(calls.truncate).toEqual([{ sessionId: 's1', beforeSeq: 10 }])
+    expect(calls.prompt).toEqual(['again'])
   })
 })

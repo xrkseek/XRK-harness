@@ -149,6 +149,7 @@ import {
   existingPiAiProvider,
   mergeCommunityProviderModels,
   schedulePluginUpdateProbeWarm,
+  sessionCreatedByBoss,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -1535,6 +1536,90 @@ export function createHostManager(): HostManager {
       } = {};
       const cronBox: { scheduler?: CronScheduler | undefined } = {};
 
+      /** text_to_speech only on 老板-created seats (creator sticky ≠ later 委派方). */
+      const ensureBossTextToSpeech = (
+        agent: { tools?: { get(name: string): unknown; register(tool: unknown): void } },
+        sid: string,
+      ): void => {
+        const rt = faceBox.runtime;
+        if (!rt || !agent.tools) return;
+        if (!sessionCreatedByBoss(rt, sid)) return;
+        if (agent.tools.get("text_to_speech")) return;
+        const ttsNs = rt.settingsNamespaces.view("tts").value as Record<
+          string,
+          unknown
+        >;
+        if (ttsNs.enabled !== true) return;
+        const ttsBase =
+          typeof ttsNs.baseUrl === "string" && ttsNs.baseUrl.trim()
+            ? ttsNs.baseUrl.trim()
+            : undefined;
+        const ttsVoice =
+          typeof ttsNs.voice === "string" && ttsNs.voice.trim()
+            ? ttsNs.voice.trim()
+            : undefined;
+        const ttsVoiceEn =
+          typeof ttsNs.voiceEn === "string" && ttsNs.voiceEn.trim()
+            ? ttsNs.voiceEn.trim()
+            : undefined;
+        const ttsLanguageRaw =
+          typeof ttsNs.language === "string"
+            ? ttsNs.language.trim().toLowerCase()
+            : "";
+        const ttsLanguage =
+          ttsLanguageRaw === "zh" ||
+          ttsLanguageRaw === "en" ||
+          ttsLanguageRaw === "auto"
+            ? ttsLanguageRaw
+            : undefined;
+        const ttsModel =
+          typeof ttsNs.model === "string" && ttsNs.model.trim()
+            ? ttsNs.model.trim()
+            : undefined;
+        const ttsProxy =
+          typeof ttsNs.proxy === "string" && ttsNs.proxy.trim()
+            ? ttsNs.proxy.trim()
+            : undefined;
+        const voiceKey =
+          rt.credentials.peek("voice.openai")?.trim() ||
+          process.env.XRK_VOICE_OPENAI_KEY?.trim() ||
+          "";
+        const voiceEnv: NodeJS.ProcessEnv | undefined = voiceKey
+          ? { ...process.env, XRK_VOICE_OPENAI_KEY: voiceKey }
+          : undefined;
+        const ttsEngine =
+          typeof ttsNs.engine === "string" && ttsNs.engine.trim()
+            ? ttsNs.engine.trim().toLowerCase()
+            : "edge";
+        const access = createVoiceAccess({
+          direction: "tts",
+          engine: ttsEngine,
+          ...(ttsBase ? { baseUrl: ttsBase } : {}),
+          ...(ttsVoice ? { voice: ttsVoice } : {}),
+          ...(ttsModel ? { model: ttsModel } : {}),
+          ...(ttsProxy ? { proxy: ttsProxy } : {}),
+          ...(voiceEnv ? { env: voiceEnv } : {}),
+        });
+        agent.tools.register(
+          createSpeakTool({
+            direction: "tts",
+            engine: ttsEngine,
+            ...(access.service ? { service: access.service } : {}),
+            ...(voiceEnv ? { env: voiceEnv } : {}),
+            ...(ttsVoice !== undefined || ttsVoiceEn !== undefined
+              ? {
+                  voices: {
+                    ...(ttsVoice !== undefined ? { zh: ttsVoice } : {}),
+                    ...(ttsVoiceEn !== undefined ? { en: ttsVoiceEn } : {}),
+                  },
+                }
+              : {}),
+            ...(ttsLanguage !== undefined ? { language: ttsLanguage } : {}),
+            attachments,
+          }),
+        );
+      };
+
       const resolveAgent = async (sessionId: string) => {
         // Cache composition binding only — never treat AgentHandle as transcript source (ADR-0003).
         const parentSessionId = lineage.parentOf(sessionId);
@@ -2199,102 +2284,8 @@ export function createHostManager(): HostManager {
                   });
                 }
               }
-              // Settings tts.enabled: bind text_to_speech on every surface
-              // (including Minimal / IM). `tts.engine` picks the Provider —
-              // OS voices (SAPI / say / espeak-ng) or an OpenAI-compatible
-              // endpoint — and an unresolvable one still mounts the tool so it
-              // can fail honestly instead of vanishing.
-              const ttsNs = faceBox.runtime.settingsNamespaces.view(
-                "tts",
-              ).value as Record<string, unknown>;
-              if (
-                ttsNs.enabled === true &&
-                !agent.tools.get("text_to_speech") &&
-                // Only seats with a listener: 老板's own sessions (project or
-                // 干员 agent-home, both top-level). Delegated children and
-                // background turns stay silent — nobody hears them, and every
-                // clip costs a synthesis round trip.
-                parentSessionId === undefined
-              ) {
-                const ttsBase =
-                  typeof ttsNs.baseUrl === "string" && ttsNs.baseUrl.trim()
-                    ? ttsNs.baseUrl.trim()
-                    : undefined;
-                const ttsVoice =
-                  typeof ttsNs.voice === "string" && ttsNs.voice.trim()
-                    ? ttsNs.voice.trim()
-                    : undefined;
-                const ttsVoiceEn =
-                  typeof ttsNs.voiceEn === "string" && ttsNs.voiceEn.trim()
-                    ? ttsNs.voiceEn.trim()
-                    : undefined;
-                const ttsLanguageRaw =
-                  typeof ttsNs.language === "string"
-                    ? ttsNs.language.trim().toLowerCase()
-                    : "";
-                const ttsLanguage =
-                  ttsLanguageRaw === "zh" ||
-                  ttsLanguageRaw === "en" ||
-                  ttsLanguageRaw === "auto"
-                    ? ttsLanguageRaw
-                    : undefined;
-                const ttsModel =
-                  typeof ttsNs.model === "string" && ttsNs.model.trim()
-                    ? ttsNs.model.trim()
-                    : undefined;
-                const ttsProxy =
-                  typeof ttsNs.proxy === "string" && ttsNs.proxy.trim()
-                    ? ttsNs.proxy.trim()
-                    : undefined;
-                const voiceKey =
-                  faceBox.runtime.credentials.peek("voice.openai")?.trim() ||
-                  process.env.XRK_VOICE_OPENAI_KEY?.trim() ||
-                  "";
-                const voiceEnv: NodeJS.ProcessEnv | undefined = voiceKey
-                  ? { ...process.env, XRK_VOICE_OPENAI_KEY: voiceKey }
-                  : undefined;
-                const ttsEngine =
-                  typeof ttsNs.engine === "string" && ttsNs.engine.trim()
-                    ? ttsNs.engine.trim().toLowerCase()
-                    // Matches the schema default (`engine: "edge"`). A different
-                    // fallback here only fires on a half-written settings row,
-                    // and then silently built a `local` voice service while the
-                    // card said Edge.
-                    : "edge";
-                const access = createVoiceAccess({
-                  direction: "tts",
-                  engine: ttsEngine,
-                  ...(ttsBase ? { baseUrl: ttsBase } : {}),
-                  ...(ttsVoice ? { voice: ttsVoice } : {}),
-                  ...(ttsModel ? { model: ttsModel } : {}),
-                  ...(ttsProxy ? { proxy: ttsProxy } : {}),
-                  ...(voiceEnv ? { env: voiceEnv } : {}),
-                });
-                agent.tools.register(
-                  createSpeakTool({
-                    direction: "tts",
-                    engine: ttsEngine,
-                    ...(access.service ? { service: access.service } : {}),
-                    ...(voiceEnv ? { env: voiceEnv } : {}),
-                    // One row per language: `auto` sniffs each clip, so a
-                    // Chinese reply and an English drill both read natively.
-                    ...(ttsVoice !== undefined || ttsVoiceEn !== undefined
-                      ? {
-                          voices: {
-                            ...(ttsVoice !== undefined ? { zh: ttsVoice } : {}),
-                            ...(ttsVoiceEn !== undefined ? { en: ttsVoiceEn } : {}),
-                          },
-                        }
-                      : {}),
-                    ...(ttsLanguage !== undefined
-                      ? { language: ttsLanguage }
-                      : {}),
-                    // Persist synthesized audio so the client gets a playable
-                    // file block instead of a truncated base64 preview.
-                    attachments,
-                  }),
-                );
-              }
+              // TTS: bound after Face bindSessionAgent (see ensureBossTextToSpeech)
+              // so opener / boss-created is known and voice mask already ran.
             }
             // Role deny projection (Codex `role.rs`: a role may only weaken).
             // A subagent with role=reviewer/researcher must not carry write /
@@ -2321,6 +2312,8 @@ export function createHostManager(): HostManager {
           // before the Face runtime was ready heals on its next resolve.
           if (!faceBox.runtime) await faceRuntimeReady;
           faceBox.runtime?.bindSessionAgent(sessionId, agent);
+          // After Face voice mask: mount TTS only when 老板 created this seat.
+          ensureBossTextToSpeech(agent, sessionId);
           // Cache hits still need live community tool sync (Settings remount
           // between turns without full agent rebuild when fingerprint matches
           // name set but execute bodies changed — replace in place).
@@ -2608,6 +2601,28 @@ export function createHostManager(): HostManager {
       // or reload injects the new boot row while `/plugins/<id>/client.js` 404s.
       const liveExtraRoots: string[] = webOverlay ? [webOverlay] : [];
       const faceWebPlugins: { id: string }[] = [];
+      /** User overlay only — Settings soft-remounts these without product HMR. */
+      const liveOverlayBoot: {
+        current: {
+          rev: string;
+          entries: {
+            id: string;
+            url: string;
+            rev: string;
+            inject: readonly string[];
+          }[];
+        };
+      } = {
+        current: {
+          rev: filteredOverlay?.rev ?? "none",
+          entries: (filteredOverlay?.entries ?? []).map((e) => ({
+            id: e.id,
+            url: e.url,
+            rev: e.rev,
+            inject: e.inject ?? [],
+          })),
+        },
+      };
       const refreshFaceWebPlugins = async () => {
         if (!config.runtime.webDist) {
           faceWebPlugins.splice(0, faceWebPlugins.length);
@@ -2616,6 +2631,7 @@ export function createHostManager(): HostManager {
             rev: liveBoot.current.rev,
             entries: [],
           };
+          liveOverlayBoot.current = { rev: "none", entries: [] };
           return;
         }
         const overlayRoot = await resolveWebPluginOverlay(resolvedPluginsDir);
@@ -2635,6 +2651,15 @@ export function createHostManager(): HostManager {
                   (e) => !isPluginSoftDisabledAt(e.id, disabled, index),
                 ),
               };
+        liveOverlayBoot.current = {
+          rev: filtered?.rev ?? "none",
+          entries: (filtered?.entries ?? []).map((e) => ({
+            id: e.id,
+            url: e.url,
+            rev: e.rev,
+            inject: e.inject ?? [],
+          })),
+        };
         const nextBoot = applyXrkProductBootPolicy(
           ensureXrkPlatformClientBootEntries(
             mergeWebBootManifests(
@@ -2650,6 +2675,12 @@ export function createHostManager(): HostManager {
           faceWebPlugins.length,
           ...nextBoot.entries.map((e) => ({ id: e.id })),
         );
+        const bus = faceBox.runtime?.bus;
+        if (bus) {
+          publishRemoteEvent(bus, "plugin-inventory/boot-changed", [
+            liveOverlayBoot.current.rev,
+          ]);
+        }
       };
       faceWebPlugins.push(...liveBoot.current.entries.map((e) => ({ id: e.id })));
       const hostWireRef: { ctx?: DshCompatOptions } = {};
@@ -2813,6 +2844,7 @@ export function createHostManager(): HostManager {
         ...(config.runtime.webDist
           ? { webPlugins: faceWebPlugins }
           : {}),
+        clientBootOverlay: () => liveOverlayBoot.current,
         hostPublic,
         cordisHostBridge: {
           applyHostHalf: async (packageName: string) => {

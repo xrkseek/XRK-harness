@@ -392,6 +392,44 @@ describe('beginSubmission', () => {
     expect(onRetire).toHaveBeenCalledWith({ reason: 'failed' })
   })
 
+  it('durable user/message with source.rpcId retires the local echo', async () => {
+    vi.useFakeTimers()
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    await session.open()
+    const onRetire = vi.fn()
+    const handle = session.beginSubmission({
+      mode: 'queue', text: '?', attachments: [], onRetire,
+    })
+    await session.prompt(
+      [{ type: 'text', text: '?' }],
+      'queue',
+      undefined,
+      handle.requestId,
+    )
+    expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
+
+    session.handleMuxEnvelope(RpcId('ev'), {
+      type: 'session/event',
+      sessionId: SID,
+      event: {
+        seq: 1,
+        time: 1,
+        type: 'user/message',
+        surfaceOp: 'append',
+        data: createUserMessage({
+          content: [{ type: 'text', text: '?' }],
+          source: { kind: 'user', rpcId: handle.requestId as never },
+        }),
+      } as never,
+    })
+    expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
+    await vi.runAllTimersAsync()
+    expect(session.getSnapshot().pendingSubmissions).toEqual([])
+    expect(onRetire).toHaveBeenCalledWith(expect.objectContaining({ reason: 'observed' }))
+    vi.useRealTimers()
+  })
+
   it('FIFO claim empty queue keeps echo until durable (no orphan race)', async () => {
     const { api } = bareApi()
     const session = new Session(SID, api, remotes())

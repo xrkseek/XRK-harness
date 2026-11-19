@@ -9,16 +9,17 @@ user-invocable: false
 
 # 笔记 · 插件体系（Harness）
 
-教科书：[docs/plugin-development.md](../../../docs/plugin-development.md) · [docs/plugin-loader.md](../../../docs/plugin-loader.md) · [docs/profiles.md](../../../docs/profiles.md)。
+教科书：[docs/plugin-development.md](../../../docs/plugin-development.md) · [docs/client-plugin-development.md](../../../docs/client-plugin-development.md) · [docs/plugin-loader.md](../../../docs/plugin-loader.md) · [docs/profiles.md](../../../docs/profiles.md)。
 
 ## 权威入口
 
 | 主题 | 文档 | 代码 |
 |------|------|------|
-| 开发流程 | [plugin-development.md](../../../docs/plugin-development.md) | `extensions/example-tools/` |
+| 进程插件 | [plugin-development.md](../../../docs/plugin-development.md) | `extensions/example-tools/` |
+| **原生 client 壳** | [client-plugin-development.md](../../../docs/client-plugin-development.md) | 金样 `example-composer-action` · `example-theme-tokens` · `ui-model-selection`（`useModelSelection`）；**第一方产品** `xrk-sunflower-free` · `xrk-phone-bridge` · `xrkh-better-sidebar`(+office) |
 | Loader 契约 | [plugin-loader.md](../../../docs/plugin-loader.md) | `packages/server/loader/` |
 | Preset 接线 | [profiles.md](../../../docs/profiles.md) · [host-preset.md](../../../docs/host-preset.md) | `presets/*/preset.ts` |
-| 社区包 | [community-plugins.md](../../../docs/community-plugins.md) | `packages/server/http/src/dsh-compat/` |
+| 社区兼容器（可选 · 0.9 迁出） | [community-plugins.md](../../../docs/community-plugins.md) · [PACKAGE.md](../../../packages/server/http/src/dsh-compat/PACKAGE.md) | `packages/server/http/src/dsh-compat/` |
 | 产品 coach 种子 | [templates/xrk-harness/](../../../templates/xrk-harness/) | `.xrk` inject + `skills/` |
 
 ## 数据流（进程插件）
@@ -53,11 +54,12 @@ XRK_PLUGINS_DIR / ~/.xrk/plugins
 ## 执行步骤
 
 1. 读 [docs/status.md](../../../docs/status.md) 确认能力可依赖。
-2. 定 kind：`tools` | `prompt` | `commands`（见 **`xrk-extensions`**）。
-3. 对照 `extensions/example-tools` 最小形；改 loader 时补 `packages/server/loader/tests`。
+2. 定 kind：`tools` | `prompt` | `commands` | **`xrk.client`**（见 **`xrk-extensions`** · client 教科书）。
+3. 对照金样：进程 `example-tools`；壳 `example-composer-action` / `example-theme-tokens`。改 loader 时补 `packages/server/loader/tests`。
 4. Preset 改动：跑对应 preset 测 + `pnpm check`。
-5. 若改契约：同步 `docs/plugin-development.md` / `plugin-loader.md` / `status.md`。
-6. 产品 coach：同步 `templates/xrk-harness/`（`assistant.md` · `skills/` · recipes）。
+5. 若改契约：同步 `docs/plugin-development.md` / `client-plugin-development.md` / `plugin-loader.md` / `status.md`。
+6. 产品 coach：同步 `templates/xrk-harness/`（`assistant.md` · `skills/` · recipes）与种子 `xrk-plugin`。
+7. **禁止**为原生作者路径往 `dsh-compat/` 加 RPC；兼容器 0.9 迁 `@xrkseek/dsh-compat`。
 
 ## 本机试跑
 

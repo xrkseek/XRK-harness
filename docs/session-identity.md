@@ -34,7 +34,7 @@
 | `<session_capability>` | 父会话：permission × tool_surface × **model/modality** × `mcp_mount` × `ask:`；干员：`kind=delegated_child` 短块（同带 model/modality / mcp / ask） | 自己是谁（事实真源） |
 | `<session_posture>` | IM / 奇创 / harness·shallow 经理；**Frugal / Shell 空**（无 spawn；见 `surface_brief`） | 派活动词卡（不复述 capability） |
 | `<session_lanes>` | 所有有会话的席（含子会话） | 本会话主线 / 支线 / open todos；完成后切换动词 |
-| `<seat_identity>` | 各员工席 | 汇报线 / 称呼 / 同级 peer |
+| `<seat_identity>` | 各员工席 | 谁你是 / `report`·`ui` / peer；席位词跟 Settings **titles**；子代理另有 `lane`（manager-kind spawn ≠ agent-kind 家） |
 | `<external_collab_board>` | 父会话：名册 + 主线 / 未钉 peers；干员：小队板 | 看见谁（ids）；同道一句，长链在 posture |
 | spawn preamble | 干员（首轮任务文本） | 身份 + FINAL 交付 |
 
@@ -70,16 +70,30 @@
 | `close_agent` | **`close_agent`**（interrupt + 末轮助手快照） |
 | `interrupt_agent` | `interrupt_agent`（只停，不回快照） |
 
+## 两类工作区（产品轴）
+
+侧栏区名与三级身份词均跟 Settings **titles**（`老板` / `经理` / `干员` 可改）。下表用 **manager-kind / agent-kind** 指类，活词见 `<seat_identity>` `titles:`。
+
+| 类 | 含谁 | 典型用户动作 | 模型该做 | 不该做 |
+|----|------|--------------|----------|--------|
+| **manager-kind** | 向阳（向日葵）· 各编码仓 | 配 Host / 开席 / 改项目 | 向阳：编排推给 peer coding；编码：本席 ship + `subagent` | 向阳代写产品；编码自建/删 WS |
+| **agent-kind** | agent-home | 专长；人机面直聊 | 跟 playbook；peer 仅 agent-kind + 向阳 | 当 manager-kind 改业务仓 |
+
+编码仓与向阳同属 manager-kind，互为 peer lead。名册成员 ≠ agent-kind 家；开家显式（`team_home` / UI）。manager-kind 上 `subagent` 的子会话：cwd=父项目，`lane` 标明 **not** agent-kind 家；**无** `workspace_*` / TTS·ASR。
+
+**创建者 vs 委派方：** TTS/ASR 只挂**老板创建**的席（无 `opener`）；席位开出的 peer / 子代理永不挂语音——老板事后发言只改 `ask:`，不改语音。工具面全表：产品 skill `xrk-tool-surfaces`。
+
 ## 许愿 → 动词
 
 | 用户意图（例） | 当前身份 | 首选动词 | 不该做 |
 |----------------|----------|----------|--------|
-| 组 Agent 团队 / 加干员 | orch / coding_parent | `team_save` →（coding）`subagent member_id` 或（奇创）`workspace_session_prompt` | 用 `propose_skill` 冒充干员 |
-| 让两干员商量 | coding_parent 已 spawn | 干员侧 `thread_message`；或父 `team_graph announce` / 分别 `send_message` | 干员再 `subagent`；不必先手工 `team_graph link` |
-| 向阳里改某编码仓 | qichuang | `workspace_list` → `workspace_session_prompt` → 可选 `thread_upsert` | 在向阳 cwd 大改 monorepo |
-| IM 里开工 | im | `subagent(workspace_id)` 或 `workspace_session_prompt` + `thread_message` | 在 IM 会话写业务代码 |
-| 两边会话自己对齐 | 两 peer_parent | 互 `thread_message`（可先 `session_inspect`） | 当成子代理树 |
-| 干员卡住 / 接管 | coding_parent | 任务板 takeover · `interrupt_agent` / `close_agent` · 再 spawn | 非 lead 干员改名册 |
+| 组名册 / 加干员 | orch / coding_parent | `team_save` / `team_import`；（要家）`team_home` | `propose_skill` 冒充干员；就绪顺便铸家 |
+| 开专长家 / 老板直聊干员 | qichuang 或侧栏 | `team_list` → `team_home` → `workspace_session_prompt` | 无故再 mint advanced；`workspace_create` 冒充家 |
+| 项目内并行拆片 | coding_parent | `subagent member_id` | 为专长任务硬开第二个家 |
+| 让两干员商量 | coding_parent 已 spawn | 干员侧 `thread_message`；或父 `send_message` | 干员再 `subagent` |
+| 向阳里改某编码仓 | qichuang | `workspace_list` → `workspace_session_prompt` 其它经理 | 在向阳 cwd 大改 monorepo |
+| IM 里开工 | im | `subagent(workspace_id)` 或 `workspace_session_prompt` | 在 IM 写业务代码 |
+| 干员卡住 / 接管 | coding_parent | takeover · `interrupt_agent` / `close_agent` · 再 spawn | 非 lead 改名册 |
 
 相关： [host-face](./host-face.md) · [status](./status.md) · [profiles](./profiles.md) · [learn](./learn.md)。
 
@@ -121,7 +135,7 @@ Session **badge** (tool_surface) and workspace are orthogonal. Face also derives
 | `<session_capability>` | Parents: permission × tool_surface × **model/modality** × `mcp_mount` × `ask:`; children: short `kind=delegated_child` (same model/modality / mcp / ask) | Who am I (source of truth) |
 | `<session_posture>` | IM / Qichuang / harness·shallow managers; **empty for Frugal / Shell** (no spawn — see `surface_brief`) | Dispatch verb card (no capability re-lecture) |
 | `<session_lanes>` | Every live seat (including children) | This session’s 主线 / 支线 / open todos; completion-switch verbs |
-| `<seat_identity>` | Employee seats | Reporting line / titles / peer leads |
+| `<seat_identity>` | Employee seats | Who you are / `report`·`ui` / peers; seat words follow Settings **titles**; subagents also get `lane` (manager-kind spawn ≠ agent-kind home) |
 | `<external_collab_board>` | Parents: roster + 主线 / unbound peers; children: teammate board | Who is here (ids); one same-lane spout — long chains stay in posture |
 | Spawn preamble | Children (first task text) | Identity + FINAL delivery |
 
@@ -157,15 +171,29 @@ See [context-fragments](./context-fragments.md) · [session-optimize](./session-
 | `close_agent` | **`close_agent`** (interrupt + last-assistant snapshot) |
 | `interrupt_agent` | `interrupt_agent` (stop only, no snapshot) |
 
+## Two workspace kinds (product axis)
+
+Sidebar labels and the three seat words follow Settings **titles** (defaults boss / manager / agent). Table uses **manager-kind / agent-kind**; live words are on `<seat_identity>` `titles:`.
+
+| Kind | Who | Typical human move | Model should | Must not |
+|------|-----|--------------------|--------------|----------|
+| **manager-kind** | Xiangyang (Sunflower) · coding repos | Host config / open seats / ship a project | Xiangyang: route to peer coding; coding: ship + `subagent` | Xiangyang shipping product; coding creating/deleting WS |
+| **agent-kind** | agent-home | Specialty; human face speaks | Follow playbook; peer agent-kind + Xiangyang only | Act as manager-kind on a product repo |
+
+Coding and Xiangyang are both manager-kind — peer leads. Roster member ≠ agent-kind home; minting a home is explicit (`team_home` / UI). A `subagent` under manager-kind keeps parent cwd; `lane` marks **not** agent-kind home; **no** `workspace_*` / TTS·ASR.
+
+**Creator vs delegator:** TTS/ASR mount only on **boss-created** seats (no `opener`). Seat-opened peers and children never get voice — later boss speech flips `ask:` only. Full tool map: product skill `xrk-tool-surfaces`.
+
 ## Intent → verbs
 
 | User intent (examples) | Current identity | Prefer | Avoid |
 |------------------------|------------------|--------|-------|
-| Create an Agent Team / add a 干员 | orch / coding_parent | `team_save` → (coding) `subagent member_id` or (Qichuang) `workspace_session_prompt` | Treating `propose_skill` as a 干员 |
-| Have two 干员 discuss | coding_parent after spawn | Child `thread_message`; or parent `team_graph announce` / `send_message` each | Child nesting `subagent`; manual `team_graph link` first |
-| Edit a coding workspace from Xiangyang | qichuang | `workspace_list` → `workspace_session_prompt` → optional `thread_upsert` | Large monorepo edits in Xiangyang cwd |
-| Start work from IM | im | `subagent(workspace_id)` or `workspace_session_prompt` + `thread_message` | Implementing product code in the IM session |
-| Two sessions align themselves | two peer_parents | Mutual `thread_message` (optional `session_inspect`) | Treating them as a subagent tree |
-| Stuck child / takeover | coding_parent | Task-board takeover · `interrupt_agent` / `close_agent` · respawn | Non-lead child editing the roster |
+| Roster / add a 干员 | orch / coding_parent | `team_save` / `team_import`; (`team_home` when a home is needed) | `propose_skill` as a 干员; minting home on ready |
+| Open specialty home / boss chats 干员 | qichuang or sidebar | `team_list` → `team_home` → `workspace_session_prompt` | Minting another advanced; faking home with `workspace_create` |
+| Parallel slices inside a project | coding_parent | `subagent member_id` | Opening a second home for a project slice |
+| Have two 干员 discuss | coding_parent after spawn | Child `thread_message`; or parent `send_message` | Child nesting `subagent` |
+| Edit a coding workspace from Xiangyang | qichuang | `workspace_list` → `workspace_session_prompt` coding manager | Large monorepo edits in Xiangyang cwd |
+| Start work from IM | im | `subagent(workspace_id)` or `workspace_session_prompt` | Implementing product code in IM |
+| Stuck child / takeover | coding_parent | Takeover · `interrupt_agent` / `close_agent` · respawn | Non-lead editing the roster |
 
 See also: [host-face](./host-face.md) · [status](./status.md) · [profiles](./profiles.md) · [learn](./learn.md).

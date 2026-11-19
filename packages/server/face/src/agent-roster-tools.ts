@@ -1,6 +1,7 @@
 /**
- * Model-facing team_list / save / import / ready / export / remove /
- * team_self (child own surfaces). Packs under agent-rosters/packs/.
+ * Model-facing team_list / save / import / ready / home / export / remove /
+ * team_self. Members ≠ 干员家 — only team_home (or UI mintHome) creates homes.
+ * Packs under agent-rosters/packs/.
  */
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -12,6 +13,8 @@ import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { isAgentTeamSpawnRole } from "./agent-team-roles.js";
 import {
   GLOBAL_ROSTER_ID,
+  MANAGER_MEMBER_ID,
+  SUNFLOWER_MEMBER_ID,
   memberIdProblem,
   catalogMemberWriteProblem,
   parseMemberInject,
@@ -45,6 +48,7 @@ import {
   adoptLiveMemberIdentityPlaybook,
   publishMemberIdentityPlaybook,
 } from "./agent-identity-sync.js";
+import { mintAgentHomeForMember } from "./agent-home.js";
 import { withAdvancedPackPathGuidance } from "./capture-member-playbook.js";
 import { resolveSessionCwd } from "./session-cwd.js";
 import { referencedAttachmentIds } from "./session-attachment.js";
@@ -53,6 +57,10 @@ import {
   rosterScopeVisibility,
   teamListDescription,
 } from "./session-tool-copy.js";
+import {
+  readSeatTitles,
+  readUiLocalePreference,
+} from "./seat-titles.js";
 
 function teamPresent(
   title: string,
@@ -179,7 +187,13 @@ function enrichListedMember(
       rosterWs,
     ),
   };
-  if (live.kind !== "advanced") return pub;
+  const homeWorkspaceId =
+    runtime.workspaces.findAgentHomeByMember(live.id)?.workspaceId;
+  const withHome = {
+    ...pub,
+    ...(homeWorkspaceId ? { homeWorkspaceId } : {}),
+  };
+  if (live.kind !== "advanced") return withHome;
   const packOpts = {
     rosterWorkspaceId: rosterWs,
     memberId: live.id,
@@ -187,7 +201,7 @@ function enrichListedMember(
   };
   const inventory = listMemberPackInventory(packOpts);
   const base = {
-    ...pub,
+    ...withHome,
     ...(inventory
       ? {
           packHome: inventory.packHome,
@@ -345,13 +359,9 @@ function mintAdvancedMember(input: {
             envHint:
               "No env/SETUP.md — team_ready when configured; friend gets playbook (± skills).",
           }),
-      next: "team_ready → subagent member_id",
+      next: "team_ready → team_home | subagent member_id",
       layout: AGENT_MEMBER_PACK_LAYOUT,
-      pathHint:
-        `Spawn keeps parent workspace cwd. ${MEMBER_PACK_BRIEFCASE} = pack_home (injected) — child may read/edit/copy into workspace. Share zip with relative paths under the pack tree.`,
-      shareHint:
-        "Friend: team_export zip / UI import, or they team_import pack=… → follow envPrep with main session → team_ready. " +
-        "scope=global keeps it on every canvas team_list.",
+      pathHint: `${MEMBER_PACK_BRIEFCASE}=pack_home (injected). Spawn cwd=parent workspace.`,
     }),
   };
 }
@@ -423,12 +433,22 @@ export function bindAgentRosterTools(
     parameters: { type: "object", properties: {}, additionalProperties: false },
     isConcurrencySafe: () => true,
     presentCall: () => teamPresent("team_list", "search"),
-    dynamicSchema: () => ({
-      description: teamListDescription({
-        listOnly,
-        ...(selfMemberId ? { selfRevise: true } : {}),
-      }),
-    }),
+    dynamicSchema: () => {
+      const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+        .value as Record<string, unknown>;
+      const localeUser = runtime.settingsNamespaces.view("locale")
+        .value as Record<string, unknown>;
+      return {
+        description: teamListDescription({
+          listOnly,
+          ...(selfMemberId ? { selfRevise: true } : {}),
+          titles: readSeatTitles(
+            presenceUser,
+            readUiLocalePreference(localeUser),
+          ),
+        }),
+      };
+    },
     execute: async () => {
       const workspaceId = ws();
       const members = runtime.agentRoster
@@ -546,11 +566,10 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_save",
     description:
-      "Mint or revise a 干员 (template → skill xrk-delegate). " +
+      "Mint or revise a 干员 (skill xrk-delegate). Does not create 干员家. " +
       "Thin: name+playbook (+inject/tools). " +
-      `Advanced ${MEMBER_PACK_BRIEFCASE}: kind=advanced + skills/files/env_prep (playbook.md · skills/ · workspace/ · env/SETUP.md) → team_ready → team_export. ` +
-      `Revise any custom member with id= (omit unchanged fields); advanced may also merge skills/files/env_prep into ${MEMBER_PACK_BRIEFCASE}. ` +
-      "Install friend zip/json → team_import (not this).",
+      `Advanced: kind=advanced + skills/files/env_prep → team_ready → team_home. ` +
+      "Revise: id= (omit unchanged). Install shared: team_import. Open home: team_home.",
     parameters: {
       type: "object",
       properties: {
@@ -755,7 +774,7 @@ export function bindAgentRosterTools(
               ...(inventory ? { inventory } : {}),
               next: patched.ready
                 ? "subagent member_id · team_export to share"
-                : "follow envPrep → team_ready → subagent member_id",
+                : "follow envPrep → team_ready → team_home | subagent member_id",
             }),
           };
         }
@@ -846,9 +865,9 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_import",
     description:
-      `Install a friend-shared 干员: card= (thin JSON) or pack= (advanced zip/dir/attachment → ${MEMBER_PACK_BRIEFCASE}). ` +
-      "Then follow envPrep with this main session → team_ready. Illegal pack: inspect/fix → re-import. " +
-      "After import you may team_save id= to edit playbook or merge skills/files. Mint new → team_save (not this).",
+      `Install shared 干员: card= (thin JSON) or pack= (advanced zip/dir → ${MEMBER_PACK_BRIEFCASE}). ` +
+      "Installs member only — no 干员家. Then envPrep → team_ready → team_home to open home. " +
+      "Revise: team_save id=. Mint new: team_save.",
     parameters: {
       type: "object",
       properties: {
@@ -950,22 +969,9 @@ export function bindAgentRosterTools(
           packDir: placed.packDir,
           skillNames: placed.skillNames,
           ready: false,
-          ...(placed.envPrep
-            ? {
-                envPrep: placed.envPrep,
-                envHint:
-                  "Review envPrep here (or hand zip to a friend). Then team_ready. Do not auto-run scripts.",
-              }
-            : {
-                envHint: "No env/SETUP.md — team_ready when configured; friend gets playbook (± skills).",
-              }),
-          next: "team_ready → subagent member_id",
+          ...(placed.envPrep ? { envPrep: placed.envPrep } : {}),
+          next: "team_ready → team_home | subagent member_id",
           layout: AGENT_MEMBER_PACK_LAYOUT,
-          pathHint:
-            `Spawn keeps parent workspace cwd. ${MEMBER_PACK_BRIEFCASE} = pack_home (injected) — child may read/edit/copy into workspace. Share zip with relative paths under the pack tree.`,
-          shareHint:
-            "Friend: team_export zip / UI import, or they team_import pack=… → follow envPrep with main session → team_ready. " +
-            "scope=global keeps it on every canvas team_list.",
         }),
       };
     },
@@ -974,10 +980,8 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_ready",
     description:
-      "Mark an advanced 干员 ready after env prep. " +
-      "Triggers: team_list shows not-ready; UI zip import; user says 帮我就绪 / mark ready / prep done. " +
-      "Flow: team_list → read envPrep → help install if needed → team_ready id=. " +
-      "Thin members stay ready. Required before subagent member_id on advanced.",
+      "Mark advanced 干员 ready after env prep (id=). Does not create 干员家. " +
+      "Required before subagent member_id on advanced. Thin stays ready.",
     parameters: {
       type: "object",
       properties: {
@@ -1008,7 +1012,52 @@ export function bindAgentRosterTools(
       return {
         content: JSON.stringify({
           member: listed ? enrichListedMember(runtime, canvasId, listed) : updated,
-          next: updated.ready ? "subagent member_id" : "configure then team_ready again",
+          next: updated.ready
+            ? "team_home | subagent member_id"
+            : "configure then team_ready again",
+        }),
+      };
+    },
+  });
+
+  registerTool(tools, {
+    name: "team_home",
+    description:
+      "Create 干员家 for an existing member (id=). Returns homeWorkspaceId. " +
+      "Idempotent. Members have no home until this (or UI 添加干员工作区). " +
+      "Not team_ready / team_save / team_import.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "mem_… from team_list" },
+      },
+      required: ["id"],
+      additionalProperties: false,
+    },
+    presentCall: (args) => teamPresent("team_home", "execute", args),
+    execute: async (args) => {
+      const a = readArgs(args);
+      const id = String(a.id ?? "").trim();
+      if (!id) return { content: "team_home: id required", isError: true };
+      if (id === MANAGER_MEMBER_ID || id === SUNFLOWER_MEMBER_ID) {
+        return {
+          content: `team_home: ${id} is an office seat — no agent-home`,
+          isError: true,
+        };
+      }
+      const canvasId = ws();
+      const member = runtime.agentRoster.get(canvasId, id);
+      if (!member) {
+        return { content: missingMemberHint(runtime, canvasId, id, "team_home"), isError: true };
+      }
+      const home = await mintAgentHomeForMember(runtime, member, canvasId);
+      return {
+        content: JSON.stringify({
+          memberId: member.id,
+          name: member.name,
+          homeWorkspaceId: home.workspaceId,
+          created: home.created,
+          next: "workspace_session_prompt(homeWorkspaceId) | subagent member_id",
         }),
       };
     },
@@ -1017,9 +1066,8 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_export",
     description:
-      `Export a custom 干员 for the user: thin→JSON, advanced→zip (${MEMBER_PACK_BRIEFCASE}: playbook+skills+references+workspace+env). ` +
-      "Writes to dir= (default session cwd). Catalog mem_seed_* cannot export — mint a copy first. " +
-      "User said 导出/分享这个干员 / export member. UI Export is equivalent.",
+      `Export custom 干员: thin→JSON, advanced→zip (${MEMBER_PACK_BRIEFCASE}). ` +
+      "dir= defaults to session cwd. Catalog mem_seed_* cannot export.",
     parameters: {
       type: "object",
       properties: {

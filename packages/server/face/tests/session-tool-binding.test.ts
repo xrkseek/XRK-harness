@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createToolRegistry, materializeTools } from "@xrkseek/core-tools";
 import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 import type { AgentHandle } from "@xrkseek/core-agent";
+import { dispatchFaceMethod } from "../src/dispatch.js";
+import {
+  sessionCreatedByBoss,
+} from "../src/session-opener.js";
 
 /**
  * The per-session Face tools that used to be missing whenever Host drove a turn
@@ -141,8 +145,47 @@ describe("FaceRuntime.bindSessionAgent", () => {
     expect(tools.get("canvas_upsert")).toBeUndefined();
     expect(tools.get("propose_skill")).toBeUndefined();
     expect(tools.get("workspace_create")).toBeUndefined();
+    expect(tools.get("workspace_list")).toBeUndefined();
+    expect(tools.get("workspace_session_prompt")).toBeUndefined();
     expect(tools.get("presence_set")).toBeDefined();
     expect(tools.get("team_list")).toBeDefined();
+  });
+
+  it("strips voice tools when seat was opened by another seat (not 老板-created)", async () => {
+    const runtime = createBareFaceRuntime({ defaultAgentPreset: "harness" });
+    const openerRes = await dispatchFaceMethod(runtime, "session.create", "o", {});
+    expect(openerRes.result.ok).toBe(true);
+    if (!openerRes.result.ok) return;
+    const openerId = (openerRes.result.value as { sessionId: string }).sessionId;
+    const coding = runtime.workspaces.create(
+      `${runtime.workspaceRoot}/voice-peer`,
+    ).workspace;
+    const peerRes = await dispatchFaceMethod(runtime, "session.create", "p", {
+      workspaceId: coding.workspaceId,
+      inheritFrom: openerId,
+    });
+    expect(peerRes.result.ok).toBe(true);
+    if (!peerRes.result.ok) return;
+    const peerId = (peerRes.result.value as { sessionId: string }).sessionId;
+    expect(sessionCreatedByBoss(runtime, peerId)).toBe(false);
+    expect(sessionCreatedByBoss(runtime, openerId)).toBe(true);
+
+    const tools = createToolRegistry();
+    tools.register({
+      name: "text_to_speech",
+      description: "speak",
+      parameters: { type: "object", properties: {} },
+      execute: async () => ({ content: "ok" }),
+    });
+    tools.register({
+      name: "voice_transcribe",
+      description: "listen",
+      parameters: { type: "object", properties: {} },
+      execute: async () => ({ content: "ok" }),
+    });
+    runtime.bindSessionAgent(peerId, hostShapedAgent(tools));
+    expect(tools.get("text_to_speech")).toBeUndefined();
+    expect(tools.get("voice_transcribe")).toBeUndefined();
   });
 
   it("keeps minimal-badge children off peer thread tools", () => {

@@ -14,6 +14,8 @@ Every resident directory refetches directly on forwarded `llm/adapters-updated` 
 
 The `/client` exports are the plugin body (`apply`/`inject`), `ModelDirectoryResolver`, `ModelDirectory` with its state fields, and the seat's injected face type.
 
+This plugin also feeds the same directory into the **session standard kit** as `useModelSelection` (same shape as `useInput`) via `sessions.provide`. Third-party client components on `conversation.input.left` / `.right` / `.dock` can read `current` / `routable` / `status` without `ctx.inject(['modelDirectories'])`.
+
 ## Model Experience
 
 Indirectly, through the `session.selectModel` RPC available to ordinary sessions, both entries submit the complete `ModelSelection` that the Host snapshots at the next prompt-assembly boundary, so the following request uses the selected provider, model, and effort while a running step keeps its assembled selection; the selection becomes durable only when the existing request header records a request that consumes it, and menu interaction adds no prompt content.

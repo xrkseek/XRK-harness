@@ -257,6 +257,26 @@ describe('scenario D: execute-kind /compact', () => {
     expect(b.executed).toContain('/compact')
   })
 
+  it('「命令」hit over a leftover /compact draft consumes the token on pick', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft('/compact') })
+    // Mirrors InputBar: caret at end is collapsed; toggleCommandMenu widens to
+    // the leading slash token before toggleSource (see apply.ts).
+    act(() => {
+      b.controller.toggleSource('command', {
+        trigger: '/',
+        query: 'compact',
+        quoted: false,
+        position: 'leading',
+        span: { start: 0, end: '/compact'.length, draftRev: b.shell.snapshot.draftRev },
+      })
+    })
+    await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
+    act(() => { b.controller.pick('command', 0) })
+    expect(b.executed).toContain('/compact')
+    expect(b.textarea.value).toBe('')
+  })
+
   it('bare /compact + enter executes; trailing text falls to the default sink (scenario I twin)', async () => {
     const b = await bench()
     act(() => { b.shell.setDraft('/compact') })

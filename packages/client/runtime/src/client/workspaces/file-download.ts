@@ -23,6 +23,35 @@ function xrkShell(): XrkShellPort | undefined {
   return (globalThis as { XrkShell?: XrkShellPort }).XrkShell
 }
 
+/**
+ * True only inside the Flutter phone thin shell (`XrkShell.postMessage`).
+ * Ordinary browsers (including phone Safari → a Host) never inject this —
+ * use it to tell APK apart from phone Web / Desktop.
+ *
+ * On APK, guest `host.openPath` / IDE "open with" are the wrong plane: share
+ * and open-with live in Flutter after a `/sidebar/file?download=1` handoff
+ * (`shell_host_download.dart`).
+ */
+export function isPhoneThinShell(): boolean {
+  try {
+    return typeof xrkShell()?.postMessage === 'function'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether chat / Overview may call Host `openPath` for a workspace file.
+ * False on the phone APK thin shell even when Face advertises `canOpenPath`
+ * (guest Termux/Linux open is not Android share / open-with).
+ */
+export function allowNativeWorkspaceOpen(
+  isLoopback: boolean,
+  canOpenPath: boolean,
+): boolean {
+  return !isPhoneThinShell() && isLoopback && canOpenPath
+}
+
 /** Basename safe for Content-Disposition / XrkShell filename. */
 export function basenameForDownload(path: string): string {
   const trimmed = path.replace(/[/\\]+$/, '')

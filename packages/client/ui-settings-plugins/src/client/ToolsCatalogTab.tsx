@@ -369,7 +369,11 @@ function ToolsCatalogSession({
                   {group.tools.map((tool) => {
                     const detailOpen = openTool === tool.name
                     return (
-                      <li key={tool.name} className={css.row}>
+                      <li
+                        key={tool.name}
+                        className={css.row}
+                        data-open={detailOpen ? 'true' : undefined}
+                      >
                         <button
                           type="button"
                           className={css.rowButton}

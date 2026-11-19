@@ -80,6 +80,8 @@ function settledIdle(input: {
   readonly tailKind: string | undefined
 }): boolean {
   if (input.turnsSettled !== true) return false
+  // Local submission echo is already the human tail — do not treat the
+  // settled timeline as "done answering" while that send is still painting.
   if ((input.pendingSendCount ?? 0) > 0) return false
   if (isPostToolVacuum(input.tailKind)) return false
   return !isHumanTail(input.tailKind)

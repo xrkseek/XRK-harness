@@ -13,7 +13,11 @@ import {
   useSyncExternalStore,
   type CSSProperties,
 } from 'react'
-import { bindSeatChannelBossLabel } from '@xrkseek/client-runtime/client'
+import {
+  bindSeatChannelBossLabel,
+  bindSpeechSeatTitles,
+  notifySpeechSeatTitlesChanged,
+} from '@xrkseek/client-runtime/client'
 import {
   DEFAULT_PRESENCE_COLOR,
   DEFAULT_PRESENCE_ENABLED,
@@ -70,19 +74,35 @@ let presenceSettingsRuntime: PresenceSettingsRuntime | undefined
 let presenceUiLocale: 'zh' | 'en' | 'ja' = 'zh'
 let seatTitlesCache: SeatTitlesSnapshot | undefined
 
+/** Drop presence look caches and wake speech-chip subscribers. */
+function invalidatePresenceCaches(): void {
+  presenceLookCache = undefined
+  bossMoodCache = undefined
+  seatTitlesCache = undefined
+  notifySpeechSeatTitlesChanged()
+}
+
+/** One subscribe per bound runtime — avoid stacking listeners on re-bind. */
+let presenceTitlesUnsub: (() => void) | undefined
+
 /** Wire the Host-backed presence prefs into PresenceBall. */
 export function bindPresenceSettingsRuntime(runtime: PresenceSettingsRuntime): void {
   presenceSettingsRuntime = runtime
   // A new runtime owns its own state — drop the merged snapshot so the next
   // read re-seeds from it instead of serving the previous runtime's look.
-  presenceLookCache = undefined
-  bossMoodCache = undefined
-  seatTitlesCache = undefined
+  presenceTitlesUnsub?.()
+  invalidatePresenceCaches()
   // Subagent send echoes stitch `[老板（nick）]` before Host admit returns.
   bindSeatChannelBossLabel(() => {
     const titles = runtime.getSeatTitles(presenceUiLocale)
     const nick = runtime.getBossNickname().trim()
     return nick ? `${titles.boss}（${nick}）` : titles.boss
+  })
+  // Speech-bubble identity chips follow the same customizable seat titles.
+  bindSpeechSeatTitles(() => runtime.getSeatTitles(presenceUiLocale))
+  // Title scheme / custom words / mood — wake MessageItem chips without remount.
+  presenceTitlesUnsub = runtime.subscribe(() => {
+    invalidatePresenceCaches()
   })
 }
 
@@ -96,8 +116,7 @@ export function bindPresenceUiLocale(locale: string): void {
   const next = locale === 'en' || locale === 'ja' ? locale : 'zh'
   if (presenceUiLocale === next) return
   presenceUiLocale = next
-  bossMoodCache = undefined
-  seatTitlesCache = undefined
+  invalidatePresenceCaches()
 }
 
 /** Active UI language for locale-aware seat-title presets. */
@@ -646,6 +665,7 @@ export const PresenceBall = memo(function PresenceBall({
     compact: Boolean(compact),
     memberLook,
     bossSize: look.size,
+    pairSeat,
   })
   const dark = useChromeDark()
   // When `memberLook` is set (including pending fallback), never blend in

@@ -30,19 +30,30 @@ export function clampPeerWaitMs(raw: unknown): number {
   return PEER_WAIT_DEFAULT_MS;
 }
 
+export type PeerWaitResult =
+  | { readonly reply: string }
+  | { readonly error: string }
+  /** Mutual wait:true cycle — caller must downgrade to async and continue. */
+  | { readonly mutualWait: true };
+
 export async function waitForPeerAssistantReply(
   runtime: FaceRuntime,
   targetId: string,
   seqAtSend: number,
   timeoutMs: number,
   signal?: AbortSignal,
-): Promise<{ readonly reply: string } | { readonly error: string }> {
+  opts?: {
+    /** Return `{ mutualWait: true }` when this becomes true (polled each slice). */
+    readonly shouldBreak?: () => boolean;
+  },
+): Promise<PeerWaitResult> {
   const deadline = Date.now() + timeoutMs;
   const stillRunning = () => isChildSessionActive(runtime, targetId);
   while (stillRunning() || Date.now() < deadline) {
     if (signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
     }
+    if (opts?.shouldBreak?.()) return { mutualWait: true };
     if (!stillRunning()) {
       const events = readSessionEvents(runtime.store, targetId);
       if (events.length > seqAtSend) {

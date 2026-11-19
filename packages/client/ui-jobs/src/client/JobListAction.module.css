@@ -53,17 +53,44 @@
   max-height: min(520px, calc(100dvh - var(--ds-safe-v) - 140px));
   margin: 0;
   padding: 6px;
-  overflow: auto;
+  overflow: hidden;
   /* Fixed sheet over a scrolling page: without contain a fling past the last
      row keeps scrolling the document behind the open menu. */
   overscroll-behavior: contain;
-  list-style: none;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 12px;
   background: var(--dsw-specific-menu);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   box-shadow: var(--dsw-shadow-lv3);
+}
+
+/* Open output: taller sheet; rows stay in .menuList, TerminalBlock in .outputSlot. */
+.menu[data-output-open] {
+  max-height: min(72dvh, calc(100dvh - var(--ds-safe-v) - 96px));
+}
+
+.menuList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.menu[data-output-open] .menuList {
+  flex: 0 1 auto;
+  max-height: min(28vh, 220px);
+}
+
+.outputSlot {
+  flex: none;
+  min-height: 0;
 }
 
 .section {
@@ -299,16 +326,18 @@
 }
 
 .panel {
-  margin: 2px 0 6px;
+  margin: 2px 0 0;
   padding: 6px;
   border-radius: 8px;
   background: var(--dsw-alias-bg-base);
-  max-height: min(36vh, 320px);
-  overflow: auto;
-  overscroll-behavior: contain;
-  /* TerminalBlock reads this for its OUTPUT scroller; without a cap the
-     card grows and the list/panel fight over which surface owns the wheel. */
+  /* No overflow here — TerminalBlock is the sole output scrollport. */
   --dsl-terminal-output-max-height: min(28vh, 260px);
+}
+
+/* Highlight the row whose output is open (detached panel below). */
+li[data-job-expanded] .row,
+li[data-job-expanded] .rowSettled {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .notice {

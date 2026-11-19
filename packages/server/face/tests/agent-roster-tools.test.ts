@@ -30,8 +30,10 @@ describe("bindAgentRosterTools", () => {
     expect(full.get("team_save")).toBeTruthy();
     expect(full.get("team_import")).toBeTruthy();
     expect(full.get("team_ready")).toBeTruthy();
+    expect(full.get("team_home")).toBeTruthy();
     expect(full.get("team_export")).toBeTruthy();
     expect(full.get("team_remove")).toBeTruthy();
+    expect(tools.get("team_home")).toBeUndefined();
   });
 
   it("team_import mints a member without appearance", async () => {
@@ -61,7 +63,7 @@ describe("bindAgentRosterTools", () => {
     expect(body.member.appearance?.shape ?? "blob").toBe("blob");
   });
 
-  it("team_import pack= installs advanced ready=false; team_ready unlocks", async () => {
+  it("team_import pack= installs member only; team_home mints 干员家", async () => {
     const { mkdtempSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const path = await import("node:path");
@@ -95,12 +97,16 @@ describe("bindAgentRosterTools", () => {
       source: string;
       member: { name: string; kind?: string; ready?: boolean; id: string };
       next?: string;
+      homeWorkspaceId?: string;
     };
     expect(body.source).toBe("pack");
     expect(body.member.name).toBe("Pack Scout");
     expect(body.member.kind).toBe("advanced");
     expect(body.member.ready).toBe(false);
+    expect(body.homeWorkspaceId).toBeUndefined();
+    expect(runtime.workspaces.findAgentHomeByMember(body.member.id)).toBeUndefined();
     expect(body.next).toContain("team_ready");
+    expect(body.next).toContain("team_home");
     // Pack omit-scope → global (visible from any workspace).
     const listed = JSON.parse(
       String((await tools.get("team_list")!.execute({})).content),
@@ -113,8 +119,56 @@ describe("bindAgentRosterTools", () => {
     expect(ready.isError).toBeFalsy();
     const readyBody = JSON.parse(String(ready.content)) as {
       member: { ready?: boolean };
+      next?: string;
     };
     expect(readyBody.member.ready).toBe(true);
+    expect(runtime.workspaces.findAgentHomeByMember(body.member.id)).toBeUndefined();
+    expect(readyBody.next).toContain("team_home");
+
+    const home = await tools.get("team_home")!.execute({ id: body.member.id });
+    expect(home.isError).toBeFalsy();
+    const homeBody = JSON.parse(String(home.content)) as {
+      homeWorkspaceId: string;
+      created: boolean;
+    };
+    expect(homeBody.homeWorkspaceId).toBeTruthy();
+    expect(homeBody.created).toBe(true);
+    expect(runtime.workspaces.get(homeBody.homeWorkspaceId)).toBeTruthy();
+
+    const again = await tools.get("team_home")!.execute({ id: body.member.id });
+    const againBody = JSON.parse(String(again.content)) as {
+      homeWorkspaceId: string;
+      created: boolean;
+    };
+    expect(againBody.homeWorkspaceId).toBe(homeBody.homeWorkspaceId);
+    expect(againBody.created).toBe(false);
+  });
+
+  it("team_home opens catalog 施工员 without minting another member", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const tools = createToolRegistry();
+    bindAgentRosterTools(tools, { runtime, sessionId });
+
+    const home = await tools.get("team_home")!.execute({ id: "mem_seed_worker" });
+    expect(home.isError).toBeFalsy();
+    const body = JSON.parse(String(home.content)) as {
+      memberId: string;
+      homeWorkspaceId: string;
+      next?: string;
+    };
+    expect(body.memberId).toBe("mem_seed_worker");
+    expect(body.homeWorkspaceId).toBeTruthy();
+    expect(body.next).toContain("workspace_session_prompt");
+    expect(runtime.workspaces.findAgentHomeByMember("mem_seed_worker")?.workspaceId).toBe(
+      body.homeWorkspaceId,
+    );
   });
 
   it("team_save revises advanced playbook in place (keeps kind); team_self for child; team_remove uninstalls", async () => {
@@ -528,8 +582,8 @@ describe("bindAgentRosterTools", () => {
       packDir: string;
       envPrep?: string;
       ready: boolean;
-      shareHint?: string;
       pathHint?: string;
+      next?: string;
     };
     expect(body.source).toBe("team_save");
     expect(body.kind).toBe("advanced");
@@ -543,7 +597,8 @@ describe("bindAgentRosterTools", () => {
     expect(readFileSync(path.join(body.packDir, "playbook.md"), "utf8")).toMatch(
       /Paths \(portable\)/,
     );
-    expect(body.pathHint).toMatch(/relative/i);
+    expect(body.pathHint).toMatch(/pack_home/i);
+    expect(body.next).toContain("team_home");
     expect(
       existsSync(
         path.join(body.packDir, "skills", "lit-search", "references", "sources.md"),

@@ -39,7 +39,7 @@ describe("jobStatusText", () => {
   it("keeps the status word and appends producer detail", () => {
     expect(
       jobStatusText({ status: "completed", detail: "exit code: 0" }, t),
-    ).toBe("已完成 · exit code: 0");
+    ).toBe("已完成 · 退出码 0");
     expect(jobStatusText({ status: "completed" }, t)).toBe("已完成");
   });
 });

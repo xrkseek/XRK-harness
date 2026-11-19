@@ -136,7 +136,14 @@ export interface SessionProjectionsBlock {
 export type PromptContentPart =
   | { type: 'text'; text: string }
   | { type: 'image'; mediaType: ImageMediaType; data: string; name?: string; sourcePath?: string }
+  /**
+   * Reuse AttachmentStore bytes by id (edit-resubmit / regenerate after truncate).
+   * Optional `name` re-stamps the display leaf — local image objects do not
+   * persist filename metadata on read-by-id.
+   */
+  | { type: 'image'; attachmentId: string; name?: string }
   | { type: 'file'; data: string; name?: string; mediaType?: string; sourcePath?: string }
+  | { type: 'file'; attachmentId: string }
 
 /** Complete model selection for one session. */
 export interface ModelSelection {

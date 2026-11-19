@@ -1163,10 +1163,14 @@ export function createBashTools(
             // trailing exit marker) so the UI exit pill still parses.
             content = appendLegacyExitMarker(body, snapshot);
           }
+          // Cap only when over budget. Suffix must stay empty: passing
+          // "\n[truncated]" as suffix made EVERY capped result look truncated
+          // (fitWithSuffix always appends suffix when under budget) — models
+          // then claim 「上下文被重置/截断」with no compact (RC.2 sess_mwlzadpt).
           if (maxOutputBytes !== undefined) {
             content = jobFailed(snapshot)
-              ? fitWithErrorHead(content, "\n[truncated]", maxOutputBytes)
-              : fitWithSuffix(content, "\n[truncated]", maxOutputBytes);
+              ? fitWithErrorHead(content, "", maxOutputBytes, "\n[truncated]")
+              : fitWithSuffix(content, "", maxOutputBytes, "\n[truncated]");
           }
           return { content };
         } catch (err) {
@@ -1329,6 +1333,9 @@ export {
   type ShellJobViewInput,
 } from "./job-view.js";
 
-/** DSH tool-jobs system prompt (order 106). */
-export const JOBS_PROMPT_TEXT =
-  "Track every background job id you start (`bash` with background=true, or terminal background sends). You are notified in-session when a job finishes — do not busy-poll or sleep on one; keep working on independent steps and do not duplicate a running job's work. Before giving a final answer, collect every still-relevant job with job_output (set wait: true only when you are genuinely blocked on it), and job_kill jobs that stopped mattering. Use job_list / job_output / job_kill.";
+/**
+ * Jobs section (order 106). Empty on purpose: settle rules live in
+ * `formatShellRoutingPrompt` (one fact, one place). Kept exported so presets /
+ * docs that still register `tool:jobs` assemble to a no-op skip.
+ */
+export const JOBS_PROMPT_TEXT = "";

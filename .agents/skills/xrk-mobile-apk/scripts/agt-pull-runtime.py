@@ -15,7 +15,7 @@ from pathlib import Path
 
 import paramiko
 
-HOST = "103.236.89.174"
+HOST = os.environ.get("XRK_AGT_SSH_HOST", "103.236.92.5")
 PORT = 46184
 REMOTE_DIR = "/root/xrk-mobile/out/arm64-v8a"
 REMOTE_ROOTFS = f"{REMOTE_DIR}/assets/runtime/rootfs-arm64-v8a.tar.xz"

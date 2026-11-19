@@ -41,7 +41,7 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 2. **先** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
 3. **`pnpm release`**（GitHub + npmjs）→ 再装回根 `devDeps`
 4. **再** `pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`；**禁止**与 stage/release 并行）
-5. 桌面包完成后 **先上 AGT 更新源**（yml 的 `url`/`path` 须为指向 `…/desktop/bin/win-x64/…` 的**绝对 URL**；先传 exe+blockmap、再传 yml），**再**改 `apps/site/releases.json`（`win-x64`；若同发手机再改 `android-arm64` 的 `version`/`filename`，指向 `XRK-harness-mobile` Release）并 **push main**（下载页 Worker 跟随本仓 GitHub，连仓自动部署）
+5. 桌面包完成后 **把 exe + blockmap + nightly.yml（相对文件名）挂到主仓 GitHub Release**（应用内更新与官网下载同源；细节见 skill `xrk-desktop-update-feed`）。**不要**再上 AGT harness-download。然后改 `apps/site/releases.json`（`win-x64`；若同发手机再改 `android-arm64` 的 `version`/`filename`，指向 `XRK-harness-mobile` Release）并 **push main**（下载页 Worker 跟随本仓 GitHub，连仓自动部署）
 6. `pnpm prune:local -- --junk`（可选 `pnpm clean:test-temp`）
 
 笔记红线：rule `xrk-release-flow` · skill `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts` · `xrk-github-npm-net`。
@@ -96,20 +96,21 @@ Windows NSIS：仓库路径含非 ASCII 时，固定 `subst X:` → 仓库根，
 
 | 档                  | 版本       | 用途                                                           |
 | ------------------- | ---------- | -------------------------------------------------------------- |
-| **当前（@latest）** | **0.7.20** | `0.7.x` 补丁；`npm i -g @xrkseek/harness-cli@latest` |
-| **过程号（@rc）**   | **0.7.0-rc.3** | 第三 rc（已并入 0.7.0）；`npm i -g @xrkseek/harness-cli@rc` 仍可指向此号 |
+| **当前（@latest）** | **0.8.0** | `0.8.x` 正式线首发；`npm i -g @xrkseek/harness-cli@latest` |
+| **过程号（@rc 留档）** | **0.8.0-rc.2** | `0.8.x` rc；`npm i -g @xrkseek/harness-cli@0.8.0-rc.2` 或 `@rc` |
+| **上一正式线**      | **0.7.22** | `0.7.x` 收官补丁，仍可精确安装 |
 | **上一预览收官**    | **0.6.23** | `0.6.x` 预览线终点，仍可精确安装 |
 | **本线收口号（0.6）** | **0.6.0** | `0.6.x` 预览线收口并曾首次接管 `@latest` |
-| **过程号（历史）**  | **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | 仅留档 |
+| **过程号（历史）**  | **0.8.0-rc.1** · **0.7.0-rc.3** · **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | 仅留档 |
 | **回退钉**          | **0.3.11** | npm 另留此号供回退                                           |
 
-`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发；**0.7.19** 曾接管 `@latest`；**0.7.20** 接管 `@latest`（会话写锁身份回收 · 官网下载区对齐产品壳）。GitHub Release 文稿可保留历史号。
+`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发至 **0.7.22**；**0.8.0** 接管 `@latest`（协作/子代理回传 · lanes · Voice×Lane · 策展 live · soft remount · Desktop 时区镜像）。GitHub Release 文稿可保留历史号。
 
 npm **不能**同号重发；改坏包就升修订号。清理用 `npm-prune-withdrawn.mjs`（先 unpublish，Granular token 失败则 deprecate）。deprecate 消息不得含空格 / 未配对引号；清除弃用须传真正的空字符串（脚本经 `npm-cli.js`）。
 
 预发布号（`-rc.N`）由 `release.mjs` 自动附 `--tag`；收口号与正式版无后缀 ⇒ 落 `@latest`。
 
-GitHub Release 公开页保留 **v0.7.20**（当前 `@latest`）、**v0.7.19**、**v0.7.18**、**v0.7.17**、**v0.7.16**、**v0.7.15**、**v0.7.14**、**v0.7.13**、**v0.7.12**、**v0.7.11**、**v0.7.10**、**v0.7.9**、**v0.7.8**、**v0.7.7**、**v0.7.6**、**v0.7.5**、**v0.7.4**、**v0.7.3**、**v0.7.2**、**v0.7.1**、**v0.7.0**、**v0.7.0-rc.3**（`@rc` 过程号）、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
+GitHub Release 公开页保留 **v0.8.0**（当前 `@latest`）、**v0.8.0-rc.2** / **v0.8.0-rc.1**（过程号留档）、**v0.7.22** … **v0.7.0**、**v0.7.0-rc.3**、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -158,7 +159,7 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 2. **First** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
 3. **`pnpm release`** (GitHub + npmjs) → restore root `devDeps`
 4. **Then** `pnpm package:desktop` (`XRK_DESKTOP_PACKAGE=1`; **never** parallel with stage/release)
-5. After the desktop build: **upload AGT feed first** (`url`/`path` in yml must be **absolute** URLs under `…/desktop/bin/win-x64/…`; exe+blockmap before yml), **then** update `apps/site/releases.json` (`win-x64`; also bump `android-arm64` `version`/`filename` when shipping the phone APK from `XRK-harness-mobile`) and **push main** (the download-page Worker tracks this GitHub repo and deploys from the connected build)
+5. After the desktop build: **attach exe + blockmap + nightly.yml (relative filenames) to the main-repo GitHub Release** (in-app updates and the download page share that SoT; see skill `xrk-desktop-update-feed`). **Do not** upload to AGT harness-download. Then update `apps/site/releases.json` (`win-x64`; also bump `android-arm64` `version`/`filename` when shipping the phone APK from `XRK-harness-mobile`) and **push main** (the download-page Worker tracks this GitHub repo and deploys from the connected build)
 6. `pnpm prune:local -- --junk` (optional `pnpm clean:test-temp`)
 
 Agent notes: rule `xrk-release-flow` · skills `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts` · `xrk-github-npm-net`.
@@ -213,19 +214,20 @@ Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = fo
 
 | Line                      | Version    | Use                                                                          |
 | ------------------------- | ---------- | ---------------------------------------------------------------------------- |
-| **Current (@latest)**     | **0.7.20** | `0.7.x` patch; `npm i -g @xrkseek/harness-cli@latest` |
-| **Process number (@rc)**  | **0.7.0-rc.3** | Third rc (folded into 0.7.0); `npm i -g @xrkseek/harness-cli@rc` may still point here |
+| **Current (@latest)**     | **0.8.0** | Opens `0.8.x` formal; `npm i -g @xrkseek/harness-cli@latest` |
+| **Process (@rc archive)** | **0.8.0-rc.2** | `0.8.x` rc; `npm i -g @xrkseek/harness-cli@0.8.0-rc.2` or `@rc` |
+| **Prior formal line**     | **0.7.22** | End of `0.7.x` patches; still installable by exact pin |
 | **Prior preview close**   | **0.6.23** | End of `0.6.x` preview; still installable by exact pin |
 | **0.6 line closing number** | **0.6.0** | `0.6.x` preview closed here and first took `@latest` |
-| **Process numbers (past)**| **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | Archive only |
+| **Process numbers (past)**| **0.8.0-rc.1** · **0.7.0-rc.3** · **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | Archive only |
 | **Rollback pin**          | **0.3.11** | Only other npm pin kept for rollback                                         |
 
-`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line; **0.7.19** held `@latest`; **0.7.20** owns `@latest` (session lock identity reclaim · site download aligns with product shell). GitHub Release notes may retain historical tags.
+`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line through **0.7.22**; **0.8.0** owns `@latest` (collab/subagent report-back · lanes · Voice×Lane · curated live · soft remount · Desktop timezone mirrors). GitHub Release notes may retain historical tags.
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Clean with `npm-prune-withdrawn.mjs` (unpublish first; deprecate when Granular tokens block). Deprecation messages must not contain spaces / unbalanced quotes; clearing a deprecation requires a real empty string (script uses `npm-cli.js`).
 
 Prereleases (`-rc.N`) get an automatic `--tag` from `release.mjs`; suffix-free versions land on `@latest`.
 
-The GitHub Releases page keeps **v0.7.20** (current `@latest`), **v0.7.19**, **v0.7.18**, **v0.7.17**, **v0.7.16**, **v0.7.15**, **v0.7.14**, **v0.7.13**, **v0.7.12**, **v0.7.11**, **v0.7.10**, **v0.7.9**, **v0.7.8**, **v0.7.7**, **v0.7.6**, **v0.7.5**, **v0.7.4**, **v0.7.3**, **v0.7.2**, **v0.7.1**, **v0.7.0**, **v0.7.0-rc.3** (`@rc` process number), **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
+The GitHub Releases page keeps **v0.8.0** (current `@latest`), **v0.8.0-rc.2** / **v0.8.0-rc.1** (process archive), **v0.7.22** … **v0.7.0**, **v0.7.0-rc.3**, **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

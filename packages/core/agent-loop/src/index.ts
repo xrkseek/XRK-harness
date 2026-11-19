@@ -1,5 +1,5 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, flushSession, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, deriveAutoCompactMaxTokens, resolveSoftBudgetCeiling, resolveSoftBudgetTriggerTokens, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, flushSession, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, promotedUserMessageSource, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, deriveAutoCompactMaxTokens, resolveSoftBudgetCeiling, resolveSoftBudgetTriggerTokens, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -46,13 +46,11 @@ import type {
   UserMessageSource,
 } from "@xrkseek/protocol";
 import {
-  contentHasImage,
   flattenText,
   newUserMessageId,
   parseSessionEvent,
   parseTurnEndCancelCause,
   projectFilesToText,
-  projectImageContentForTextModel,
   projectImagesForTextModel,
   DEFAULT_PLAN_POLICY_SECTION,
   TOOL_EMITTABLE_EVENT_TYPES,
@@ -62,6 +60,7 @@ import {
 import { resolveCompactionOptions, runCompaction } from "./compaction.js";
 import { maybeAppendRequestHeader } from "./request-header-log.js";
 import { boundToolResultContent } from "./tool-result-bound.js";
+import { formatAutoContinueOnMaxTokensText } from "./auto-continue.js";
 import {
   MAX_STEPS_PROMPT,
   MAX_STEPS_TOOL_DISABLED,
@@ -156,10 +155,16 @@ export interface RunTurnInput {
   readonly userText: string;
   /**
    * Session log content for `user/message` (string or ContentBlock[]).
-   * Defaults to `userText`. Images are persisted as refs; adapter without
-   * `image` in `inputModalities` hard-fails.
+   * Defaults to `userText`. Images are persisted as refs; text-only routes
+   * still store the image block and project stubs only on the LLM wire.
    */
   readonly userContent?: MessageContent;
+  /**
+   * Durable producer for the opening `user/message`. Prefer the admit's
+   * stamped source (seat / handoff / plugin) via `promotedUserMessageSource`.
+   * Omit → `{ kind: "user" }` (human UI composer / bare `agent.run({ text })`).
+   */
+  readonly userMessageSource?: UserMessageSource;
   /**
    * Resolve attachment bytes when user content includes image refs.
    * Required by vision adapters; unused on text-only routes.
@@ -205,9 +210,10 @@ export interface RunTurnInput {
   readonly maxSteps?: number;
   /**
    * Auto-continue on max-tokens truncation: when the model hits its output
-   * token cap mid-turn, inject a synthetic `user/message` ("继续") instead of
-   * ending the turn with `max-tokens`. Default on at Face
-   * (`agent-loop.autoContinueOnMaxTokens`); loop still requires the flag.
+   * token cap mid-turn, inject a synthetic `user/message`
+   * ({@link AUTO_CONTINUE_ON_MAX_TOKENS_TEXT}) instead of ending the turn with
+   * `max-tokens`. Default on at Face (`agent-loop.autoContinueOnMaxTokens`);
+   * loop still requires the flag.
    */
   readonly autoContinueOnMaxTokens?: boolean;
   /**
@@ -760,14 +766,10 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
     }
   }
 
-  // Text-only route + image admit: keep the durable user event as-is when the
-  // caller already stored blocks; for the live turn body, project to
-  // placeholders so the model can continue (same contract as toLlmRequest).
-  if (contentHasImage(userContent) && !llmAllowsImage(input.llm)) {
-    userContent = projectImageContentForTextModel(userContent);
-    if (typeof userContent === "string") userText = userContent;
-    else userText = flattenText(userContent);
-  }
+  // Text-only route + image admit: durable `user/message` keeps image refs so
+  // the chat UI / edit-resubmit still see the attachment. `toLlmRequest`
+  // projects placeholders for the model (same as rebuild-from-events).
+  // Do not rewrite `userContent` here — that leaked stubs into the session log.
 
   // Fail-before-retry: close orphan open turns left by a prior false-idle /
   // crash (every turn/start without turn/end), then settle any dangling tools
@@ -870,7 +872,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
     turnId,
     messageId: newUserMessageId(),
     content: userContent,
-    source: { kind: "user" },
+    source: input.userMessageSource ?? { kind: "user" },
   });
   for (const ctx of preparedContexts) {
     append(input.store, input.sessionId, {
@@ -902,7 +904,9 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           turnId,
           messageId: newUserMessageId(),
           content: steered.content,
-          source: { kind: "user" },
+          // Keep seat / handoff / plugin tags from the steered admits.
+          source:
+            promotedUserMessageSource(steered.receipts) ?? { kind: "user" },
         });
       }
     }
@@ -925,7 +929,12 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
         turnId,
         messageId: newUserMessageId(),
         content: MAX_STEPS_PROMPT,
-        source: { kind: "user" },
+        source: {
+          kind: "plugin",
+          plugin: "agent-loop",
+          form: "notice",
+          reason: "max-steps",
+        },
       });
     }
     const table = isLastStep
@@ -1510,16 +1519,16 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
       });
       activeStepId = undefined;
       if (shouldAutoContinue) {
-        // A synthetic user message resumes the model mid-turn: it is
-        // model-visible, tagged for Face rendering, and bounded by
-        // `autoContinueMaxRounds`.
+        // Synthetic mid-turn resume: model-visible, Face-tagged, bounded by
+        // `autoContinueMaxRounds`. Copy names keep/drop so the model does not
+        // retry one giant tool arg until the round cap (see auto-continue.ts).
         autoContinueRounds += 1;
         append(input.store, input.sessionId, {
           type: "user/message",
           ts: now(),
           turnId,
           messageId: newUserMessageId(),
-          content: "继续",
+          content: formatAutoContinueOnMaxTokensText(response.droppedToolNames),
           source: { kind: "auto-continue", round: autoContinueRounds },
         });
         continue;
@@ -1818,6 +1827,11 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
   }
 }
 
+export {
+  AUTO_CONTINUE_ON_MAX_TOKENS_TEXT,
+  AUTO_CONTINUE_USER_TEXT,
+  formatAutoContinueOnMaxTokensText,
+} from "./auto-continue.js";
 export { MAX_STEPS_PROMPT, MAX_STEPS_TOOL_DISABLED } from "./max-steps.js";
 export {
   settleToolBatch,

@@ -42,6 +42,11 @@ describe("reconcileClientBootAt", () => {
     expect(first.wrote).toBe(true);
     expect(first.rev.startsWith("xrk-plugins-")).toBe(true);
     expect(first.entries).toHaveLength(1);
+    expect(first.entries[0]).toMatchObject({
+      id: "side",
+      rev: "1.2.3",
+      url: "/plugins/side/client.js?rev=1.2.3",
+    });
     const boot1 = readFileSync(path.join(root, "web", "boot.json"), "utf8");
 
     const second = reconcileClientBootAt(root);

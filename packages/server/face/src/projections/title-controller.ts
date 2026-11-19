@@ -1,14 +1,16 @@
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
-  flattenText,
   isHumanUserMessageSource,
+  looksLikeAttachmentHandleCaption,
 } from "@xrkseek/protocol";
 import type { FaceProjectionRegistry } from "./registry.js";
 import {
   DEFAULT_FALLBACK_MAX_WORDS,
   DEFAULT_TITLE_MAX_BYTES,
   fallbackSessionTitle,
+  humanTitleSourceText,
   normalizeSessionTitle,
+  softAttachmentTitleSource,
 } from "./title-normalize.js";
 
 export class SessionTitleInvalidError extends Error {
@@ -76,11 +78,7 @@ export class FaceTitleController {
     if (events.some((e) => e.type === "session/title")) return;
     const snap = this.projections.snapshot(sessionId);
     if (snap.values.title) return;
-    const title = fallbackSessionTitle(
-      content,
-      this.fallbackMaxWords,
-      this.fallbackMaxBytes,
-    );
+    const title = this.deriveFallbackTitle(content);
     if (!title) return;
     this.append(sessionId, {
       type: "session/title",
@@ -92,22 +90,85 @@ export class FaceTitleController {
   }
 
   /**
-   * Repair path for loaded sessions that never got a `session/title` (hydrate
-   * skips live fallback; compaction can leave the opener off-transcript while
-   * the log still holds the first human prompt). Scans once; no-op when titled.
+   * Repair / hydrate titles from the durable log:
+   * - no title yet → first human prose, else soft attachment filename
+   * - leaked handle-caption fallback → rewrite from prose / filename
+   * Compaction can leave the opener off-transcript while the log still holds it.
    */
   ensureFallbackFromLog(sessionId: string): void {
     const events = this.getEvents(sessionId);
-    if (events.some((e) => e.type === "session/title")) return;
+    let lastTitle: Extract<SessionEvent, { type: "session/title" }> | undefined;
+    for (let i = events.length - 1; i >= 0; i--) {
+      const event = events[i]!;
+      if (event.type === "session/title") {
+        lastTitle = event;
+        break;
+      }
+    }
+    if (lastTitle !== undefined) {
+      if (
+        lastTitle.source.kind === "fallback" &&
+        looksLikeAttachmentHandleCaption(lastTitle.title)
+      ) {
+        this.repairLeakedCaptionTitle(sessionId, events);
+      }
+      return;
+    }
     const snap = this.projections.snapshot(sessionId);
     if (snap.values.title) return;
     for (let i = 0; i < events.length; i++) {
       const event = events[i]!;
       if (event.type !== "user/message") continue;
       if (!isHumanUserMessageSource(event.source)) continue;
-      const text = flattenText(event.content);
-      if (text.trim() === "") continue;
-      this.maybeFallbackFromUserMessage(sessionId, i + 1, text);
+      const prose = humanTitleSourceText(event.content);
+      if (prose.trim() !== "") {
+        this.maybeFallbackFromUserMessage(sessionId, i + 1, prose);
+        return;
+      }
+      const soft = softAttachmentTitleSource(event.content);
+      if (soft.trim() !== "") {
+        this.maybeFallbackFromUserMessage(sessionId, i + 1, soft);
+        return;
+      }
+    }
+  }
+
+  /** Normalize + reject handle-caption leftovers after word/byte caps. */
+  private deriveFallbackTitle(content: string): string {
+    if (looksLikeAttachmentHandleCaption(content)) return "";
+    const title = fallbackSessionTitle(
+      content,
+      this.fallbackMaxWords,
+      this.fallbackMaxBytes,
+    );
+    if (!title || looksLikeAttachmentHandleCaption(title)) return "";
+    return title;
+  }
+
+  /**
+   * Replace a fallback title that is still a handle caption when reader prose
+   * or a filename is available (older logs / lost `modelOnly`).
+   */
+  private repairLeakedCaptionTitle(
+    sessionId: string,
+    events: readonly SessionEvent[],
+  ): void {
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i]!;
+      if (event.type !== "user/message") continue;
+      if (!isHumanUserMessageSource(event.source)) continue;
+      const prose = humanTitleSourceText(event.content);
+      const soft =
+        prose.trim() !== "" ? prose : softAttachmentTitleSource(event.content);
+      const title = this.deriveFallbackTitle(soft);
+      if (!title) continue;
+      this.append(sessionId, {
+        type: "session/title",
+        ts: Date.now(),
+        title,
+        source: { kind: "fallback" },
+        messageSeqs: [i + 1],
+      });
       return;
     }
   }

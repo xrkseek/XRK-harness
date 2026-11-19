@@ -72,6 +72,7 @@ export {
 } from "./consolidate-pipeline.js";
 export {
   CURATED_MEMORY_FRAGMENT_ID,
+  CURATED_MEMORY_FRAGMENT_MAX_CHARS,
   createCuratedMemoryLiveGate,
   curatedMemoryBodyFingerprint,
   formatCuratedMemoryLiveBody,

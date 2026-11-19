@@ -1,5 +1,5 @@
 ---
-description: 发版流水线顺序：tgz → release → 桌面 → AGT → site → 清理（禁止并行打包）
+description: 发版流水线顺序：tgz → release → 桌面 → GH 更新资产 → site → 清理（禁止并行打包）
 alwaysApply: true
 xrk-inject: false
 ---
@@ -8,7 +8,7 @@ xrk-inject: false
 
 教科书：[docs/publishing.md](../../docs/publishing.md)。  
 副作用与终态：`.agents/skills/xrk-release-chain`。  
-桌面打包 / AGT 上传：`.agents/skills/xrk-desktop-update-feed`。  
+桌面打包 / GitHub 更新资产：`.agents/skills/xrk-desktop-update-feed`。  
 本机落点：rule/skill `xrk-local-artifacts`。  
 GitHub / npm 选路：`.agents/skills/xrk-github-npm-net`（**打包只用官方 `registry.npmjs.org` + Clash；禁止淘宝/npmmirror**）。
 
@@ -20,25 +20,25 @@ GitHub / npm 选路：`.agents/skills/xrk-github-npm-net`（**打包只用官方
 4. **桌面 + 手机（仅在 release 之后）**：根 `devDeps` 装回后立刻开打——**不要**为 `npm view harness-cli` 还 404 / `FETCH_ERROR` 空转轮询。CLI 大包 validate 可拖很久，但 Desktop / APK **不依赖** registry 已绿（APK 用本地 `ENGINE_TGZ`）。  
    - Desktop：`XRK_DESKTOP_PACKAGE=1` … `pnpm package:desktop`（优先 `C:\xrk-h`）  
    - APK：可与 Desktop **并行**（`C:\xrk-mobile` + `xrk-mobile-apk`）；**禁止**与步骤 2/3 并行
-5. **先上 AGT（桌面）**：改名去 `unsigned` · yml **绝对 URL** 指 `…/desktop/bin/win-x64/…` · **先 exe+blockmap、再 yml** · `HEAD` 对齐（细节见 `xrk-desktop-update-feed`）· **同时** `gh release upload` 挂公开名 exe（Worker 下载首选 GH asset）
+5. **桌面更新资产上主仓 GitHub Release**（对标手机）：改名去 `unsigned` · yml 用**相对文件名** · `gh release upload` 挂 `exe` + `blockmap` + `nightly.yml`（+ `latest.yml`）。细节见 `xrk-desktop-update-feed`。**禁止**再上 AGT harness-download。
 6. **安卓发行版（与桌面同号时必做 · 0.7.20 漏过）**：只打出本机 `C:\xrk-mobile\out\*.apk` **不算发版**。必须：  
    - 手机仓 `app/pubspec.yaml` 升到 N（壳与引擎同号）→ 重打 APK  
    - `python tooling/release_assets.py --notes notes-N.md`（可 `arm64=<apk路径>`）→ `dist/`  
    - `gh release create vN dist/* --repo xrkseek/XRK-harness-mobile`（资产：`xrk-harness-N-arm64.apk` · `SHA256SUMS` · `update.json`）  
    - 真源：手机仓 `docs/release.md` · skill `xrk-mobile-apk`「发行版」
-7. **再**改主仓 `apps/site/releases.json`：**同时**写 `win-x64` 与 `android-arm64` 的 `version`/`filename` → commit + **`git push origin main`**。官网 Worker **跟随本仓 GitHub**，**不要**手跑 `wrangler deploy`
+7. **再**改主仓 `apps/site/releases.json`：**同时**写 `win-x64` 与 `android-arm64` 的 `version`/`filename`（均指 GitHub Release 资产）→ commit + **`git push origin main`**。官网 Worker **跟随本仓 GitHub**，**不要**手跑 `wrangler deploy`
 8. **清理**：`pnpm prune:local -- --junk` · 必要时 `pnpm clean:test-temp` · `subst X: /d`
 
 ## 禁止
 
 - **`package:desktop` 与 `pnpm release` / `release:stage` 并行**
 - 未 push 就 `pnpm release`
-- 桌面未上 AGT 就改 `releases.json` 宣称可下
+- 桌面未挂主仓 GH Release（exe+yml）就改 `releases.json` 宣称可下
 - 因 CLI `FETCH_ERROR` / `npm view` 暂 404 **卡住 Desktop/APK**（先发安装包；registry 稍后自绿）
 - **只打本机 APK、不上 `XRK-harness-mobile` GitHub Release**（官网安卓按钮 / 应用内更新仍旧版；0.7.20 实锤）
 - `releases.json` 只改 Desktop、漏 `android-arm64`（同号发版时两边都要改）
 - 发版收尾去手搓 `wrangler deploy` / 追问 CF token（Worker 跟 GitHub push）
-- yml 里写**相对**文件名（会解析到 `/desktop/win-x64/` → 404；必须绝对路径进 `/desktop/bin/win-x64/`）
+- Desktop yml 写 AGT 绝对 URL / 再跑 `_upload-desktop-agt.py`（已退役）
 - `electron` / `electron-builder` 进 Desktop `dependencies` / `optionalDependencies`（只许 `devDependencies`；运行时用 `electron-updater`）
 - 因 CDN 延迟对同一版本重跑 `npm publish`
 - **打包 / stage / Desktop / APK runtime 使用淘宝源或 `registry.npmmirror.com`**（须官方 registry；不通配 Clash `127.0.0.1:7897`）

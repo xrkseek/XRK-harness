@@ -54,6 +54,49 @@ describe("resolveSessionModelSelection", () => {
   });
 });
 
+describe("selectSessionModel remount", () => {
+  it("invalidates the session Agent when the route changes", async () => {
+    const { mkdtemp, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-model-remount-"));
+    await writeFile(
+      path.join(dir, "settings.yaml"),
+      [
+        "llm-pi-ai:",
+        "  providers:",
+        "    empty-gw:",
+        "      baseURL: http://127.0.0.1:9/v1",
+        "      api: openai-completions",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const invalidated: string[] = [];
+    const runtime = createBareFaceRuntime({
+      productDir: dir,
+      workspaceRoot: dir,
+      invalidateAgent: async (sessionId) => {
+        invalidated.push(sessionId);
+      },
+    });
+    const sessionId = runtime.ensureSession("remount");
+    runtime.sessionModels.set(sessionId, {
+      provider: "empty-gw",
+      model: "old",
+    });
+
+    const result = await selectSessionModel(runtime, {
+      sessionId,
+      provider: "empty-gw",
+      model: "new",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(invalidated).toEqual([sessionId]);
+  });
+});
+
 describe("selectSessionModel reasoning effort", () => {
   it("rejects an undeclared effort without pinning or persisting it", async () => {
     const runtime = createBareFaceRuntime();

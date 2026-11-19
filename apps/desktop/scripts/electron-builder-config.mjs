@@ -134,13 +134,16 @@ export function createElectronBuilderConfig(
     (env.XRK_DESKTOP_AUTO_UPDATE_ENV?.trim() || "test") === "production"
       ? env.XRK_DESKTOP_UPDATE_ORIGIN?.trim()
       : env.XRK_DESKTOP_UPDATE_TEST_ORIGIN?.trim();
-  // Unsigned builds omit the feed unless XRK_DESKTOP_UNSIGNED_UPDATE=1 (test origin).
-  const updateUrl =
-    (unsigned && !isDesktopUnsignedUpdateRequested(env)) ||
-    !updateOrigin ||
-    updateOrigin.length === 0
-      ? undefined
-      : `${updateOrigin.replace(/\/+$/u, "")}/desktop/${targetName}`;
+  // Product default: GitHub Releases (phone-aligned). Optional UPDATE_*_ORIGIN
+  // still embeds a generic feed for local mirrors. Unsigned omits feed unless
+  // XRK_DESKTOP_UNSIGNED_UPDATE=1.
+  const embedUpdateFeed =
+    !unsigned || isDesktopUnsignedUpdateRequested(env);
+  const genericUpdateUrl =
+    embedUpdateFeed && updateOrigin && updateOrigin.length > 0
+      ? `${updateOrigin.replace(/\/+$/u, "")}/desktop/${targetName}`
+      : undefined;
+  const useGithubFeed = embedUpdateFeed && !genericUpdateUrl;
 
   const webRoot =
     env.XRK_DESKTOP_WEB_ROOT?.trim() ||
@@ -259,14 +262,23 @@ export function createElectronBuilderConfig(
         // Never ship a maintainer-local `pnpm vendor:bun` binary.
         rmSync(join(sunflowerDest, "vendor"), { recursive: true, force: true });
       }
-      if (!updateUrl) return;
-      const yml = [
-        "provider: generic",
-        `url: ${updateUrl}`,
-        "channel: nightly",
-        "updaterCacheDirName: xrk-harness-updater",
-        "",
-      ].join("\n");
+      if (!useGithubFeed && !genericUpdateUrl) return;
+      const yml = useGithubFeed
+        ? [
+            "provider: github",
+            "owner: xrkseek",
+            "repo: XRK-harness",
+            "channel: nightly",
+            "updaterCacheDirName: xrk-harness-updater",
+            "",
+          ].join("\n")
+        : [
+            "provider: generic",
+            `url: ${genericUpdateUrl}`,
+            "channel: nightly",
+            "updaterCacheDirName: xrk-harness-updater",
+            "",
+          ].join("\n");
       writeFileSync(join(resourcesDir, "app-update.yml"), yml, "utf8");
       if (unsigned) {
         writeFileSync(
@@ -317,8 +329,10 @@ export function createElectronBuilderConfig(
       installerHeaderIcon: iconIco,
     },
     detectUpdateChannel: false,
-    publish: updateUrl
-      ? [{ provider: "generic", url: updateUrl, channel: "nightly" }]
+    // Product updates read app-update.yml (GitHub SoT); builder publish is only
+    // for optional local generic mirrors via UPDATE_*_ORIGIN.
+    publish: genericUpdateUrl
+      ? [{ provider: "generic", url: genericUpdateUrl, channel: "nightly" }]
       : null,
   };
 }

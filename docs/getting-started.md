@@ -4,6 +4,22 @@
 
 能力边界见 [status.md](./status.md)。日常调参走 **Web 设置**；环境变量与落盘路径全集见 [configuration.md](./configuration.md)。
 
+| 本地 Host · 对话与概况 | 对话 |
+|:---:|:---:|
+| ![本地 Host · 对话与概况](./assets/screenshots/host-overview.png) | ![对话](./assets/screenshots/host-chat.png) |
+
+| 官网首屏 | 工作台预览 |
+|:---:|:---:|
+| ![官网首屏](./assets/screenshots/site-hero-zh.png) | ![工作台](./assets/screenshots/site-workbench-zh.png) |
+
+| 发送 / 回合 | 下载 |
+|:---:|:---:|
+| ![从任务到回合](./assets/screenshots/site-flow-zh.png) | ![下载 Windows / Android / CLI](./assets/screenshots/site-download-zh.png) |
+
+| 干员站 |
+|:---:|
+| ![干员站](./assets/screenshots/operators-zh.png) |
+
 ## 前置
 
 | 项 | 要求 |
@@ -39,7 +55,11 @@ npx @xrkseek/harness-cli web
 | 3 | 接真模型：**设置 → 模型 / 凭据**（推荐），见下文 |
 | 4 | 可选装用户插件：`xrkh plugin add <包名>`（落到 `~/.xrk/plugins`；装完 **`xrkh restart`** 重载 Host）；`xrkh doctor` 可查看 xrk-home 与已装 community client |
 
-**社区 client 包**（如 `dsh-wallet` · `@liustack/modsearch`）同样用 `plugin add` 安装；经自研 Host 兼容器接入。能用什么、待补什么见 [community-plugins.md](./community-plugins.md)；安装与 discover 见 [plugin-loader.md](./plugin-loader.md)。
+**自写壳 UI**（输入框按钮、主题 token）：见 [client-plugin-development.md](./client-plugin-development.md)；金样 `extensions/example-composer-action` · `example-theme-tokens`。
+
+**第一方原生产品插件**（侧栏 `xrkh-better-sidebar` · Office `xrkh-better-sidebar-plugin-office` · 手机桥 `@xrkseek/xrk-phone-bridge` · 向日葵 `xrk-sunflower-free`）同样可经 **设置 → 插件** / `plugin add` 安装；清单见 [client-plugin-development.md](./client-plugin-development.md)。
+
+**社区 client 包**（如 `dsh-wallet` · `@liustack/modsearch`）同样用 `plugin add` 安装；经可选 Host 兼容器接入（计划 0.9 独立包 `@xrkseek/dsh-compat`）。能用什么、待补什么见 [community-plugins.md](./community-plugins.md)；安装与 discover 见 [plugin-loader.md](./plugin-loader.md)。
 
 Registry / 安装见根 [README](../README.md)。版本说明：[releases/](./releases/)。
 
@@ -150,14 +170,15 @@ xrkh restart
 | 项 | 说明 |
 |----|------|
 | 落盘 | `~/.xrk/plugins`（`XRK_HOME` · `XRK_PLUGINS_DIR`） |
-| Host | `serve` / `web` 加载内置兼容器（`extensions/dsh-compat`） |
-| 边界 | Host / 持久化 / 门禁为 XRK 自研；见 [community-plugins](./community-plugins.md) |
+| Host | `serve` / `web` 可加载可选兼容器（`extensions/dsh-compat`；0.9 拟迁 `@xrkseek/dsh-compat`） |
+| 边界 | Host / 持久化 / 门禁为 XRK 自研；原生作者路径不依赖兼容器 |
 
 | 文档 | 内容 |
 |------|------|
-| [community-plugins.md](./community-plugins.md) | Host 契约 · 已实现 / 待补 |
+| [client-plugin-development.md](./client-plugin-development.md) | 原生壳扩展（优先） |
+| [community-plugins.md](./community-plugins.md) | 社区 Host 契约 · 已实现 / 待补 |
 | [plugin-loader.md](./plugin-loader.md) | `plugin add` · discover · `host.mjs` |
-| [plugin-development.md](./plugin-development.md) | 自写 `tools` / client 叠加 |
+| [plugin-development.md](./plugin-development.md) | 进程 `tools` / client 入口 |
 
 本机已装包可审计：`node scripts/dsh-community-audit.mjs`（Node ≥26）。
 
@@ -166,7 +187,8 @@ xrkh restart
 | 目标 | 文档 |
 |------|------|
 | 能力边界 | [status.md](./status.md) |
-| 社区插件 | [community-plugins.md](./community-plugins.md) |
+| 原生 client / 进程插件 | [client-plugin-development.md](./client-plugin-development.md) · [plugin-development.md](./plugin-development.md) |
+| 社区插件（可选） | [community-plugins.md](./community-plugins.md) |
 | 配置全集 | [configuration.md](./configuration.md) |
 | HTTP / Face | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 | 发布 | [publishing.md](./publishing.md) |
@@ -179,6 +201,22 @@ xrkh restart
 > **Audience**: End users (Path A) · Contributors developing from this repository (Path B)
 
 Capability boundaries: [status.md](./status.md). Day-to-day knobs live in **Web Settings**; full env and on-disk paths: [configuration.md](./configuration.md).
+
+| Local Host · chat & overview | Chat |
+|:---:|:---:|
+| ![Local Host · chat and overview](./assets/screenshots/host-overview.png) | ![Chat](./assets/screenshots/host-chat.png) |
+
+| Hero | Workbench |
+|:---:|:---:|
+| ![Hero](./assets/screenshots/site-hero-en.png) | ![Workbench](./assets/screenshots/site-workbench-zh.png) |
+
+| Flow | Download |
+|:---:|:---:|
+| ![Task flow](./assets/screenshots/site-flow-zh.png) | ![Downloads](./assets/screenshots/site-download-zh.png) |
+
+| Operators |
+|:---:|
+| ![Operators](./assets/screenshots/operators-en.png) |
 
 ## Prerequisites
 
@@ -215,7 +253,11 @@ Open a **concrete project folder** as the workspace — not the Desktop root (re
 | 3 | Connect a live model via **Settings → Models / Credentials** (recommended); see below |
 | 4 | Optionally install user plugins with `xrkh plugin add <package>` (into `~/.xrk/plugins`; then **`xrkh restart`** to reload Host); `xrkh doctor` reports xrk-home and staged community clients |
 
-**Community client packages** (for example `dsh-wallet` · `@liustack/modsearch`) also install via `plugin add` and connect through the first-party Host adapter. Implemented vs planned surfaces: [community-plugins.md](./community-plugins.md); install and discover: [plugin-loader.md](./plugin-loader.md).
+**Author shell UI** (composer buttons, theme tokens): [client-plugin-development.md](./client-plugin-development.md); samples `extensions/example-composer-action` · `example-theme-tokens`.
+
+**First-party native product plugins** (sidebar `xrkh-better-sidebar` · Office `xrkh-better-sidebar-plugin-office` · phone bridge `@xrkseek/xrk-phone-bridge` · sunflower `xrk-sunflower-free`) also install via **Settings → Plugins** / `plugin add`; inventory in [client-plugin-development.md](./client-plugin-development.md).
+
+**Community client packages** (for example `dsh-wallet` · `@liustack/modsearch`) also install via `plugin add` and connect through the optional Host compat adapter (planned 0.9 standalone npm `@xrkseek/dsh-compat`). Implemented vs planned surfaces: [community-plugins.md](./community-plugins.md); install and discover: [plugin-loader.md](./plugin-loader.md).
 
 Registry and install notes: root [README](../README.md). Release notes: [releases/](./releases/).
 
@@ -326,14 +368,15 @@ xrkh restart
 | Item | Notes |
 |------|-------|
 | Disk | `~/.xrk/plugins` (`XRK_HOME` · `XRK_PLUGINS_DIR`) |
-| Host | `serve` / `web` load the built-in adapter (`extensions/dsh-compat`) |
-| Boundary | Host, persistence, and gating are first-party XRK; see [community-plugins](./community-plugins.md) |
+| Host | `serve` / `web` may load optional compat (`extensions/dsh-compat`; 0.9 → `@xrkseek/dsh-compat`) |
+| Boundary | Host, persistence, and gating are first-party XRK; native authoring does not require compat |
 
 | Doc | Content |
 |-----|---------|
-| [community-plugins.md](./community-plugins.md) | Host contracts · Implemented / Planned |
+| [client-plugin-development.md](./client-plugin-development.md) | Native shell extension (preferred) |
+| [community-plugins.md](./community-plugins.md) | Community Host contracts · Implemented / Planned |
 | [plugin-loader.md](./plugin-loader.md) | `plugin add` · discover · `host.mjs` |
-| [plugin-development.md](./plugin-development.md) | Author `tools` / client overlays |
+| [plugin-development.md](./plugin-development.md) | Process `tools` / client entry |
 
 Audit installed packages: `node scripts/dsh-community-audit.mjs` (Node ≥26).
 
@@ -342,7 +385,8 @@ Audit installed packages: `node scripts/dsh-community-audit.mjs` (Node ≥26).
 | Goal | Doc |
 |------|-----|
 | Capability boundaries | [status.md](./status.md) |
-| Community plugins | [community-plugins.md](./community-plugins.md) |
+| Native client / process plugins | [client-plugin-development.md](./client-plugin-development.md) · [plugin-development.md](./plugin-development.md) |
+| Community plugins (optional) | [community-plugins.md](./community-plugins.md) |
 | Full configuration | [configuration.md](./configuration.md) |
 | HTTP / Face | [http-api.md](./http-api.md) · [host-face.md](./host-face.md) |
 | Publishing | [publishing.md](./publishing.md) |

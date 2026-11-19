@@ -8,6 +8,7 @@
  */
 
 import type { FaceRuntime } from "./context.js";
+import { bossStatusBroadcastSource } from "./message-source.js";
 import {
   DEFAULT_SEAT_TITLE_SCHEME,
   readSeatTitles,
@@ -159,7 +160,10 @@ export async function broadcastBossStatusToRunningEmployees(
       try {
         runtime.watchSession(sessionId);
         const agent = await runtime.resolveAgent(sessionId);
-        agent.admit(text, { delivery: "steer" });
+        agent.admit(text, {
+          delivery: "steer",
+          source: bossStatusBroadcastSource(),
+        });
         runtime.publishQueue(sessionId);
         runtime.drain.wake(sessionId);
         sent += 1;

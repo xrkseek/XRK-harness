@@ -670,7 +670,9 @@ const FORM_BODIES: { [Key in ContextFormKey]: FormBody } = {
   },
   notice: {
     rendered: 'notice',
-    validate: (source: unknown) => noticeSummary(source) !== null,
+    // Missing `summary` still paints as notice — the row falls back to the
+    // first content line so older job-completion admits stay readable.
+    validate: () => true,
     summary: (source: unknown) => noticeSummary(source),
     body: (props: ContextBodyProps) => <NoticeBody {...props} />,
   },

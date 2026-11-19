@@ -75,12 +75,19 @@ apps/cli/product-web/
 !/extensions/example-tools/**
 !/extensions/example-channel/
 !/extensions/example-channel/**
+!/extensions/example-composer-action/
+!/extensions/example-composer-action/**
+!/extensions/example-theme-tokens/
+!/extensions/example-theme-tokens/**
 !/extensions/dsh-compat/
 !/extensions/dsh-compat/**
 !/extensions/xrk-sunflower-free/
 !/extensions/xrk-sunflower-free/**
 # 本机可选 `pnpm vendor:bun` 产物（产品包不随带）
 /extensions/xrk-sunflower-free/vendor/
+!/extensions/xrk-phone-bridge/
+!/extensions/xrk-phone-bridge/**
+# xrkh-better-sidebar(+office) 为第一方原生（文档口径）；本机联调可落 extensions/，默认仍 ignore（体积大 / 经 npm 安装）
 
 session-agent-presets.json
 

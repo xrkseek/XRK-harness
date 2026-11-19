@@ -98,9 +98,8 @@ function parseDelivery(args: Record<string, unknown>): CronDelivery | undefined 
 }
 
 export const CRON_PROMPT_TEXT =
-  "Use the cronjob tool to schedule Host tasks: unattended agent turns (run_kind=agent) " +
-  "or script-only jobs (run_kind=script). Deliver results with delivery_kind=webhook|file. " +
-  "Actions: create, list, pause, resume, run, remove, runs. Cron runs on the Host ticker (not OS crontab).";
+  "`cronjob`: Host ticker (not OS crontab). run_kind=agent|script; delivery_kind=webhook|file. " +
+  "Actions: create, list, pause, resume, run, remove, runs.";
 
 /**
  * Model-facing `cronjob` tool (Hermes-style action discriminator).

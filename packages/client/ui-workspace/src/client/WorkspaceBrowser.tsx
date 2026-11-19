@@ -1626,7 +1626,7 @@ export function WorkspaceBrowser({
           {...(phoneShell ? { 'data-phone-lane': phoneLane } : {})}
         >
           {phoneShell ? (
-            <div className={css.phoneLaneTabs} role="tablist" aria-label={t('splitter.aria')}>
+            <div className={css.phoneLaneTabs} role="tablist" aria-label={t('splitter.aria', { agent: seatTitles.agent })}>
               <button
                 type="button"
                 role="tab"
@@ -1724,11 +1724,11 @@ export function WorkspaceBrowser({
                   t={t}
                 />
                 {teamAvailable && (
-                  <Tooltip label={t('team.title')} side="bottom">
+                  <Tooltip label={t('team.title', { agent: seatTitles.agent })} side="bottom">
                     <button
                       type="button"
                       className={css.iconButton}
-                      aria-label={t('team.title')}
+                      aria-label={t('team.title', { agent: seatTitles.agent })}
                       onClick={openTeamRoster}
                     >
                       <IconUsersOutlineRegular size={16} />
@@ -1773,7 +1773,7 @@ export function WorkspaceBrowser({
             <button
               type="button"
               className={css.splitHandle}
-              aria-label={t('splitter.aria')}
+              aria-label={t('splitter.aria', { agent: seatTitles.agent })}
               aria-orientation="horizontal"
               aria-valuemin={15}
               aria-valuemax={85}
@@ -1807,7 +1807,7 @@ export function WorkspaceBrowser({
                     <button
                       type="button"
                       className={css.searchButton}
-                      aria-label={t('search.agents.aria')}
+                      aria-label={t('search.agents.aria', { agent: seatTitles.agent })}
                       aria-expanded={agentSearchExpanded}
                       onClick={() => { setAgentSearchExpanded(true) }}
                     >
@@ -1818,7 +1818,7 @@ export function WorkspaceBrowser({
                     ref={agentSearchInput}
                     className={css.searchInput}
                     type="text"
-                    placeholder={t('search.agents.placeholder')}
+                    placeholder={t('search.agents.placeholder', { agent: seatTitles.agent })}
                     maxLength={SEARCH_QUERY_MAX_CODE_UNITS}
                     value={agentQuery}
                     tabIndex={agentSearchExpanded ? 0 : -1}

@@ -127,6 +127,11 @@ describe("boss-status-broadcast", () => {
     expect(admit).toHaveBeenCalledTimes(2);
     expect(admit).toHaveBeenCalledWith("[老板状态] 疲惫 · 摸鱼中", {
       delivery: "steer",
+      source: {
+        form: "notice",
+        kind: "plugin",
+        plugin: "boss-status",
+      },
     });
     expect(watchSession).toHaveBeenCalledWith("s-office");
     expect(watchSession).toHaveBeenCalledWith("s-home");

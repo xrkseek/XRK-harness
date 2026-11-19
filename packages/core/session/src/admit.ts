@@ -7,6 +7,7 @@ import type {
 } from "@xrkseek/protocol";
 import {
   flattenText,
+  isAdmitSpeechUserMessageSource,
   isHumanUserMessageSource,
   isPromptDelivery,
   mergeMessageContents,
@@ -191,28 +192,30 @@ export function listSessionsWithPendingAdmits(
 }
 
 /**
- * `prompt/promoted` rows after the latest human `user/message` — crash window
- * between promote and the Face-stamped user row (`beforeUserMessage` await).
- * Content is still on the matching `prompt/admitted`; not model-visible yet.
+ * `prompt/promoted` rows after the latest admit-speech `user/message` — crash
+ * window between promote and the Face-stamped user row (`beforeUserMessage`
+ * await). Seat / handoff / plugin steers close the window the same as human
+ * speech; durable injects (skill-catalog / …) do not. Content is still on the
+ * matching `prompt/admitted`; not model-visible yet.
  */
 export function listDanglingPromotedAdmits(
   events: readonly SessionEvent[],
   sessionId = "",
 ): readonly AdmitReceipt[] {
-  let lastHuman = -1;
+  let lastSpeech = -1;
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
     if (
       ev !== undefined
       && ev.type === "user/message"
-      && isHumanUserMessageSource(ev.source)
+      && isAdmitSpeechUserMessageSource(ev.source)
     ) {
-      lastHuman = i;
+      lastSpeech = i;
     }
   }
   const promotedIds: string[] = [];
   const seen = new Set<string>();
-  for (let i = lastHuman + 1; i < events.length; i++) {
+  for (let i = lastSpeech + 1; i < events.length; i++) {
     const ev = events[i];
     if (ev?.type !== "prompt/promoted") continue;
     if (seen.has(ev.admitId)) continue;

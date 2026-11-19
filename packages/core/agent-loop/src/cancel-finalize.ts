@@ -79,15 +79,17 @@ export function isAbortError(
   }
   const name =
     err instanceof DOMException || err instanceof Error ? err.name : undefined;
-  if (name === "AbortError") {
-    return signal === undefined || signal.aborted === true;
-  }
+  // Provider/stream AbortError can win the race before `signal.aborted` flips
+  // (RC.2 `sess_mwlyjk32`: turn/end error UNKNOWN message "aborted"). Treat
+  // the AbortError / ABORTED code itself as cancel — do not require the
+  // signal flag when the thrown value already names abortion.
+  if (name === "AbortError") return true;
   if (
     err instanceof Error &&
     "code" in err &&
     (err as { code: unknown }).code === "ABORTED"
   ) {
-    return signal === undefined || signal.aborted === true;
+    return true;
   }
   return false;
 }

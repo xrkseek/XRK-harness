@@ -110,4 +110,53 @@ describe("runTurn assemble + vision", () => {
     // stringified away by first-step skeleton lift.
     expect(sawImageBlock).toBe(true);
   });
+
+  it("text-only route keeps durable image blocks and projects stubs on the wire", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    let wireHadStub = false;
+    let wireHadImage = false;
+    const llm: LlmAdapter = {
+      id: "text-only",
+      inputModalities: ["text"],
+      async chat(req: LlmChatRequest) {
+        for (const m of req.messages) {
+          if (m.role !== "user") continue;
+          if (typeof m.content === "string") {
+            if (m.content.includes("accepts text only")) wireHadStub = true;
+            continue;
+          }
+          for (const b of m.content) {
+            if (b.type === "image") wireHadImage = true;
+            if (b.type === "text" && b.text.includes("accepts text only")) {
+              wireHadStub = true;
+            }
+          }
+        }
+        return { content: "no-vision" };
+      },
+    };
+
+    await runTurn({
+      sessionId: session.id,
+      userText: "看这张图",
+      userContent: [
+        { type: "text", text: "看这张图" },
+        { type: "image", attachment: imageAttachment },
+      ],
+      store,
+      llm,
+      tools: createToolRegistry(),
+      now: () => Date.parse("2026-08-15T00:00:00.000Z"),
+    });
+
+    const userEv = store.get(session.id).events.find((e) => e.type === "user/message");
+    expect(userEv?.type).toBe("user/message");
+    if (userEv?.type !== "user/message" || typeof userEv.content === "string") {
+      throw new Error("expected block content");
+    }
+    expect(contentHasImage(userEv.content)).toBe(true);
+    expect(wireHadStub).toBe(true);
+    expect(wireHadImage).toBe(false);
+  });
 });

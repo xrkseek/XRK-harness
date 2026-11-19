@@ -252,7 +252,7 @@ export function AddAgentPanel({
             <div className={css.empty}>
               <p>{t('agent.pickEmpty', { agent: seatTitles.agent })}</p>
               <Button variant="outline" size="sm" onClick={() => { onClose(); onOpenTeam() }}>
-                {t('team.title')}
+                {t('team.title', { agent: seatTitles.agent })}
               </Button>
             </div>
           ) : (

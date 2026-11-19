@@ -21,10 +21,11 @@ describe("session_lanes fragment", () => {
     );
 
     const text = formatSessionLanes(runtime, sessionId!);
-    expect(text).toContain("主线: none");
-    expect(text).toContain("支线: none");
-    expect(text).toContain("todo: none");
-    expect(text).toContain("done →");
+    // Idle first-turn card: one short line (no lecture).
+    expect(text).toContain("idle");
+    expect(text).toContain("todo_write");
+    expect(text).not.toContain("主线: none");
+    expect(text.length).toBeLessThan(160);
 
     const frags = createSessionLanesFragmentProvider(runtime).produce({
       sessionId: sessionId!,

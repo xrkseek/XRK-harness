@@ -396,11 +396,12 @@
   font-size: 10px;
 }
 
-.root[data-seat='from']:not([data-compact]) .stage {
-  /* Slightly quieter 委派方 — keep transform-origin top so pair stages stay level. */
-  transform: scale(0.92);
-  transform-origin: 50% 0%;
-  opacity: 0.92;
+/* Equal seat weight: do not shrink 委派方 relative to 被委派方 (phone especially
+ * read as "left tiny / right large" when combined with independent size trims). */
+.root[data-seat='from']:not([data-compact]) .stage,
+.root[data-seat='to']:not([data-compact]) .stage {
+  transform: none;
+  opacity: 1;
 }
 
 .root[data-seat='to']:not([data-compact]) .stage {
@@ -428,7 +429,8 @@
   }
 
   .root[data-pair]:not([data-compact]) .stage {
-    width: min(100%, 112px);
+    /* Keep both seats readable on phone — was 112px and felt tiny next to chrome. */
+    width: min(100%, 132px);
     min-height: 0;
   }
 
@@ -482,6 +484,6 @@
 }
 
 :global(html[data-xrk-layout-phone]) .root[data-pair]:not([data-compact]) .stage {
-  width: min(100%, 112px);
+  width: min(100%, 132px);
   min-height: 0;
 }

@@ -486,7 +486,7 @@ describe('MessageItem arms', () => {
     expect(view.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
   })
 
-  it('context uses the Tool calls disclosure chrome and keeps its body collapsed by default', () => {
+  it('context uses the centered notice chip and keeps its body collapsed by default', () => {
     const ctxView = render(
       <MessageItem t={t} node={{
         kind: 'context',
@@ -514,7 +514,7 @@ describe('MessageItem arms', () => {
     const fields = [...ctxView.container.querySelectorAll('[data-context-fields] dt')].map(node => node.textContent)
     expect(fields).toEqual(['plugin', 'empty', 'list'])
 
-    fireEvent.keyDown(disclosure, { key: ' ' })
+    fireEvent.click(disclosure)
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
   })
 
@@ -857,12 +857,14 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
+    expect(view.getByRole('button', { name: /后台任务完成/ }).textContent)
+      .toContain('bash pnpm test [status: 已完成]')
     expect(view.container.querySelector('[data-context-summary]')?.textContent)
-      .toBe('bash pnpm test [status: completed]')
+      .toBe('bash pnpm test [status: 已完成]')
     expect(view.container.querySelector('[data-context-injection-body]')).toBeNull()
   })
 
-  it('a notice without its account falls back to the opaque body', () => {
+  it('a notice without its account still paints as a centered notice chip', () => {
     const view = render(
       <MessageItem t={t} node={{
         kind: 'context', seq: 3, content: [{ type: 'text', text: 'notice prose' }],
@@ -872,9 +874,28 @@ describe('MessageItem arms', () => {
       } as never}
       />,
     )
-    expect(view.container.querySelector('[data-context-summary]')).toBeNull()
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*tool-jobs$/ }))
-    expect(view.container.querySelector('[data-context-fields]')).not.toBeNull()
+    expect(view.container.querySelector('[data-context-summary]')?.textContent).toBe('notice prose')
+    fireEvent.click(view.getByRole('button', { name: /后台任务完成/ }))
+    expect(view.container.querySelector('[data-context-injection-body]')).not.toBeNull()
+  })
+
+  it('job-completion body without summary collapses to id + localized status', () => {
+    const view = render(
+      <MessageItem t={t} node={{
+        kind: 'context',
+        seq: 3,
+        content: [{
+          type: 'text',
+          text: 'background job bash-2 (bash: echo hi) finished [status: completed]. Read its output with job_output.',
+        }],
+        source: { kind: 'plugin', plugin: 'job-completion', form: 'notice', jobId: 'bash-2' },
+        provenance: { role: 'inject', label: 'job-completion' },
+        form: 'notice',
+      } as never}
+      />,
+    )
+    expect(view.container.querySelector('[data-context-summary]')?.textContent)
+      .toBe('bash-2 [已完成]')
   })
 
   it('each form falls back to the opaque body when its required facts are unreadable', () => {

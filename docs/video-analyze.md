@@ -35,11 +35,11 @@
 | **Credentials** | `XRK_VIDEO_ANALYZE_OPENAI_KEY`（槽 `video-analyze.openai`）；运行时也可回落 `OPENAI_API_KEY` |
 | **仅 env** | `XRK_VIDEO_ANALYZE=memory` · `=1` / `openai`（旁路 Settings）· 可选 `XRK_VIDEO_ANALYZE_BASE_URL` / `XRK_VIDEO_ANALYZE_MODEL` |
 
-保存 Settings 后热切换。OpenAI 兼容路径发 `chat/completions` + `content[].type=video_url`；网关须支持视频部件（默认模型 `gemini-2.0-flash`）。
+**热挂载**：Settings → Plugins → **视频分析** + Credentials 填钥 → `video-analyze` / `credentials/updated` → Host `invalidateAgents`，下一轮起挂上。OpenAI 兼容路径发 `chat/completions` + `content[].type=video_url`；网关须支持视频部件（默认模型 `gemini-2.0-flash`）。
 
 | Settings / env | 行为 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| （未设 / 关） | 工具仍登记；execute **诚实失败** |
+| （未设 / 关 / 无密钥） | **不登记** `video_analyze`（省 catalog + 引导句） |
 | `memory`（仅 env） | 内存 Provider（确定性文本，CI / 演示） |
 | `1` / openai | 需 API key；可选 Settings / env 的 base URL · model |
 
@@ -82,10 +82,10 @@ Precedence: **Settings (product SoT)** → **Credentials (secrets)** → **env (
 | **Credentials** | `XRK_VIDEO_ANALYZE_OPENAI_KEY` (slot `video-analyze.openai`); runtime may also fall back to `OPENAI_API_KEY` |
 | **env only** | `XRK_VIDEO_ANALYZE=memory` · `=1` / `openai` (bypasses Settings) · optional `XRK_VIDEO_ANALYZE_BASE_URL` / `XRK_VIDEO_ANALYZE_MODEL` |
 
-Applies after the next agent rebuild. The OpenAI-compatible path posts `chat/completions` with `content[].type=video_url`; the gateway must accept video parts (default model `gemini-2.0-flash`).
+**Hot remount**: Settings → Plugins → **Video analyze** + Credentials → `video-analyze` / `credentials/updated` → Host `invalidateAgents`; next turn mounts the tool. The OpenAI-compatible path posts `chat/completions` with `content[].type=video_url`; the gateway must accept video parts (default model `gemini-2.0-flash`).
 
 | Settings / env | Behavior |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| (unset / off) | Tool still registered; execute **fails honestly** |
+| (unset / off / no key) | **Does not register** `video_analyze` |
 | `memory` (env only) | In-memory Provider (deterministic text; CI / demo) |
 | `1` / openai | Needs an API key; optional Settings / env base URL · model |

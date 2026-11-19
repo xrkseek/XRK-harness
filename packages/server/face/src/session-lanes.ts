@@ -2,8 +2,8 @@
  * Turn-start `<session_lanes>` — this session's live 主线 / 支线 / open todos
  * plus verbs to pin, refresh, and switch after completion.
  *
- * Dynamic every turn (long or short). Skill playbooks stay optional; this card
- * is the always-on awareness so agents keep anchoring work.
+ * Idle (no pin/tips/todos): one short line so a first greeting is cheap.
+ * Active work expands the card. Skill playbooks stay optional.
  */
 
 import type { FaceRuntime } from "./context.js";
@@ -73,6 +73,14 @@ export function formatSessionLanes(
   const todos = openTodos(runtime, sessionId);
   const settled = allTodosSettled(runtime, sessionId);
   const child = Boolean(runtime.subagents.getByChild(sessionId));
+  const idle = !thread && !sideline && todos.length === 0 && !settled;
+
+  // First-turn / empty chat: one line — posture/board own the rest.
+  if (idle) {
+    return child
+      ? "idle — mint your own 主线 (do not copy the parent pin); multi-step → todo_write."
+      : "idle — pin 主线 when mission clear; multi-step → todo_write; tips → presence_set.";
+  }
 
   // State first; one verb line; no lecture (posture/board own their facts).
   const lines: string[] = [

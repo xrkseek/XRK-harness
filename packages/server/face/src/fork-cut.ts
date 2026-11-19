@@ -98,6 +98,60 @@ function trimBeforeSeqCut(
 }
 
 /**
+ * After turn trim: drop orphan `prompt/*` inbox chrome that would paint an
+ * empty chat (no user bubbles) while Status still reports queue > 0.
+ *
+ * Delete / edit-resubmit cuts before a user row often keep the admit that
+ * preceded it when no `turn/start` framed the open turn — or a clamped
+ * beforeSeq on an already-stripped log keeps a pile of pending admits.
+ */
+function trimOrphanInboxCut(
+  events: readonly SessionEvent[],
+  cut: number,
+): number {
+  const end = Math.min(Math.max(0, cut), events.length);
+  let lastHuman = -1;
+  for (let i = 0; i < end; i++) {
+    const event = events[i];
+    if (
+      event?.type === "user/message" &&
+      isHumanUserMessageSource(event.source)
+    ) {
+      lastHuman = i;
+    }
+  }
+  if (lastHuman < 0) {
+    for (let i = 0; i < end; i++) {
+      const type = events[i]?.type;
+      if (
+        type === "prompt/admitted" ||
+        type === "prompt/promoted" ||
+        type === "prompt/withdrawn" ||
+        type === "turn/start" ||
+        type === "turn/end"
+      ) {
+        return i;
+      }
+    }
+    return end;
+  }
+  let next = end;
+  while (next > lastHuman + 1) {
+    const type = events[next - 1]?.type;
+    if (
+      type === "prompt/admitted" ||
+      type === "prompt/promoted" ||
+      type === "prompt/withdrawn"
+    ) {
+      next -= 1;
+      continue;
+    }
+    break;
+  }
+  return next;
+}
+
+/**
  * Wire history seq is 1-based (`index + 1`), matching `session.history`.
  * `atSeq` anchors the first `turn/end` at or after that seq; omitted /
  * past-end anchors use the last completed turn. `beforeSeq` is an exclusive
@@ -138,7 +192,7 @@ export function resolveForkCut(
   if (atSeq === undefined && beforeSeq !== undefined) {
     return {
       ok: true,
-      cut: trimBeforeSeqCut(events, beforeSeq),
+      cut: trimOrphanInboxCut(events, trimBeforeSeqCut(events, beforeSeq)),
       beforeSeq,
     };
   }

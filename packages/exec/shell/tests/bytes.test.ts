@@ -47,6 +47,17 @@ describe("fitWithSuffix", () => {
     expect(out).toContain("[output truncated]");
     expect(Buffer.byteLength(out)).toBeLessThanOrEqual(40);
   });
+
+  it("empty suffix + custom omit marker only appears when over budget", () => {
+    // Bash settle path: suffix must be "" and omit = "\n[truncated]".
+    // Passing "\n[truncated]" as suffix falsely stamps every under-budget result.
+    expect(fitWithSuffix("hi\n[exit code: 1]", "", 64_000, "\n[truncated]")).toBe(
+      "hi\n[exit code: 1]",
+    );
+    const over = fitWithSuffix("abcdefghij".repeat(20), "", 40, "\n[truncated]");
+    expect(over).toContain("[truncated]");
+    expect(Buffer.byteLength(over)).toBeLessThanOrEqual(40);
+  });
 });
 
 describe("fitWithErrorHead", () => {

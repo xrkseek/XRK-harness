@@ -929,8 +929,8 @@ describe("COMPUTER_USE_PROMPT_TEXT", () => {
       delivery: "uia",
     });
     expect(text).toContain("delivery=uia");
-    expect(text).toContain("Usual loop: list_windows → focus_window →");
-    expect(text).not.toContain("focus_window or launch");
+    expect(text).toContain("Loop: list_windows → focus_window →");
+    expect(text).not.toContain("focus_window|launch");
     expect(text).toMatch(/do not call launch/i);
     expect(text).toMatch(/Settings → Computer use → agent-desktop/);
   });

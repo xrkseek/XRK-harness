@@ -1,4 +1,4 @@
-﻿import path from "node:path";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, mergeConfig } from "vitest/config";
 import unit from "./vitest.config.ts";
@@ -89,6 +89,11 @@ const config = mergeConfig(
         "@xrkseek/xrk-llm-retry/types": path.join(
           root,
           "packages/stubs/xrk-llm-retry/src/types.ts",
+        ),
+        // Longer than unit `@xrkseek/xrk-token-meter` → index (prefix would steal /client).
+        "@xrkseek/xrk-token-meter/client": path.join(
+          root,
+          "packages/stubs/xrk-token-meter/src/client.ts",
         ),
         "@xrkseek/client-ui-primitives": path.join(
           root,

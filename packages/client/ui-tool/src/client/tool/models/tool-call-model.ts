@@ -81,6 +81,19 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   cordis_run: 'others',
   cordis_stop: 'others',
   cordis_undefine: 'others',
+  // Background-job family: own titles so the wire name does not ride the summary.
+  job_list: 'others',
+  job_output: 'others',
+  job_kill: 'others',
+  // Browser family: own titles; keep `others` chrome (not a file/terminal card).
+  browser_open: 'others',
+  browser_snapshot: 'others',
+  browser_act: 'others',
+  browser_wait: 'others',
+  browser_tabs: 'others',
+  browser_get: 'others',
+  browser_find: 'others',
+  browser_reload: 'others',
 }
 
 /** Tool-owned titles that refine a generic row variant without replacing it. */
@@ -96,6 +109,17 @@ const TOOL_TITLES: Record<string, string> = {
   video_generate: 'Video generation',
   present: 'Present',
   propose_skill: 'Write skill',
+  job_list: 'List jobs',
+  job_output: 'Job output',
+  job_kill: 'Stop job',
+  browser_open: 'Open browser',
+  browser_snapshot: 'Browser snapshot',
+  browser_act: 'Browser act',
+  browser_wait: 'Browser wait',
+  browser_tabs: 'Browser tabs',
+  browser_get: 'Browser get',
+  browser_find: 'Browser find',
+  browser_reload: 'Browser reload',
 }
 
 /**
@@ -251,7 +275,8 @@ const SUMMARY_KEYS: Record<ToolRowVariant, readonly string[]> = {
   write: ['path', 'file_path'],
   edit: ['path', 'file_path'],
   code: ['description'],
-  others: [],
+  // Prefer stable identity fields before dumping the first arbitrary string.
+  others: ['job_id', 'url', 'description', 'query', 'selector', 'action'],
 }
 
 /**

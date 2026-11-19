@@ -30,24 +30,32 @@ describe("curated memory live fragment gate", () => {
     expect(body).toContain("prefer tabs");
   });
 
-  it("turn-start always injects; post-tool only when the body changes", () => {
+  it("skips while disk still matches the session-start freeze", () => {
+    const dir = tempDir();
+    writeFileSync(path.join(dir, "MEMORY.md"), "ship on Fridays", "utf8");
+    const store = createCuratedMemoryStore({ dir });
+    const gate = createCuratedMemoryLiveGate(store);
+    // Freeze already holds the same body — do not duplicate into fragments.
+    expect(gate.turnStart()).toBeUndefined();
+    expect(gate.postTool()).toBeUndefined();
+  });
+
+  it("emits after a same-session write; stays quiet until the next move", () => {
     const dir = tempDir();
     const store = createCuratedMemoryStore({ dir });
     const gate = createCuratedMemoryLiveGate(store);
     expect(gate.turnStart()).toBeUndefined();
-    expect(gate.postTool()).toBeUndefined();
 
     expect(store.add("memory", "ship on Fridays").success).toBe(true);
-    const first = gate.turnStart();
+    const first = gate.postTool();
     expect(first).toContain("ship on Fridays");
-    // Unchanged disk → post-tool silent (no log spam / no false cache churn).
     expect(gate.postTool()).toBeUndefined();
 
     expect(store.add("memory", "prefer dark theme").success).toBe(true);
     const afterWrite = gate.postTool();
     expect(afterWrite).toContain("prefer dark theme");
     expect(afterWrite).toContain("ship on Fridays");
-    expect(gate.postTool()).toBeUndefined();
+    expect(gate.turnStart()).toBeUndefined();
   });
 
   it("sees another session's write on the next turn-start", () => {
@@ -59,7 +67,7 @@ describe("curated memory live fragment gate", () => {
     expect(gateA.turnStart()).toContain("from A");
 
     expect(b.add("memory", "from B").success).toBe(true);
-    // A's gate still has lastFp=from-A-only; turn-start re-reads disk.
+    // A's gate lastFp is from-A-only; turn-start re-reads disk.
     const next = gateA.turnStart();
     expect(next).toContain("from A");
     expect(next).toContain("from B");

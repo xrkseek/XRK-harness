@@ -1,13 +1,13 @@
 /**
  * Cloudflare Worker product page.
  * Desktop + Android installers are GitHub Release assets (desktop: XRK-harness;
- * Android: XRK-harness-mobile). Visitors in China-ish timezones (or CF country
- * CN/HK/MO/TW) get a gh-proxy mirror link; others get GitHub direct.
- * HARNESS_ORIGIN remains for optional live catalog / legacy /api/harness/* proxy.
+ * Android: XRK-harness-mobile). In-app Desktop updates also read GitHub Releases
+ * (phone-aligned mirrors). Visitors in China-ish timezones (or CF country
+ * CN/HK/MO/TW) get a ghfast mirror link; others get GitHub direct.
+ * Legacy `/api/harness/*` (AGT harness-download) is retired → 410.
  */
 import fallbackCatalog from "../releases.json" with { type: "json" };
 
-const DEFAULT_ORIGIN = "http://103.236.89.174:6969";
 const GITHUB = "https://github.com/xrkseek/XRK-harness";
 const MOBILE_GITHUB = "https://github.com/xrkseek/XRK-harness-mobile";
 const NPM = "https://www.npmjs.com/package/@xrkseek/harness-cli";
@@ -46,7 +46,7 @@ const TARGET_KEY = {
 
 const LABELS = {
   zh: {
-    lead: "本地优先的 AI 编程工作台。对话留在会话里，干员能接手任务，模型和 MCP 在设置里接好就能用。",
+    lead: "综合个人智能体、编码智能体与专业智能体的开山之作——无代餐。本地优先：会话为真源，干员可接手，模型和 MCP 在设置里接好就能用。",
     tagline: "向阳而生，驭光而行",
     skip: "跳到工作台",
     play: "工作台",
@@ -56,7 +56,7 @@ const LABELS = {
     assign: "委派",
     assigned: "已委派",
     quota: "配额 2 / 2",
-    flow: "从任务到合回",
+    flow: "从任务到回合",
     send: "发送消息",
     sendQueue: "排队（本轮后）",
     sendSteer: "插队（本轮结束后）",
@@ -126,7 +126,7 @@ const LABELS = {
     lang: "EN",
   },
   en: {
-    lead: "A local-first AI coding workbench. Sessions keep the thread, operators take work you hand off, and models plus MCP live in Settings.",
+    lead: "The pioneering work uniting personal, coding, and specialist agents — not a substitute. Local-first: sessions keep the thread, operators take handoffs, models and MCP live in Settings.",
     tagline: "Grow toward the sun. Steer the light.",
     skip: "Skip to workbench",
     play: "Workbench",
@@ -136,7 +136,7 @@ const LABELS = {
     assign: "Delegate",
     assigned: "Delegated",
     quota: "quota 2 / 2",
-    flow: "From task to merge",
+    flow: "From task to turn",
     send: "Send message",
     sendQueue: "Queue (after this turn)",
     sendSteer: "Steer (right after this turn)",
@@ -224,23 +224,10 @@ const FLOW = {
   ],
 };
 
-function origin(env) {
-  return String(env.HARNESS_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, "");
-}
-
 /** Operators share site (Cloudflare Pages). Override with env OPERATORS_SITE. */
 function operatorsSite(env) {
   const raw = String(env.OPERATORS_SITE || "https://xrk-operators.pages.dev").trim();
   return raw.replace(/\/+$/, "") || "https://xrk-operators.pages.dev";
-}
-
-function unwrap(json) {
-  if (!json || json.success === false) throw new Error("catalog");
-  if (json.data !== undefined) return json.data;
-  const rest = { ...json };
-  delete rest.success;
-  delete rest.message;
-  return rest;
 }
 
 function escapeHtml(value) {
@@ -251,16 +238,9 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-async function loadCatalog(env) {
-  try {
-    const res = await fetch(`${origin(env)}/api/harness/releases`, {
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) throw new Error("live");
-    return unwrap(await res.json());
-  } catch {
-    return fallbackCatalog;
-  }
+/** Catalog is `releases.json` only — no AGT live hop. */
+async function loadCatalog(_env) {
+  return fallbackCatalog;
 }
 
 function isMacTarget(target) {
@@ -416,33 +396,20 @@ function renderPage(catalog, env, zh, request) {
   const t = zh ? LABELS.zh : LABELS.en;
   const preferProxy = preferGithubProxy(request);
   const live = Array.isArray(catalog.products) ? catalog.products : [];
-  // Marketing download URLs come from releases.json (GitHub). Live AGT catalog
-  // may refresh version/filename/available for the desktop auto-update feed only.
-  // Android APKs ship from XRK-harness-mobile Releases — never from AGT.
+  // Marketing download URLs come from releases.json → GitHub Release assets.
   const products = (fallbackCatalog.products || []).map((base) => {
     const hit = live.find((row) => row.target === base.target) || {};
     if (isMacTarget(base.target)) {
       return { ...base, ...hit, target: base.target, available: false };
     }
-    if (isAndroidTarget(base.target)) {
-      return {
-        ...base,
-        target: base.target,
-        githubRepo: base.githubRepo,
-        download: base.download,
-        version: base.version,
-        filename: base.filename,
-        available: Boolean(base.available),
-      };
-    }
     return {
       ...base,
-      ...hit,
       target: base.target,
+      githubRepo: base.githubRepo,
       download: base.download,
-      version: hit.version || base.version,
-      filename: hit.filename || base.filename,
-      available: Boolean(base.available || hit.available),
+      version: base.version,
+      filename: base.filename,
+      available: Boolean(base.available),
     };
   });
   const cli = catalog.cli || fallbackCatalog.cli || "npm i -g @xrkseek/harness-cli";
@@ -729,65 +696,35 @@ function corsJson(body, status = 200) {
   });
 }
 
-/** Empty operators catalog when AGT origin is down — Pages can keep serving samples. */
-function emptyOperatorsCatalog() {
-  return corsJson({
-    ok: true,
-    data: { version: 1, sites: {}, members: [] },
-  }, 503);
-}
-
-async function proxyHarness(request, env) {
-  const incoming = new URL(request.url);
-  const upstream = `${origin(env)}${incoming.pathname}${incoming.search}`;
-  if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    });
-  }
-  const headers = new Headers();
-  const accept = request.headers.get("Accept");
-  if (accept) headers.set("Accept", accept);
-  const isOperatorsList =
-    request.method === "GET" &&
-    (incoming.pathname === "/api/harness/operators" ||
-      incoming.pathname === "/api/harness/operators/");
-  try {
-    const res = await fetch(upstream, {
-      method: request.method,
-      headers,
-      redirect: "follow",
-      signal: AbortSignal.timeout(12_000),
-    });
-    // CF / dead origin often returns HTML "error code: 1003" — keep JSON contract.
-    if (isOperatorsList && (res.status >= 500 || res.status === 403 || res.status === 502)) {
-      return emptyOperatorsCatalog();
-    }
-    const out = new Headers(res.headers);
-    out.set("Access-Control-Allow-Origin", "*");
-    return new Response(res.body, { status: res.status, headers: out });
-  } catch {
-    if (isOperatorsList) return emptyOperatorsCatalog();
-    return new Response("upstream unavailable", {
-      status: 502,
-      headers: { "access-control-allow-origin": "*" },
-    });
-  }
+/** AGT harness-download API retired — installs/updates are GitHub Releases. */
+function retiredHarnessApi(pathname) {
+  return corsJson(
+    {
+      ok: false,
+      error: "retired",
+      message:
+        "AGT harness-download is retired. Use GitHub Releases (desktop: xrkseek/XRK-harness; Android: xrkseek/XRK-harness-mobile; operators: xrk-operators Pages catalog).",
+      path: pathname,
+    },
+    410,
+  );
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/harness/")) {
-      if (url.pathname.startsWith("/api/harness/download/") || url.pathname.startsWith("/api/harness/desktop/bin/")) {
-        return Response.redirect(`${origin(env)}${url.pathname}${url.search}`, 302);
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        });
       }
-      return proxyHarness(request, env);
+      return retiredHarnessApi(url.pathname);
     }
     if (url.pathname === "/" || url.pathname === "") {
       const catalog = await loadCatalog(env);

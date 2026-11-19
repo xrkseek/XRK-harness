@@ -1,21 +1,9 @@
-import type { SessionEvent, TurnEndReason, UserMessageSource } from "@xrkseek/protocol";
+import type { SessionEvent, TurnEndReason } from "@xrkseek/protocol";
+import { subagentHandoffSource } from "../message-source.js";
 import type { FaceSubagentLink } from "../subagent-registry.js";
 
-/**
- * Durable `user/message.source` for subagent completion / stop steers.
- * Face / client project this as Voice `courier` · Lane `handoff`.
- */
-export function subagentNoticeSource(link: FaceSubagentLink): UserMessageSource {
-  return {
-    kind: "plugin",
-    plugin: "subagent",
-    form: "notice",
-    childSessionId: link.childSessionId,
-    label: link.label,
-    ...(link.memberId !== undefined ? { memberId: link.memberId } : {}),
-    ...(link.appearance !== undefined ? { appearance: link.appearance } : {}),
-  };
-}
+/** Alias of `subagentHandoffSource` (durable handoff tag for child → parent). */
+export const subagentNoticeSource = subagentHandoffSource;
 
 /**
  * Child body text for parent-facing completion / tool results.
@@ -304,11 +292,14 @@ function resumeHint(
   if (outcome.kind === "max-tokens") {
     const rounds = autoContinueRounds(events);
     const sent = rounds > 0
-      ? `The child already sent "继续" as a user message ${rounds} time(s) inside this turn and still hit the output cap, so the turn stopped.`
-      : 'The child hit the output cap and did not auto-send "继续" (auto-continue off, or this truncation never entered continuation).';
+      ? `The child already auto-continued ${rounds} time(s) inside this turn and still hit the output cap, so the turn stopped.`
+      : "The child hit the output cap and did not auto-continue (auto-continue off, or this truncation never entered continuation).";
     return (
-      `${sent} If you still need the rest, call send_message(agent_id, "继续") ` +
-      `for another turn. session_read / list_agents shows what it already wrote. ${idHint}`
+      `${sent} Incomplete tool calls on a max-tokens finish are discarded (not executed) — ` +
+      `if it was mid write_file/apply_patch, ask it to split the write. ` +
+      `If you still need the rest, send_message with a split-write instruction ` +
+      `(do not send bare 「继续」 — that retried the same giant call). ` +
+      `session_read / list_agents shows what it already wrote. ${idHint}`
     );
   }
   if (

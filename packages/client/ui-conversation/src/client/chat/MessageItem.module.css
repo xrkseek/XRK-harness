@@ -71,6 +71,72 @@
   white-space: nowrap;
 }
 
+/* Author chip above the bubble — live seat title / Face label (avatar later). */
+.speechIdentity {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .userStack {
+    max-width: min(100%, 92%);
+    gap: 6px;
+  }
+
+  .bubble {
+    border-radius: 18px;
+    padding: 10px 14px;
+  }
+
+  .speechIdentity {
+    font-size: 11px;
+    line-height: 14px;
+  }
+
+  .speechDetail {
+    font-size: 10px;
+    line-height: 14px;
+  }
+}
+
+/* Handoff Face status block — tucked under the answer bubble. */
+.speechDetail {
+  align-self: stretch;
+  max-width: 100%;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.speechDetail summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.speechDetail summary::-webkit-details-marker {
+  display: none;
+}
+
+.speechDetail pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--dsw-alias-label-caption) 8%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font: 400 11px/16px var(--ds-font-family-code, ui-monospace, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .pendingSteerBadge {
   display: inline-flex;
   align-items: center;

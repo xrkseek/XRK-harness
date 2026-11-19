@@ -6,6 +6,7 @@ import { latestTurnNumber } from './pending-input-chrome.ts'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import { TurnTimePanel, TurnUsagePanel } from './TurnUsagePanel.tsx'
 import { assistantText } from './turn-assistant.ts'
+import { humanTurnOpenerForRegenerate } from './human-turn-opener.ts'
 import css from './TurnTailNodeView.module.css'
 
 type TurnTailNodeViewProps = ChatNodeViewProps<'turn-tail'>
@@ -24,24 +25,6 @@ function turnEndRunMs(turn: {
   return Math.max(0, closingTime - turn.start.time)
 }
 
-function userPromptText(content: readonly unknown[]): string {
-  const parts: string[] = []
-  for (const block of content) {
-    if (
-      block !== null
-      && typeof block === 'object'
-      && 'type' in block
-      && (block as { type?: unknown }).type === 'text'
-      && typeof (block as { text?: unknown }).text === 'string'
-    ) {
-      const text = (block as { text: string }).text
-      if ((block as { modelOnly?: unknown }).modelOnly === true) continue
-      parts.push(text)
-    }
-  }
-  return parts.join('')
-}
-
 /**
  * Turn-local feature tail + message actions.
  * Completed-turn footers stay mounted across later turns — hiding them while
@@ -49,6 +32,11 @@ function userPromptText(content: readonly unknown[]): string {
  * as the next round started. Restore/regenerate stay tip-gated via
  * `hasLaterChatNode` / `branchUnavailable`; branch is a turn-cut fork and stays
  * available on any closed turn (Host anchors on the first `turn/end` at/after seq).
+ *
+ * Job-completion / subagent wakes are a normal next 轮次: prior turn footers
+ * stay mounted and always-visible (no hover gate). Regenerate only mounts when
+ * *this* Host turn has a human opener — wake tips keep copy/usage/branch but
+ * not a misleading refresh that would truncate an earlier human round.
  *
  * Assembler only materializes visible tails after turn/end. Host `running` on
  * a still-latest closed tip suppresses the footer once (wait_agent / subagent
@@ -68,17 +56,15 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
     snapshot.running && latestTurnNumber(snapshot.chat.timeline) === data.turn)
   // Latch after an idle paint so the next-send running race cannot unmount us.
   const [keepFooter, setKeepFooter] = useState(false)
-  // Regenerate re-runs the turn opener only — skip `steering` 插话 (step inject).
+  // Regenerate re-runs this turn's human-owned opener only — never seat /
+  // auto-continue / a walked-back opener from a prior round.
   const regenerateSource = useSession((snapshot) => {
     const keys = snapshot.chat.locations.getTurn(data.turn)
-    for (const key of keys) {
+    const nodes = keys.flatMap((key) => {
       const candidate = snapshot.chat.nodes.get(key)
-      if (candidate === undefined || candidate.kind !== 'user') continue
-      const text = userPromptText(candidate.data.content as readonly unknown[])
-      if (text.trim() === '') continue
-      return { seq: candidate.data.seq, text }
-    }
-    return null
+      return candidate === undefined ? [] : [candidate]
+    })
+    return humanTurnOpenerForRegenerate(nodes)
   })
   const turn = node.location.kind === 'turn' || node.location.kind === 'step'
     ? node.location.turn
@@ -93,13 +79,19 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const tail = renderSlotChain('conversation.chat.turnTail', owner)
   const runMs = turnEndRunMs(turn, closing?.time ?? data.time)
   const stopped = turnEndedAsStop(turn.end)
-  const stoppedText = stopped ? t(stopLabelKey(turnAbortCause(turn.end))) : undefined
   const assistantAlreadyStopped = turn.steps.some((step) => {
     const assistant = step.data.get('assistant-step') as
       | { readonly status?: string; readonly finalNode?: { readonly interrupted?: boolean } }
       | undefined
     return assistant?.status === 'interrupted' || assistant?.finalNode?.interrupted === true
   })
+  // Human opener Stop with no assistant text: say so. Bare 「已停止」 after a
+  // visible user bubble reads like a broken turn.
+  const stoppedText = !stopped
+    ? undefined
+    : (closing === null && regenerateSource !== null
+      ? t('message.stopped.noReply')
+      : t(stopLabelKey(turnAbortCause(turn.end))))
   const showStopped = stopped && !assistantAlreadyStopped && stoppedText !== undefined
   let usageAction: ReactNode
   if (data.tokenUsage === undefined && runMs === undefined) {
@@ -120,11 +112,21 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
     )
   }
   if (closing === null) {
+    // Inject/catalog-only abort (no human speech, no assistant reply): a lone
+    // 「已停止」+用时 confuses beginners on Overview seed sessions. Suppress
+    // regardless of empty slot shells from renderSlotChain (display:contents).
+    if (regenerateSource === null) {
+      return null
+    }
     if (tail === null && runMs === undefined && !showStopped && data.tokenUsage === undefined) {
       return null
     }
     return (
-      <div className={css.root} data-turn-tail={data.turn} data-time-hover-root data-actions-reveal="always">
+      <div
+        className={css.root}
+        data-turn-tail={data.turn}
+        data-actions-reveal="always"
+      >
         {tail}
         {showStopped ? <span className={css.stopped} role="status">{stoppedText}</span> : null}
         {usageAction !== undefined && (
@@ -148,19 +150,19 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const assistantActions = messageId === undefined || hasLaterChatNode
     ? null
     : renderSlot('conversation.chat.assistant-actions', { messageId })
-  // Regenerate / restore rewrite the transcript tail in place, so they need
-  // this turn to still be the last one. Branch is a turn-cut fork instead: the
-  // Host anchors on the first `turn/end` at or after the seq, so any closed turn
-  // with a final assistant message can seed a branch even with later turns
-  // below it. `branchUnavailable` therefore stays off here — reaching this
-  // render already proved `closing !== null`.
+  // Regenerate rewrites the transcript tail in place, so it needs this turn's
+  // tip (no later same-turn node). Restore is files-only (`/rollback`) and is
+  // tip-gated the same way so the button stays next to a settled assistant
+  // close — not mid-turn after steering. Branch is a turn-cut fork: Host
+  // anchors on the first `turn/end` at/after seq, so any closed turn works
+  // even with later turns below. `branchUnavailable` stays off here — reaching
+  // this render already proved `closing !== null`.
   const tipActionsUnavailable = data.branchUnavailable || hasLaterChatNode
   return (
     <div
       className={css.root}
       data-turn-tail={data.turn}
-      data-time-hover-root
-      data-actions-reveal={tipActionsUnavailable ? 'hover' : 'always'}
+      data-actions-reveal="always"
     >
       {tail}
       {showStopped ? <span className={css.stopped} role="status">{stoppedText}</span> : null}
@@ -170,11 +172,10 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
         clock="end"
         onBranch={() => { forkAt(closing.finalNode.seq) }}
         onRestore={() => { restoreAt(closing.finalNode.seq) }}
-        // Only mount regenerate when it can run — hide on non-tip / busy turns
-        // rather than showing a disabled refresh (control already existed).
+        // Only mount regenerate when this turn has a human opener and is tip.
         onRegenerate={regenerateSource === null || tipActionsUnavailable
           ? undefined
-          : () => { regenerateAt(regenerateSource.seq, regenerateSource.text) }}
+          : () => { regenerateAt(regenerateSource.seq, regenerateSource.content) }}
         tipUnavailable={tipActionsUnavailable}
         className={css.actions}
         extraActions={assistantActions}

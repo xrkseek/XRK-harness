@@ -699,6 +699,8 @@ export function createFsTools(
       name: "write_file",
       description:
         "Create or fully overwrite a UTF-8 file. Read the path in this turn first (write-intent). " +
+        "Keep content modest — oversized payloads hit the output-token cap and the incomplete call is discarded (not written); " +
+        "prefer apply_edit / apply_patch or split across multiple writes for large files. " +
         "Workspace-relative paths stay under the workspace; absolute paths may use " +
         "Settings → Permissions → extra writable roots (defaults include product home).",
       parameters: {

@@ -1029,6 +1029,52 @@ describe('built-in conversation node Definitions', () => {
     expect(node(snapshot(value), 'context')).toBeUndefined()
   })
 
+  it('shows seat speech as a user bubble (never hidden form:speech context)', () => {
+    const value = assembler([
+      at(1, 'user/message', {
+        ...textMessage('seat-1', 'delegator task'),
+        source: {
+          kind: 'seat',
+          form: 'speech',
+          channel: 'parent',
+          fromSessionId: 'sess_mgr',
+          label: '经理',
+        },
+      }, { surfaceOp: 'append' }),
+    ])
+    const row = node(snapshot(value), 'user')
+    expect(row?.visibility).toBe('visible')
+    expect(row?.data).toMatchObject({
+      kind: 'user',
+      content: [{ type: 'text', text: 'delegator task' }],
+      source: { kind: 'seat', channel: 'parent', fromSessionId: 'sess_mgr' },
+    })
+    expect(node(snapshot(value), 'context')).toBeUndefined()
+  })
+
+  it('paints handoff returns as identity speech bubbles (not context chips)', () => {
+    const value = assembler([
+      at(1, 'user/message', {
+        ...textMessage('handoff-1', 'child done'),
+        source: {
+          kind: 'handoff',
+          form: 'notice',
+          via: 'subagent',
+          fromSessionId: 'sess_child',
+          label: '发版员',
+        },
+      }, { surfaceOp: 'append' }),
+    ])
+    const row = node(snapshot(value), 'user')
+    expect(row?.visibility).toBe('visible')
+    expect(row?.data).toMatchObject({
+      kind: 'user',
+      content: [{ type: 'text', text: 'child done' }],
+      source: { kind: 'handoff', via: 'subagent', label: '发版员' },
+    })
+    expect(node(snapshot(value), 'context')).toBeUndefined()
+  })
+
   it('classifies appended producer context from durable source metadata', () => {
     const value = assembler([
       at(1, 'user/message', {

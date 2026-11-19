@@ -349,9 +349,14 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       return 'handled'
     }
     if (desc.input !== undefined) return { claim: this.leadingClaim(desc, pick.session) }
-    // Menu-pick execute consumes the trigger span before the detached run
-    // (scoped event; the input owns the CAS guard).
-    this.consumeVia(pick.session.sessionId, { via: 'menu', span: pick.span })
+    // Menu-pick execute consumes the trigger before the detached run.
+    // Caret-collapsed spans (「命令」launcher) cannot splice — fall back to
+    // bare-token clear so `/${name}` does not stick in the composer.
+    if (pick.span.start === pick.span.end) {
+      this.consumeVia(pick.session.sessionId, { via: 'enter', token: `/${name}` })
+    } else {
+      this.consumeVia(pick.session.sessionId, { via: 'menu', span: pick.span })
+    }
     this.runDetached(desc, pick.session, `/${name}`)
     return 'handled'
   }

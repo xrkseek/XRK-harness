@@ -124,6 +124,12 @@ export interface PluginInventorySettingsTabInjected {
    */
   subscribeUpdatesChanged?: (onChanged: () => void) => () => void
   /**
+   * Host refreshed live overlay boot — refresh inventory list.
+   * Soft remount runs at plugin apply() lifetime (not here).
+   * Absent in unit stubs.
+   */
+  subscribeBootChanged?: (onChanged: () => void) => () => void
+  /**
    * Host update probe (warm cache after listen). `force` re-runs npm view.
    * Pass the same Settings install-row `registry` / `proxy` as `plugin add`
    * so Desktop / Web / Mobile hit one mirror.
@@ -367,6 +373,7 @@ export function PluginInventorySettingsTab({
   install,
   subscribeInstallLog,
   subscribeUpdatesChanged,
+  subscribeBootChanged,
   checkUpdates,
   t,
 }: PluginInventorySettingsTabProps): ReactNode {
@@ -507,6 +514,16 @@ export function PluginInventorySettingsTab({
     installNet.registry,
     installNet.proxy,
   ])
+
+  // Soft remount runs at apply() lifetime; tab only refreshes the list.
+  useEffect(() => {
+    const unsub = subscribeBootChanged?.(() => {
+      setRequest((value) => value + 1)
+    })
+    return () => {
+      unsub?.()
+    }
+  }, [subscribeBootChanged])
 
   const updateById = useMemo(() => {
     const map = new Map<string, PluginUpdateProbeRow>()
@@ -673,7 +690,8 @@ export function PluginInventorySettingsTab({
     void runManaged(
       removeTarget.entryId,
       () => remove(removeTarget.entryId),
-      { notice: t('toastRemoved', { name }), clientRefresh: true },
+      // Soft unload via boot-changed; hint only if unload fails.
+      { notice: t('toastRemoved', { name }) },
     )
   }
 
@@ -1051,7 +1069,6 @@ export function PluginInventorySettingsTab({
                           notice: t(next ? 'toastEnabled' : 'toastDisabled', {
                             name: t('gitWorktreesTitle'),
                           }),
-                          clientRefresh: true,
                         },
                       )
                     }}
@@ -1301,7 +1318,6 @@ export function PluginInventorySettingsTab({
                                 () => setEnabled(entry.entryId, next),
                                 {
                                   notice: t(next ? 'toastEnabled' : 'toastDisabled', { name: title }),
-                                  clientRefresh: true,
                                 },
                               )
                             }}
@@ -1348,7 +1364,8 @@ export function PluginInventorySettingsTab({
                                 void runManaged(
                                   entry.entryId,
                                   () => reload(entry.entryId),
-                                  { notice: t('toastReloaded', { name }), clientRefresh: true },
+                                  // Soft remount via boot-changed; hint only on failure.
+                                  { notice: t('toastReloaded', { name }) },
                                 )
                                 return
                               }

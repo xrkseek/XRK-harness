@@ -195,11 +195,11 @@ xrkh plugin path
   <id>/   # 进程插件（discover 跳过 web/）
 ```
 
-装完后：**进程半部**经 Settings 停用/启用可即时 reconcile；**client 半部**（或新装后首次进壳）刷新页面 / 重启 `web`·`serve`（`needsRestart`）。`add` / `remove` 会自动 reconcile boot；手删目录或 inventory 不同步时跑 `plugin reconcile`。Settings **插件列表**（独立 Manager 面）可调 `pluginInventory/install|update|reload|remove|setEnabled`（底层同 `runPluginMutate` spawn；install 可选 `--registry`；安装中经 Face `plugin-inventory/install-log` 流式刷 TerminalBlock）。更新探测：Host 暖探 / 强制检查 / 安装·更新后重探结算时发 `plugin-inventory/updates-changed`（`host/remote-event` → 壳 `$dispatch`），Settings 拉暖缓存刷新 →version 徽标（Desktop 走 host SSE，Web 走 host WS）。Host 经 Settings 调 mutate 时按序尝试：`XRK_HARNESS_BIN` → 仓内 `apps/cli/dist/bin.js` → `xrkh` → 旧名 `xrk-harness`（仅在命令不存在时回退）。Desktop 启动时若解析到内置 CLI 会写入 `XRK_HARNESS_BIN`。全程 **不用** `shell: true`：`node` + `.js` 直接 argv（兼容 `Program Files` / 含空格或非 ASCII 路径）；Windows 裸 `.cmd` 经 `ComSpec /d /s /c` 正规转义。
+装完后：**进程半部**经 Settings 停用/启用可即时 reconcile；**client 半部**由 Host 刷新 overlay boot 并发 `plugin-inventory/boot-changed`，Settings 调 `pluginInventory/clientBoot`：**装 / 启 / 更 / 重载** **软重挂**，**停用 / 删除** **软卸载**（`Loader.remove`；产品 boot 仍省略完整 `@xrkseek/client-hmr`）。仅 unload/remount 失败时硬刷新（列表可标 `needsRestart`）。`add` / `remove` 会自动 reconcile boot；手删目录或 inventory 不同步时跑 `plugin reconcile`。Settings **插件列表**（独立 Manager 面）可调 `pluginInventory/install|update|reload|remove|setEnabled`（底层同 `runPluginMutate` spawn；install 可选 `--registry`；安装中经 Face `plugin-inventory/install-log` 流式刷 TerminalBlock）。更新探测：Host 暖探 / 强制检查 / 安装·更新后重探结算时发 `plugin-inventory/updates-changed`（`host/remote-event` → 壳 `$dispatch`），Settings 拉暖缓存刷新 →version 徽标（Desktop 走 host SSE，Web 走 host WS）。Host 经 Settings 调 mutate 时按序尝试：`XRK_HARNESS_BIN` → 仓内 `apps/cli/dist/bin.js` → `xrkh` → 旧名 `xrk-harness`（仅在命令不存在时回退）。Desktop 启动时若解析到内置 CLI 会写入 `XRK_HARNESS_BIN`。全程 **不用** `shell: true`：`node` + `.js` 直接 argv（兼容 `Program Files` / 含空格或非 ASCII 路径）；Windows 裸 `.cmd` 经 `ComSpec /d /s /c` 正规转义。
 
 **Inventory 与磁盘**：`.xrk-plugins.json` 是 managed 包真源。`web/plugins/<id>/` 仅应存在 inventory 里 `kind: client|both` 的包；孤儿目录会导致 overlay `boot.json` 引用已删 `client.js`，浏览器 boot 失败或 slot 崩溃。`reconcile` 按 inventory 清理 staging 并重写 boot。
 
-**Settings 软停用**：写入 `.xrk-plugins-disabled.json` 后从 `web/boot.json` 去掉该 client 条目。Host 对**进程半部**即时调用 `reconcileManagedProcessPlugins`（停用 unregister+dispose、启用再 load；跳过 `mcp:*`；磁盘已删的也卸；可选 load 失败进 `failures`，`required` 失败抛错），并**刷新 Face `webPlugins`**（避免 remove/停用后仍列出已卸 client）。`loader.loadAll` 与 reconcile 同样跳过 soft-disable（含 `skipLoad` cordis stub），避免幽灵登记。Client 半部仍需浏览器刷新（列表标 `needsRestart`）。`pluginInventory/list` 仍从 inventory 列出停用行（`enabled: false`，`fiberPhase: null`，并带 `version` / `kind` / `source`），以便再启用；`dynamicCordisRunner/inventory` 对停用行保持 `fiberPhase: null`（不伪造 `failed`）。Face 读写优先 Host `hostPublic.pluginsDir`（绝对路径，含 `XRK_PLUGINS_DIR`）。
+**Settings 软停用**：写入 `.xrk-plugins-disabled.json` 后从 `web/boot.json` 去掉该 client 条目。Host 对**进程半部**即时调用 `reconcileManagedProcessPlugins`（停用 unregister+dispose、启用再 load；跳过 `mcp:*`；磁盘已删的也卸；可选 load 失败进 `failures`，`required` 失败抛错），并**刷新 Face `webPlugins` / overlay boot**（避免 remove/停用后仍列出已卸 client）。`loader.loadAll` 与 reconcile 同样跳过 soft-disable（含 `skipLoad` cordis stub），避免幽灵登记。**停用 / 删除**的 client 半部走 soft unload；失败时列表可标 `needsRestart` 并硬刷新；**再启用**走 soft remount。`pluginInventory/list` 仍从 inventory 列出停用行（`enabled: false`，`fiberPhase: null`，并带 `version` / `kind` / `source`），以便再启用；`dynamicCordisRunner/inventory` 对停用行保持 `fiberPhase: null`（不伪造 `failed`）。Face 读写优先 Host `hostPublic.pluginsDir`（绝对路径，含 `XRK_PLUGINS_DIR`）。
 
 软停用磁盘契约（`@xrkseek/server-loader` `managed-state`，Face / HTTP / CLI / Host 共用）：
 
@@ -208,7 +208,7 @@ xrkh plugin path
 | 真源叶 | 软停用与 inventory 读盘在 loader，避免 Face↔HTTP 环依赖 |
 | durable id | inventory 包名；reconcile 规范化别名并剪 orphan |
 | 写盘 | boot / inventory / disabled 原子写；内容不变不重写 |
-| 进程半部 | Settings 变更后本进程 reconcile，并做 unload/register 成对检查；`kind:host` 路由随注册表重建；client 仍要刷新页面 |
+| 进程半部 | Settings 变更后本进程 reconcile，并做 unload/register 成对检查；`kind:host` 路由随注册表重建；client 叠加层 soft remount + soft unload（失败再刷新） |
 
 产品壳 cordis **不会**仅因 `kind:cordis` 变成可管理项。soft-disable market `disabled` 与 soft-disable 列表对齐。
 
@@ -227,7 +227,10 @@ XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 ## 边界
 
 - 任意目录 watch / 未声明入口的热重载：不支持  
-- 浏览器 client 半部热装卸：不支持（停用后刷新页面即可）  
+- 浏览器 client 半部：安装 / 启用 / 更新 / 重载 soft remount；停用 / 删除 soft unload；失败时再硬刷新  
+
+
+
 - 未声明入口的任意执行：不支持  
 - 插件覆盖同名 builtin / 保留 prompt id：不支持  
 - 保留 kind 的自动接线：未接线，登记需配 `apply*` 才会生效  
@@ -435,11 +438,11 @@ Layout:
   <id>/   # process plugins (discover skips web/)
 ```
 
-After install: the **process half** can live-reconcile on Settings enable/disable; the **client half** (or first shell load after install) still needs a page refresh / restart of `web`·`serve` (`needsRestart`). `add` / `remove` auto-reconcile boot; run `plugin reconcile` when directories were deleted by hand or inventory drifts. Settings **Plugin list** (Manager surface) calls `pluginInventory/install|update|reload|remove|setEnabled` (`runPluginMutate` via spawn; optional `--registry`; live `plugin-inventory/install-log` chunks feed the TerminalBlock). Update probe: when Host warm / force / post-mutate probes settle, Face publishes `plugin-inventory/updates-changed` (`host/remote-event` → shell `$dispatch`) so Settings re-pulls the warm cache for →version badges (Desktop host SSE, Web host WS). Host Settings mutate tries, in order: `XRK_HARNESS_BIN` → repo `apps/cli/dist/bin.js` → `xrkh` → legacy `xrk-harness` (fallback only when the binary is missing). Desktop sets `XRK_HARNESS_BIN` when a bundled CLI is resolved. Never uses `shell: true`: `node` + `.js` is a direct argv (safe for `Program Files` / spaces / non-ASCII paths); bare Windows `.cmd` shims go through `ComSpec /d /s /c` with proper quoting.
+After install: the **process half** can live-reconcile on Settings enable/disable; the **client half** soft-remounts on install / enable / update / reload and soft-unloads on disable / delete — Host refreshes overlay boot, publishes `plugin-inventory/boot-changed`, and Settings calls `pluginInventory/clientBoot` (product boot still omits full `@xrkseek/client-hmr`). Hard-refresh only when unload/remount fails (list may show `needsRestart`). `add` / `remove` auto-reconcile boot; run `plugin reconcile` when directories were deleted by hand or inventory drifts. Settings **Plugin list** (Manager surface) calls `pluginInventory/install|update|reload|remove|setEnabled` (`runPluginMutate` via spawn; optional `--registry`; live `plugin-inventory/install-log` chunks feed the TerminalBlock). Update probe: when Host warm / force / post-mutate probes settle, Face publishes `plugin-inventory/updates-changed` (`host/remote-event` → shell `$dispatch`) so Settings re-pulls the warm cache for →version badges (Desktop host SSE, Web host WS). Host Settings mutate tries, in order: `XRK_HARNESS_BIN` → repo `apps/cli/dist/bin.js` → `xrkh` → legacy `xrk-harness` (fallback only when the binary is missing). Desktop sets `XRK_HARNESS_BIN` when a bundled CLI is resolved. Never uses `shell: true`: `node` + `.js` is a direct argv (safe for `Program Files` / spaces / non-ASCII paths); bare Windows `.cmd` shims go through `ComSpec /d /s /c` with proper quoting.
 
 **Inventory vs disk**: `.xrk-plugins.json` is the source of truth for managed packages. `web/plugins/<id>/` must only hold packages listed as `kind: client|both`; orphans make overlay `boot.json` point at deleted `client.js` and break boot or slots. `reconcile` cleans staging from inventory and rewrites boot.
 
-**Settings soft-disable**: writes `.xrk-plugins-disabled.json` and drops the client entry from `web/boot.json`. Host **live-reconciles** the process half via `reconcileManagedProcessPlugins` (unregister on disable, reload on enable; skips `mcp:*`; also drops plugins removed from disk) and **refreshes Face `webPlugins`** so remove/disable cannot leave stale active client rows. `loader.loadAll` skips soft-disabled ids the same way (including `skipLoad` cordis stubs) so stubs cannot reappear as live inventory ghosts. The client half still needs a browser refresh (`needsRestart` on the list). `pluginInventory/list` still surfaces the disabled row from inventory (`enabled: false`, `fiberPhase: null`, plus `version` / `kind` / `source`) so it can be re-enabled; `dynamicCordisRunner/inventory` keeps soft-disabled rows at `fiberPhase: null` (does not invent `failed`). Face I/O prefers Host `hostPublic.pluginsDir` (absolute, including `XRK_PLUGINS_DIR`).
+**Settings soft-disable**: writes `.xrk-plugins-disabled.json` and drops the client entry from `web/boot.json`. Host **live-reconciles** the process half via `reconcileManagedProcessPlugins` (unregister on disable, reload on enable; skips `mcp:*`; also drops plugins removed from disk) and **refreshes Face `webPlugins` / overlay boot** so remove/disable cannot leave stale active client rows. `loader.loadAll` skips soft-disabled ids the same way (including `skipLoad` cordis stubs) so stubs cannot reappear as live inventory ghosts. **Disable / delete** soft-unloads; on failure the list may show `needsRestart` and the shell asks for a hard refresh; **re-enable** soft-remounts. `pluginInventory/list` still surfaces the disabled row from inventory (`enabled: false`, `fiberPhase: null`, plus `version` / `kind` / `source`) so it can be re-enabled; `dynamicCordisRunner/inventory` keeps soft-disabled rows at `fiberPhase: null` (does not invent `failed`). Face I/O prefers Host `hostPublic.pluginsDir` (absolute, including `XRK_PLUGINS_DIR`).
 
 Soft-disable disk contract (`@xrkseek/server-loader` `managed-state`, shared by Face / HTTP / CLI / Host):
 
@@ -448,7 +451,7 @@ Soft-disable disk contract (`@xrkseek/server-loader` `managed-state`, shared by 
 | Shared leaf | Soft-disable and inventory reads live in loader (avoids a Face↔HTTP cycle) |
 | Durable id | Inventory package name; reconcile canonicalizes aliases and prunes orphans |
 | Writes | Atomic boot / inventory / disabled; skip rewrite when content is unchanged |
-| Process half | In-process reconcile after Settings mutations, with an unload/register pairing check; `kind:host` routes follow the live registry; client still needs a page refresh |
+| Process half | In-process reconcile after Settings mutations, with an unload/register pairing check; `kind:host` routes follow the live registry; client overlay soft-remounts and soft-unloads (hard-refresh only on failure) |
 
 Product-shell cordis is **not** managed merely because `kind:cordis`. soft-disable market `disabled` mirrors the soft-disable list.
 
@@ -467,7 +470,10 @@ XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js serve
 ## Boundaries
 
 - Arbitrary directory watch / undeclared-entry hot reload: not supported  
-- Hot unload/reload of the browser client half: not supported (page refresh still required after disable)  
+- Browser client half: install / enable / update / reload soft-remount; disable / delete soft-unload; hard-refresh only on failure  
+
+
+
 - Arbitrary execution without a declared entry: not supported  
 - Plugins overriding same-name builtins or reserved prompt ids: not supported  
 - Auto-wiring reserved kinds: not wired; registration takes effect only with an `apply*`  

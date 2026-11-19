@@ -103,6 +103,70 @@ function parseUserMessageSource(
     return { kind: "user" };
   }
 
+  if (kind === "seat") {
+    if (raw.form !== undefined && raw.form !== "speech") {
+      throw new SessionEventParseError('seat form must be "speech"', path);
+    }
+    const channel = raw.channel;
+    if (channel !== "parent" && channel !== "peer") {
+      throw new SessionEventParseError(
+        'seat.channel must be "parent" | "peer"',
+        path,
+      );
+    }
+    const fromSessionId = reqString(raw, "fromSessionId", path);
+    const memberId =
+      typeof raw.memberId === "string" && raw.memberId.trim()
+        ? raw.memberId.trim()
+        : undefined;
+    const label =
+      typeof raw.label === "string" && raw.label.trim()
+        ? raw.label.trim()
+        : undefined;
+    return {
+      kind: "seat",
+      form: "speech",
+      channel,
+      fromSessionId,
+      ...(memberId ? { memberId } : {}),
+      ...(label ? { label } : {}),
+    };
+  }
+
+  if (kind === "handoff") {
+    if (raw.form !== undefined && raw.form !== "notice") {
+      throw new SessionEventParseError('handoff form must be "notice"', path);
+    }
+    const via = raw.via;
+    if (
+      via !== "subagent"
+      && via !== "peer-collab"
+      && via !== "thread-stop"
+    ) {
+      throw new SessionEventParseError(
+        'handoff.via must be "subagent" | "peer-collab" | "thread-stop"',
+        path,
+      );
+    }
+    const fromSessionId = reqString(raw, "fromSessionId", path);
+    const memberId =
+      typeof raw.memberId === "string" && raw.memberId.trim()
+        ? raw.memberId.trim()
+        : undefined;
+    const label =
+      typeof raw.label === "string" && raw.label.trim()
+        ? raw.label.trim()
+        : undefined;
+    return {
+      kind: "handoff",
+      form: "notice",
+      via,
+      fromSessionId,
+      ...(memberId ? { memberId } : {}),
+      ...(label ? { label } : {}),
+    };
+  }
+
   if (kind === "skill-catalog") {
     if (raw.form !== undefined && raw.form !== "catalog") {
       throw new SessionEventParseError(

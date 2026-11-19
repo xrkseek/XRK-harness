@@ -49,10 +49,11 @@ describe("session_posture", () => {
       if (!coding.result.ok) return;
       const codingId = (coding.result.value as { sessionId: string }).sessionId;
       const codingText = formatSessionPosture(runtime, codingId);
-      expect(codingText).toMatch(/kind=coding_parent \(项目经理席\)/);
-      expect(codingText).toMatch(/向日葵 = peer/);
-      expect(codingText).toMatch(/workspace_session_prompt/);
-      expect(codingText).toMatch(/向阳/);
+      expect(codingText).toMatch(/kind=coding_parent \(经理工作区\)/);
+      expect(codingText).toMatch(/peer 经理|其它经理/);
+      expect(codingText).toMatch(/subagent\(member_id\)/);
+      expect(codingText).toMatch(/干员工作区/);
+      expect(codingText).toMatch(/向阳|向日葵/);
       expect(codingText).not.toMatch(/Never agent-home/);
 
       const member = runtime.agentRoster.upsertAtScope(
@@ -79,10 +80,10 @@ describe("session_posture", () => {
       if (!homeSession.result.ok) return;
       const officeId = (homeSession.result.value as { sessionId: string }).sessionId;
       const officeText = formatSessionPosture(runtime, officeId);
-      expect(officeText).toMatch(/干员家/);
-      expect(officeText).toMatch(/homes \+ 向阳/);
-      expect(officeText).toMatch(/Never project coding/);
-      expect(officeText).not.toMatch(/项目经理席/);
+      expect(officeText).toMatch(/干员工作区/);
+      expect(officeText).toMatch(/向阳/);
+      expect(officeText).toMatch(/not a 经理工作区|Never coding 经理工作区/);
+      expect(officeText).not.toMatch(/kind=coding_parent \(经理工作区\) · path=open\nYou are a 经理/);
 
       const frugal = await dispatchFaceMethod(runtime, "session.create", "f", {
         workspaceId: codingWs.workspaceId,
@@ -101,16 +102,17 @@ describe("session_posture", () => {
       if (!xy.result.ok) return;
       const xyId = (xy.result.value as { sessionId: string }).sessionId;
       const xyText = formatSessionPosture(runtime, xyId);
-      expect(xyText).toMatch(/向日葵|奇创|Xiangyang|Qichuang/);
-      expect(xyText).toMatch(/向阳经理席/);
-      expect(xyText).toMatch(/peer/);
+      expect(xyText).toMatch(/向日葵|向阳|Xiangyang|Qichuang/);
+      expect(xyText).toMatch(/orchestrat|Route/i);
       expect(xyText).toMatch(/path=open/);
       expect(xyText).toMatch(/shell_confine=off/);
-      expect(xyText).toMatch(/workspace_session_prompt/);
       expect(xyText).toMatch(/xrk-demand-translate/);
-      expect(xyText).toMatch(/xrk-home-config/);
-      expect(xyText).toMatch(/team_\*/);
-      expect(xyText).toMatch(/thread_upsert/);
+      expect(xyText).toMatch(/don't ship|do not ship|Route/i);
+      expect(xyText).toMatch(/team_home/);
+      expect(xyText).toMatch(/peer 经理|其它经理/);
+      expect(xyText).toMatch(/干员工作区/);
+      expect(xyText).toMatch(/经理工作区/);
+      expect(xyText).toMatch(/thread_/);
 
       await ensureImWorkspace(runtime);
       const im = await dispatchFaceMethod(runtime, "session.create", "im", {

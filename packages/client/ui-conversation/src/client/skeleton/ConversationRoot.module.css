@@ -179,19 +179,29 @@
   display: none;
 }
 
-/* figma Tab_Group 34:11441: 35px strip, gap 36, pad-left 8, tabs bottom-aligned. */
+/* figma Tab_Group 34:11441: strip under title — 对话 / 轨迹 / 运行时 / 注入 / 任务. */
 .tabs {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 36px;
+  flex-wrap: nowrap;
+  gap: 28px;
   margin-top: 4px;
   padding-left: 8px;
+  padding-right: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* figma .Tab 34:11442: 13/16 text (figma wt510, rendered 500), gap 8 to the 2px bar. */
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* figma .Tab 34:11442: 13/16 text, underline bar. */
 .tab {
   position: relative;
+  flex: none;
   padding: 0 0 11px;
   border: none;
   background: transparent;
@@ -200,6 +210,13 @@
   font-weight: 500;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
+  transition-property: color;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.tab:hover {
+  color: var(--dsw-alias-label-secondary);
 }
 
 .tab::after {
@@ -211,6 +228,11 @@
   height: 2px;
   border-radius: 2px;
   background: transparent;
+  transform: scaleX(0.72);
+  transform-origin: center;
+  transition-property: background-color, transform;
+  transition-duration: 140ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Selected tab is blue, not ink: brand-primary resolves to neutral black in
@@ -222,6 +244,14 @@
 
 .tabActive::after {
   background: var(--dsw-alias-state-business-primary);
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .tab::after {
+    transition: none;
+  }
 }
 
 .viewArea {

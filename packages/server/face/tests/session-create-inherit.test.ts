@@ -66,4 +66,29 @@ describe("session.create model inheritance", () => {
       model: "deepseek-chat",
     });
   });
+
+  it("records the inheritFrom seat as session opener (Overview 委派方)", async () => {
+    const runtime = createBareFaceRuntime();
+    const xy = await create(runtime, {});
+    // Bare create → 向阳 → opener seat is 向日葵.
+    const coding = runtime.workspaces.create(`${runtime.workspaceRoot}/code`).workspace;
+    const child = await create(runtime, {
+      workspaceId: coding.workspaceId,
+      inheritFrom: xy,
+    });
+    expect(runtime.sessionOpeners.get(child)).toEqual({
+      memberId: "mem_seed_xrkseek",
+      sourceSessionId: xy,
+    });
+  });
+
+  it("ignores inheritFrom ghost sessions that are not in the store", async () => {
+    const runtime = createBareFaceRuntime();
+    const coding = runtime.workspaces.create(`${runtime.workspaceRoot}/code-ghost`).workspace;
+    const child = await create(runtime, {
+      workspaceId: coding.workspaceId,
+      inheritFrom: "sess-ghost-missing",
+    });
+    expect(runtime.sessionOpeners.has(child)).toBe(false);
+  });
 });

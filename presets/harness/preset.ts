@@ -41,8 +41,6 @@ import {
 } from "@xrkseek/exec-fs";
 import type { AttachmentStore } from "@xrkseek/attachment";
 import {
-  formatWebFetchGuidance,
-  formatWebSearchGuidance,
   formatBrowserGuidance,
   formatWebFamilyGuidance,
   createDefaultWebAccess,
@@ -89,6 +87,8 @@ import {
 } from "@xrkseek/exec-video-analyze";
 import {
   CURATED_MEMORY_PROMPT_TEXT,
+  CURATED_MEMORY_FRAGMENT_MAX_CHARS,
+  createCuratedMemoryLiveGate,
   createCuratedMemoryTools,
   createScopedCuratedMemoryTools,
   resolveMemoryProvider,
@@ -127,7 +127,6 @@ import {
   createLocalShell,
   createSessionScopedShell,
   toJobView,
-  JOBS_PROMPT_TEXT,
 } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
 import { defaultSpillDir } from "@xrkseek/server-config";
@@ -428,22 +427,21 @@ export interface HarnessCompositionOptions {
   /**
    * Register `image_generate` (text-to-image). Default: on.
    * `false` skips. Pass an `ImageGenService` to inject.
-   * Without `XRK_IMAGE_GEN=1` (+ API key) / `memory` / inject → tool still
-   * visible, execute is an honest error.
+   * Without a usable Provider (`XRK_IMAGE_GEN` + key / Settings mode +
+   * Credentials / `memory` / inject) → **no tool** (same as ASR listen:
+   * do not waste catalog + prompt tokens on a surface that can only refuse).
    */
   readonly imageGenTools?: boolean | ImageGenService;
   /**
    * Register `video_generate` (text-to-video, async job lifecycle). Default: on.
    * `false` skips. Pass a `VideoGenService` to inject.
-   * Without `XRK_VIDEO_GEN=1` (+ API key) / `memory` / inject → tool still
-   * visible, execute is an honest error.
+   * Without a usable Provider → **no tool** (no catalog / prompt waste).
    */
   readonly videoGenTools?: boolean | VideoGenService;
   /**
    * Register `video_analyze` (video understanding; Hermes-style). Default: on.
    * `false` skips. Pass a `VideoAnalyzeService` to inject.
-   * Without `XRK_VIDEO_ANALYZE=1` (+ API key) / `memory` / inject → tool still
-   * visible, execute is an honest error. Not browser_vision / not video_generate.
+   * Without a usable Provider → **no tool**. Not browser_vision / not video_generate.
    */
   readonly videoAnalyzeTools?: boolean | VideoAnalyzeService;
   /**
@@ -461,8 +459,8 @@ export interface HarnessCompositionOptions {
   readonly curatedMemoryAgentLabel?: string;
   /**
    * Register `lsp`. Default: on. `false` skips.
-   * Pass an `LspService` to inject in tests. No `XRK_LSP_COMMAND` → tool
-   * still visible, execute is an honest error.
+   * Pass an `LspService` to inject in tests. No `XRK_LSP_COMMAND` / inject →
+   * **no tool** (do not waste catalog tokens on a surface that can only refuse).
    */
   readonly lspTools?: boolean | LspService;
   /**
@@ -774,8 +772,9 @@ function wrapStoreForLifecycleWebhooks(
 }
 
 /**
- * Badge delta only (absent tools + delegation posture). Permission stays in
- * session_capability; per-tool guidance stays orthogonal.
+ * Badge delta only for *missing* tools. Delegation posture lives solely in
+ * `tool:subagent` (`subagentRoutingPrompt`) — do not duplicate it here.
+ * Empty when the live surface is full (assembler skips empty sections).
  */
 function formatToolSurfacePack(input: {
   readonly hasBash: boolean;
@@ -783,7 +782,6 @@ function formatToolSurfacePack(input: {
   readonly lsp: boolean;
   readonly pty: boolean;
   readonly subagents: boolean;
-  readonly delegation?: "explicit" | "proactive";
 }): string {
   const absent: string[] = [];
   if (!input.hasBash) absent.push("bash");
@@ -791,22 +789,12 @@ function formatToolSurfacePack(input: {
   if (!input.lsp) absent.push("lsp");
   if (!input.pty) absent.push("pty");
   if (!input.subagents) absent.push("subagent");
-  const lines: string[] = [];
-  if (absent.length > 0) {
-    lines.push(
-      `Tool surface: no ${absent.join("/")}. Say so when asked; do not invent missing tools.`,
-    );
-  }
+  if (absent.length === 0) return "";
+  const lines = [
+    `Tool surface: no ${absent.join("/")}. Say so when asked; do not invent missing tools.`,
+  ];
   if (!input.subagents) {
     lines.push("Delegation: off — Skill or do the work yourself.");
-  } else if (input.delegation === "explicit") {
-    lines.push(
-      "Delegation: explicit only. See session_capability before spawn.",
-    );
-  } else {
-    lines.push(
-      "Delegation: proactive when useful. Check session_capability + member caps before spawn.",
-    );
   }
   return lines.join("\n");
 }
@@ -1295,15 +1283,19 @@ export function createHarnessComposition(
               ? { product: options.imageGenProduct }
               : {}),
           }).service;
-    for (const tool of createImageGenTools({
-      ...(service ? { service } : {}),
-      ...(options.imageGenEnv ? { env: options.imageGenEnv } : {}),
-      ...(options.imageGenProduct
-        ? { product: options.imageGenProduct }
-        : {}),
-      ...(options.attachments ? { attachments: options.attachments } : {}),
-    })) {
-      tools.register(tool);
+    // No Provider / key → leave the catalog empty (Settings / Credentials
+    // change still rebuilds the agent via Host invalidateAgents).
+    if (service) {
+      for (const tool of createImageGenTools({
+        service,
+        ...(options.imageGenEnv ? { env: options.imageGenEnv } : {}),
+        ...(options.imageGenProduct
+          ? { product: options.imageGenProduct }
+          : {}),
+        ...(options.attachments ? { attachments: options.attachments } : {}),
+      })) {
+        tools.register(tool);
+      }
     }
   }
   if (options.videoGenTools !== false) {
@@ -1316,15 +1308,17 @@ export function createHarnessComposition(
               ? { product: options.videoGenProduct }
               : {}),
           }).service;
-    for (const tool of createVideoGenTools({
-      ...(service ? { service } : {}),
-      ...(options.videoGenEnv ? { env: options.videoGenEnv } : {}),
-      ...(options.videoGenProduct
-        ? { product: options.videoGenProduct }
-        : {}),
-      ...(options.attachments ? { attachments: options.attachments } : {}),
-    })) {
-      tools.register(tool);
+    if (service) {
+      for (const tool of createVideoGenTools({
+        service,
+        ...(options.videoGenEnv ? { env: options.videoGenEnv } : {}),
+        ...(options.videoGenProduct
+          ? { product: options.videoGenProduct }
+          : {}),
+        ...(options.attachments ? { attachments: options.attachments } : {}),
+      })) {
+        tools.register(tool);
+      }
     }
   }
   if (options.videoAnalyzeTools !== false) {
@@ -1339,17 +1333,19 @@ export function createHarnessComposition(
               ? { product: options.videoAnalyzeProduct }
               : {}),
           }).service;
-    for (const tool of createVideoAnalyzeTools({
-      ...(service ? { service } : {}),
-      ...(options.videoAnalyzeEnv
-        ? { env: options.videoAnalyzeEnv }
-        : {}),
-      ...(options.videoAnalyzeProduct
-        ? { product: options.videoAnalyzeProduct }
-        : {}),
-      fs,
-    })) {
-      tools.register(tool);
+    if (service) {
+      for (const tool of createVideoAnalyzeTools({
+        service,
+        ...(options.videoAnalyzeEnv
+          ? { env: options.videoAnalyzeEnv }
+          : {}),
+        ...(options.videoAnalyzeProduct
+          ? { product: options.videoAnalyzeProduct }
+          : {}),
+        fs,
+      })) {
+        tools.register(tool);
+      }
     }
   }
   if (options.lspTools !== false) {
@@ -1357,11 +1353,14 @@ export function createHarnessComposition(
       typeof options.lspTools === "object"
         ? options.lspTools
         : createDefaultLspAccess().service;
-    for (const tool of createLspTools({
-      workspaceRoot: options.workspaceRoot,
-      ...(service ? { service } : {}),
-    })) {
-      tools.register(tool);
+    // No `XRK_LSP_COMMAND` / inject → no `lsp` tool (same catalog hygiene).
+    if (service) {
+      for (const tool of createLspTools({
+        workspaceRoot: options.workspaceRoot,
+        service,
+      })) {
+        tools.register(tool);
+      }
     }
   }
   if (options.ptyTools !== false) {
@@ -1606,36 +1605,28 @@ export function createHarnessComposition(
       if (options.locale === "zh") {
         return [
           "# Language",
-          "界面语言为简体中文。",
-          "- 一律使用简体中文进行思考（thinking / reasoning / 规划 / 工具调用前的判断）以及最终回复。不得用英文起笔推理。",
-          "- 保持原样、不要翻译：代码、命令、文件路径、API 与工具名、参数键名、标识符、日志原文、报错文本。",
-          "- 引用工具输出时保留原文，解释部分用中文。",
-          "- 用户主动用英文提问时仍可用英文回复，但界面为中文期间默认中文。",
+          "界面=简体中文：思考与回复用简体中文（勿用英文起笔推理）。",
+          "代码/命令/路径/工具名/参数键/日志与报错原文不译；引用工具输出时保留原文、解释用中文。用户用英文提问可用英文答。",
         ].join("\n");
       }
       if (options.locale === "en") {
         return [
           "# Language",
-          "The UI language is English.",
-          "- Reason (thinking, planning, pre-tool narration) and reply in English.",
-          "- Keep code, commands, file paths, tool and parameter names, identifiers and raw tool output verbatim.",
+          "UI=English: reason and reply in English.",
+          "Keep code, commands, paths, tool/param names, identifiers, and raw tool output verbatim.",
         ].join("\n");
       }
       if (options.locale === "ja") {
         return [
           "# Language",
-          "UI 言語は日本語です。",
-          "- 思考（thinking / reasoning / 計画 / ツール呼び出し前の判断）と最終返信は日本語で行う。英語で推論を始めない。",
-          "- コード、コマンド、ファイルパス、API・ツール名、パラメータキー、識別子、ログ原文、エラー文はそのまま残し、翻訳しない。",
-          "- ツール出力を引用するときは原文を保ち、説明は日本語で書く。",
-          "- ユーザーが英語で質問した場合は英語で答えてよいが、UI が日本語の間は既定で日本語。",
+          "UI=日本語：思考と返信は日本語（英語で推論を始めない）。",
+          "コード/コマンド/パス/ツール名・キー/ログ・エラー原文は訳さない。ユーザーが英語で質問したら英語で答えてよい。",
         ].join("\n");
       }
       return [
         "# Language",
-        "No explicit UI locale was configured.",
-        "- Reason and reply in the same natural language as the user's latest message: if the user writes Chinese, think and answer in Chinese.",
-        "- Keep code, commands, file paths, tool and parameter names, identifiers and raw tool output verbatim.",
+        "Match the user's latest message language (e.g. Chinese → think and answer in Chinese).",
+        "Keep code, commands, paths, tool/param names, identifiers, and raw tool output verbatim.",
       ].join("\n");
     },
   });
@@ -1667,20 +1658,11 @@ export function createHarnessComposition(
     }
   }
   if (options.webTools !== false) {
+    // Family owns search/fetch contracts; browser stays orthogonal (modality).
     prompts.register({
       id: "tool:web_family",
       order: 109,
       content: () => formatWebFamilyGuidance(availableToolNames()),
-    });
-    prompts.register({
-      id: "tool:web_search",
-      order: 110,
-      content: () => formatWebSearchGuidance(availableToolNames()),
-    });
-    prompts.register({
-      id: "tool:web_fetch",
-      order: 111,
-      content: () => formatWebFetchGuidance(availableToolNames()),
     });
     prompts.register({
       id: "tool:browser",
@@ -1730,11 +1712,6 @@ export function createHarnessComposition(
         lsp: names.has("lsp"),
         pty: names.has("terminal_open") || names.has("terminal_send"),
         subagents: options.subagentRouting !== false,
-        ...(options.delegationMode
-          ? { delegation: options.delegationMode }
-          : options.subagentRouting !== false
-            ? { delegation: "proactive" as const }
-            : {}),
       });
     },
   });
@@ -1793,7 +1770,7 @@ export function createHarnessComposition(
       order: 112.5,
       content: () =>
         availableToolNames().has("propose_skill")
-          ? "After a complex multi-step task that produced a reusable procedure, call `propose_skill` with a class-level SKILL.md draft (scope=workspace writes the current workspace `.agents/skills`; scope=global writes home `~/.agents/skills`). A 干员 / 成员 / 子代理团队的一员 is `team_save`, not a skill. The user must approve before anything is written."
+          ? "`propose_skill` after reusable multi-step work (class-level SKILL.md; scope=workspace|global). 干员=`team_save`. Needs user approve."
           : "",
     });
   }
@@ -1832,21 +1809,8 @@ export function createHarnessComposition(
     order: 105,
     content: () => formatShellRoutingPrompt(availableToolNames()),
   });
-  prompts.register({
-    id: "tool:jobs",
-    order: 106,
-    content: () => {
-      const names = availableToolNames();
-      if (
-        !names.has("job_list") &&
-        !names.has("job_output") &&
-        !names.has("job_kill")
-      ) {
-        return "";
-      }
-      return JOBS_PROMPT_TEXT;
-    },
-  });
+  // Jobs settle lives in tool:shell-routing. `tool:jobs` stays reserved so
+  // plugins cannot re-add a duplicate section.
   if (options.subagentRouting !== false) {
     prompts.register({
       id: "tool:subagent",
@@ -1888,6 +1852,8 @@ export function createHarnessComposition(
       ...(options.webTools !== false
         ? [
             "tool:web_family",
+            // Reserved so plugins cannot re-add duplicate search/fetch sections
+            // (contracts live inside web_family).
             "tool:web_search",
             "tool:web_fetch",
             "tool:browser",
@@ -1928,16 +1894,21 @@ export function createHarnessComposition(
 
   // Fragment pipeline is opt-out; empty by default. Layered apart from
   // durable workspace inject (beforeUserMessage runs inject then fragments).
+  // When curated memory is on, raise the phase budget so a four-zone live
+  // refresh is not mid-truncated by the default 8k seat/capability pack.
+  const fragmentBudgetChars =
+    options.contextFragmentBudgetChars ??
+    (curatedMemory ? 24_000 : undefined);
   const contextFragments: ContextFragmentPipeline | undefined =
     options.contextFragments === false
       ? undefined
       : typeof options.contextFragments === "object"
         ? options.contextFragments
-        : createContextFragmentPipeline({
-            ...(options.contextFragmentBudgetChars !== undefined
-              ? { budgetChars: options.contextFragmentBudgetChars }
-              : {}),
-          });
+        : createContextFragmentPipeline(
+            fragmentBudgetChars !== undefined
+              ? { budgetChars: fragmentBudgetChars }
+              : {},
+          );
   if (contextFragments && options.contextFragmentProviders) {
     for (const provider of options.contextFragmentProviders) {
       contextFragments.register(provider);
@@ -1957,6 +1928,39 @@ export function createHarnessComposition(
             priority: -5,
           }),
         ];
+      },
+    } satisfies ContextFragmentProvider);
+  }
+  if (contextFragments && curatedMemory) {
+    const memoryLiveGate = createCuratedMemoryLiveGate(curatedMemory);
+    const emitLive = (
+      phase: "turn-start" | "post-tool",
+      body: string | undefined,
+    ) => {
+      if (!body) return [];
+      return [
+        createAdditionalContextFragment({
+          key: "curated_memory",
+          value: body,
+          phase,
+          // Below instruction_authority (9.5), above capability / seat pack.
+          priority: 9.0,
+          maxValueChars: CURATED_MEMORY_FRAGMENT_MAX_CHARS,
+        }),
+      ];
+    };
+    contextFragments.register({
+      id: "curated-memory-live-turn",
+      phases: ["turn-start"],
+      produce() {
+        return emitLive("turn-start", memoryLiveGate.turnStart());
+      },
+    } satisfies ContextFragmentProvider);
+    contextFragments.register({
+      id: "curated-memory-live-post",
+      phases: ["post-tool"],
+      produce() {
+        return emitLive("post-tool", memoryLiveGate.postTool());
       },
     } satisfies ContextFragmentProvider);
   }

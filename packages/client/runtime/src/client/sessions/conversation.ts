@@ -411,10 +411,11 @@ export type ComposerPhase = 'blank' | 'engaging' | 'active'
    * Composer-strip failure; `op` picks the user-facing copy (发送失败 / 停止失败 /
    * 截断失败). `resubmit` covers edit-resubmit truncation — a cut that failed
    * must never be followed by the re-prompt, or the old turn and the edited
-   * message both survive.
+   * message both survive. `fork` / `rollback` surface branch and file-restore
+   * failures in the same toast strip (toast shows `error.message`).
    */
   export interface PromptError {
-    op: 'send' | 'stop' | 'resubmit'
+    op: 'send' | 'stop' | 'resubmit' | 'fork' | 'rollback'
     error: RpcError
   }
 

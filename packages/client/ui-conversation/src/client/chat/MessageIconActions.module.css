@@ -1,6 +1,5 @@
 /* Shared message IconActions row (user + assistant). Parent modules own
-   layout offsets via the composed className. Icons stay visible when mounted;
-   the time label is hover-revealed inside a data-time-hover-root scope. */
+   layout offsets via the composed className. Icons and clock stay visible. */
 
 .actions {
   display: flex;
@@ -39,20 +38,7 @@
   margin: 0 10px;
 }
 
-/* Message containers opt in with data-time-hover-root: the time label fades
-   in on message hover (or keyboard focus within). Opacity keeps the layout
-   stable, and devices without hover keep the label always visible. */
-@media (hover: hover) {
-  [data-time-hover-root] :is(.timeStart, .timeEnd) {
-    opacity: 0;
-    transition: opacity 80ms ease;
-  }
-
-  [data-time-hover-root]:hover :is(.timeStart, .timeEnd),
-  [data-time-hover-root]:focus-within :is(.timeStart, .timeEnd) {
-    opacity: 1;
-  }
-}
+/* Clock stays visible with the action strip (no hover gate). */
 
 .action {
   display: inline-flex;

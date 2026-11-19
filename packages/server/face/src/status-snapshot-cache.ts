@@ -9,6 +9,7 @@
 import { sessionEventCount } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import type { SessionStatusSnapshot } from "./session-status.js";
+import { readSessionOpener } from "./session-opener.js";
 
 type CacheEntry = {
   readonly revision: string;
@@ -56,19 +57,42 @@ export function statusSnapshotRevision(
       childLive += `${child}:${runtime.drain.isActive(child) ? "1" : "0"};`;
     }
   }
-  // Child Status paints parent presence / delivery — include home fingerprints.
+  // 委派方 balls sync from real source sessionIds (subagent parent · opener ·
+  // collab peer · ancestor chain). Fingerprint each so presence_set / drain on
+  // that individual busts this session's Status cache — no shared hardcoded skin.
   const parentLink = runtime.subagents.getByChild(sessionId);
-  const homeId = parentLink?.parentSessionId;
-  const homePresence = homeId ? runtime.presence.get(homeId) : undefined;
-  const homeFp = homeId
-    ? [
-        homeId,
-        runtime.drain.isActive(homeId) ? "1" : "0",
-        homePresence?.emotionId ?? "",
-        homePresence?.tips ?? "",
-        String(homePresence?.updatedAt ?? 0),
-      ].join(":")
-    : "";
+  const opener = readSessionOpener(runtime, sessionId);
+  const sourceIds = new Set<string>();
+  let walkId =
+    parentLink && parentLink.mode !== "fork"
+      ? parentLink.parentSessionId
+      : undefined;
+  while (walkId) {
+    sourceIds.add(walkId);
+    const up = runtime.subagents.getByChild(walkId);
+    walkId =
+      up && up.mode !== "fork" ? up.parentSessionId : undefined;
+  }
+  const openerSource = opener?.sourceSessionId ?? "";
+  if (openerSource) sourceIds.add(openerSource);
+  for (const hop of runtime.agentTeams.neighbors(sessionId, "peer")) {
+    if (hop.label === "sibling") continue;
+    if (!runtime.store.has(hop.id)) continue;
+    sourceIds.add(hop.id);
+  }
+  const homeFp = [...sourceIds]
+    .map((id) => {
+      const row = runtime.presence.get(id);
+      return [
+        id,
+        runtime.drain.isActive(id) ? "1" : "0",
+        runtime.isTurnUiIdle(id) ? "1" : "0",
+        row?.emotionId ?? "",
+        row?.tips ?? "",
+        String(row?.updatedAt ?? 0),
+      ].join(":");
+    })
+    .join(";");
   const badge = runtime.sessionAgentPresets.get(sessionId) ?? "";
   // Live roster looks (Team dress edits must bust Status / Overview cache).
   const lookMemberId =
@@ -127,6 +151,11 @@ export function statusSnapshotRevision(
     typeof presenceUser.overlayHeld === "string" ? presenceUser.overlayHeld : "",
     typeof presenceUser.stickers === "string" ? presenceUser.stickers : "",
   ].join(":");
+  // Overview 委派方: opener seat + whether the human boss has spoken.
+  const openerFp = opener
+    ? `${opener.memberId}:${opener.sourceSessionId}`
+    : "";
+  const humanSpokeFp = runtime.sessionHumanSpoke.has(sessionId) ? "1" : "0";
   // eventCount covers projection cells that fold from the durable log.
   return [
     eventCount,
@@ -142,6 +171,8 @@ export function statusSnapshotRevision(
     badge,
     rosterLookFp,
     bossPresenceFp,
+    openerFp,
+    humanSpokeFp,
   ].join("|");
 }
 

@@ -19,6 +19,7 @@ export type ApiRemoteForwardedEvent =
   | 'llm/adapters-updated'
   | 'plugin-inventory/install-log'
   | 'plugin-inventory/updates-changed'
+  | 'plugin-inventory/boot-changed'
   | 'settings/document-updated'
   | 'settings/seat-titles-updated'
 
@@ -45,6 +46,11 @@ declare module '@xrkseek/cordis' {
       status: 'ready' | 'error' | string,
       checkedAt: number,
     ): void
+    /**
+     * Live overlay boot refreshed — Settings soft-remounts client halves.
+     * @param rev - overlay boot rev (informational).
+     */
+    'plugin-inventory/boot-changed'(rev: string): void
     /** ui-presence titleScheme / title* — remount Agents for agentLabel. */
     'settings/seat-titles-updated'(): void
   }

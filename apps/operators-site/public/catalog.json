@@ -4,11 +4,6 @@
     "download": "https://xrk.indevs.in/",
     "operators": "/"
   },
-  "agt": {
-    "origin": "https://xrk.indevs.in",
-    "list": "/api/harness/operators",
-    "downloadTemplate": "/api/harness/operators/{id}/download"
-  },
   "members": [
     {
       "id": "sample_researcher",

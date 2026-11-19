@@ -83,7 +83,7 @@
 | 回合后启发式 / 会话结束 Phase1·2 | **能跑** | 写入分层 store 的缺省区；不刷新本会话冻结段 |
 | 站立 `AGENTS` / `SOUL` / inject `USER` | **能跑** | 与策展分界见上表；站立不经 `memory` 工具 |
 | Mnemon · memory-embed | **分开** | 文档库 / 向量检索，不是策展 `MEMORY.md` |
-| 本会话即时生效的「干预记忆」 | **未做** | 写盘成功后，当前组合的系统提示仍是旧快照；下一会话才读到 |
+| 本会话即时生效的「干预记忆」 | **能跑** | 系统提示仍冻会话开始快照；磁盘变更后同回合/下回合注入 last-wins `<external_curated_memory>`（优先于冻结段） |
 | 按主题检索历史会话摘要 | **未做** | 无 rollout summary 索引；只有冻结全文 + `list` |
 | 记忆引用 / 引用块 | **未做** | 模型不必标明用了哪条记忆 |
 
@@ -102,7 +102,7 @@
 
 吸收业界 harness 策展流水线的长处，落点仍用本仓 `memory` / 分区 / 冻结语义（不引入第二套记忆产品名）。以下仅供审阅，**尚未改实现**。
 
-1. **写后可见性** — 用户明确要求「记住 / 以后按这个做」时：要么在工具结果里写清「已落盘，本会话 system 仍是旧快照」；要么提供可选的本会话补充注入（不改冻结契约的前提下）。避免「写成功了却继续踩同一坑」。
+1. **写后可见性** — **已做**：磁盘变更后同会话注入 last-wins `<external_curated_memory>`（优先于 system 冻结段）；工具结果仍可说明「冻结段未改写」。
 2. **工具防呆** — `action` 与 `operations` 都缺时返回可执行示例（含 `action`+`content`+推荐 `scope`）；schema / 描述强调二选一必填。
 3. **缺省区诚实** — 策略段与 polish skill 与 Host 对齐：主会话默认 `session`，干员默认 `agent`；跨项目偏好才写 `global`。
 4. **巩固质量** — Phase2 从「抽 JSON 短句」升级为「按证据合并 / 删过时 / 区分偏好与单次任务结论」，并限制把过程性排障写进跨会话区。
@@ -222,7 +222,7 @@ Disk zones and Host wiring ship; “user said remember → this session immediat
 | After-turn heuristics / session-end Phase1·2 | **Working** | Write the layered store’s default zone; freeze unchanged this session |
 | Standing `AGENTS` / `SOUL` / inject `USER` | **Working** | Split as in the table above; standing is not the `memory` tool |
 | Mnemon · memory-embed | **Separate** | Document library / embeddings — not curated `MEMORY.md` |
-| Same-session “intervention memory” | **Not done** | Successful writes hit disk; the live system prompt stays the old freeze until the next composition |
+| Same-session “intervention memory” | **Working** | System freeze stays at session start; disk moves inject a last-wins `<external_curated_memory>` fragment (prefer over the freeze) |
 | Retrieve prior-session summaries by topic | **Not done** | No rollout-summary index; freeze + `list` only |
 | Memory citations | **Not done** | Model need not mark which entries it used |
 
@@ -241,7 +241,7 @@ Common failure: empty `action` and no `operations` → `Unknown action ''` (tool
 
 Absorb strengths from industry harness curated-memory pipelines; keep this repo’s `memory` / zones / freeze semantics (no second product name). Review only — **not implemented yet**.
 
-1. **Write visibility** — When the user explicitly asks to remember / obey a rule going forward: either state in the tool result that disk updated but this session’s system freeze is unchanged, or offer optional same-session supplemental inject without breaking the freeze contract. Avoid “write succeeded, same mistake continues.”
+1. **Write visibility** — **Done**: disk moves inject a last-wins `<external_curated_memory>` fragment in the same session (prefer over the system freeze); tool results may still note that the freeze itself is unchanged.
 2. **Tool guardrails** — If both `action` and `operations` are missing, return a copy-pasteable example (`action`+`content`+recommended `scope`); schema/description require one of the two.
 3. **Honest defaults** — Align policy text and polish skill with Host: main session → `session`, 干员 → `agent`; cross-project preferences → `global`.
 4. **Consolidation quality** — Evolve Phase2 from “JSON short facts” toward evidence-backed merge / drop stale / separate preferences from one-off task conclusions; keep process debugging out of cross-session zones.

@@ -308,7 +308,9 @@ export class FaceGoalStore {
     const runtime = this.requireRuntime();
     goal.roundsStarted += 1;
     goal.updatedAt = Date.now();
-    admitPrompt(runtime.store, sessionId, content);
+    admitPrompt(runtime.store, sessionId, content, {
+      source: { kind: "plugin", plugin: "goals", form: "notice" },
+    });
     runtime.drain.wake(sessionId);
   }
 

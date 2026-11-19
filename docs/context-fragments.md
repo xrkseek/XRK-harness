@@ -43,7 +43,7 @@ Harness：`createHarnessComposition({ contextFragmentProviders, contextFragmentB
 
 Chat 壳对 `fragmentKind: "additional_context"` 使用 `visibility: "hidden"`：模型仍从 session 日志可见，**不**再展开成「上下文注入」行。
 
-Host **turn-start**（priority 高→低）：`instruction_authority` · `session_capability`（`mcp_mount` / `ask:`）· `session_posture`（IM/奇创/harness·shallow；Frugal/Shell 空）· `session_lanes`（本会话主线/支线/open todos + 完成后切换动词；长短会话每回合）· `boss_status` · `seat_identity` · `collab_board`（名册 ids + 近 24h 主线；同道一句，长派活链在 posture）。Settings → 插件 → Inject 的 `session://*` 与上列一一对应（`skill.list` / `skill.read`）。seed AGENTS / skills 仍走 inject。子会话不吃 posture 全板，但吃 `session_lanes`（authority / capability / seat 仍可有）。委派用 `subagent member_id`，别贴 playbook。
+Host **turn-start**（priority 高→低）：`instruction_authority`（三行 dense）· **`curated_memory` live**（仅当磁盘相对会话开始冻结有变动；priority 9.0；与 system 冻结段并存，模型优先 live）· `session_capability`（`permission`+`gate`+合并 `tool_surface` · `mcp_mount` / `ask:`；无 UI label）· `session_posture`（IM/奇创/harness·shallow；Frugal/Shell 空）· `session_lanes`（空会话一行 idle；有主线/支线/todo 时展开）· `boss_status` · `seat_identity` · `collab_board`（空 peers 一行；有主线/同道再展开）。`post-tool` 同样可刷 live curated memory。Settings → 插件 → Inject 的 `session://*` 与上列一一对应（`session://memory` 是区划普查 + 指针，不是 MEMORY 全文）。seed AGENTS / skills 仍走 inject。子会话不吃 posture 全板，但吃 `session_lanes`。委派用 `subagent member_id`，别贴 playbook。
 
 **一事一处：** ask 只在 capability；MCP **用法**看 `mcp_mount`，**配置**仍在向阳。
 
@@ -53,7 +53,7 @@ Host **turn-start**（priority 高→低）：`instruction_authority` · `sessio
 
 本仓交付可插拔 **section + budget** 收集管线（marked additional_context · recap）。工具预审走 auto-review，不在本包。
 
-相关：[workspace-inject.md](./workspace-inject.md) · [status.md](./status.md)
+相关：[workspace-inject.md](./workspace-inject.md) · [prompt-engineering.md](./prompt-engineering.md) · [status.md](./status.md)
 
 ---
 
@@ -102,7 +102,7 @@ Harness: `createHarnessComposition({ contextFragmentProviders, contextFragmentBu
 
 The chat shell marks `fragmentKind: "additional_context"` as `visibility: "hidden"`: still model-visible from the session log, **not** rendered as expandable 「上下文注入」 rows.
 
-Host **turn-start** (high→low): `instruction_authority` · `session_capability` (`mcp_mount` / `ask:`) · `session_posture` (IM/奇创/harness·shallow; empty for Frugal/Shell) · `session_lanes` (this session’s 主线 / 支线 / open todos + completion-switch verbs; every turn) · `boss_status` · `seat_identity` · `collab_board` (roster ids + recent 主线; one same-lane spout; long dispatch chains stay in posture). Settings → Plugins → Inject `session://*` mirrors that set (`skill.list` / `skill.read`). Seed AGENTS / skills stay on inject. Children skip full posture but still get `session_lanes` (authority / capability / seat may still appear). Spawn with `subagent member_id`; do not paste playbooks.
+Host **turn-start** (high→low): dense `instruction_authority` · **live `curated_memory`** (only when disk moved past the session-start freeze; priority 9.0; coexists with the system freeze — prefer live) · `session_capability` (`permission`+`gate`+merged `tool_surface` · `mcp_mount` / `ask:`; no UI label) · `session_posture` (IM/奇创/harness·shallow; empty for Frugal/Shell) · idle-or-expanded `session_lanes` · `boss_status` · `seat_identity` · `collab_board` (one idle peers line; expands with 主线/roster). `post-tool` can refresh live curated memory the same way. Settings → Plugins → Inject `session://*` mirrors that set (`session://memory` is a zone census + pointer, not a MEMORY dump). Children skip full posture but still get `session_lanes`. Spawn with `subagent member_id`; do not paste playbooks.
 
 **One fact one place:** ask → capability; MCP **usage** → `mcp_mount` (config on Xiangyang); 主线/支线/todo → `session_lanes` (not restated in posture); dispatch chains → posture; board → ids.
 
@@ -112,4 +112,4 @@ Host **turn-start** (high→low): `instruction_authority` · `session_capability
 
 This repo ships the pluggable **section + budget** collection pipeline (marked additional_context · recap). Tool pre-review is auto-review elsewhere, not this package.
 
-Related: [workspace-inject.md](./workspace-inject.md) · [status.md](./status.md)
+Related: [workspace-inject.md](./workspace-inject.md) · [prompt-engineering.md](./prompt-engineering.md) · [status.md](./status.md)

@@ -1,5 +1,11 @@
 /** Title text normalization and UTF-8-safe truncation (XRK port of DSH session-title). */
 
+import {
+  isTextBlock,
+  looksLikeAttachmentHandleCaption,
+  type MessageContent,
+} from "@xrkseek/protocol";
+
 /* eslint-disable no-control-regex -- intentional strip of terminal / C0-C1 controls */
 const OSC_SEQUENCE =
   /(?:\u001B\]|\u009D)(?:(?!\u0007|\u001B\\)[\s\S])*(?:\u0007|\u001B\\|$)/gu;
@@ -59,6 +65,46 @@ export function fallbackSessionTitle(
   assertPositiveInteger("maxWords", maxWords);
   const words = cleanTitleText(input).split(" ").filter(Boolean).slice(0, maxWords);
   return truncateTitleUtf8(words.join(" "), maxBytes).trimEnd();
+}
+
+/**
+ * Reader-authored prose for session title fallback.
+ * Skips `modelOnly` handle captions and file/image blocks — `flattenText`
+ * keeps those for the model and must not become DocumentTitle / sidebar labels.
+ */
+export function humanTitleSourceText(content: MessageContent): string {
+  if (typeof content === "string") {
+    return looksLikeAttachmentHandleCaption(content) ? "" : content;
+  }
+  const parts: string[] = [];
+  for (const block of content) {
+    if (!isTextBlock(block)) continue;
+    if (block.modelOnly === true) continue;
+    if (looksLikeAttachmentHandleCaption(block.text)) continue;
+    parts.push(block.text);
+  }
+  return parts.join("\n");
+}
+
+/**
+ * Soft title from the first named image/file attachment when the opener has
+ * no reader prose (pure media send). Prefer a human filename over a sha256
+ * handle caption in the sidebar.
+ */
+export function softAttachmentTitleSource(content: MessageContent): string {
+  if (typeof content === "string") return "";
+  for (const block of content) {
+    if (block.type === "image") {
+      const name = block.attachment.name?.trim();
+      if (name) return name;
+      continue;
+    }
+    if (block.type === "file") {
+      const name = block.attachment.name?.trim();
+      if (name) return name;
+    }
+  }
+  return "";
 }
 
 export const DEFAULT_TITLE_MAX_BYTES = 120;

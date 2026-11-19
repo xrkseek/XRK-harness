@@ -265,12 +265,22 @@ describe("向阳空间 workspace", () => {
     expect(first.installed).toContain("xrk-home-config");
     expect(first.installed).toContain("xrk-memory-polish");
     expect(first.installed).toContain("xrk-mainline-sideline");
+    expect(first.revision).toBeGreaterThanOrEqual(11);
+    const demandBody = await readFile(
+      path.join(root, ".xrk", "skills", "xrk-demand-translate", "SKILL.md"),
+      "utf8",
+    );
+    expect(demandBody).toMatch(/Dispatch|dispatcher|ORCHESTRATE|勿抢活|don't ship/i);
+    expect(demandBody).toMatch(/workspace_session_prompt/);
+    expect(demandBody).toMatch(/ws_default/);
     const pluginBody = await readFile(
       path.join(root, ".xrk", "skills", "xrk-plugin-dev-care", "SKILL.md"),
       "utf8",
     );
-    expect(pluginBody).toMatch(/createPlugin/);
-    expect(pluginBody).toMatch(/xrkh plugin add/);
+    // Thin orch pointer — full template lives in shared seed `xrk-plugin`.
+    expect(pluginBody).toMatch(/xrk-plugin/);
+    expect(pluginBody).toMatch(/workspace_session_prompt/);
+    expect(pluginBody).toMatch(/ws_default/);
     const second = await seedXiangyangSkills(root);
     expect(second.installed).toEqual([]);
   });
@@ -285,6 +295,7 @@ describe("向阳空间 workspace", () => {
     const refreshed = await seedXiangyangSkills(root);
     expect(refreshed.installed).toContain("xrk-memory-polish");
     const body = await readFile(file, "utf8");
-    expect(body).toMatch(/scope=global\|workspace\|session\|agent/);
+    expect(body).toMatch(/xrk-curated-memory/);
+    expect(body).toMatch(/scope:"global"|scope=global/);
   });
 });

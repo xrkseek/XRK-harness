@@ -35,11 +35,11 @@ describe("formatWebFetchGuidance", () => {
     );
   });
 
-  it("keeps binary/proxy contracts without naming search/browser", () => {
+  it("keeps binary/redirect contracts without naming search/browser", () => {
     const text = formatWebFetchGuidance(["web_fetch", "web_search", "browser_open"]);
     expect(text).toContain("web_fetch");
     expect(text).toMatch(/binar/i);
-    expect(text).toMatch(/proxy/i);
+    expect(text).toMatch(/Location/i);
     expect(text).not.toContain("web_search");
     expect(text).not.toContain("browser");
     expect(text).not.toContain("Playwright");
@@ -53,11 +53,10 @@ describe("formatWebFetchGuidance", () => {
 describe("formatBrowserGuidance", () => {
   it("mentions loop/ladder without web_* or computer_use routing", () => {
     const text = formatBrowserGuidance(["browser_open", "browser_act"]);
-    expect(text).toContain("browser_open");
-    expect(text).toContain("Loop:");
+    expect(text).toContain("Browser:");
     expect(text).toContain("Ladder:");
     expect(text).toContain("browser_find");
-    expect(text).toContain("covered");
+    expect(text).toMatch(/[Cc]overed/);
     expect(text).not.toContain("web_fetch");
     expect(text).not.toContain("web_search");
     expect(text).not.toContain("computer_use");
@@ -110,6 +109,11 @@ describe("formatWebFamilyGuidance", () => {
     expect(WEB_FAMILY_GUIDANCE).toContain("web_fetch");
     expect(WEB_FAMILY_GUIDANCE).toContain("browser_*");
     expect(WEB_FAMILY_GUIDANCE).toContain("computer_use");
+    expect(WEB_FAMILY_GUIDANCE).toMatch(/untrusted/i);
+    // Family also carries per-tool contracts (preset no longer double-registers).
+    expect(WEB_FAMILY_GUIDANCE).toContain("cite URLs");
+    expect(WEB_FAMILY_GUIDANCE).toMatch(/binar/i);
+    expect(WEB_FAMILY_GUIDANCE).toMatch(/Location/i);
   });
 
   it("returns empty when no web tools", () => {

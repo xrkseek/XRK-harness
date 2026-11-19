@@ -33,6 +33,7 @@ import type { ProjectionsBaseline } from './projection-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
 import { SessionQueueMirror, echoRpcIdsFromUserMessage } from './queue-mirror.ts'
 import { isTokenDelta } from './assistant-timing.ts'
+import { exclusiveBeforeSeqForWireSeq as mapExclusiveBeforeSeq } from './exclusive-before-seq.ts'
 
 /**
  * Messages requested per history page (open / loadOlder).
@@ -59,6 +60,13 @@ export interface SessionOptions {
    * (hidden, still reusable by connectWorkspace).
    */
   onEngaged?(session: Session): void
+  /**
+   * Truncate / delete wiped every speech turn: restore Hero blank so the
+   * column is not a white void with an active composerPhase. Monotone
+   * {@link Session.handleBlank} ignores Host list lag; this is the one
+   * local path allowed to flip blank back to true.
+   */
+  onReblank?(session: Session): void
   /**
    * Local unsent composer draft boundary flip: fires when the draft crosses
    * into or out of emptiness. The manager mirrors it into the list row so a
@@ -163,6 +171,12 @@ export class Session implements SessionFace {
   private stitching = false
   /** subscribed.lastSeq baseline (gap detection; null when no subscribed frame arrived — degrade to the liveBuffer dedup path). */
   private subscribedLastSeq: number | null = null
+  /**
+   * After an in-place truncate, drop late mux frames from the cancelled tail
+   * (`kept < seq <= rejectLiveThroughSeq`). Face's mux clock stays monotonic,
+   * so post-cut admits land above this watermark and are kept.
+   */
+  private rejectLiveThroughSeq: number | null = null
 
   /**
    * Per-session projection value store (push model; see the session-projection
@@ -547,10 +561,33 @@ export class Session implements SessionFace {
    * @param line - the full command line, leading slash included.
    * @returns the admission result, or the error branch on transport failure.
    */
-  async command(line: string): Promise<RemoteResult<{ matched: boolean }>> {
+  async command(line: string): Promise<RemoteResult<{
+    matched: boolean
+    /** Face slash settle when the line matched a command. */
+    outcome?: { kind: 'success' | 'error'; text?: string }
+  }>> {
     const result = await this.remote.commands.execute(this.sessionId, line)
     if (!result.ok) return result
-    return { ok: true, value: { matched: result.value !== undefined } }
+    if (result.value === undefined) return { ok: true, value: { matched: false } }
+    const execution = result.value as {
+      result?: { kind?: string; text?: string }
+    }
+    const kind = execution.result?.kind
+    const text = typeof execution.result?.text === 'string' ? execution.result.text : undefined
+    return {
+      ok: true,
+      value: {
+        matched: true,
+        ...(kind === 'success' || kind === 'error'
+          ? {
+              outcome: {
+                kind,
+                ...(text !== undefined && text !== '' ? { text } : {}),
+              },
+            }
+          : {}),
+      },
+    }
   }
 
   /** First open: pull the tail page (idempotent — in-flight/already-open returns the existing promise). */
@@ -675,6 +712,7 @@ export class Session implements SessionFace {
     this.pending.clear()
     this.pendingRev++
     this.subscribedLastSeq = null
+    this.rejectLiveThroughSeq = null
     this.liveBuffer = []
     this.deferredStreamAppends = []
     this.notifier.markDirty()
@@ -689,13 +727,31 @@ export class Session implements SessionFace {
    * rows with `seq <= eventCount` stay. Returns false when the kept prefix
    * is not in the loaded window (caller falls back to {@link resync}).
    */
+  /**
+   * Face truncate `beforeSeq` is a durable log offset; chat nodes carry mux
+   * seq. See {@link mapExclusiveBeforeSeq}.
+   */
+  exclusiveBeforeSeqForWireSeq(wireSeq: number): number {
+    return mapExclusiveBeforeSeq({
+      wireSeq,
+      eventSeqs: this.events.map((event) => event.seq),
+      hasMore: this.hasMore,
+      baseSeq: this.baseSeq,
+    })
+  }
+
   applyTruncateCut(eventCount: number): boolean {
     if (this.openState !== 'open') return false
     const kept = Math.max(0, Math.floor(eventCount))
     const first = this.events[0]
-    // Entire loaded window sits after the cut — need a full rebuild to paint
-    // the kept prefix that lives only in older history.
-    if (first !== undefined && first.seq > kept) return false
+    // Arm ghost barrier + clear chrome *before* any early return: resync
+    // fallback must not revive cancelled-tail mux / stale queue dock rows.
+    this.armPostTruncateIdle(kept)
+    // Entire loaded window sits after a *non-empty* kept prefix — need a full
+    // rebuild to paint history that lives only outside the window. kept=0
+    // (delete the opener / wipe the log) is a valid empty prefix: cutting in
+    // place must succeed, or late mux frames resurrect the deleted tail.
+    if (kept > 0 && first !== undefined && first.seq > kept) return false
 
     let cutIndex = this.events.length
     for (let i = 0; i < this.events.length; i++) {
@@ -705,28 +761,73 @@ export class Session implements SessionFace {
       }
     }
 
+    if (cutIndex < this.events.length) {
+      const keptEvents = this.events.slice(0, cutIndex)
+      const keptViews = this.views.slice(0, cutIndex)
+      this.events = keptEvents
+      this.views = keptViews
+      this.baseSeq = keptEvents[0]?.seq ?? 0
+      this.conversation.replaceWindow(
+        keptEvents.map((event, i) => ({ event, view: keptViews[i] })),
+        this.hasMore,
+      )
+    }
+    this.reblankIfTruncateEmptiedChat()
+    this.notifier.markDirty()
+    return true
+  }
+
+  /**
+   * After Face truncate: drop cancelled-tail mux, clear Stop/queue/pending
+   * chrome, and park the next beginSubmission as transcript.
+   */
+  private armPostTruncateIdle(kept: number): void {
+    let rejectThrough = kept
+    const bumpReject = (seq: number): void => {
+      if (seq > rejectThrough) rejectThrough = seq
+    }
+    const tail = this.windowTailSeq()
+    if (tail !== null) bumpReject(tail)
+    if (this.subscribedLastSeq !== null) bumpReject(this.subscribedLastSeq)
+    for (const item of this.liveBuffer) bumpReject(item.event.seq)
+    for (const item of this.deferredStreamAppends) bumpReject(item.event.seq)
+    this.rejectLiveThroughSeq = rejectThrough > kept ? rejectThrough : null
+
     this.deferredStreamAppends = this.deferredStreamAppends.filter(item => item.event.seq <= kept)
     this.liveBuffer = this.liveBuffer.filter(item => item.event.seq <= kept)
     if (this.subscribedLastSeq !== null && this.subscribedLastSeq > kept) {
       this.subscribedLastSeq = kept
     }
 
-    if (cutIndex === this.events.length) {
-      this.notifier.markDirty()
-      return true
+    if (this.running) this.handleRunning(false)
+    if (this.queueMirror.reset()) this.notifier.markDirty()
+    this.hostQueuedRpcIds.clear()
+    if (this.pending.size > 0) {
+      this.pending.clear()
+      this.pendingRev++
     }
+    for (const submission of [...this.pendingSubmissions]) {
+      this.retireFailedSubmission(submission.requestId)
+    }
+  }
 
-    const keptEvents = this.events.slice(0, cutIndex)
-    const keptViews = this.views.slice(0, cutIndex)
-    this.events = keptEvents
-    this.views = keptViews
-    this.baseSeq = keptEvents[0]?.seq ?? 0
-    this.conversation.replaceWindow(
-      keptEvents.map((event, i) => ({ event, view: keptViews[i] })),
-      this.hasMore,
+  /**
+   * Delete-opener / wipe: no speech left in the window → Hero blank again.
+   * Setup-only rows (permission / sandbox / orphan-stripped presets) do not
+   * count as conversation content.
+   */
+  private reblankIfTruncateEmptiedChat(): void {
+    const hasSpeech = this.events.some(event =>
+      event.type === 'turn/start'
+      || event.type === 'command/run'
+      || event.type === 'user/message',
     )
-    this.notifier.markDirty()
-    return true
+    if (hasSpeech) return
+    if (this.blankBit && !this.promptAttempted && !this.firstPromptPendingTurn) return
+    this.blankBit = true
+    this.promptAttempted = false
+    this.firstPromptPendingTurn = false
+    this.options.onReblank?.(this)
   }
 
   /**
@@ -750,7 +851,13 @@ export class Session implements SessionFace {
         this.projections.reseal(result.value.projections)
       } else {
         const last = this.windowTailSeq()
-        if (last !== null) this.projections.truncate(last)
+        if (last !== null) {
+          this.projections.truncate(last)
+        } else {
+          // Wipe-to-empty: no kept tail and Host omitted the baseline — drop
+          // title / turn chrome so DocumentTitle and list rows reblank.
+          this.projections.clear()
+        }
       }
       this.notifier.markDirty()
     } catch {
@@ -1029,6 +1136,8 @@ export class Session implements SessionFace {
     const buffered = this.liveBuffer
     this.liveBuffer = []
     for (const item of buffered) this.appendLive(item.event, item.view)
+    // Truncate → resync fallback: restore Hero when the rebuilt window has no speech.
+    if (this.rejectLiveThroughSeq !== null) this.reblankIfTruncateEmptiedChat()
     this.notifier.markDirty()
   }
 
@@ -1087,13 +1196,26 @@ export class Session implements SessionFace {
    *  raw range, which lets Conversation Definitions correlate every recorded event between its
    *  ends and lets a compaction checkpoint resolve its cited summary event. */
   private acceptLiveEvent(event: SessionEvent, view?: ToolEventView): void {
+    // Truncate barrier: ignore cancelled-tail frames that race past the cut.
+    // Face keeps a monotonic mux clock, so the first post-cut admit often
+    // jumps above `kept + 1` — that is not a reconnect hole; append it.
+    let postTruncateJump = false
+    if (this.rejectLiveThroughSeq !== null && event.seq > 0) {
+      if (event.seq <= this.rejectLiveThroughSeq) {
+        const keptTail = this.windowTailSeq() ?? 0
+        if (event.seq > keptTail) return
+      } else {
+        this.rejectLiveThroughSeq = null
+        postTruncateJump = true
+      }
+    }
     if (this.openState === 'loading' || this.stitching) {
       this.liveBuffer.push({ event, view })
       return
     }
     if (this.openState !== 'open') return // cold/error: no window upkeep (history fully backfills on open)
     const tailSeq = this.windowTailSeq()
-    if (tailSeq !== null && event.seq > tailSeq + 1) {
+    if (tailSeq !== null && event.seq > tailSeq + 1 && !postTruncateJump) {
       this.liveBuffer.push({ event, view })
       void this.repairGap()
       return

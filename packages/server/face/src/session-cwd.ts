@@ -112,20 +112,26 @@ async function setSessionWorkingDirectoryUnlocked(
   }
 
   runtime.sessionCwds.set(sessionId, abs);
-  const attach = runtime.workspaces.resolveAttachTarget({ cwd: abs });
-  if ("error" in attach) {
-    runtime.sessionCwds.set(sessionId, previous);
-    return { ok: false, error: attach.error };
-  }
-  if (attach.workspaceId) {
-    runtime.workspaces.attachSession(sessionId, attach.workspaceId);
-    if (
-      isOrchestrationWorkspaceId(attach.workspaceId) &&
-      runtime.store.has(sessionId)
-    ) {
-      ensureOrchestrationFullAccess(runtime.store, sessionId, {
-        autoGate: runtime.permissionAuto,
-      });
+  // Cwd may diverge from the sidebar workspace. Do not rebind membership on
+  // every cd — that moved sessions (e.g. 施工员 project → Host monorepo) when
+  // the agent entered another registered path. Only adopt when ungrouped.
+  const currentWs = runtime.workspaces.workspaceIdOf(sessionId);
+  if (!currentWs) {
+    const attach = runtime.workspaces.resolveAttachTarget({ cwd: abs });
+    if ("error" in attach) {
+      runtime.sessionCwds.set(sessionId, previous);
+      return { ok: false, error: attach.error };
+    }
+    if (attach.workspaceId) {
+      runtime.workspaces.attachSession(sessionId, attach.workspaceId);
+      if (
+        isOrchestrationWorkspaceId(attach.workspaceId) &&
+        runtime.store.has(sessionId)
+      ) {
+        ensureOrchestrationFullAccess(runtime.store, sessionId, {
+          autoGate: runtime.permissionAuto,
+        });
+      }
     }
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);

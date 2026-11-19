@@ -6,6 +6,6 @@
 - `startJob` / `startManagedJob` / `listJobs` / `killJob` / `readJobOutput` / `waitJob` / `dispose` — in-process jobs（`stopping` · `reported` · per-owner 并发）
 - `createSessionScopedShell` — Host 共享 root 时按 `sessionId` 隔离（CV DSH owner fence）
 - `createBashTools` → `bash` · `job_list` · `job_output` · `job_kill`
-- `JOBS_PROMPT_TEXT` — harness `tool:jobs` section
+- `JOBS_PROMPT_TEXT` — empty; settle rules live in `formatShellRoutingPrompt` (`tool:shell-routing`)
 
 See `docs/shell-jobs.md` · `docs/seams.md`.

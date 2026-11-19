@@ -41,9 +41,14 @@ type QueueUserMessageData = {
  */
 export function echoRpcIdsFromUserMessage(data: QueueUserMessageData): readonly string[] {
   const source = data.source
-  const primary = (source?.kind === 'user' && typeof source.rpcId === 'string')
-    ? source.rpcId
-    : (typeof data.rpcId === 'string' ? data.rpcId : undefined)
+  // Prefer source.rpcId for any speech kind (user / seat / …). Fall back to
+  // top-level data.rpcId when Face stamped only the event field.
+  const sourceRpc =
+    typeof source?.rpcId === 'string' && source.rpcId.length > 0
+      ? source.rpcId
+      : undefined
+  const primary = sourceRpc
+    ?? (typeof data.rpcId === 'string' && data.rpcId.length > 0 ? data.rpcId : undefined)
   const extras = Array.isArray(data.rpcIds)
     ? data.rpcIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
     : []
@@ -99,7 +104,7 @@ export class SessionQueueMirror {
     }
     this.current = items.map(item => {
       const source = item.message.source as { readonly kind?: unknown; readonly rpcId?: unknown } | undefined
-      const rpcId = source?.kind === 'user' && typeof source.rpcId === 'string'
+      const rpcId = typeof source?.rpcId === 'string' && source.rpcId.length > 0
         ? source.rpcId as RpcId
         : undefined
       const content = item.message.content.map((block) => {

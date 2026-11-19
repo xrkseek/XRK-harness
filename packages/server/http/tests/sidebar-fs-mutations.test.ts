@@ -163,6 +163,23 @@ describe("sidebar fs mutations", () => {
     });
   });
 
+  it("fs.write keeps absolute chat-woken paths under the session root when cwd is a nested explorer override", async () => {
+    await withWorkspace(async (base, cwd) => {
+      const note = path.join(cwd, "notes.md");
+      writeFileSync(note, "# old\n");
+      const nested = path.join(cwd, "nested");
+      mkdirSync(nested);
+      // Editor tab path is absolute (chat open); explorer scope.cwd may be a subdir.
+      const body = await callApi(base, "fs.write", {
+        cwd: nested,
+        path: note,
+        content: "# saved\n",
+      });
+      expect(body.ok).toBe(true);
+      expect(readFileSync(note, "utf8")).toBe("# saved\n");
+    });
+  });
+
   it("fs.watch.sync marks levels unwatched for degraded polling", async () => {
     await withWorkspace(async (base, cwd) => {
       mkdirSync(path.join(cwd, "src"));

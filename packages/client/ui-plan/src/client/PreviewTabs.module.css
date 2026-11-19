@@ -54,7 +54,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 7px 10px 6px;
+  padding: 8px 12px 7px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 62%, var(--dsw-alias-bg-base));
 }
@@ -139,19 +139,78 @@
 .delegateFromLayer {
   min-width: 0;
   flex: 0 1 auto;
+  transform-origin: top center;
 }
 
-.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:not(:last-child) {
-  margin-right: -28%;
-  opacity: 0.88;
-  transform: scale(0.86);
-  transform-origin: top center;
+/* Ancestors shrink/fade toward root (depth from lead). Lead stays full size.
+   Keep pair-stage shape (not compact chips) so the stack reads as N balls. */
+.delegateFromLayer[data-depth='1'] {
+  margin-right: -42%;
+  opacity: 0.9;
+  transform: scale(0.88);
+}
+
+.delegateFromLayer[data-depth='2'] {
+  margin-right: -42%;
+  opacity: 0.78;
+  transform: scale(0.76);
+}
+
+.delegateFromLayer[data-depth='3'] {
+  margin-right: -42%;
+  opacity: 0.66;
+  transform: scale(0.66);
+}
+
+/* Non-lead layers: peek stages only — meta would stack as unreadably overlapping captions. */
+.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:not([data-lead]) {
   pointer-events: none;
 }
 
-.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:last-child {
+.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:not([data-lead]) [data-presence-meta] {
+  display: none;
+}
+
+.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer[data-lead] {
   position: relative;
   z-index: 2;
+}
+
+/* Collapsed rail: one lead chip only — overlapping compact chips read as noise. */
+.delegatePair[data-collapsed] .delegateFromLayer:not([data-lead]) {
+  display: none;
+}
+
+/* Narrow Overview: stronger overlap so N stages fit beside the child ball. */
+@media (max-width: 767px) {
+  .delegateFromLayer[data-depth='1'],
+  .delegateFromLayer[data-depth='2'],
+  .delegateFromLayer[data-depth='3'] {
+    margin-right: -55%;
+  }
+
+  /* 3–4 parents: peek more aggressively or the left column clips the lead. */
+  .delegateFromStack[data-count='3'] .delegateFromLayer[data-depth='1'],
+  .delegateFromStack[data-count='3'] .delegateFromLayer[data-depth='2'],
+  .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='1'],
+  .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='2'],
+  .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='3'] {
+    margin-right: -64%;
+  }
+}
+
+:global(html[data-xrk-layout-phone]) .delegateFromLayer[data-depth='1'],
+:global(html[data-xrk-layout-phone]) .delegateFromLayer[data-depth='2'],
+:global(html[data-xrk-layout-phone]) .delegateFromLayer[data-depth='3'] {
+  margin-right: -55%;
+}
+
+:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='3'] .delegateFromLayer[data-depth='1'],
+:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='3'] .delegateFromLayer[data-depth='2'],
+:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='1'],
+:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='2'],
+:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='3'] {
+  margin-right: -64%;
 }
 
 .delegatePair:not([data-collapsed]) {
@@ -174,7 +233,8 @@
   justify-content: center;
   gap: 4px;
   width: 52px;
-  /* Sit beside stage mid (~155px runway), not the meta footer. */
+  /* Align to pair-stage mid (~155px), not the role/emotion meta under the lead. */
+  align-self: start;
   margin-top: 56px;
   padding-bottom: 0;
   color: var(--dsw-alias-label-tertiary);
@@ -213,6 +273,10 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--dsw-alias-label-secondary);
+}
+
+.delegateCaption[data-live] {
+  color: var(--dsw-alias-label-primary);
 }
 
 .bossSharedChip {
@@ -571,6 +635,23 @@
 .valueChip[data-tone='warn'] {
   color: var(--dsw-alias-state-warn-label);
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent);
+}
+
+.valueChip[data-tone='ok'] {
+  color: var(--dsw-alias-state-success-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent);
+}
+
+.valueChip[data-tone='danger'] {
+  color: var(--dsw-alias-state-error-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 16%, transparent);
+}
+
+.curatedMemoryPhase2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .valueStrong {

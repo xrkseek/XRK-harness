@@ -8,6 +8,7 @@ import {
 } from "@xrkseek/core-session";
 import { createStdTools, createToolRegistry } from "@xrkseek/core-tools";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
+import { AUTO_CONTINUE_ON_MAX_TOKENS_TEXT } from "../src/auto-continue.js";
 import { runTurn } from "../src/index.js";
 
 describe("runTurn", () => {
@@ -139,15 +140,62 @@ describe("runTurn", () => {
     );
     expect(auto).toHaveLength(1);
     expect(auto[0]).toMatchObject({
-      content: "继续",
+      content: AUTO_CONTINUE_ON_MAX_TOKENS_TEXT,
       source: { kind: "auto-continue", round: 1 },
     });
     expect(deriveMessages(events)).toEqual([
       { role: "user", content: "hi" },
       { role: "assistant", content: "first-half" },
-      { role: "user", content: "继续" },
+      { role: "user", content: AUTO_CONTINUE_ON_MAX_TOKENS_TEXT },
       { role: "assistant", content: "second-half" },
     ]);
+  });
+
+  it("auto-continue names tools dropped by max-tokens keep/drop", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const tools = createToolRegistry();
+    tools.register({
+      name: "write_file",
+      description: "w",
+      parameters: { type: "object" },
+      async execute() {
+        return { content: "should-not-run" };
+      },
+    });
+    const llm = createReplayAdapter([
+      {
+        content: "writing…",
+        finishReason: "max-tokens",
+        toolCalls: [
+          {
+            id: "c1",
+            name: "write_file",
+            arguments: { path: "big.json", content: "{…}" },
+          },
+        ],
+      },
+      { content: "done in smaller chunks" },
+    ]);
+
+    await runTurn({
+      sessionId: session.id,
+      userText: "hi",
+      store,
+      llm,
+      tools,
+      autoContinueOnMaxTokens: true,
+    });
+
+    const auto = store
+      .get(session.id)
+      .events.find(
+        (e) =>
+          e.type === "user/message" &&
+          (e as { source?: { kind?: string } }).source?.kind === "auto-continue",
+      ) as { content: string } | undefined;
+    expect(auto?.content).toContain("write_file");
+    expect(auto?.content).toContain("被丢弃的工具调用");
   });
 
   it("respects autoContinueMaxRounds and ends max-tokens at the cap", async () => {

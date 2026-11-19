@@ -3,7 +3,7 @@
 > **读者**：维护者
 
 Cloudflare **Pages 静态站**（与下载站 Worker `apps/site` **分开**）。  
-页面只渲染目录与表情球；**zip / json 字节在 AGT**，下载按钮指向 AGT 绝对 URL。
+页面渲染目录与表情球；**zip / json 字节走 GitHub / Pages 静态路径**（不经 AGT）。
 
 | 站 | 产品 | 仓内 |
 |----|------|------|
@@ -17,7 +17,7 @@ Cloudflare **Pages 静态站**（与下载站 Worker `apps/site` **分开**）�
 
 **可以。** 复用下载站同源静态脚本：
 
-`public/presence/emotion-ball/{rings,emotions,ball,engine}.js`
+`public/presence/emotion-ball/{rings,emotions,ball,engine}.js`（[NOTICE.md](./public/presence/emotion-ball/NOTICE.md)）
 
 与产品壳 / `apps/site` 同契约：`EmotionBall.create(el, { emotion, idle, lite, shape, color, … })`。  
 装扮与体色**只活在站点展示层**——`team_export` 的 card/pack **不** round-trip appearance（见 `agent-member-card.ts`）。
@@ -38,22 +38,17 @@ Cloudflare **Pages 静态站**（与下载站 Worker `apps/site` **分开**）�
 瘦卡 = `xrk-member-<名>.json`（`kind: xrk-agent-member`）。  
 用户导入：壳内拖 zip / `team_import pack=` 或 `card=`。
 
-## AGT（并入 `harness-download-Core`，不另起 Core）
+## 目录真源（纯静态）
 
 ```text
-data/harness-download/operators/
-  catalog.json
-  packs/<file>.zip
-  cards/<file>.json
+apps/operators-site/public/
+  catalog.json          # members[] + sites.download
+  samples/*.json|.zip   # 可直接下载的样例
 ```
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/harness/operators` | 列表 |
-| `GET` | `/api/harness/operators/:id/download` | 字节 |
-| `POST` | `/api/harness/operators` | 上传（systemAuth） |
-
-本站 `catalog.json` → `agt.list` = `/api/harness/operators`；优先 live fetch，失败回退静态 `members`。
+`catalog.json` 只读静态 `members`（**不再** live fetch AGT）。  
+旧 Worker `/api/harness/operators*` 已退役 → **410**。  
+`scripts/_sync-agt-harness-download-core.py` / `_prune-agt-harness-download.py` 已退役（exit 2）。
 
 ## Cloudflare Pages 填法（照抄）
 
@@ -71,8 +66,6 @@ data/harness-download/operators/
 **不要**建 Worker。本站是纯静态 Pages。  
 部署后把真实 `https://xrk-operators.pages.dev`（或自定义域）写进下载站 env `OPERATORS_SITE`，并把本站 `public/catalog.json` 里 `sites.download` 指回下载站。
 
-`public/samples/` 放可直接下载的瘦卡样例（AGT 未上线时列表仍可用）。AGT `harness-download` 恢复后跑 `scripts/_sync-agt-harness-download-core.py --restart` 再切回 `/api/harness/operators` 真源。
-
 本地预览：任意静态服务器指到 `public/`。
 
 ## 目录条目
@@ -84,18 +77,17 @@ data/harness-download/operators/
   "id": "mem_example",
   "name": "示例干员",
   "brief": "一句话职责",
-  "kind": "advanced",
+  "kind": "card",
   "shape": "blob",
   "color": "sage",
-  "filename": "xrk-member-示例干员.zip",
-  "downloadUrl": "https://xrk.indevs.in/api/harness/operators/mem_example/download",
+  "filename": "xrk-member-文书示例.json",
+  "downloadUrl": "https://xrk-operators.pages.dev/samples/xrk-member-文书示例.json",
   "sizeBytes": 12000,
   "skills": ["xrk-example"]
 }
 ```
 
-`downloadUrl` 必须是 **AGT 绝对 URL**（或同源反代后的公开 HTTPS）。  
-CF 不扛大包。
+`downloadUrl` 须为 **Pages / GitHub 公开 HTTPS**（同源相对路径也可）。不要再写 AGT `/api/harness/operators/...`。
 
 ---
 
@@ -104,6 +96,6 @@ CF 不扛大包。
 > **Audience**: Maintainers
 
 Cloudflare **Pages** (separate from the download **Worker** in `apps/site`).  
-UI + emotion balls here; pack bytes on **AGT**.
+UI + emotion balls here; pack/card bytes are **static GitHub / Pages assets** — AGT harness-download operators API is retired.
 
-Emotion-ball scripts are vendored under `public/presence/emotion-ball/` (same as `apps/site`). Pack layout: Face `agent-member-pack.ts`. Pages root = `apps/operators-site`, output = `public`, project name `xrk-operators`.
+Emotion-ball scripts are vendored under `public/presence/emotion-ball/` (same as `apps/site`). Pack layout: Face `agent-member-pack.ts`. Pages root = `apps/operators-site`, output = `public`, project name `xrk-operators`. Catalog is static `catalog.json` only (no live AGT hop).

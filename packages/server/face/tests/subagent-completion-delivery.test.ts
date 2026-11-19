@@ -186,6 +186,71 @@ describe("subagent completion delivery", () => {
     expect(wakes).toContain(parentId);
   });
 
+  it("does not wake a still-running parent (steer stays in-turn, no extra 轮次)", async () => {
+    const store = createMemorySessionStore();
+    const admits: { sessionId: string; delivery?: string }[] = [];
+    const wakes: string[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: {
+        wake(sessionId: string) {
+          wakes.push(sessionId);
+        },
+        async cancel() {},
+        isActive() {
+          // Parent is mid one-shot wait / live turn.
+          return true;
+        },
+      },
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content, opts) => {
+            admits.push({ sessionId, delivery: opts?.delivery });
+            return admitPrompt(store, sessionId, content, opts);
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => true,
+          abort() {},
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!parent.result.ok) throw new Error("parent create failed");
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+
+    const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+      parentSessionId: parentId,
+      label: "oneshot",
+      mode: "one-shot",
+    });
+    if (!child.result.ok) throw new Error("child create failed");
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    store.append(childId, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t1",
+      stepId: "s1",
+      content: "干员回传测试OK",
+    });
+
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+
+    expect(admits).toHaveLength(1);
+    expect(admits[0]).toMatchObject({
+      sessionId: parentId,
+      delivery: "steer",
+    });
+    expect(wakes).not.toContain(parentId);
+  });
+
   it("steers one-shot children on idle (single-channel handoff)", async () => {
     const store = createMemorySessionStore();
     const admits: string[] = [];

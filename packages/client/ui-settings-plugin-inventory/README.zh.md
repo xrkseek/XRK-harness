@@ -17,4 +17,4 @@ Web / Desktop 设置中的**插件列表**标签页。注册 id 为 `all` 的 `s
 ## 已知限制与暂缓事项
 
 - **每次 Settings 挂载或重试一份快照** —— 不订阅 Loader；重新打开 Settings 再读。
-- **Client 半部**在安装 / 更新后可能需要硬刷新（有 `needsRestart` 时）。
+- **Client 半部**：装 / 启 / 更 / 重载 soft remount，停用 / 删除 soft unload；仅失败时硬刷新（`needsRestart` / 刷新横幅）。

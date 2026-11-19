@@ -27,7 +27,8 @@ describe("makeHarness", () => {
     expect(names).toContain("web_search");
     expect(names).toContain("web_fetch");
     expect(names).toContain("skill");
-    expect(names).toContain("lsp");
+    // lsp registers only when an LSP command/service is configured.
+    expect(names).not.toContain("lsp");
     expect(names).toContain("terminal_open");
     expect(names).toContain("job_output");
     expect(names).toContain("job_kill");

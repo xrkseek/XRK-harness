@@ -52,12 +52,38 @@ export interface ModelDirectoryState {
   error: string | null
 }
 
+/**
+ * Public model-selection actions on the session standard kit (mirrors
+ * `inputActions`): slot plugins switch / refresh the shared directory without
+ * injecting `ctx.modelDirectories`.
+ */
+export interface ModelSelectionActions {
+  /**
+   * False for addressed subagent seats (directory stays readable; switch is
+   * refused). Recomputed when the standard-kit provider resolves.
+   */
+  readonly available: boolean
+  /**
+   * Switch the session route through the same `selectModel` path the composer
+   * seat uses. Returns false when unavailable or the Host rejects the pick.
+   */
+  select(selection: ModelSelection): Promise<boolean>
+  /** Soft-refresh the advisory catalog (failures stay on the store). */
+  reload(): void
+}
+
 /** One session's shared directory controller; disposed with the session scope. */
 export class ModelDirectory {
   /** The shared snapshot both entries render from (uSES-safe store). */
   readonly store: SnapshotStore<ModelDirectoryState> = createSnapshotStore<ModelDirectoryState>({
     current: null, routable: null, groups: [], failures: [], status: 'idle', error: null,
   })
+
+  /**
+   * Stable standard-kit action face (mirrors `inputActions`): same identity for
+   * the directory lifetime; `available` reads the live gate on each access.
+   */
+  readonly actions: ModelSelectionActions
 
   /** Latest operation wins; an older response never overwrites a newer one. */
   private generation = 0
@@ -75,8 +101,21 @@ export class ModelDirectory {
     private readonly sessions: Pick<IApiClient['sessions'], 'models' | 'selectModel'>,
     private readonly sessionId: SessionId,
     private readonly available: () => boolean,
-  ) {}
-
+  ) {
+    const directory = this
+    this.actions = {
+      get available() {
+        return directory.available()
+      },
+      select: (selection) => {
+        if (!directory.available()) return Promise.resolve(false)
+        return directory.select(selection).then(() => true, () => false)
+      },
+      reload: () => {
+        void directory.load().catch(() => undefined)
+      },
+    }
+  }
   /**
    * Refresh the advisory directory (both entries call this on open).
    * Failure preserves the last good groups and current selection.
@@ -162,6 +201,10 @@ export class ModelDirectory {
       s.status = 'selecting'
       s.error = null
       s.current = selection
+      // Optimistic: the user just picked a catalog route. Keep the composer
+      // usable during the Host round-trip — a deleted prior model left
+      // routable=false and would otherwise keep "select a model" blocking send.
+      s.routable = true
     })
     const { result } = await this.sessions.selectModel({
       sessionId: this.sessionId,

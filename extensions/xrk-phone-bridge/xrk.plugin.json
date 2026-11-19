@@ -1,0 +1,5 @@
+{
+  "id": "xrk-phone-bridge",
+  "kind": "host",
+  "entry": "./plugin.mjs"
+}

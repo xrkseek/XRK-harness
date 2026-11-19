@@ -226,31 +226,29 @@ export function formatComputerUseGuidance(
         : "Ladder: accessibility → find → clipboard → vision/som when the route is multimodal → headed=true only with user consent (it moves the real cursor). On text-only routes, vision/som soft-degrade.";
   if (delivery === "uia" || delivery === "background") {
     return [
-      `Native desktop GUI via ${delivery === "uia" ? "Windows UI Automation" : "Background helper + UIA capture"} (delivery=${delivery}). ` +
-        "Tool action enum is already narrowed — do not call launch/get/overlay/list_apps; they are not on this Provider.",
-      "Usual loop: list_windows → focus_window → capture or find → click/type/key/scroll by element index → capture again. Indices go stale after UI changes.",
-      "Prefer focus_window over shell scripts. For CJK text, clipboard_set then key=ctrl+v (or type on an AX ref).",
+      `Native desktop GUI via ${delivery === "uia" ? "Windows UI Automation" : "Background helper + UIA capture"} (delivery=${delivery}). Action enum already narrowed — do not call launch/get/overlay/list_apps.`,
+      "Loop: list_windows → focus_window → capture|find → click/type/key/scroll by index → capture again (indices go stale after UI changes).",
+      "Prefer focus_window over shell. CJK: clipboard_set then key=ctrl+v (or type on AX ref).",
       ladder,
-      "A coordinate click needs headed=true.",
-      "Hollow AX (custom-drawn apps): keyboard first — focus_window → press keys → clipboard_set + key=ctrl+v → key=return. A headed coordinate click is the last resort, not the first move.",
-      "Need the full agent-desktop surface → Settings → Computer use → agent-desktop.",
+      "Coordinate click needs headed=true. Hollow AX: keyboard first (focus→press→clipboard_set+ctrl+v→return); headed click is last resort.",
+      "Full agent-desktop surface → Settings → Computer use → agent-desktop.",
     ].join("\n");
   }
   if (delivery === "memory") {
     return [
-      "In-memory computer_use fake (delivery=memory). Limited actions: capture/find/list_windows/click/type/key/scroll.",
+      "In-memory computer_use fake (delivery=memory). Limited: capture/find/list_windows/click/type/key/scroll.",
       ladder,
     ].join("\n");
   }
+  // Same safety / loop contracts; denser wording (product surface unchanged).
   return [
-    "Native desktop GUI through agent-desktop. Ref actions are headless: they do not move the cursor, steal focus, or touch the clipboard.",
-    "Usual loop: list_windows → focus_window or launch → capture or find → click/type/key/scroll by element index → capture again. A newer capture or find invalidates older indices.",
-    "Prefer focus_window / launch / restore over shell scripts. For CJK or awkward text, clipboard_set then key=ctrl+v (or type on an AX ref).",
+    "Native desktop GUI through agent-desktop. Ref actions are headless (no cursor/focus/clipboard side effects).",
+    "Loop: list_windows → focus_window|launch → capture|find → click/type/key/scroll by index → capture again (newer capture/find invalidates older indices).",
+    "Prefer focus_window/launch/restore over shell. CJK/awkward text: clipboard_set then key=ctrl+v (or type on AX ref).",
     ladder,
-    "Keyboard first: press and clipboard_set move no pointer; only coordinate clicks do, and they need headed=true.",
-    "A coordinate click takes screenshot pixels (coordinateSpace=window, the default) and the provider adds the window frame origin — never add it yourself and never do DPI math. preserveCursor=true (default) puts the user's pointer back after the click.",
-    "If a window returns almost no accessibility nodes (custom-drawn apps), stay on the keyboard: focus_window → press to reach the row or field → clipboard_set + key=ctrl+v → key=return. Use a headed coordinate click only when the keyboard genuinely cannot reach the target. Do not invent PowerShell or user32 helpers.",
-    "Prefer the computer_use tool over bare `agent-desktop` in bash — the tool resolves the binary (like Host already seeing node/npm); do not expect PATH injection.",
+    "Keyboard first: press/clipboard_set move no pointer; only coordinate clicks do — need headed=true. Coordinates=screenshot pixels (coordinateSpace=window default); provider adds window frame origin — never add it / no DPI math. preserveCursor=true (default) restores the user pointer.",
+    "Hollow AX (custom-drawn): keyboard first — focus_window → press → clipboard_set+ctrl+v → return; headed coordinate click only when keyboard cannot reach. No invented PowerShell/user32 helpers.",
+    "Prefer computer_use tool over bare `agent-desktop` in bash (tool resolves the binary; no PATH injection).",
   ].join("\n");
 }
 

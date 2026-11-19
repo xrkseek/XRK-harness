@@ -2,7 +2,7 @@
 
 Workspace-frequent seats only: **经理** · **向日葵** · manager specializations on coding/IM/Xiangyang parents (`audience=user`).
 
-**Not** injected into 干员家 identity sessions or any delegated child — even when the Boss opens an agent-home and spawns there. Put seat/task rules in the member playbook instead.
+**Not** injected into 干员工作区 identity sessions or any delegated child — even when the Boss opens an agent-home and spawns there. Put seat/task rules in the member playbook instead.
 
 ## What belongs here
 

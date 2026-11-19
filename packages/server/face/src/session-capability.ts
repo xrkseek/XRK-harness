@@ -14,7 +14,6 @@ import {
 import type { FaceRuntime } from "./context.js";
 import {
   FACE_PERMISSION_TABLE,
-  formatPermissionStatusLabel,
   permissionSelectFromEvents,
   resolvePermissionPresetSpec,
 } from "./permissions.js";
@@ -33,6 +32,7 @@ import { subagentDepth } from "./subagent-tools.js";
 import { liveRouteAllowsImageInput } from "./llm-resolve.js";
 import { resolveSessionModelSelection } from "./model-catalog.js";
 import { sessionSeatMemberId } from "./agent-home-boundary.js";
+import { readSessionOpener } from "./session-opener.js";
 
 /** Live provider/model and image modality for this session, one line each. */
 export function formatSessionModelRouteLines(
@@ -72,27 +72,27 @@ function permissionBrief(permission: string): string {
 }
 
 /**
- * One-line tool-surface brief. Orchestrators: kind only — verbs live in
- * `<session_posture>`. Coding: what this badge can/cannot do (no skill essays).
+ * Tip folded into `tool_surface` (bits live in {@link toolSurfaceSummary}).
+ * Orchestrators: posture owns verbs. Coding: only the delta the bits omit.
  */
-function surfaceBrief(badge: string): string {
+function surfaceTip(badge: string): string {
   switch (badge) {
     case "minimal":
-      return "kind=coding_parent · PI · fs+session only — no bash/skill/web/office/peer/subagents.";
+      return "kind=coding_parent · no bash/skill/web/office/peer/subagents";
     case "shell":
-      return "kind=coding_parent · Shell · fs+session+bash+skill+PTY — no web/office/peer/subagents.";
+      return "kind=coding_parent · no web/office/peer/subagents";
     case "frugal":
-      return "kind=coding_parent · Frugal · local+web+office · no peer/subagents — one session; outline→ask→todo→build.";
+      return "kind=coding_parent · no peer/subagents · outline→ask→todo→build";
     case "shallow":
-      return "kind=coding_parent · Shallow · Frugal+peer+subagents — spawn when parallel helps (cap 2).";
+      return "kind=coding_parent · spawn when parallel helps (cap 2)";
     case "harness":
-      return "kind=coding_parent · Harness · full peer+subagents — prefer team_list member_id (live session cap).";
+      return "kind=coding_parent · prefer team_list member_id";
     case "im":
-      return "kind=orchestrator · surface=im — verbs in <session_posture>.";
+      return "kind=orchestrator · verbs in <session_posture>";
     case "qichuang":
-      return "kind=orchestrator · surface=qichuang · path=open — verbs in <session_posture>.";
+      return "kind=orchestrator · verbs in <session_posture>";
     default:
-      return `kind=coding_parent · surface=${badge} — catalog is truth.`;
+      return `kind=coding_parent · catalog is truth`;
   }
 }
 
@@ -102,7 +102,7 @@ function toolSurfaceSummary(badge: string): string {
     return "im (full-access · channel+list/create/session_prompt+subagent→coding+thread_message)";
   }
   if (badge === "qichuang") {
-    return "qichuang (full-access · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · mcp_config · no nested subagent)";
+    return "qichuang (orch · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · mcp_config · no nested subagent)";
   }
   const profile = resolveAgentPresetProfile(badge);
   const bits: string[] = ["fs", "session"];
@@ -158,9 +158,13 @@ function seatSpeakerLines(
 ): string[] {
   const link = runtime.subagents.getByChild(sessionId);
   if (link && link.mode !== "fork") {
-    return [`ask: ask→${link.parentSessionId} (answer_ask; not boss)`];
+    return [`ask: ask→${link.parentSessionId}`];
   }
-  return ["ask: ask_user→boss"];
+  const opener = readSessionOpener(runtime, sessionId);
+  if (opener && !runtime.sessionHumanSpoke.has(sessionId)) {
+    return [`ask: ask→${opener.sourceSessionId}`];
+  }
+  return ["ask: ask_user"];
 }
 
 /**
@@ -278,13 +282,13 @@ export function formatSessionCapability(
     : [];
   const shellConfine = shouldConfineSandbox(sandbox) ? "on" : "off";
   const pendingAsks = runtime.parentAsk.listPending(sessionId);
+  // Dense: one permission line + gate tip; one tool_surface (bits + tip).
+  // UI chrome labels (Approve for me) stay out — model only needs path/approval.
   const lines = [
     `badge: ${badge}`,
     `permission: ${permission} (path=${pathMode}) · approval=${approval} · shell_confine=${shellConfine}`,
-    `permission_label: ${formatPermissionStatusLabel(permission)}`,
-    `permission_brief: ${permissionBrief(permission)}`,
-    `tool_surface: ${toolSurfaceSummary(badge)}`,
-    `surface_brief: ${surfaceBrief(badge)}`,
+    `gate: ${permissionBrief(permission)}`,
+    `tool_surface: ${toolSurfaceSummary(badge)} · ${surfaceTip(badge)}`,
     ...formatSessionModelRouteLines(runtime, sessionId),
     `cwd: ${cwd}`,
     ...briefcase,
@@ -302,7 +306,7 @@ export function formatSessionCapability(
             .join(",")}`,
         ]
       : []),
-    `path_allowlist: ${allowN} objects (session+settings)`,
+    ...(allowN > 0 ? [`path_allowlist: ${allowN}`] : []),
     `tools: direct=${counts.direct} deferred=${counts.deferred} expanded=${expanded}`,
   ];
   lines.push(...childGapLines(runtime, sessionId));

@@ -246,14 +246,35 @@ describe("desktop Windows token signing", () => {
 });
 
 describe("desktop auto-update environment", () => {
-  it("resolves generic feed URL for supported targets", () => {
+  it("defaults to GitHub provider; optional origin stays generic", () => {
     expect(
       resolveDesktopAutoUpdateConfig(
         { [DESKTOP_AUTO_UPDATE_ENV]: "test" },
         "win32",
         "x64",
       ),
-    ).toBeUndefined();
+    ).toEqual({
+      channel: "test",
+      metadataChannel: "nightly",
+      provider: "github",
+      owner: "xrkseek",
+      repo: "XRK-harness",
+    });
+    const github = resolveDesktopAutoUpdateConfig(
+      { [DESKTOP_AUTO_UPDATE_ENV]: "production" },
+      "win32",
+      "x64",
+    );
+    expect(desktopElectronBuilderPublish(github)).toEqual([
+      {
+        provider: "github",
+        owner: "xrkseek",
+        repo: "XRK-harness",
+        channel: "nightly",
+      },
+    ]);
+    expect(renderDesktopAppUpdateYml(github!)).toContain("provider: github");
+
     const update = resolveDesktopAutoUpdateConfig(
       {
         [DESKTOP_AUTO_UPDATE_ENV]: "test",
@@ -266,6 +287,7 @@ describe("desktop auto-update environment", () => {
       channel: "test",
       publicUrl: "https://updates.example.test/desktop/win-x64",
       metadataChannel: "nightly",
+      provider: "generic",
     });
     expect(
       resolveDesktopAutoUpdateConfig(
@@ -297,12 +319,14 @@ describe("desktop auto-update environment", () => {
     tempDirs.push(dir);
     const update = {
       channel: "test" as const,
-      publicUrl: "https://updates.example.test/desktop/mac-arm64",
+      provider: "github" as const,
+      owner: "xrkseek",
+      repo: "XRK-harness",
       metadataChannel: "nightly" as const,
     };
     const written = writeDesktopAppUpdateConfig(dir, update);
     expect(written.endsWith(DESKTOP_APP_UPDATE_YML)).toBe(true);
-    expect(readFileSync(written, "utf8")).toContain(update.publicUrl);
+    expect(readFileSync(written, "utf8")).toContain("provider: github");
     expect(
       isDesktopUpdateFeedEnabled({
         isPackaged: true,

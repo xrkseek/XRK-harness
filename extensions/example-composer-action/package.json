@@ -1,0 +1,20 @@
+{
+  "name": "example-composer-action",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native XRK client gold sample: conversation.input.right reads useModelSelection + draft",
+  "type": "module",
+  "exports": {
+    "./client": "./lib/client.js"
+  },
+  "xrk": {
+    "client": {
+      "inject": [
+        "@xrkseek/client-runtime",
+        "@xrkseek/client-ui-conversation",
+        "@xrkseek/client-ui-model-selection"
+      ],
+      "platform": "web"
+    }
+  }
+}

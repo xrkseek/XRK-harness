@@ -50,19 +50,30 @@ describe("session-tool-copy", () => {
 
   it("workspace / subagent copy flips on IM vs coding", () => {
     expect(workspaceListDescription("qichuang")).toContain("no nested subagent");
+    expect(workspaceListDescription("qichuang")).toContain("create?");
+    expect(workspaceListDescription("qichuang")).toContain("team_home");
     expect(workspaceListDescription("im")).toContain("subagent(workspace_id)");
     expect(
       workspaceListDescription(undefined, { fromAgentHome: true }),
-    ).toContain("向阳 or peer homes");
+    ).toContain("向阳 or peer");
     expect(workspaceSessionPromptDescription({ surface: "im" })).toContain(
       "not your child",
     );
+    expect(
+      workspaceSessionPromptDescription({ surface: "qichuang" }),
+    ).toContain("其它经理工作区 peer");
+    expect(
+      workspaceSessionPromptDescription({ surface: "qichuang" }),
+    ).toMatch(/No nested subagent/);
+    expect(
+      workspaceSessionPromptDescription({ surface: "qichuang" }),
+    ).not.toContain("Implement there");
     expect(
       workspaceSessionPromptDescription({
         surface: undefined,
         fromAgentHome: true,
       }),
-    ).toContain("never project coding");
+    ).toContain("never coding");
     expect(
       subagentDescription({
         base: "BASE.",

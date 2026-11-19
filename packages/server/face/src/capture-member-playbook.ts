@@ -10,6 +10,10 @@ import type { FaceRuntime } from "./context.js";
 import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
 import { MEMBER_NAME_MAX, MEMBER_PLAYBOOK_MAX } from "./agent-roster-store.js";
 import { MEMBER_PACK_BRIEFCASE } from "./agent-member-pack.js";
+import {
+  readSeatTitles,
+  readUiLocalePreference,
+} from "./seat-titles.js";
 
 /** Injected into advanced playbooks so zip-share stays path-portable. */
 export const ADVANCED_PACK_PATHS_SECTION = [
@@ -52,11 +56,19 @@ export function captureSessionPlaybook(
   const events = readSessionEvents(runtime.store, sessionId);
   const users = lastUserTexts(events);
   if (users.length === 0) return undefined;
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const localeUser = runtime.settingsNamespaces.view("locale")
+    .value as Record<string, unknown>;
+  const agentTitle = readSeatTitles(
+    presenceUser,
+    readUiLocalePreference(localeUser),
+  ).agent;
   const goal = users[0]!.replace(/\s+/g, " ").trim();
-  const name = goal.slice(0, MEMBER_NAME_MAX) || "干员";
+  const name = goal.slice(0, MEMBER_NAME_MAX) || agentTitle;
   const assistant = lastAssistantBodyText(events).slice(0, 2_400);
   const playbook = [
-    "You are a reusable workspace 干员 for a concrete scenario.",
+    `You are a reusable workspace ${agentTitle} for a concrete scenario.`,
     "Follow this workflow for the next TASK; refine the playbook if it is only a draft stub.",
     "",
     "SCENARIO (from recent user asks — draft only):",

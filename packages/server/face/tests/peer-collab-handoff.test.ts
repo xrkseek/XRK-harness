@@ -3,11 +3,14 @@ import { admitPrompt, createMemorySessionStore } from "@xrkseek/core-session";
 import {
   FacePeerCollabWaiters,
   armPeerCollabAfterPrompt,
+  breakMutualPeerSyncWait,
   clearPeerCollabAfterSyncReply,
   deliverPeerCollabIdleHandoffs,
   deliverPeerCollabStopHandoffs,
+  formatMutualPeerWaitAsyncNotice,
   formatPeerCollabCompletionNotice,
   formatPeerCollabStopHandoffNotice,
+  promoteFailedSyncPeerWait,
 } from "../src/peer-collab-handoff.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { createBareFaceRuntime, idleFaceDrain } from "./helpers/bare-runtime.js";
@@ -40,6 +43,31 @@ describe("FacePeerCollabWaiters", () => {
     expect(list).toHaveLength(1);
     expect(list[0]?.seqAtSend).toBe(5);
     expect(list[0]?.mode).toBe("sync-promoted");
+  });
+
+  it("clearAsWaiter drops every arm where this session is waiting", () => {
+    const w = new FacePeerCollabWaiters();
+    w.arm({
+      peerSessionId: "peer-a",
+      waiterSessionId: "me",
+      seqAtSend: 1,
+    });
+    w.arm({
+      peerSessionId: "peer-b",
+      waiterSessionId: "me",
+      seqAtSend: 2,
+      mode: "sync-promoted",
+    });
+    w.arm({
+      peerSessionId: "peer-a",
+      waiterSessionId: "other",
+      seqAtSend: 3,
+    });
+    w.clearAsWaiter("me");
+    expect(w.listForPeer("peer-a").map((x) => x.waiterSessionId)).toEqual([
+      "other",
+    ]);
+    expect(w.listForPeer("peer-b")).toHaveLength(0);
   });
 
   it("idle take clears waiters once; stop suppresses later idle", () => {
@@ -265,6 +293,113 @@ describe("peer collab deliver", () => {
       waiterSessionId: "waiter",
     });
     expect(runtime.peerCollabWaiters.listForPeer("peer")).toHaveLength(0);
+  });
+
+  it("failed sync wait promotes to async so a later idle still delivers", async () => {
+    const store = createMemorySessionStore();
+    const admits: string[] = [];
+    const active = new Set<string>();
+    const runtime = createBareFaceRuntime({
+      store,
+      drain: {
+        ...idleFaceDrain,
+        isActive(id) {
+          return active.has(id);
+        },
+      },
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content: string) => {
+            admits.push(`${sessionId}:${String(content)}`);
+            return admitPrompt(store, sessionId, content);
+          },
+          pendingAdmits: () => [],
+          danglingPromotedAdmits: () => [],
+          hasInboxWork: () => false,
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => false,
+          abort() {},
+          setApprovalHandler() {},
+        }) as never,
+    });
+    const peerId = await createSession(runtime, "peer-fail");
+    const waiterId = await createSession(runtime, "waiter-fail");
+    active.add(peerId);
+    runtime.onSessionDrainStatus(peerId, true);
+    armPeerCollabAfterPrompt({
+      runtime,
+      peerSessionId: peerId,
+      waiterSessionId: waiterId,
+      seqAtSend: 0,
+      wait: true,
+    });
+    expect(runtime.peerCollabWaiters.listForPeer(peerId)[0]?.mode).toBe(
+      "sync-promoted",
+    );
+    // Abort / timeout while peer still running — keep courier as async.
+    expect(
+      promoteFailedSyncPeerWait({
+        runtime,
+        peerSessionId: peerId,
+        waiterSessionId: waiterId,
+      }),
+    ).toBe(true);
+    expect(runtime.peerCollabWaiters.listForPeer(peerId)[0]?.mode).toBe(
+      "async",
+    );
+    // Normal idle (no includePromoted) would have skipped sync-promoted.
+    store.append(peerId, {
+      type: "assistant/message",
+      ts: 3,
+      turnId: "t3",
+      stepId: "s3",
+      content: "late peer reply after abort",
+    });
+    active.delete(peerId);
+    runtime.onSessionDrainStatus(peerId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+    expect(
+      admits.some((a) => a.includes("late peer reply after abort")),
+    ).toBe(true);
+  });
+
+  it("mutual wait:true downgrades both arms to async", () => {
+    const runtime = createBareFaceRuntime();
+    armPeerCollabAfterPrompt({
+      runtime,
+      peerSessionId: "b",
+      waiterSessionId: "a",
+      seqAtSend: 0,
+      wait: true,
+    });
+    armPeerCollabAfterPrompt({
+      runtime,
+      peerSessionId: "a",
+      waiterSessionId: "b",
+      seqAtSend: 0,
+      wait: true,
+    });
+    expect(
+      breakMutualPeerSyncWait({
+        runtime,
+        peerSessionId: "b",
+        waiterSessionId: "a",
+      }),
+    ).toBe(true);
+    expect(runtime.peerCollabWaiters.listForPeer("b")[0]?.mode).toBe("async");
+    expect(runtime.peerCollabWaiters.listForPeer("a")[0]?.mode).toBe("async");
+    expect(formatMutualPeerWaitAsyncNotice("b")).toMatch(/deadlock/);
+    // Second call is a no-op once both arms are already async.
+    expect(
+      breakMutualPeerSyncWait({
+        runtime,
+        peerSessionId: "b",
+        waiterSessionId: "a",
+      }),
+    ).toBe(false);
   });
 
   it("drain running then idle delivers via onSessionDrainStatus", async () => {

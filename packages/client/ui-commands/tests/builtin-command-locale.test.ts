@@ -47,6 +47,19 @@ describe("localizeHostCommandDescription", () => {
       expect(zh[key].length).toBeGreaterThan(0);
       expect(name.length).toBeGreaterThan(0);
     }
-    expect(HOST_DESCRIPTION_KEYS.size).toBe(12);
+    expect(HOST_DESCRIPTION_KEYS.size).toBe(13);
+  });
+
+  it("rewrites the Face recipe expand trailer for the UI locale", () => {
+    const t = (key: keyof typeof zh) => zh[key];
+    expect(
+      localizeHostCommandDescription(
+        "code-review",
+        "Read-only defect-first review (load xrk-code-review) (expands into the prompt)",
+        t,
+      ),
+    ).toBe(
+      `Read-only defect-first review (load xrk-code-review)${zh["recipe.expandSuffix"]}`,
+    );
   });
 });

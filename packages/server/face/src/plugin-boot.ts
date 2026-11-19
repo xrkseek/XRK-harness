@@ -29,6 +29,20 @@ export interface ClientBootEntry {
   readonly immediately?: boolean;
 }
 
+/**
+ * Ensure `/plugins/<id>/client.js` carries a matching `?rev=` cache-bust.
+ * Replaces a stale query when the rev field disagrees.
+ */
+export function ensureClientBootUrlRev(url: string, rev: string): string {
+  const safe = rev || "0";
+  const encoded = encodeURIComponent(safe);
+  if (/[?&]rev=/.test(url)) {
+    return url.replace(/([?&]rev=)[^&#]*/, `$1${encoded}`);
+  }
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}rev=${encoded}`;
+}
+
 export interface ClientBootReconcileResult {
   readonly rev: string;
   readonly entries: readonly ClientBootEntry[];
@@ -70,10 +84,12 @@ export function reconcileClientBootAt(
     if (entry.kind !== "client" && entry.kind !== "both") continue;
     if (PRODUCT_BOOT_OMIT.has(name)) continue;
     if (isPluginSoftDisabledAt(name, disabled, index)) continue;
+    const rev = entry.version ?? "0";
     entries.push({
       id: name,
-      url: `/plugins/${name}/client.js`,
-      rev: entry.version ?? "0",
+      // Match first-party graphRow cache-bust so soft remount reloads pick up updates.
+      url: ensureClientBootUrlRev(`/plugins/${name}/client.js`, rev),
+      rev,
       inject: entry.clientInject ?? [],
       ...(entry.clientImmediately ? { immediately: true } : {}),
     });

@@ -15,6 +15,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 |------------|------|
 | **本仓作工作区写插件**（产品 UI） | 产品 **`xrk-harness-monorepo`** → `xrk-plugin-*` |
 | **写 / 审进程插件**（Cursor 改金样/loader） | `xrk-plugin-dev` → `xrk-extensions` |
+| **原生 client 壳**（槽位 · `useModelSelection` · 主题） | [docs/client-plugin-development.md](../../docs/client-plugin-development.md) · `xrk-extensions` · 金样 `example-composer-action` |
 | **kind 选型**（tools / prompt / commands / client） | `xrk-extensions` · 产品 `xrk-plugin`（kind 段） |
 | **MCP vs 进程插件** | `xrk-mcp-plugins` · [docs/modules/mcp.md](../../docs/modules/mcp.md) |
 | **社区 client / host.mjs / dsh-compat** | `xrk-community-plugins` · [docs/community-plugins.md](../../docs/community-plugins.md) |

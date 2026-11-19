@@ -1,0 +1,18 @@
+{
+  "name": "example-theme-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native XRK client gold sample: ThemeRuntime.overrideTokens without dsh-compat",
+  "type": "module",
+  "exports": {
+    "./client": "./lib/client.js"
+  },
+  "xrk": {
+    "client": {
+      "inject": [
+        "@xrkseek/client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  }
+}

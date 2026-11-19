@@ -511,6 +511,53 @@ describe("parseSessionEvent", () => {
     }
   });
 
+  it("parses seat speech and handoff user/message sources", () => {
+    const seat = parseSessionEvent({
+      type: "user/message",
+      ts: 1,
+      turnId: "t1",
+      content: "delegator task",
+      source: {
+        kind: "seat",
+        form: "speech",
+        channel: "parent",
+        fromSessionId: "sess_mgr",
+        memberId: "mem_seed_manager",
+        label: "经理",
+      },
+    });
+    expect(seat).toMatchObject({
+      type: "user/message",
+      source: {
+        kind: "seat",
+        form: "speech",
+        channel: "parent",
+        fromSessionId: "sess_mgr",
+      },
+    });
+    const handoff = parseSessionEvent({
+      type: "user/message",
+      ts: 2,
+      turnId: "t2",
+      content: "child done",
+      source: {
+        kind: "handoff",
+        form: "notice",
+        via: "subagent",
+        fromSessionId: "sess_child",
+        label: "发版员",
+      },
+    });
+    expect(handoff).toMatchObject({
+      type: "user/message",
+      source: {
+        kind: "handoff",
+        via: "subagent",
+        fromSessionId: "sess_child",
+      },
+    });
+  });
+
   it("parses approval/asked and approval/decided", () => {
     const asked = parseSessionEvent({
       type: "approval/asked",

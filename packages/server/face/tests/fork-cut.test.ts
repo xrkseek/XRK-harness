@@ -90,6 +90,59 @@ describe("resolveForkCut beforeSeq trim", () => {
     expect(cut.cut).toBe(1);
   });
 
+  it("drops orphan prompt admits when the kept prefix has no human user row", () => {
+    // Delete-opener / wipe after a prior soft cut: Status would report queue N
+    // while the chat paints empty (admits are not bubbles).
+    const events = [
+      { type: "permission/preset", ts: 1, preset: "workspace-write" },
+      { type: "sandbox/mode", ts: 2, mode: "workspace-write" },
+      { type: "approval/policy", ts: 3, policy: "ask" },
+      {
+        type: "prompt/admitted",
+        ts: 4,
+        admitId: "a1",
+        content: [{ type: "text", text: "one" }],
+        delivery: "queue",
+      },
+      { type: "prompt/promoted", ts: 5, admitId: "a1" },
+      {
+        type: "prompt/admitted",
+        ts: 6,
+        admitId: "a2",
+        content: [{ type: "text", text: "two" }],
+        delivery: "queue",
+      },
+      {
+        type: "prompt/admitted",
+        ts: 7,
+        admitId: "a3",
+        content: [{ type: "text", text: "three" }],
+        delivery: "queue",
+      },
+    ] as unknown as SessionEvent[];
+    const cut = resolveForkCut(events, { beforeSeq: events.length });
+    if (!cut.ok) throw new Error(cut.message);
+    expect(cut.cut).toBe(3);
+  });
+
+  it("drops trailing orphan admits after the last kept human user row", () => {
+    const events = [
+      { type: "turn/start", ts: 1, turnId: "t1" },
+      { type: "user/message", ts: 2, turnId: "t1", content: "kept" },
+      { type: "turn/end", ts: 3, turnId: "t1" },
+      {
+        type: "prompt/admitted",
+        ts: 4,
+        admitId: "ghost",
+        content: [{ type: "text", text: "ghost" }],
+        delivery: "queue",
+      },
+    ] as unknown as SessionEvent[];
+    const cut = resolveForkCut(events, { beforeSeq: events.length });
+    if (!cut.ok) throw new Error(cut.message);
+    expect(cut.cut).toBe(3);
+  });
+
   it("stops at the last human-led turn when an abort-only turn sits between", () => {
     const events = [
       { type: "turn/start", ts: 1, turnId: "t1" },

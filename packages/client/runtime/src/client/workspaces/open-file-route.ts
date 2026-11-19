@@ -1,5 +1,5 @@
 import { isAttachmentAddress } from './path.ts'
-import { looksLikeDirectoryPath } from './file-download.ts'
+import { isPhoneThinShell, looksLikeDirectoryPath } from './file-download.ts'
 
 /** Scenario knobs for chat / Overview file-open (platform + surface aware). */
 export interface RouteWorkspaceOpenFileOptions {
@@ -54,11 +54,13 @@ async function tryDownload(
 /**
  * Open a workspace file with the cascade used by mature web agents:
  *
- * 1. Wake in-app workbench (community `xrkh-better-sidebar`) when present.
- * 2. Privileged surfaces (Desktop / LAN / phone local Host): OS `openPath`.
+ * 1. Wake in-app workbench (`xrkh-better-sidebar`) when present.
+ * 2. Privileged Desktop / LAN Web: OS `openPath`. Phone APK thin shell
+ *    (`XrkShell`, see XRK-harness-mobile `shell_host_download.dart`) never
+ *    uses guest `openPath` — even if a caller forgets `allowNativeOpen: false`.
  * 3. Soft-fail OS open after a successful wake (guest proot / missing xdg-open).
- * 4. Otherwise **download** via Host `/sidebar/file?download=1` (Web Download;
- *    phone thin shell → XrkShell → Downloads).
+ * 4. Otherwise **download** via Host `/sidebar/file?download=1`
+ *    (APK → Flutter Downloads → share / open-with sheet).
  * 5. Directories / total failure → {@link NativeOpenUnavailableError}.
  *
  * Shared by chat `openFile` and Overview Changes preview.
@@ -72,8 +74,11 @@ export async function routeWorkspaceOpenFile(
   if (isAttachmentAddress(resolvedPath)) return
   const woke = wakeCommunity?.(resolvedPath) === true
   const downloadFile = options?.downloadFile
+  // Defense in depth: APK thin shell always skips guest OS open (callers should
+  // also pass allowNativeOpen via allowNativeWorkspaceOpen).
+  const allowNative = options?.allowNativeOpen !== false && !isPhoneThinShell()
 
-  if (options?.allowNativeOpen !== false) {
+  if (allowNative) {
     try {
       await openWorkspace(resolvedPath)
       return
@@ -84,7 +89,7 @@ export async function routeWorkspaceOpenFile(
     }
   }
 
-  // Public / remote / non-privileged Web: never OS-open on the caller's device.
+  // Public / remote / phone APK: never OS-open on the caller's device.
   if (woke) return
   if (await tryDownload(resolvedPath, downloadFile)) return
   throw new NativeOpenUnavailableError(resolvedPath)

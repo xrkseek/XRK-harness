@@ -27,7 +27,7 @@ from pathlib import Path
 
 import paramiko
 
-HOST = "103.236.89.174"
+HOST = os.environ.get("XRK_AGT_SSH_HOST", "103.236.92.5")
 PORT = 46184
 USER = "root"
 REMOTE_ROOT = "/root/xrk-mobile"

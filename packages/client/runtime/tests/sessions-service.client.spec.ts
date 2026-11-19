@@ -413,6 +413,94 @@ describe('cell (render-layer session kit)', () => {
     expect(b.svc.currentProvideInfo.getSnapshot().sessionId).toBeUndefined()
   })
 
+  it('provide resolvers that call scope() during materialize do not remint infinitely', async () => {
+    // ui-model-selection directoryFor → sessions.scope during materializeInfo
+    // used to remint because scopes.set ran after materialize (stack overflow).
+    const b = bench()
+    await feedList(b, [{ id: 's1' }, { id: 's2' }])
+    b.svc.provide({
+      hooks: ['reenterScope'],
+      resolve: (binding) => {
+        const again = b.svc.scope(binding.sessionId)
+        expect(again).toBeDefined()
+        return {
+          hooks: {
+            reenterScope: { getSnapshot: () => true, subscribe: () => () => {} },
+          },
+        }
+      },
+    })
+    b.svc.open(sid('s1'))
+    expect(b.svc.currentProvideInfo.getSnapshot().sessionId).toBe('s1')
+    b.svc.open(sid('s2'))
+    expect(b.svc.list.getSnapshot().current).toBe('s2')
+    expect(b.svc.currentProvideInfo.getSnapshot().sessionId).toBe('s2')
+  })
+
+  it('a materialize failure after bindScope cleans up so a later open can still publish', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }, { id: 's2' }])
+    b.svc.open(sid('s1'))
+    expect(b.svc.currentProvideInfo.getSnapshot().sessionId).toBe('s1')
+    let failS2 = true
+    const errors: unknown[] = []
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+      errors.push(args)
+    })
+    try {
+      b.svc.provide({
+        hooks: ['probe'],
+        resolve: (binding) => {
+          if (failS2 && binding.sessionId === 's2') throw new Error('materialize boom')
+          return {
+            hooks: {
+              probe: { getSnapshot: () => 0, subscribe: () => () => {} },
+            },
+          }
+        },
+      })
+      // list.subscribe contains the mint failure so the sidebar selection still lands.
+      b.svc.open(sid('s2'))
+      expect(b.svc.list.getSnapshot().current).toBe('s2')
+      expect(errors.some(args => String(args).includes('materialize boom'))).toBe(true)
+      failS2 = false
+      b.svc.open(sid('s2'))
+      expect(b.svc.currentProvideInfo.getSnapshot().sessionId).toBe('s2')
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('dispose reentry during reclaim cannot freeze currentProvideInfo on the previous session', async () => {
+    // reclaimOffStageScopes + dispose-before-unbind used to remint into a
+    // still-bound Session and leave provideInfo on the previous selection.
+    const b = bench()
+    await feedList(b, [{ id: 's1' }, { id: 's2' }])
+    b.svc.open(sid('s1'))
+    b.svc.provide({
+      hooks: ['reenter'],
+      resolve: (binding) => {
+        binding.ctx.effect(() => () => {
+          try {
+            b.svc.scope(sid('s1'))
+          } catch {
+            // Regression is "open(s2) still publishes", not this remint attempt.
+          }
+        })
+        return {
+          hooks: {
+            reenter: { getSnapshot: () => true, subscribe: () => () => {} },
+          },
+        }
+      },
+    })
+    b.svc.open(sid('s2'))
+    expect(b.svc.list.getSnapshot().current).toBe('s2')
+    expect(b.svc.currentProvideInfo.getSnapshot().sessionId).toBe('s2')
+    b.svc.open(sid('s1'))
+    expect(b.svc.currentProvideInfo.getSnapshot().sessionId).toBe('s1')
+  })
+
   it('a provider roster change under a stable current id republishes the bundle', async () => {
     const b = bench()
     await feedList(b, [{ id: 's1' }])

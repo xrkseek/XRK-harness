@@ -1,13 +1,21 @@
 /**
- * Desktop auto-update feed + upload destination (ADR-0008 · electron-updater generic).
- * Upload PUTs stay credential-gated; resolve here so packaging / CI share one SoT.
+ * Desktop auto-update feed (ADR-0008).
+ * Product default: GitHub Releases (`provider: github`) — same source-of-truth
+ * model as the phone App. Optional `XRK_DESKTOP_UPDATE_*_ORIGIN` still enables a
+ * generic feed for local/dev mirrors only.
  */
 
 import type { DesktopPackageTargetName } from "./package-targets.js";
+import {
+  DESKTOP_UPDATE_GITHUB_OWNER,
+  DESKTOP_UPDATE_GITHUB_REPO,
+  DESKTOP_UPDATE_METADATA_CHANNEL,
+  renderDesktopGithubAppUpdateYml,
+} from "./desktop-update-mirrors.js";
 
 export const DESKTOP_AUTO_UPDATE_ENV = "XRK_DESKTOP_AUTO_UPDATE_ENV" as const;
 
-/** Opt-in: embed generic feed on unsigned Windows test builds (AGT / local origin). */
+/** Opt-in: embed update feed on unsigned Windows test builds. */
 export const DESKTOP_UNSIGNED_UPDATE_ENV = "XRK_DESKTOP_UNSIGNED_UPDATE" as const;
 
 export function isDesktopUnsignedUpdateRequested(
@@ -18,25 +26,31 @@ export function isDesktopUnsignedUpdateRequested(
 
 export type DesktopAutoUpdateChannel = "test" | "production";
 
+export type DesktopAutoUpdateProvider = "github" | "generic";
+
 export interface DesktopAutoUpdateConfig {
   readonly channel: DesktopAutoUpdateChannel;
-  /** electron-updater generic `provider` URL (directory that hosts latest*.yml). */
-  readonly publicUrl: string;
-  readonly metadataChannel: "nightly";
+  readonly metadataChannel: typeof DESKTOP_UPDATE_METADATA_CHANNEL;
+  readonly provider: DesktopAutoUpdateProvider;
+  /** Set when `provider: generic` (local/dev origin). */
+  readonly publicUrl?: string;
+  /** Set when `provider: github`. */
+  readonly owner?: string;
+  readonly repo?: string;
 }
 
-/** Private object-store destination for one channel (COS-shaped env; transport is pluggable). */
+/** Private object-store destination for one channel (legacy COS-shaped env). */
 export interface DesktopUploadConfig extends DesktopAutoUpdateConfig {
   readonly environment: DesktopAutoUpdateChannel;
   readonly target: DesktopPackageTargetName;
   readonly origin: string;
-  /** Prefix for channel metadata YAML (`latest*.yml` / `nightly*.yml`). */
   readonly keyPrefix: string;
-  /** Prefix for installer binaries + blockmaps. */
   readonly binaryKeyPrefix: string;
   readonly bucket: string;
   readonly secretIdEnvName: string;
   readonly secretKeyEnvName: string;
+  readonly publicUrl: string;
+  readonly provider: "generic";
 }
 
 const CHANNELS: Record<
@@ -107,31 +121,51 @@ function resolveSupportedUpdateTarget(
   return target;
 }
 
+/** Product default: GitHub Releases for xrkseek/XRK-harness. */
+export function resolveDesktopGithubAutoUpdateConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): DesktopAutoUpdateConfig {
+  return {
+    channel: resolveDesktopAutoUpdateChannel(env),
+    metadataChannel: DESKTOP_UPDATE_METADATA_CHANNEL,
+    provider: "github",
+    owner: DESKTOP_UPDATE_GITHUB_OWNER,
+    repo: DESKTOP_UPDATE_GITHUB_REPO,
+  };
+}
+
 /**
- * Resolve a generic update feed when an origin is configured.
- * Missing origin → undefined (packaged build still ships; check stays idle).
+ * Resolve update feed for packaging.
+ * - Default / unsigned+flag without origin → GitHub provider
+ * - `XRK_DESKTOP_UPDATE_*_ORIGIN` set → generic (local/dev only)
  */
 export function resolveDesktopAutoUpdateConfig(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
   arch: string = process.arch,
 ): DesktopAutoUpdateConfig | undefined {
-  const target = resolveSupportedUpdateTarget(platform, arch);
+  resolveSupportedUpdateTarget(platform, arch);
   const channel = resolveDesktopAutoUpdateChannel(env);
   const spec = CHANNELS[channel];
   const origin = trimEnv(env, spec.originEnv);
-  if (origin === undefined) return undefined;
-  const base = origin.replace(/\/+$/u, "");
-  return {
-    channel,
-    publicUrl: `${base}/desktop/${target}`,
-    metadataChannel: "nightly",
-  };
+  if (origin !== undefined) {
+    const target = resolveSupportedUpdateTarget(platform, arch);
+    const base = origin.replace(/\/+$/u, "");
+    return {
+      channel,
+      publicUrl: `${base}/desktop/${target}`,
+      metadataChannel: DESKTOP_UPDATE_METADATA_CHANNEL,
+      provider: "generic",
+    };
+  }
+  // Product default: GitHub Releases (phone-aligned). Packaging may still omit
+  // writing app-update.yml for unsigned builds without UNSIGNED_UPDATE=1.
+  return resolveDesktopGithubAutoUpdateConfig(env);
 }
 
 /**
  * Resolve public feed + private upload destination for one supported target.
- * Requires update origin + bucket (secrets are named here; values read at PUT time).
+ * Legacy COS/generic upload path — not used for product GitHub Releases.
  */
 export function resolveDesktopUploadConfig(
   env: NodeJS.ProcessEnv = process.env,
@@ -152,7 +186,8 @@ export function resolveDesktopUploadConfig(
     keyPrefix,
     binaryKeyPrefix,
     publicUrl: `${origin}/${keyPrefix}`,
-    metadataChannel: "nightly",
+    metadataChannel: DESKTOP_UPDATE_METADATA_CHANNEL,
+    provider: "generic",
     bucket: requiredEnv(env, spec.bucketEnv),
     secretIdEnvName: spec.secretIdEnv,
     secretKeyEnvName: spec.secretKeyEnv,
@@ -164,8 +199,31 @@ export function desktopElectronBuilderPublish(
   update: DesktopAutoUpdateConfig | undefined,
 ):
   | null
-  | readonly [{ readonly provider: "generic"; readonly url: string; readonly channel: string }] {
+  | readonly [
+      | {
+          readonly provider: "github";
+          readonly owner: string;
+          readonly repo: string;
+          readonly channel: string;
+        }
+      | {
+          readonly provider: "generic";
+          readonly url: string;
+          readonly channel: string;
+        },
+    ] {
   if (update === undefined) return null;
+  if (update.provider === "github") {
+    return [
+      {
+        provider: "github",
+        owner: update.owner ?? DESKTOP_UPDATE_GITHUB_OWNER,
+        repo: update.repo ?? DESKTOP_UPDATE_GITHUB_REPO,
+        channel: update.metadataChannel,
+      },
+    ];
+  }
+  if (!update.publicUrl) return null;
   return [
     {
       provider: "generic",
@@ -175,10 +233,19 @@ export function desktopElectronBuilderPublish(
   ];
 }
 
-/** YAML body for `app-update.yml` (generic provider). */
+/** YAML body for `app-update.yml`. */
 export function renderDesktopAppUpdateYml(
   update: DesktopAutoUpdateConfig,
 ): string {
+  if (update.provider === "github") {
+    return renderDesktopGithubAppUpdateYml({
+      ...(update.owner !== undefined ? { owner: update.owner } : {}),
+      ...(update.repo !== undefined ? { repo: update.repo } : {}),
+      ...(update.metadataChannel !== undefined
+        ? { channel: update.metadataChannel }
+        : {}),
+    });
+  }
   return [
     "provider: generic",
     `url: ${update.publicUrl}`,
@@ -190,11 +257,10 @@ export function renderDesktopAppUpdateYml(
 
 /** Filename electron-builder writes for channel metadata. */
 export function desktopUpdateMetadataFilename(
-  version: string,
+  _version: string,
   platform: "darwin" | "win32",
 ): string {
-  // electron-builder uses latest.yml on Windows and latest-mac.yml on macOS for the default channel;
-  // our builds pin channel=nightly → nightly.yml / nightly-mac.yml.
+  // channel=nightly → nightly.yml / nightly-mac.yml.
   return platform === "darwin" ? "nightly-mac.yml" : "nightly.yml";
 }
 

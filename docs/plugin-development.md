@@ -13,7 +13,7 @@
 | 给模型新工具 | `tools` | `ToolDefinition[]` → ToolRegistry |
 | 往 system 追加段落 | `prompt` | `promptSections[]` → SystemPromptAssembler |
 | 斜杠 / 命令面 | `commands` | Face `commands/list` + `commands/execute` |
-| 改产品壳 UI | `xrk.client`（client 包） | `~/.xrk/plugins/web/` 叠加，**不是**进程 kind |
+| 改产品壳 UI | `xrk.client`（client 包） | `~/.xrk/plugins/web/` 叠加，**不是**进程 kind；作者路径见 [client-plugin-development.md](./client-plugin-development.md) |
 
 本仓只 discover **`kind: cordis` 进程包**、不自动 `apply`（写它请放 extensions/）。装 **社区 client / `host.mjs` 包**见 [community-plugins.md](./community-plugins.md) · [plugin-loader.md](./plugin-loader.md)。
 
@@ -70,29 +70,32 @@ export function createPlugin() {
 # 源码仓
 XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js web --workspace .
 
-# 或装到用户插件根（装完用 xrkh restart 重载 Host）
+# 或装到用户插件根
 xrkh plugin add ./extensions/example-tools
-xrkh restart
 ```
 
 `plugin list` / `plugin path` 看 `~/.xrk/plugins`（可用 `XRK_HOME` / `XRK_PLUGINS_DIR` 改）。
 
-重载：用 **`restart`**（pid 锁停自己的 Host）。`--force` 只杀已识别的 XRK 监听；不会误杀 nginx 等。
+- **进程半部**（本例）：Settings 启停 / 重载会 live reconcile；改 `plugin.mjs` 后可用 Settings **重载**或 `xrkh restart`。
+- **Client 半部**：见 [client-plugin-development.md](./client-plugin-development.md)「作者开发循环」——Settings soft remount，一般不必先 `restart`。
+
+整 Host 仍用 **`restart`**（pid 锁停自己的 Host）。`--force` 只杀已识别的 XRK 监听；不会误杀 nginx 等。
 
 ### 插件开发边界（仓内 `extensions/`）
 
 | 类别 | 落点 | 是否进主仓 git / pnpm workspace |
 |------|------|--------------------------------|
-| **金样 / 内置适配** | `extensions/example-tools` · `example-channel` · `a2a` · `dsh-compat` | **是**（`.gitignore` / `pnpm-workspace` 白名单） |
+| **金样 / 内置适配** | `extensions/example-tools` · `example-channel` · `example-composer-action` · `example-theme-tokens` · `a2a` · `dsh-compat` | **是**（`.gitignore` / `pnpm-workspace` 白名单） |
+| **第一方原生产品插件** | `xrk-sunflower-free` · `xrk-phone-bridge` · `xrkh-better-sidebar` · `xrkh-better-sidebar-plugin-office` | 源码可在 `extensions/`；经 **设置 → 插件** / `xrkh plugin add` 装到 `~/.xrk/plugins`；清单见 [client-plugin-development.md](./client-plugin-development.md) |
 | **第三方 / 本地工作树** | `extensions/<plugin-id>/`（对标 AGT 本地 Core） | **默认忽略**；联调产物不提交进主仓 |
 | **用户全局安装** | `~/.xrk/plugins`（`xrkh plugin add`） | 不在源码仓内 |
 
 边界：
 
 - **产品 Agent / 插件作者**：只写 `extensions/<id>/`；`packages/` · `apps/` · `presets/` 由内核维护者修改。
-- **Client 叠加包**（`xrk.client`）：装到 `plugins/web/`，不参与进程 `kind` discover；Host 面契约见 [community-plugins.md](./community-plugins.md)。
-- **标准侧栏**（`xrkh-better-sidebar`）：**Host 拥有** `/sidebar/*`；插件只挂 client，插件 host 半包不提供 `/sidebar/*` 前缀。
-- 无热重载：改完 **`xrkh restart`**（或重启 `web`）。
+- **Client 叠加包**（`xrk.client`）：装到 `plugins/web/`，不参与进程 `kind` discover；原生写法见 [client-plugin-development.md](./client-plugin-development.md)；社区 Host 面见 [community-plugins.md](./community-plugins.md)。
+- **第一方原生侧栏**（`xrkh-better-sidebar` + `xrkh-better-sidebar-plugin-office`）：**Host 拥有** `/sidebar/*`；插件只挂 client，插件 host 半包不提供 `/sidebar/*` 前缀。
+- 热重载边界：进程半部 Settings reconcile / **重载**；client 半部 Settings soft remount（装 / 启 / 更 / 重载）与 soft unload（停用 / 删除）；仍不亮或失败 → 硬刷新；整 Host 用 `xrkh restart`。
 
 ### 接线发生在哪
 
@@ -118,13 +121,15 @@ xrkh restart
 
 维护者改内核见 [maintainer.md](./maintainer.md)。分层说明：[skills-layers.md](./skills-layers.md)。
 
-## Client 叠加（可选）
+## Client 叠加（原生主路径）
 
-带 `xrk.client` / `dsh.client` 的包经 `xrkh plugin add` 写入 `plugins/web/`，Host merge 进产品壳 boot。改完同样 `xrkh restart`。不参与进程 discover（`web/` 被跳过）。
+带 `xrk.client` / `dsh.client` 的包经 `xrkh plugin add` 写入 `plugins/web/`，Host merge 进产品壳 boot。Settings **重载** soft remount client 半部；停用 / 删除 soft unload（失败再硬刷新）。不参与进程 discover（`web/` 被跳过）。详情见 [client-plugin-development.md](./client-plugin-development.md)。
 
-## 社区 client / Host 包
+**写输入框控件、读当前模型、叠主题 token**：见 [client-plugin-development.md](./client-plugin-development.md)。金样：`extensions/example-composer-action` · `extensions/example-theme-tokens`。
 
-与上文「最小进程插件」不同：社区包通常带 **`client.js`**（壳 UI）和可选 **`host.mjs`**（同源 HTTP/RPC）。
+## 社区 client / Host 包（可选）
+
+与上文「最小进程插件」和原生 client 不同：社区包通常带 **`client.js`**（壳 UI）和可选 **`host.mjs`**（同源 HTTP/RPC），经兼容器接线。兼容器**不是**写原生插件的前置；计划在 **0.9** 迁出为独立 npm `@xrkseek/dsh-compat`。
 
 ```bash
 xrkh plugin add dsh-wallet
@@ -134,10 +139,9 @@ xrkh restart
 
 | 文档 | 内容 |
 |------|------|
-| [community-plugins.md](./community-plugins.md) | Host 契约 · 已实现 / 待补 · fixture |
+| [client-plugin-development.md](./client-plugin-development.md) | **原生**壳扩展（优先） |
+| [community-plugins.md](./community-plugins.md) | 社区 Host 契约 · 已实现 / 待补 · fixture |
 | [plugin-loader.md](./plugin-loader.md) | discover · `host.mjs` apply · subprocess |
-
-详见 [community-plugins.md](./community-plugins.md) 与 [`packages/server/http/src/dsh-compat/README.md`](../packages/server/http/src/dsh-compat/README.md)。
 
 ## 边界
 
@@ -146,7 +150,7 @@ xrkh restart
 - 插件覆盖同名 builtin：不支持  
 - 外部云端满血能力不在本仓实现（见 community-plugins「待补」）
 
-相关：[plugin-loader.md](./plugin-loader.md) · [community-plugins.md](./community-plugins.md) · [host-preset.md](./host-preset.md) · [modules/server-loader.md](./modules/server-loader.md)
+相关：[client-plugin-development.md](./client-plugin-development.md) · [plugin-loader.md](./plugin-loader.md) · [community-plugins.md](./community-plugins.md) · [host-preset.md](./host-preset.md) · [modules/server-loader.md](./modules/server-loader.md)
 
 ---
 
@@ -165,7 +169,7 @@ Contract API details: [plugin-loader.md](./plugin-loader.md). Profile selection:
 | New model tools | `tools` | `ToolDefinition[]` → ToolRegistry |
 | Extra system sections | `prompt` | `promptSections[]` → SystemPromptAssembler |
 | Slash commands | `commands` | Face `commands/list` + `commands/execute` |
-| Product-shell UI | `xrk.client` (client package) | Overlay under `~/.xrk/plugins/web/`, **not** a process kind |
+| Product-shell UI | `xrk.client` (client package) | Overlay under `~/.xrk/plugins/web/`, **not** a process kind; author path: [client-plugin-development.md](./client-plugin-development.md) |
 
 Do not author in-tree **`kind: cordis` process packages** (discover only; no automatic `apply`). For **community client / `host.mjs` packages**, see [community-plugins.md](./community-plugins.md) · [plugin-loader.md](./plugin-loader.md).
 
@@ -222,29 +226,32 @@ In-repo golden sample: [extensions/example-tools](../extensions/example-tools/).
 # From the monorepo
 XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js web --workspace .
 
-# Or install into the user plugin root (then xrkh restart to reload Host)
+# Or install into the user plugin root
 xrkh plugin add ./extensions/example-tools
-xrkh restart
 ```
 
 Use `plugin list` / `plugin path` to inspect `~/.xrk/plugins` (overridable with `XRK_HOME` / `XRK_PLUGINS_DIR`).
 
-Reload with **`restart`** (pid lock stops this Host). `--force` only stops recognized XRK listeners; it will not kill nginx and similar.
+- **Process half** (this sample): Settings enable/disable / reload live-reconciles; after editing `plugin.mjs`, Settings **Reload** or `xrkh restart`.
+- **Client half**: see [client-plugin-development.md](./client-plugin-development.md) “Author loop” — Settings soft remount; usually no prior `restart`.
+
+Full Host reload still uses **`restart`** (pid lock). `--force` only stops recognized XRK listeners; it will not kill nginx and similar.
 
 ### Plugin boundaries (`extensions/` in this monorepo)
 
 | Kind | Location | In main-repo git / pnpm workspace? |
 |------|----------|-------------------------------------|
-| **Samples / built-in adapter** | `extensions/example-tools` · `example-channel` · `a2a` · `dsh-compat` | **Yes** (`.gitignore` / `pnpm-workspace` whitelist) |
+| **Samples / built-in adapter** | `extensions/example-tools` · `example-channel` · `example-composer-action` · `example-theme-tokens` · `a2a` · `dsh-compat` | **Yes** (`.gitignore` / `pnpm-workspace` whitelist) |
+| **First-party native product plugins** | `xrk-sunflower-free` · `xrk-phone-bridge` · `xrkh-better-sidebar` · `xrkh-better-sidebar-plugin-office` | Source may live under `extensions/`; install via **Settings → Plugins** / `xrkh plugin add` into `~/.xrk/plugins`; inventory in [client-plugin-development.md](./client-plugin-development.md) |
 | **Third-party / local working tree** | `extensions/<plugin-id>/` (AGT-style local Core) | **Ignored by default**; OK for local smoke tests, do not commit into the main repo |
 | **User global install** | `~/.xrk/plugins` (`xrkh plugin add`) | Outside the monorepo |
 
 Boundaries:
 
 - **Product Agent / plugin authors**: write only under `extensions/<id>/`; `packages/` · `apps/` · `presets/` are changed by kernel maintainers.
-- **Client overlay packages** (`xrk.client`): install under `plugins/web/`; not process `kind` discover; Host contracts in [community-plugins.md](./community-plugins.md).
-- **Standard sidebar** (`xrkh-better-sidebar`): **Host owns** `/sidebar/*`; the package injects client UI only — a plugin host half provides no `/sidebar/*` prefix.
-- No hot reload: **`xrkh restart`** (or restart `web`) after changes.
+- **Client overlay packages** (`xrk.client`): install under `plugins/web/`; not process `kind` discover; native authoring in [client-plugin-development.md](./client-plugin-development.md); community Host contracts in [community-plugins.md](./community-plugins.md).
+- **First-party native sidebar** (`xrkh-better-sidebar` + `xrkh-better-sidebar-plugin-office`): **Host owns** `/sidebar/*`; the package injects client UI only — a plugin host half provides no `/sidebar/*` prefix.
+- Hot-reload boundary: process half Settings reconcile / **Reload**; client half Settings soft remount (install / enable / update / reload) and soft unload (disable / delete); still-dark UI or failure → hard refresh; full Host via `xrkh restart`.
 
 ### Where wiring happens
 
@@ -270,13 +277,15 @@ Workspace `.agents/skills/` and `{workspace}/.xrk/skills/` enter `<available_ski
 
 Maintainer kernel work: [maintainer.md](./maintainer.md). Layering: [skills-layers.md](./skills-layers.md).
 
-## Client overlay (optional)
+## Client overlay (native main path)
 
-Packages with `xrk.client` / `dsh.client` land under `plugins/web/` via `xrkh plugin add`; the Host merges them into the product-shell boot. Restart with `xrkh restart`. They are not process-discovered (`web/` is skipped).
+Packages with `xrk.client` / `dsh.client` land under `plugins/web/` via `xrkh plugin add`; the Host merges them into the product-shell boot. Settings **Reload** soft-remounts the client half; disable / delete soft-unloads (hard-refresh only on failure). They are not process-discovered (`web/` is skipped). Details: [client-plugin-development.md](./client-plugin-development.md).
 
-## Community client and Host packages
+**Composer controls, reading the selected model, theme tokens**: [client-plugin-development.md](./client-plugin-development.md). Samples: `extensions/example-composer-action` · `extensions/example-theme-tokens`.
 
-Unlike the minimal process plugin above, community packages usually ship **`client.js`** (shell UI) and optional **`host.mjs`** (same-origin HTTP/RPC).
+## Community client and Host packages (optional)
+
+Unlike process plugins and native client packages above, community packages usually ship **`client.js`** (shell UI) and optional **`host.mjs`** (same-origin HTTP/RPC) through the compat bridge. Compat is **not** a prerequisite for native authoring; it is planned to extract at **0.9** as standalone npm `@xrkseek/dsh-compat`.
 
 ```bash
 xrkh plugin add dsh-wallet
@@ -286,10 +295,9 @@ xrkh restart
 
 | Doc | Content |
 |-----|---------|
-| [community-plugins.md](./community-plugins.md) | Host contracts · Implemented / Planned · fixtures |
+| [client-plugin-development.md](./client-plugin-development.md) | **Native** shell extension (preferred) |
+| [community-plugins.md](./community-plugins.md) | Community Host contracts · Implemented / Planned · fixtures |
 | [plugin-loader.md](./plugin-loader.md) | discover · `host.mjs` apply · subprocess |
-
-See [community-plugins.md](./community-plugins.md) and [`packages/server/http/src/dsh-compat/README.md`](../packages/server/http/src/dsh-compat/README.md).
 
 ## Boundaries
 
@@ -298,4 +306,4 @@ See [community-plugins.md](./community-plugins.md) and [`packages/server/http/sr
 - Plugins overriding same-name builtins: not supported
 - Full external cloud parity is not implemented in-tree (see community-plugins Planned)
 
-Related: [plugin-loader.md](./plugin-loader.md) · [community-plugins.md](./community-plugins.md) · [host-preset.md](./host-preset.md) · [modules/server-loader.md](./modules/server-loader.md)
+Related: [client-plugin-development.md](./client-plugin-development.md) · [plugin-loader.md](./plugin-loader.md) · [community-plugins.md](./community-plugins.md) · [host-preset.md](./host-preset.md) · [modules/server-loader.md](./modules/server-loader.md)

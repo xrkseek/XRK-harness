@@ -1,6 +1,6 @@
 /**
  * Model-facing subagent routing (injected when tools are bound).
- * Details live on the tool schemas; this section only steers when to use them.
+ * Shape / delivery / route params live on tool schemas; this section only steers.
  */
 
 export type DelegationRoutingMode = "explicit" | "proactive";
@@ -15,14 +15,13 @@ export function delegationModeLine(mode: DelegationRoutingMode): string {
     return [
       "Delegation: explicit only.",
       "- Do NOT spawn unless the user, AGENTS.md, or the task text itself asked for delegation.",
-      "- \"Go deeper\", \"investigate more\", or \"make it thorough\" is NOT authorization to spawn.",
-      "- When delegation is justified, use `subagent` normally.",
+      "- \"Go deeper\" / \"investigate more\" / \"make it thorough\" is NOT authorization.",
     ].join("\n");
   }
   return [
     "Delegation: proactive.",
-    "- Spawning is an approved strategy; spawn when it genuinely helps (parallel independent work, research without burning this context).",
-    "- Depth, active-child, and budget caps still apply — call `list_agents` before fanning out; it prints the live quota.",
+    "- Spawn when it genuinely helps (parallel independent work, research without burning this context).",
+    "- Caps still apply — `list_agents` before fan-out.",
   ].join("\n");
 }
 
@@ -31,30 +30,13 @@ export function subagentRoutingPrompt(
 ): string {
   return [
     "Subagents:",
-    "- Before spawning, read turn-start `<session_capability>`: (1) no subagent tool_surface (Minimal/Shell/Frugal) → do not spawn, Skill or self; (2) permission path gate — read-only → no write tasks; workspace-write → out-of-workspace paths need allowlist/5s confirm; open → path gate off, still pick by caps; (3) member caps must cover the task or pick another member / skip.",
-    "- Use `subagent` for a self-contained task that should not consume this conversation's context.",
-    "- Before spawning, make a high-level plan and identify the critical path. Do NOT delegate the task you are blocked on to a child and then wait — you are the one responsible for unblocking it.",
-    "- A child task must be self-contained and must not duplicate work you are already doing. Give disjoint scopes to concurrent children so two writers never edit the same file.",
-    "- The child inherits this session's path permission (same pathAccessMode + object allowlist). Child tools ≤ this tool_surface, further weakened by role/member. Child cannot raise permission or invent parent MCP.",
-    "- The child shares this session's workspace (same cwd / AGENTS inject) unless you set `worktree: true`. Do not assume it is a different project.",
-    "- The child cannot see this transcript unless `inherit_context: true` (then only completed turns; the open turn is excluded). Put paths, goals, constraints, and any persona in `prompt`. Face prepends parent/child session ids, mode, role, permission inherit, and cwd — never tell the child to read AGENTS.md to discover who it is.",
-    "- Pick the spawn shape:",
-    "  - Continuable (default — omit `run_in_background` or set true): the tool returns as soon as the child starts. When the child goes idle, Host steers a completion notice into this session (插队). Continue later with `followup_task` / `send_message` / `interrupt_agent` / `close_agent` (stop + snapshot).",
-    "  - One-shot (`run_in_background: false`): only when the user asked to wait for a final answer in this tool call (10 min salvage). The child is read-only afterward — no human follow-ups.",
-    "  - Need this conversation: `inherit_context: true` (in-process only).",
-    "  - Isolated git tree: `worktree: true` (same repo, separate checkout).",
-    "  - Child profile: prefer `member_id` from the live `subagent` / `team_list` catalog (turn-start board lists the same roster). `team_save` creates a 干员; `propose_skill` only writes a SKILL.md. Bare `role` is the fallback.",
-    "- The child's LLM route defaults to this session's current provider / model / reasoning effort. Pass `provider` / `model` / `reasoning_effort` on `subagent` only when the task needs a different route (bulk work on a cheap model, hard reasoning at `max`).",
-    "- A child that ends with `(QUOTA)` did not fail its task — its route ran out. Do not resend there: `set_agent_model` (or `model` / `reasoning_effort` on `followup_task`) moves it onto a route that still works, then follow up. `(RATE_LIMIT)` is temporary — wait and resend on the same route. `list_models` shows routable pairs, efforts and live slot use.",
-    "- After you have handed work to a child: if this turn has nothing else useful to do, end the turn and let the child's result arrive as that steer notice. Keep working in this turn when you still have independent steps. Call `wait_agent` when the next step in this turn needs the child's answer (foreground spawn is usually clearer for that case).",
-    "- Parent↔child and peer follow-ups use `delivery=steer` by default (插队 at the next tool-step boundary). `delivery=queue` waits until the child is idle.",
-    "- Match the live catalog by name and brief when this session has subagent tools. If a member fits, `subagent` with that `member_id` this turn. Do not Skill-load a standing skill that covers the same job. Frugal has no subagent tools — Skill-load here. Tiny asks with no catalog match stay with you. `presence_set` may run in parallel.",
-    "- Sibling parent sessions talk with `thread_message` (session_id from the collab board). Do not `thread_switch` to send mail. That is not a subagent.",
-    "- `team_graph` reads/edits the collaboration graph (delegates + peer): view · neighbors · link/unlink · role · announce to peers. Same-parent siblings are auto peer-linked on spawn.",
-    "- `list_agents` shows depth/active quota, per-child state and inbox backlog before spawning more work.",
-    "- Default `runtime` is in-process (Face child). Set `runtime` to `acp` / `app-server` / `claude-code` for an external subprocess (needs local binary / Settings). `acp` / `app-server` support `run_in_background` + the same followup/wait/interrupt tools; `claude-code` stays one-shot print.",
-    "- Use `ralph` only when the human explicitly asks for a Ralph / fresh-agent loop toward one immutable objective (each round is a new child; handoff is structured JSON). Prefer `subagent` for ordinary delegation.",
-    "- Prefer a few independent children over deep nesting; respect depth and active-child caps. Prefer doing small work yourself **only when no catalog member fits** — **Frugal** has no subagent tools; **Shallow** allows depth 1 only.",
+    "- Gate on turn-start `<session_capability>` (tool_surface · path · member caps). No subagent on Minimal/Shell/Frugal → Skill or self.",
+    "- Self-contained task only; high-level plan first; never delegate the blocker you are waiting on; concurrent children get disjoint scopes.",
+    "- Prefer `member_id` from collab board / `team_list`. Tiny asks with no catalog match stay with you. Peers use `thread_message` (not `thread_switch`).",
+    "- Child ≤ this tool_surface + role/member; same cwd unless `worktree: true` (coding) or IM `workspace_id`/`cwd`; no transcript unless `inherit_context: true` — put the job in `prompt` (Face prepends ids; never tell the child to read AGENTS.md for identity).",
+    "- Shape: continuable default (`followup_task` / `send_message` / `interrupt_agent` / `close_agent`); one-shot `run_in_background: false` only when the user asked to wait in this call; `ralph` only if the human asks.",
+    "- Route defaults to this session's provider/model/effort; override on `subagent` when needed. `(QUOTA)` → `set_agent_model` / `list_models` then follow up; `(RATE_LIMIT)` wait and resend same route.",
+    "- After handoff: end the turn when idle (Host steers a completion notice); `wait_agent` when this turn is blocked. Default `delivery=steer`. `team_graph` for the peer graph.",
     delegationModeLine(mode),
   ].join("\n");
 }

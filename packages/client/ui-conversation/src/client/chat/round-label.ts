@@ -1,9 +1,10 @@
 /**
  * Whole-log 轮次 chrome on chat rows.
  *
- * Only the Host-turn opener paints 「第 N 轮」. Mid-turn human rows (durable
- * 插话, or a `user` row that lost its inbox claim) paint 「第 N 轮 插话」.
- * Auto-continue 「继续」 stays a user bubble but never repeats the round mark.
+ * The Host-turn opener (human · seat · handoff wake) paints 「第 N 轮」— first
+ * speech of a round is never 插队. Same-turn follow-ups (human 插话, mid-turn
+ * seat / handoff 回传) paint 「第 N 轮 插话」. Auto-continue 「继续」 stays a
+ * user bubble but never repeats the round mark.
  */
 
 export type RoundLabelKind = 'turn' | 'steer'
@@ -19,7 +20,7 @@ export function roundLabelLocaleKey(
 }
 
 /**
- * Label kind for a durable `user` row.
+ * Label kind for a durable `user` row (incl. seat / handoff speech bubbles).
  * @returns `null` when this row should not paint a round mark.
  */
 export function userRoundLabelKind(
@@ -34,7 +35,8 @@ export function userRoundLabelKind(
   // Rail not ready yet — keep the opener wording so a first paint does not
   // flash 「插话」 on the real turn-opening send.
   if (opener === undefined) return 'turn'
-  return opener === nodeKey ? 'turn' : 'steer'
+  if (opener === nodeKey) return 'turn'
+  return 'steer'
 }
 
 /** Loaded-rail opener keys keyed by Host turn (jump / `data-chat-turn`). */

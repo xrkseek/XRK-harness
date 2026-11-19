@@ -52,6 +52,12 @@ export type JobRowsProps = JobListActions & {
   /** Currently expanded job id (output panel). */
   expandedId?: string
   onToggleExpand?: (jobId: string) => void
+  /**
+   * When false, only row chrome renders — the owner mounts {@link JobOutputPanel}
+   * beside the list so multi-job expand does not nest TerminalBlock inside a
+   * scrolling `<ul>`.
+   */
+  embedOutput?: boolean
 }
 
 const KILL_ARM_MS = 3_000
@@ -77,17 +83,20 @@ function terminalLabels(t: TranslateNS<'job'>): TerminalBlockLabels {
   }
 }
 
-function JobOutputPanel({
-  job,
-  live,
-  t,
-  css,
-}: {
+export type JobOutputPanelProps = {
   job: JobView
   live: boolean
   t: TranslateNS<'job'>
   css: JobRowStyle
-}) {
+}
+
+/** Streams Host `jobs.output` into TerminalBlock (shared by dock + header menu). */
+export function JobOutputPanel({
+  job,
+  live,
+  t,
+  css,
+}: JobOutputPanelProps) {
   const [text, setText] = useState('')
   const [truncated, setTruncated] = useState(false)
   const [error, setError] = useState<string | undefined>()
@@ -133,7 +142,8 @@ function JobOutputPanel({
   )
 }
 
-function KillButton({
+/** Two-press stop control (shared by row actions and collapsed multi-job chrome). */
+export function KillButton({
   job,
   t,
   css,
@@ -220,6 +230,7 @@ export function JobRows({
   backgroundJob,
   expandedId,
   onToggleExpand,
+  embedOutput = true,
 }: JobRowsProps) {
   const onBackground = (event: MouseEvent<HTMLButtonElement>, job: JobView): void => {
     event.stopPropagation()
@@ -265,7 +276,7 @@ export function JobRows({
           </>
         )
         return (
-          <li key={job.id}>
+          <li key={job.id} data-job-expanded={expanded || undefined}>
             <div className={live ? `${css.rowLine} ${css.rowLineLive}` : css.rowLine}>
               {expandable
                 ? (
@@ -300,7 +311,7 @@ export function JobRows({
                 )
                 : null}
             </div>
-            {expanded
+            {embedOutput && expanded
               ? <JobOutputPanel job={job} live={live} t={t} css={css} />
               : null}
           </li>

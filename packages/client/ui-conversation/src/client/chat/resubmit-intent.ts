@@ -5,7 +5,7 @@
  * apply.tsx / InputHub await {@link requestResubmitConfirm}; ChatView calls
  * {@link completeResubmitConfirm} from ResubmitConfirm.
  */
-export type ResubmitIntentKind = 'edit' | 'regenerate' | 'delete'
+export type ResubmitIntentKind = 'edit' | 'regenerate' | 'delete' | 'restore'
 
 export type ResubmitIntent = {
   readonly sessionId: string

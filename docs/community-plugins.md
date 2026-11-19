@@ -2,8 +2,10 @@
 
 > **读者**：集成者 · 贡献者（安装社区 client、对照 Host 已实现能力与待补特性）
 
-产品壳可加载社区 `client.js`。Host 侧由内置适配器 `extensions/dsh-compat` 与 `@xrkseek/server-http/dsh-compat` 按 **路径与 RPC 形状**接线，落盘与会话走 `~/.xrk`。实现笔记：[dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · 发包边界：[PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) · 发现：[plugin-loader.md](./plugin-loader.md)。  
-**逐表面兼容矩阵**（对标 DSH 适配 CC mods 的写法）：[community-plugin-compat.md](./community-plugin-compat.md)。
+**可选桥**：写原生壳扩展（输入框、主题 token、进程 `tools`）请先读 [client-plugin-development.md](./client-plugin-development.md) · [plugin-development.md](./plugin-development.md)。本页描述**社区** `client.js` / `host.mjs` 形状与 Host 兼容面。
+
+产品壳可加载社区 `client.js`。Host 侧由内置适配器 `extensions/dsh-compat` 与 `@xrkseek/server-http/dsh-compat` 按 **路径与 RPC 形状**接线，落盘与会话走 `~/.xrk`。实现笔记：[dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · 发包边界：[PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md)（目标窗口 **0.9** 整夹迁出独立 npm **`@xrkseek/dsh-compat`**）· 发现：[plugin-loader.md](./plugin-loader.md)。  
+**逐表面兼容矩阵**：[community-plugin-compat.md](./community-plugin-compat.md)。
 
 ## 怎么安装与使用
 
@@ -15,7 +17,7 @@ xrkh plugin add <包名>
 xrkh restart
 ```
 
-示例包名：`dsh-wallet` · `@liustack/modsearch` · `xrkh-better-sidebar` · `@smalltailqwq/dsh-client-ui-skin-maid-atelier` 等（完整清单见下「已适配社区包清单」）。CLI 装完用 **`xrkh restart`**；Settings 装完进程半部会热 reconcile，client 半部按列表 `needsRestart` 硬刷新。
+示例包名：`dsh-wallet` · `@liustack/modsearch` · `@smalltailqwq/dsh-client-ui-skin-maid-atelier` 等（完整清单见下「已适配社区包清单」）。**第一方原生**侧栏 / 手机桥 / 向日葵见 [client-plugin-development.md](./client-plugin-development.md)，不在本页「社区」分类。CLI 装完用 **`xrkh restart`**；Settings 装完进程半部热 reconcile，client 叠加层 soft remount / soft unload——仅列表标 `needsRestart`（unload/remount 失败）时硬刷新。
 
 **Scoped 再发行**：社区包常以裸名 `dsh-*` 写入 `__ModuleLoader__.load({ id })`，又以 `@scope/dsh-*` 发 npm。安装时 CLI 会把 stamp 对齐到安装名；运行时 ModuleLoader 对同一插件族（裸名 ↔ `@scope/裸名`）双登记。Host 具名适配（如 OFM / WorkBuddy）按**裸名族**识别，不钉死某个 publisher scope。
 
@@ -71,12 +73,12 @@ community client.js
 | 自动审阅 | 启发式 classify（默认）· **可替换 classifier**（`options.classifier` / `XRK_AUTO_REVIEW_CLASSIFIER_URL`）· slash | — |
 | 上下文浏览器 | Face **`contextTimeline`**（requests 分项 · usage 盖章 · events）/ **`contextHeaders`** · **`costUsage`** 计价 | — |
 | 移动访问 | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
-| **侧栏（`xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表）；含 `git.worktrees` · `changes.ops` · agent-opens/terminals 真推送 | prefs 默认关；**仅当 boot 图已启用 better-sidebar** 时，**设置 → 通用** 才出现 `agentOpenTools` / `agentTerminalTools`（写 `~/.xrk/sidebar/prefs.json`），开后模型可 `sidebar_open` / `terminal_create` |
+| **侧栏（第一方原生 `xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表）；含 `git.worktrees` · `changes.ops` · agent-opens/terminals 真推送。包本身是 XRK 产品插件，不是第三方社区包 | prefs 默认关；**仅当 boot 图已启用 better-sidebar** 时，**设置 → 通用** 才出现 `agentOpenTools` / `agentTerminalTools`（写 `~/.xrk/sidebar/prefs.json`），开后模型可 `sidebar_open` / `terminal_create` |
 | **ModLens（`@liustack/modlens`）** | `GET/POST /modlens/config`（DSH engineSummary：`engines.*.hasKey` · `keyless` · `discovery`；密钥不进浏览器）· `GET /modlens/paste` → `{ takeover: true }`（关 `pasteToPath` 时 404）· 二进制 `POST /modlens/paste` → `{ path }`；Settings → Plugins 配置卡（`settings.plugin.item` 键 `modlens`） | Cordis 视觉包装路由（选择器 `(modlens vision)`）· `modlens_read_image` 工具半包 |
 | **牛来桌宠（`dsh-niulai-pet`）** | client `createRoot` 挂 body；Settings 卡 `niulai-pet`；`GET /niulai-kws/*` 白名单伺服 staged `kws/`（装包拷贝资产目录） | 全量 host.mjs Cordis settings 节（桌宠本体不依赖） |
 | **皮肤** | `/skin-assets/<id>/<hash>` · `/api/dsh/skins` · `/api/skin-manager` · `/api/skin-center/v2|*` · `/dsh-skin-market` · `/dream-skin/api` · `/wallpaper-engine`；装包拷贝 `assets/` · `preview/` · `locale/` · `skins/` · `skin.json` | Cordis profile 互斥启停区段（XRK 持久化偏好 + 重载；不改写第三方 patch YAML） |
 
-本地消息、节点、OCR 与 GenUI 预览线已在适配器内可用。社区 client 配置卡走 **设置 → Plugins → 插件配置**：Host `describe` 应答后派发全部已注册 `settings.plugin.item` 键（含 Face 未列出的自托管键）。纯 client 包首次安装以及启停 / 删除 / 重载 / 更新后需 **刷新页面**（Desktop 首次装 client 建议整应用重启）才会挂上 / 卸下 `webPlugins`。
+本地消息、节点、OCR 与 GenUI 预览线已在适配器内可用。社区 client 配置卡走 **设置 → Plugins → 插件配置**：Host `describe` 应答后派发全部已注册 `settings.plugin.item` 键（含 Face 未列出的自托管键）。纯 client 包：**安装 / 启用 / 更新 / 重载** soft remount；**停用 / 删除** soft unload；失败或 Desktop 首次装未亮起时再硬刷新 / 整应用重启。
 
 ## 已适配社区包清单
 
@@ -91,13 +93,13 @@ community client.js
 | `host-ok` | Host 路径已覆盖，但仍注册 DSH 全局面板 seat（`sidebar.panellist` / `main` 等）— 见「待补特性」 |
 | `client` | 仅壳 UI / Settings 卡，无 Host HTTP |
 
-Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；Desktop 另需整应用重启以挂 `webPlugins`（见上文）。
+Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；Settings 安装通常 soft remount；Desktop 若未亮起可整应用重启（见上文）。
 
 ### 壳 · 工具 · 市场
 
 | npm 包 | 覆盖 | Host 要点 |
 |--------|------|-----------|
-| `xrkh-better-sidebar` · `dsh-better-sidebar` | full | Host 原生 `/sidebar/*` |
+| `xrkh-better-sidebar` · `dsh-better-sidebar`（**第一方原生**；`dsh-*` 为旧名别名） | full | Host 原生 `/sidebar/*`；Office 预览另装 `xrkh-better-sidebar-plugin-office` |
 | `dsh-wallet` | full | `/api/wallet` · `/wallet/api` |
 | `dsh-memento` | full | `/api/memento` |
 | `@liustack/modlens` | partial | `/modlens` paste · config · Settings 卡已接；Cordis 视觉包装路由 / `modlens_read_image` 未做（选择器无 `(modlens vision)`） |
@@ -185,13 +187,13 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 
 装皮肤包后若立绘 404：确认 staged `assets/` · `skin.json`，并重启 Host。Desktop 上非 `/assets/*` 的扩展名路径（如 preview 图）在磁盘未命中时会回落 Host Fetch，避免皮肤资源被静态 404 吃掉。主题音效目录 stage 为 `sounds/`。
 
-## 侧栏插件契约（Host 原生，client 只挂 UI）
+## 侧栏插件契约（Host 原生，第一方 client 只挂 UI）
 
-标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.22**）注入 `lib/client.js`。`/sidebar/*` 由 Host `createSidebarPublicHandler` 挂载；插件 host 半包不占用该路径。
+第一方原生侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.20.9**；Office 另装 **`xrkh-better-sidebar-plugin-office`**）注入 `lib/client.js`。`/sidebar/*` 由 Host `createSidebarPublicHandler` 挂载；插件 host 半包不占用该路径。这是 XRK 产品插件，不是第三方社区包。
 
 概况栏（`details`）默认 **Status**（子代理图 · jobs · live `contextTimeline` · cost · channels），与 `/status` / Face `session.status` 同源。概况栏与侧栏工作台可同时开：壳发布 `LayoutInsets`（`--xrk-layout-inset-*`）。产品切分见 [sidebar-workbench](./sidebar-workbench.md)。
 
-产品 Host 挂载同源 `/sidebar/*`，再经 `attachSidebarPtyUpgrades` 挂终端 WS。社区 client 若也调 `/sidebar/*`，共用同一契约。
+产品 Host 挂载同源 `/sidebar/*`，再经 `attachSidebarPtyUpgrades` 挂终端 WS。其它 client 若也调 `/sidebar/*`，共用同一契约。
 
 | 表面 | Host 落点 | 插件职责 |
 |------|-----------|----------|
@@ -295,8 +297,10 @@ node scripts/dsh-community-mirror.mjs --search=skin
 
 > **Audience**: Integrators · Contributors (install community clients; compare implemented Host surfaces and planned work)
 
-The product shell may load community `client.js`. The Host side is wired by the built-in adapter `extensions/dsh-compat` and `@xrkseek/server-http/dsh-compat` according to **path and RPC shape**, with persistence under `~/.xrk`. Implementation notes: [dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · Package boundary: [PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) · Discover: [plugin-loader.md](./plugin-loader.md).  
-**Per-surface compatibility matrix** (same grain as DSH’s Claude Code mods page): [community-plugin-compat.md](./community-plugin-compat.md).
+**Optional bridge**: for native shell extensions (composer, theme tokens, process `tools`) start with [client-plugin-development.md](./client-plugin-development.md) · [plugin-development.md](./plugin-development.md). This page covers **community** `client.js` / `host.mjs` shapes and Host compatibility.
+
+The product shell may load community `client.js`. The Host side is wired by the built-in adapter `extensions/dsh-compat` and `@xrkseek/server-http/dsh-compat` according to **path and RPC shape**, with persistence under `~/.xrk`. Implementation notes: [dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · Package boundary: [PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) (target window **0.9**: whole-folder extract to standalone npm **`@xrkseek/dsh-compat`**) · Discover: [plugin-loader.md](./plugin-loader.md).  
+**Per-surface compatibility matrix**: [community-plugin-compat.md](./community-plugin-compat.md).
 
 ## Install and use
 
@@ -308,7 +312,7 @@ xrkh plugin add <package-name>
 xrkh restart
 ```
 
-Example package names: `dsh-wallet` · `@liustack/modsearch` · `xrkh-better-sidebar` · `@smalltailqwq/dsh-client-ui-skin-maid-atelier` (full inventory under **Adapted community packages** below). After CLI install use **`xrkh restart`**; Settings install live-reconciles the process half — hard-refresh the client half when the list shows `needsRestart`.
+Example package names: `dsh-wallet` · `@liustack/modsearch` · `@smalltailqwq/dsh-client-ui-skin-maid-atelier` (full inventory under **Adapted community packages** below). **First-party native** sidebar / phone bridge / sunflower: [client-plugin-development.md](./client-plugin-development.md) — not classified as community on this page. After CLI install use **`xrkh restart`**; Settings install live-reconciles the process half and soft-remounts / soft-unloads the client overlay — hard-refresh only when the list shows `needsRestart` (unload/remount failure).
 
 **Scoped republish**: community clients often stamp `__ModuleLoader__.load({ id })` with the bare `dsh-*` name while publishing as `@scope/dsh-*`. Install and `xrkh serve` reconcile align the stamp to the install name; at runtime ModuleLoader dual-registers by boot-graph family (bare ↔ `@scope/bare`) so parallel plugin prefetch cannot drop a bare stamp under a sibling arrival. Named Host adapters (OFM / WorkBuddy, …) match by **bare family**, not a hard-coded publisher scope.
 
@@ -364,12 +368,12 @@ Source of truth: `dsh-compat-matrix.ts`.
 | Auto-review | Heuristic classify (default) · **replaceable classifier** (`options.classifier` / `XRK_AUTO_REVIEW_CLASSIFIER_URL`) · slash | — |
 | Context browser | Face **`contextTimeline`** (per-request items · usage stamps · events) / **`contextHeaders`** · **`costUsage`** pricing | — |
 | Mobile access | Pairing · LAN/WAN PIN · tunnel HTTP+WS | — |
-| **Sidebar (`xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below); includes `git.worktrees` · `changes.ops` · real agent-opens/terminals push | Prefs default off; **Settings → General** shows `agentOpenTools` / `agentTerminalTools` **only when better-sidebar is in the boot graph** (`~/.xrk/sidebar/prefs.json`); then model may `sidebar_open` / `terminal_create` |
+| **Sidebar (first-party native `xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below); includes `git.worktrees` · `changes.ops` · real agent-opens/terminals push. The package is an XRK product plugin, not a third-party community package | Prefs default off; **Settings → General** shows `agentOpenTools` / `agentTerminalTools` **only when better-sidebar is in the boot graph** (`~/.xrk/sidebar/prefs.json`); then model may `sidebar_open` / `terminal_create` |
 | **ModLens (`@liustack/modlens`)** | `GET/POST /modlens/config` (DSH engineSummary: `engines.*.hasKey` · `keyless` · `discovery`; secrets stay off the wire) · `GET /modlens/paste` → `{ takeover: true }` (404 when `pasteToPath` off) · binary `POST /modlens/paste` → `{ path }`; Settings → Plugins config card (`settings.plugin.item` key `modlens`) | Cordis vision wrapper routes (picker `(modlens vision)`) · `modlens_read_image` tool half |
 | **Niulai pet (`dsh-niulai-pet`)** | client `createRoot` on `document.body`; Settings card `niulai-pet`; `GET /niulai-kws/*` allowlist serves staged `kws/` (install copies asset dirs) | Full Cordis host settings section (pet UI does not require it) |
 | **Skins** | `/skin-assets/<id>/<hash>` · `/api/dsh/skins` · `/api/skin-manager` · `/api/skin-center/v2|*` · `/dsh-skin-market` · `/dream-skin/api` · `/wallpaper-engine`; install stages `assets/` · `preview/` · `locale/` · `skins/` · `skin.json` | Cordis exclusive profile patch blocks (XRK stores preference + reload; does not rewrite third-party patch YAML) |
 
-Local messaging, nodes, OCR, and GenUI preview are available inside the adapter today. Community config cards render under **Settings → Plugins → Configurable** after one Host `describe`: every registered `settings.plugin.item` key is dispatched (including self-hosted keys Face never lists). After install **and** enable / disable / delete / reload / update, **refresh the page** so client halves remount (Desktop first install of a pure client package: prefer a full app restart).
+Local messaging, nodes, OCR, and GenUI preview are available inside the adapter today. Community config cards render under **Settings → Plugins → Configurable** after one Host `describe`: every registered `settings.plugin.item` key is dispatched (including self-hosted keys Face never lists). Pure client packages: **install / enable / update / reload** soft-remount; **disable / delete** soft-unload; hard-refresh or Desktop full restart only on failure / first-light miss.
 
 ## Adapted community packages
 
@@ -384,13 +388,13 @@ Packages in the tables below have **Host HTTP/RPC wired** (or are client-only wi
 | `host-ok` | Host paths covered, but the client still registers DSH global-panel seats (`sidebar.panellist` / `main`, …) — see **Planned work** |
 | `client` | Shell UI / Settings only, no Host HTTP |
 
-Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; Desktop still needs a full app restart to mount `webPlugins` (see above).
+Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; Settings install usually soft-remounts; Desktop may still need a full app restart if the overlay does not light up (see above).
 
 ### Shell · tools · market
 
 | npm package | Coverage | Host surface |
 |--------|------|-----------|
-| `xrkh-better-sidebar` · `dsh-better-sidebar` | full | Host-native `/sidebar/*` |
+| `xrkh-better-sidebar` · `dsh-better-sidebar` (**first-party native**; `dsh-*` legacy alias) | full | Host-native `/sidebar/*`; Office preview via `xrkh-better-sidebar-plugin-office` |
 | `dsh-wallet` | full | `/api/wallet` · `/wallet/api` |
 | `dsh-memento` | full | `/api/memento` |
 | `@liustack/modlens` | partial | `/modlens` paste · config · Settings card wired; Cordis vision wrappers / `modlens_read_image` not done (no `(modlens vision)` in picker) |
@@ -480,7 +484,7 @@ If skin artwork 404s after install: confirm staged `assets/` · `skin.json`, the
 
 ## Sidebar plugin contract (Host owns; client UI only)
 
-Standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.22**) injects `lib/client.js`. `/sidebar/*` is mounted by Host `createSidebarPublicHandler`; a plugin host half does not occupy that path.
+First-party native sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.20.9**; Office via **`xrkh-better-sidebar-plugin-office`**) injects `lib/client.js`. `/sidebar/*` is mounted by Host `createSidebarPublicHandler`; a plugin host half does not occupy that path. This is an XRK product plugin, not a third-party community package.
 
 The session **Status** column (`details`) defaults to the subagent graph · jobs · live `contextTimeline` · cost · channels (same source as `/status` / Face `session.status`). Status and the sidebar workbench may stay open together via `LayoutInsets` (`--xrk-layout-inset-*`). Product cut: [sidebar-workbench](./sidebar-workbench.md).
 

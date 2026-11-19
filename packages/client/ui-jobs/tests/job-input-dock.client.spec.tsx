@@ -130,6 +130,46 @@ describe('JobInputDock actions', () => {
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('/sidebar/api/jobs.output')
   })
 
+  it('mounts output beside the list so multi-job expand does not nest scrollports', async () => {
+    vi.useRealTimers()
+    const long = Array.from({ length: 80 }, (_, i) => `line-${i + 1}`).join('\n')
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true, value: { text: long, truncated: false } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })))
+    const { container } = render(<JobInputDock {...props([
+      job(),
+      job({ id: 'bash-2' as JobView['id'], label: 'second', startedAt: START + 1_000 }),
+    ])} />)
+    fireEvent.click(screen.getByRole('button', { name: /2 个后台任务运行中/ }))
+    fireEvent.click(screen.getByRole('button', { name: '展开 pnpm run build 的输出' }))
+    expect(await screen.findByText('line-1')).toBeTruthy()
+    const panel = container.querySelector('[class*="panel"]') as HTMLElement | null
+    expect(panel).not.toBeNull()
+    const list = screen.getByRole('list', { name: zh['list.aria'] })
+    expect(list.contains(panel)).toBe(false)
+    expect(container.querySelector('[data-output-open]')?.contains(list)).toBe(true)
+    expect(getComputedStyle(panel!).overflowY).not.toMatch(/^(auto|scroll)$/)
+  })
+
+  it('keeps panel out of the scroll chain for a single live job', async () => {
+    vi.useRealTimers()
+    const long = Array.from({ length: 40 }, (_, i) => `line-${i + 1}`).join('\n')
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true, value: { text: long, truncated: false } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })))
+    const { container } = render(<JobInputDock {...props([job()])} />)
+    fireEvent.click(screen.getByRole('button', { name: '展开 pnpm run build 的输出' }))
+    expect(await screen.findByText('line-1')).toBeTruthy()
+    const panel = container.querySelector('[class*="panel"]') as HTMLElement | null
+    const list = screen.getByRole('list', { name: zh['list.aria'] })
+    expect(panel).not.toBeNull()
+    expect(list.contains(panel)).toBe(false)
+  })
+
   it('offers background only for foreground running jobs', () => {
     const backgroundJob = vi.fn()
     render(<JobInputDock {...props([

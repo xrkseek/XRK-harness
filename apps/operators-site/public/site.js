@@ -425,45 +425,9 @@ function normalizeCatalog(raw) {
   };
 }
 
+/** Live AGT catalog retired — Pages `catalog.json` (+ GitHub/Pages downloadUrl) is SoT. */
 async function loadLiveCatalog(staticCatalog) {
-  const origin = String(staticCatalog.agt?.origin || "").replace(/\/+$/, "");
-  const listPath = String(
-    staticCatalog.agt?.list || "/api/harness/operators",
-  );
-  if (!origin) return staticCatalog;
-  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timer =
-    ctrl && typeof setTimeout === "function"
-      ? setTimeout(() => ctrl.abort(), 2500)
-      : null;
-  try {
-    const res = await fetch(
-      `${origin}${listPath.startsWith("/") ? listPath : `/${listPath}`}`,
-      {
-        headers: { Accept: "application/json" },
-        signal: ctrl ? ctrl.signal : undefined,
-      },
-    );
-    // 503 empty catalog = Worker soft-fail while AGT is down; keep Pages samples.
-    if (!res.ok && res.status !== 503) throw new Error("live");
-    const json = await res.json();
-    const data = json && json.data !== undefined ? json.data : json;
-    const live = normalizeCatalog({
-      ...data,
-      // Live AGT may omit sites; keep Pages cross-link defaults.
-      sites: { ...staticCatalog.sites, ...(data?.sites || {}) },
-      agt: staticCatalog.agt,
-    });
-    return {
-      sites: { ...staticCatalog.sites, ...live.sites },
-      agt: staticCatalog.agt,
-      members: live.members.length ? live.members : staticCatalog.members,
-    };
-  } catch {
-    return staticCatalog;
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+  return staticCatalog;
 }
 
 function paintCatalog(filterValue) {
@@ -505,20 +469,8 @@ async function boot() {
   } catch {
     /* keep empty */
   }
-  // First paint from local samples — never wait on the live Worker/AGT hop.
   catalog = staticCatalog;
   paintCatalog(filter?.value || "");
-
-  void loadLiveCatalog(staticCatalog).then((live) => {
-    const before = JSON.stringify(catalog.members.map((m) => m.id));
-    const after = JSON.stringify(live.members.map((m) => m.id));
-    catalog = live;
-    if (before === after) {
-      wireDownloadLinks();
-      return;
-    }
-    paintCatalog(filter?.value || "");
-  });
 }
 
 boot();

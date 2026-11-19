@@ -77,7 +77,7 @@ describe("session inject documents", () => {
     );
     expect(body?.content).toContain("<session_capability>");
     expect(body?.content).toContain("badge:");
-    expect(body?.content).toContain("permission_label:");
+    expect(body?.content).toMatch(/^gate:/m);
     expect(
       readSessionInjectDocument(runtime, sessionId, SESSION_AUTHORITY_PATH)
         ?.content,
@@ -113,9 +113,18 @@ describe("session inject documents", () => {
     ).toContain("<external_collab_board>");
     const memory = docs.find((d) => d.path === SESSION_MEMORY_PATH);
     expect(memory).toMatchObject({ layer: "session", kind: "session-memory" });
-    expect(
-      readSessionInjectDocument(runtime, sessionId, SESSION_MEMORY_PATH)?.content,
-    ).toContain("<session_memory>");
+    const memoryBody = readSessionInjectDocument(
+      runtime,
+      sessionId,
+      SESSION_MEMORY_PATH,
+    )?.content;
+    expect(memoryBody).toContain("<session_memory>");
+    expect(memoryBody).toContain(`treeRoot=${sessionId}`);
+    // Project top seat wears the manager member → default write is agent.
+    expect(memoryBody).toMatch(/defaultWrite=agent/);
+    expect(memoryBody).toMatch(/zone session:/);
+    expect(memoryBody).toMatch(/zone agent:.*← default write/);
+    expect(memoryBody).toContain("external_curated_memory");
   });
 
   it("injects coding_parent posture for harness badges", async () => {

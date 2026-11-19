@@ -210,6 +210,25 @@ function resolveWorkspacePath(
   return abs;
 }
 
+/**
+ * Writable path for `fs.write`: relative paths use the effective explorer
+ * `cwd`; absolute editor tabs (chat wake) fence against the **session** root
+ * so a nested explorer override cannot block Ctrl+S / checkmark save.
+ */
+function resolveWritablePath(
+  sessionBase: string,
+  cwd: string,
+  raw: string,
+): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  if (path.isAbsolute(trimmed)) {
+    const abs = path.resolve(trimmed);
+    return isPathInside(sessionBase, abs) ? abs : undefined;
+  }
+  return resolveWorkspacePath(cwd, trimmed);
+}
+
 /** Typed outcome for read-only path resolution (preview / editor). */
 type ReadablePathResult =
   | { readonly ok: true; readonly abs: string }
@@ -423,7 +442,11 @@ async function dispatchMethod(
     }
     case "fs.write": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const abs = resolveWorkspacePath(cwd, rel);
+      const abs = resolveWritablePath(
+        resolveSessionBaseCwd(options, sessionId),
+        cwd,
+        rel,
+      );
       if (!abs) return fail("path", "path escapes workspace");
       const content =
         typeof payload.content === "string" ? payload.content : "";

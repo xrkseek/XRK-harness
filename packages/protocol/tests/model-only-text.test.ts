@@ -83,6 +83,28 @@ describe("modelOnly handle text", () => {
       ),
     ).toBe(true);
     expect(looksLikeAttachmentHandleCaption("帮我做")).toBe(false);
+    expect(
+      looksLikeAttachmentHandleCaption(
+        '[image omitted because this model accepts text only; attachment sha256:abcdef01 name="x.png"; 10x10. Ask the user]',
+      ),
+    ).toBe(true);
+  });
+
+  it("readerText drops handle captions that lost modelOnly", () => {
+    const leaked = {
+      type: "text" as const,
+      text: "[图1 sha256:abcdef0123456789（10×10 image/png）。视觉模型直接看块]",
+    };
+    expect(
+      readerText([
+        leaked,
+        { type: "image" as const, attachment: image },
+        { type: "text" as const, text: "IMAGE_TEST2: say one word: seen" },
+      ]),
+    ).toBe("IMAGE_TEST2: say one word: seen");
+    expect(readerText([leaked, { type: "image" as const, attachment: image }])).toBe(
+      "",
+    );
   });
 
   it("survives the durable event parse round trip", () => {

@@ -1,9 +1,6 @@
 /**
  * Short tool-routing rules for the model (injected every turn).
- * Human sentences; omit lines for tools not in the available set.
- * Empty when no related tools remain.
- *
- * Copy standard: say what to prefer and why; leave parameter enums on the tools.
+ * Prefer / why only — parameter enums stay on the tools.
  */
 
 export type ToolNameSet = ReadonlySet<string> | Iterable<string>;
@@ -15,23 +12,24 @@ function asSet(available: ToolNameSet): ReadonlySet<string> {
 /** File-tool routing; empty when none of the fs tools are available. */
 export function formatFsRoutingPrompt(available: ToolNameSet): string {
   const names = asSet(available);
-  const lines: string[] = [];
+  const bits: string[] = [];
   if (names.has("glob") || names.has("grep")) {
-    lines.push("- Discover files with `glob` / `grep` instead of shell find/rg/ls.");
+    bits.push("discover=`glob`/`grep` (not find/rg/ls)");
   }
   if (names.has("read_file")) {
-    lines.push(
-      "- Prefer `read_file` over cat/head/sed (use offset/limit on large files). Uploaded files use `sha256:…` / `attachment:sha256:…` — do not hunt the disk for them.",
+    bits.push(
+      "`read_file` over cat (offset/limit; uploads=`sha256:`/`attachment:sha256:`)",
     );
   }
   if (names.has("read_image")) {
-    lines.push(
-      "- Images: `read_image` for workspace PNG/JPEG/WebP/GIF paths, or `sha256:…` / `attachment:sha256:…` from `image_generate`. On a text-only model it returns the path/id plus guidance (OCR, ask the user, or switch to vision) — it does not error, and pixels stay off the wire.",
+    bits.push(
+      "`read_image` for PNG/JPEG/WebP/GIF or `sha256:` — text-only routes soft-guide, no pixels",
     );
   }
   if (names.has("apply_edit") || names.has("write_file") || names.has("apply_patch")) {
-    lines.push(
-      "- Prefer `apply_edit` for a unique snippet, `apply_patch` for multi-file or structured hunks, and `write_file` only to create or fully replace a file.",
+    bits.push(
+      "edit=`apply_edit` unique · `apply_patch` multi · `write_file` create/replace " +
+        "(keep write_file bodies small; max-tokens drops unfinished calls)",
     );
   }
   if (
@@ -40,48 +38,28 @@ export function formatFsRoutingPrompt(available: ToolNameSet): string {
       names.has("write_file") ||
       names.has("apply_patch"))
   ) {
-    lines.push(
-      "- Read a path in this turn before `apply_edit` / `write_file` / `apply_patch` Update|Delete (write-intent).",
-    );
+    bits.push("read path this turn before write-intent");
   }
   if (names.has("present")) {
-    lines.push(
-      "- After creating user-facing files (including via bash), call `present` with their paths before the final reply.",
-    );
+    bits.push("`present` user-facing paths before final reply");
   }
-  if (
-    names.has("glob") ||
-    names.has("grep") ||
-    names.has("read_file") ||
-    names.has("read_image") ||
-    names.has("apply_edit") ||
-    names.has("write_file") ||
-    names.has("apply_patch") ||
-    names.has("present")
-  ) {
-    lines.push(
-      names.has("read_file")
-        ? "- Paths are workspace-relative by default. Absolute paths are allowed when path access is open (full access / auto) or under host-readable roots — `grep` / `glob` share the same gate as `read_file`."
-        : "- Paths are workspace-relative by default. Absolute paths are allowed when path access is open (full access / auto) or under host-readable roots.",
-    );
-  }
-  if (lines.length === 0) return "";
-  return ["File tools:", ...lines].join("\n");
+  if (bits.length === 0) return "";
+  const pathGate = names.has("read_file")
+    ? "paths workspace-relative; absolute ok when path open / host-readable (`grep`/`glob` same gate)"
+    : "paths workspace-relative; absolute ok when path open / host-readable";
+  return `File tools: ${bits.join("; ")}. ${pathGate}.`;
 }
 
 /** Shell / terminal / jobs routing; empty when none of those tools are available. */
 export function formatShellRoutingPrompt(available: ToolNameSet): string {
   const names = asSet(available);
-  const lines: string[] = [];
+  const bits: string[] = [];
   if (names.has("bash")) {
-    lines.push(
-      "- `bash` starts in the session workspace. When path access is open, shell confine is off (Sandbox Provider idle); when allowlisted, confine stays on through that Provider.",
+    bits.push(
+      "`bash` in workspace (confine off when path open) for builds/git/pkg one-shots",
     );
-    lines.push(
-      "- Use `bash` for builds, git, package managers, and other one-shot commands.",
-    );
-    lines.push(
-      "- Write tool screenshots/downloads under the workspace (or an absolute path you control), then `read_image` / `present` — not the Desktop or Host cwd.",
+    bits.push(
+      "screenshots/downloads → workspace then `read_image`/`present` (not Desktop/Host cwd)",
     );
   }
   const hasTerminal =
@@ -92,9 +70,7 @@ export function formatShellRoutingPrompt(available: ToolNameSet): string {
     names.has("terminal_close") ||
     names.has("terminal_signal");
   if (hasTerminal) {
-    lines.push(
-      "- Use `terminal_*` only when you need a persistent interactive shell across tool calls.",
-    );
+    bits.push("`terminal_*` only for persistent interactive shells");
   }
   if (
     names.has("bash") &&
@@ -102,12 +78,12 @@ export function formatShellRoutingPrompt(available: ToolNameSet): string {
       names.has("job_output") ||
       names.has("job_kill"))
   ) {
-    lines.push(
-      "- For background work: `bash` with background=true, then `job_list` / `job_output` / `job_kill`.",
+    bits.push(
+      "background=`bash` background=true → track job ids; Host notifies on finish — no busy-poll; before final `job_output` (wait:true only if blocked) / `job_kill` unused",
     );
   }
-  if (lines.length === 0) return "";
-  return ["Shell / terminal:", ...lines].join("\n");
+  if (bits.length === 0) return "";
+  return `Shell: ${bits.join("; ")}.`;
 }
 
 /** Full-surface defaults (all fs tools present). */

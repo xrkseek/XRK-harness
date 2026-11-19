@@ -90,7 +90,7 @@ pnpm build:desktop   # 或文档中的 dev:desktop
 pnpm start:desktop   # 以本仓脚本为准
 ```
 
-### 打测包 / 上 AGT / 发版
+### 打测包 / 挂 GitHub 更新资产 / 发版
 
 **只走** rule `xrk-release-flow` + skill `xrk-desktop-update-feed` + `xrk-release-chain`：
 
@@ -98,7 +98,7 @@ pnpm start:desktop   # 以本仓脚本为准
 2. `pnpm release:stage` (+ sdk) → `CI=true pnpm install --frozen-lockfile`
 3. `pnpm release` → 再 `CI=true pnpm install --frozen-lockfile`
 4. **立刻**打安装包（**不要**等 CLI npm validate）：Desktop @ `C:\xrk-h`；APK 可**并行**（面 C / `ENGINE_TGZ`）——二者都**禁止**与步骤 2/3 并行
-5. AGT 上传（`_upload-desktop-agt.py`）+ `gh release upload` exe
+5. `gh release upload`：公开名 exe + blockmap + `nightly.yml`（相对文件名；**禁止** `_upload-desktop-agt.py`）
 6. **安卓发行版**（同号必做）：手机仓 bump → 重打 APK → `release_assets.py` → `gh release create` @ `XRK-harness-mobile`（本机 out APK **不算**发行）
 7. 改 `apps/site/releases.json`（**win-x64 + android-arm64**）→ **push main**（Worker 跟 GitHub，勿手 wrangler）
 8. `pnpm prune:local -- --junk`

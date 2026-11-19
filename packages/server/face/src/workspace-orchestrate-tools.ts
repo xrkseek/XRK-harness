@@ -12,6 +12,7 @@
  * Pin a peer for discovery: `thread_upsert` with session_id + workspace_id.
  */
 
+import path from "node:path";
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
@@ -25,8 +26,10 @@ import {
 } from "./peer-session-wait.js";
 import {
   armPeerCollabAfterPrompt,
+  breakMutualPeerSyncWait,
   clearPeerCollabAfterSyncReply,
-  flushPeerCollabIfPeerIdle,
+  formatMutualPeerWaitAsyncNotice,
+  promoteFailedSyncPeerWait,
 } from "./peer-collab-handoff.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { dispatchFaceMethod } from "./dispatch.js";
@@ -42,6 +45,30 @@ import {
   isXiangyangSession,
 } from "./agent-home-boundary.js";
 import { listWorkspacesForDiscovery } from "./workspace-discovery.js";
+import { resolveHarnessHome } from "./settings-document.js";
+import {
+  readSeatTitles,
+  readUiLocalePreference,
+} from "./seat-titles.js";
+
+function liveTitles(runtime: FaceRuntime) {
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const localeUser = runtime.settingsNamespaces.view("locale")
+    .value as Record<string, unknown>;
+  return readSeatTitles(presenceUser, readUiLocalePreference(localeUser));
+}
+
+/** True when absPath is under `{XRK_HOME}/agent-homes/` (干员家 tree). */
+function isUnderAgentHomesRoot(
+  runtime: FaceRuntime,
+  absPath: string,
+): boolean {
+  const homesRoot = path.resolve(resolveHarnessHome(runtime), "agent-homes");
+  const target = path.resolve(absPath);
+  const rel = path.relative(homesRoot, target);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
   if (tools.get(tool.name)) return;
@@ -80,7 +107,10 @@ export function bindWorkspaceOrchestrateTools(
     dynamicSchema: () => ({
       description: workspaceListDescription(
         orchestratorSurface(runtime, sessionId),
-        { fromAgentHome: isAgentHomeSession(runtime, sessionId) },
+        {
+          fromAgentHome: isAgentHomeSession(runtime, sessionId),
+          titles: liveTitles(runtime),
+        },
       ),
     }),
     parameters: {
@@ -132,9 +162,8 @@ export function bindWorkspaceOrchestrateTools(
     registerTool(tools, {
       name: "workspace_create",
       description:
-        "Create (or adopt) a coding Face workspace by absolute path. " +
-        "Returns workspaceId for later session dispatch. " +
-        "Refuse paths that would become Xiangyang or IM.",
+        "Create or adopt a coding project workspace (absolute path) → workspaceId. " +
+        "Agent-home: team_home (or UI 添加干员工作区), not this tool.",
       parameters: {
         type: "object",
         properties: {
@@ -160,6 +189,21 @@ export function bindWorkspaceOrchestrateTools(
         const title = String(a.title ?? "").trim();
         if (!rawPath) {
           return { content: "workspace_create: path required", isError: true };
+        }
+        {
+          const abs = path.resolve(rawPath);
+          const base = path.basename(abs).toLowerCase();
+          if (
+            isUnderAgentHomesRoot(runtime, abs)
+            || base === "agent-home"
+            || base === "agent_home"
+          ) {
+            return {
+              content:
+                "workspace_create: use team_home for agent-home",
+              isError: true,
+            };
+          }
         }
         const created = await dispatchFaceMethod(
           runtime,
@@ -214,6 +258,7 @@ export function bindWorkspaceOrchestrateTools(
         surface: orchestratorSurface(runtime, sessionId),
         codingLabel: label,
         fromAgentHome: isAgentHomeSession(runtime, sessionId),
+        titles: liveTitles(runtime),
       }),
     }),
     parameters: {
@@ -329,12 +374,16 @@ export function bindWorkspaceOrchestrateTools(
                 // member. A generic session in an office would be an orphan
                 // nobody seats — refuse rather than mint that shape.
                 memberId: homeMemberId,
+                // Same as subagent spawn: carry the caller's effective route
+                // (incl. sunflower-free) instead of Settings default.
+                inheritFrom: sessionId,
               }
             : {
                 ...(targetId ? { sessionId: targetId } : {}),
                 workspaceId,
                 ...(sessionLabel ? { label: sessionLabel } : {}),
                 agentPreset: "harness",
+                inheritFrom: sessionId,
               },
         );
         if (!created.result.ok) {
@@ -364,6 +413,9 @@ export function bindWorkspaceOrchestrateTools(
         {
           sessionId: targetId,
           mode: wait ? "steer" : "queue",
+          // AI→AI dispatch — not the UI composer. Durable seat source = caller.
+          seatChannel: "parent",
+          fromSessionId: sessionId,
           content: [
             {
               type: "text",
@@ -395,14 +447,64 @@ export function bindWorkspaceOrchestrateTools(
           }),
         };
       }
+      if (
+        breakMutualPeerSyncWait({
+          runtime,
+          peerSessionId: targetId,
+          waiterSessionId: sessionId,
+        })
+      ) {
+        return {
+          content: JSON.stringify({
+            workspaceId,
+            sessionId: targetId,
+            ok: true,
+            wait: false,
+            mutualWait: true,
+            notice: formatMutualPeerWaitAsyncNotice(targetId),
+          }),
+        };
+      }
       const timeoutMs = clampPeerWaitMs(a.timeout_ms);
-      const waited = await waitForPeerAssistantReply(
-        runtime,
-        targetId,
-        seqAtSend,
-        timeoutMs,
-        signal,
-      );
+      let waited: Awaited<ReturnType<typeof waitForPeerAssistantReply>>;
+      try {
+        waited = await waitForPeerAssistantReply(
+          runtime,
+          targetId,
+          seqAtSend,
+          timeoutMs,
+          signal,
+          {
+            shouldBreak: () =>
+              breakMutualPeerSyncWait({
+                runtime,
+                peerSessionId: targetId,
+                waiterSessionId: sessionId,
+              }),
+          },
+        );
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          promoteFailedSyncPeerWait({
+            runtime,
+            peerSessionId: targetId,
+            waiterSessionId: sessionId,
+          });
+        }
+        throw err;
+      }
+      if ("mutualWait" in waited) {
+        return {
+          content: JSON.stringify({
+            workspaceId,
+            sessionId: targetId,
+            ok: true,
+            wait: false,
+            mutualWait: true,
+            notice: formatMutualPeerWaitAsyncNotice(targetId),
+          }),
+        };
+      }
       if ("reply" in waited) {
         clearPeerCollabAfterSyncReply({
           runtime,
@@ -419,8 +521,11 @@ export function bindWorkspaceOrchestrateTools(
           }),
         };
       }
-      // Keep the arm; if peer already idle, flush so the reply is not stranded.
-      flushPeerCollabIfPeerIdle(runtime, targetId);
+      promoteFailedSyncPeerWait({
+        runtime,
+        peerSessionId: targetId,
+        waiterSessionId: sessionId,
+      });
       return {
         content: `workspace_session_prompt: ${waited.error}`,
         isError: true,

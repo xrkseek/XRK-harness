@@ -8,8 +8,8 @@
       "available": true,
       "version": "0.8.0-rc.2",
       "filename": "xrk-harness-0.8.0-rc.2-win-x64.exe",
-      "feed": "/api/harness/desktop/win-x64/nightly.yml",
-      "download": "/api/harness/desktop/bin/win-x64/xrk-harness-0.8.0-rc.2-win-x64.exe"
+      "githubRepo": "xrkseek/XRK-harness",
+      "download": ""
     },
     {
       "target": "android-arm64",
@@ -22,13 +22,11 @@
     {
       "target": "mac-arm64",
       "available": false,
-      "feed": "/api/harness/desktop/mac-arm64/nightly.yml",
       "download": ""
     },
     {
       "target": "mac-x64",
       "available": false,
-      "feed": "/api/harness/desktop/mac-x64/nightly.yml",
       "download": ""
     }
   ]

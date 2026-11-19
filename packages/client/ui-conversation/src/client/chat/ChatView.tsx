@@ -323,17 +323,21 @@ function filenameForAttachment(label: string, mediaType: string): string {
  */
 function messageEchoIds(data: {
   readonly source?: { readonly kind?: unknown; readonly rpcId?: unknown } | null
+  readonly rpcId?: unknown
   readonly rpcIds?: unknown
   readonly messageId?: unknown
 }): readonly string[] {
   const ids: string[] = []
+  // Any speech source may carry the client echo id (Face stamps it on source).
   const source = data.source
-  if (source?.kind === 'user' && typeof source.rpcId === 'string' && source.rpcId.length > 0) {
+  if (typeof source?.rpcId === 'string' && source.rpcId.length > 0) {
     ids.push(source.rpcId)
+  } else if (typeof data.rpcId === 'string' && data.rpcId.length > 0) {
+    ids.push(data.rpcId)
   }
   if (Array.isArray(data.rpcIds)) {
     for (const id of data.rpcIds) {
-      if (typeof id === 'string' && id.length > 0) ids.push(id)
+      if (typeof id === 'string' && id.length > 0 && !ids.includes(id)) ids.push(id)
     }
   }
   if (typeof data.messageId === 'string' && data.messageId.length > 0) ids.push(data.messageId)
@@ -402,10 +406,8 @@ function isOpenerDuplicateSteer(
 
 function promptRpcId(node: ReturnType<ChatSnapshot['nodes']['get']>): string | undefined {
   if (node === undefined || node.kind !== 'user') return undefined
-  const source = node.data.source
-  if (source === null || typeof source !== 'object' || !('rpcId' in source)) return undefined
-  const rpc = (source as { rpcId?: unknown }).rpcId
-  return typeof rpc === 'string' && rpc.length > 0 ? rpc : undefined
+  const ids = messageEchoIds(node.data as Parameters<typeof messageEchoIds>[0])
+  return ids[0]
 }
 
 function hostTurnOf(node: NonNullable<ReturnType<ChatSnapshot['nodes']['get']>>): number | undefined {
@@ -634,6 +636,42 @@ export function ChatView({
   const [attachmentPreview, setAttachmentPreview] = useState<ImageAttachmentRef | null>(null)
   const resubmitIntent = useSyncExternalStore(subscribeResubmitIntent, getResubmitIntent, getResubmitIntent)
   const resubmitOpen = resubmitIntent !== null && resubmitIntent.sessionId === sessionId
+  // Modal keeps mounting through its exit animation after intent clears. Freeze
+  // the copy while open so Cancel on delete/regenerate never flashes the
+  // edit-resubmit wording (undefined kind used to fall through there).
+  const resubmitCopyRef = useRef<{
+    title: string
+    description: string
+    mode: 'three-way' | 'confirm'
+    primaryLabel: string
+  } | null>(null)
+  if (resubmitOpen && resubmitIntent !== null) {
+    const kind = resubmitIntent.kind
+    const restore = kind === 'restore'
+    resubmitCopyRef.current = {
+      title: t(
+        kind === 'delete'
+          ? 'message.delete.title'
+          : kind === 'regenerate'
+            ? 'message.regenerate.title'
+            : restore
+              ? 'message.restore.title'
+              : 'message.resubmit.title',
+      ),
+      description: t(
+        kind === 'delete'
+          ? 'message.delete.description'
+          : kind === 'regenerate'
+            ? 'message.regenerate.description'
+            : restore
+              ? 'message.restore.description'
+              : 'message.resubmit.description',
+      ),
+      mode: restore ? 'confirm' : 'three-way',
+      primaryLabel: restore ? t('message.restore.confirm') : t('message.resubmit.keepFiles'),
+    }
+  }
+  const resubmitCopy = resubmitCopyRef.current
   // Close/retry must ignore a settlement that started before the latest
   // gesture; otherwise a cancelled in-flight refusal reopens the dialog.
   const fileOpenRequest = useRef(0)
@@ -1716,23 +1754,13 @@ export function ChatView({
       )}
       <ResubmitConfirm
         open={resubmitOpen}
-        title={t(
-          resubmitIntent?.kind === 'delete'
-            ? 'message.delete.title'
-            : resubmitIntent?.kind === 'regenerate'
-              ? 'message.regenerate.title'
-              : 'message.resubmit.title',
-        )}
-        description={t(
-          resubmitIntent?.kind === 'delete'
-            ? 'message.delete.description'
-            : resubmitIntent?.kind === 'regenerate'
-              ? 'message.regenerate.description'
-              : 'message.resubmit.description',
-        )}
+        title={resubmitCopy?.title ?? ''}
+        description={resubmitCopy?.description ?? ''}
         cancelLabel={t('message.resubmit.cancel')}
-        keepFilesLabel={t('message.resubmit.keepFiles')}
+        keepFilesLabel={resubmitCopy?.primaryLabel ?? t('message.resubmit.keepFiles')}
         revertFilesLabel={t('message.resubmit.revertFiles')}
+        closeLabel={t('close')}
+        mode={resubmitCopy?.mode ?? 'three-way'}
         onChoice={completeResubmitConfirm}
       />
     </div>

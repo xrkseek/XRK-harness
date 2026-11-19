@@ -15,7 +15,6 @@
  */
 
 import { readSessionEvents } from "@xrkseek/core-session";
-import type { UserMessageSource } from "@xrkseek/protocol";
 import type { FaceRuntime } from "./context.js";
 import { boundChildAnswer } from "./adapt/subagent-answer-bound.js";
 import {
@@ -24,6 +23,7 @@ import {
   lastAssistantBodyText,
 } from "./adapt/subagent-notice.js";
 import { isChildSessionActive } from "./external-agent-runtime.js";
+import { peerCollabHandoffSource } from "./message-source.js";
 
 export type PeerCollabWaitMode = "async" | "sync-promoted";
 
@@ -36,14 +36,8 @@ export type PeerCollabWaiter = {
   readonly epoch: number;
 };
 
-export function peerCollabNoticeSource(peerSessionId: string): UserMessageSource {
-  return {
-    kind: "plugin",
-    plugin: "peer-collab",
-    form: "notice",
-    peerSessionId,
-  };
-}
+/** Alias of `peerCollabHandoffSource` (durable handoff tag for peer → waiter). */
+export const peerCollabNoticeSource = peerCollabHandoffSource;
 
 export function formatPeerCollabCompletionNotice(input: {
   readonly peerSessionId: string;
@@ -155,6 +149,21 @@ export class FacePeerCollabWaiters {
     else this.byPeer.set(peer, next);
   }
 
+  /**
+   * Drop every arm where this session is the waiter (waiting on someone else).
+   * Used by in-place truncate / edit-resubmit so a later peer idle does not
+   * steer a `[会话协作]` notice into a rewritten transcript.
+   */
+  clearAsWaiter(waiterSessionId: string): void {
+    const waiter = waiterSessionId.trim();
+    if (!waiter) return;
+    for (const [peer, list] of [...this.byPeer.entries()]) {
+      const next = list.filter((w) => w.waiterSessionId !== waiter);
+      if (next.length === 0) this.byPeer.delete(peer);
+      else this.byPeer.set(peer, next);
+    }
+  }
+
   /** Stop path: suppress completion and snapshot waiters once. */
   takeStopWaiters(peerSessionId: string): readonly PeerCollabWaiter[] {
     const peer = peerSessionId.trim();
@@ -204,6 +213,82 @@ export class FacePeerCollabWaiters {
   listForPeer(peerSessionId: string): readonly PeerCollabWaiter[] {
     return this.byPeer.get(peerSessionId.trim()) ?? [];
   }
+
+  /**
+   * True when `waiterSessionId` currently holds a sync-promoted arm on
+   * `peerSessionId` (blocked in wait:true for that peer's next reply).
+   */
+  isSyncWaitingFor(
+    waiterSessionId: string,
+    peerSessionId: string,
+  ): boolean {
+    const waiter = waiterSessionId.trim();
+    const peer = peerSessionId.trim();
+    if (!waiter || !peer) return false;
+    return (this.byPeer.get(peer) ?? []).some(
+      (w) => w.waiterSessionId === waiter && w.mode === "sync-promoted",
+    );
+  }
+
+  /**
+   * Downgrade one waiter→peer arm from sync-promoted to async (keep seqAtSend).
+   * No-op when missing or already async.
+   */
+  downgradeToAsync(
+    peerSessionId: string,
+    waiterSessionId: string,
+  ): boolean {
+    const peer = peerSessionId.trim();
+    const waiter = waiterSessionId.trim();
+    const prev = this.byPeer.get(peer);
+    if (!prev?.length) return false;
+    let changed = false;
+    const next = prev.map((w) => {
+      if (w.waiterSessionId !== waiter || w.mode !== "sync-promoted") return w;
+      changed = true;
+      return { ...w, mode: "async" as const };
+    });
+    if (!changed) return false;
+    this.byPeer.set(peer, next);
+    return true;
+  }
+}
+
+/**
+ * Mutual wait:true (A waits for B while B waits for A) deadlocks both drains —
+ * neither can finish the tool call that must produce the other's reply.
+ * Downgrade both arms to async and wake both so each turn can continue; the
+ * reply arrives later as a `[会话协作]` handoff steer.
+ *
+ * @returns true when a mutual sync wait was broken.
+ */
+export function breakMutualPeerSyncWait(input: {
+  readonly runtime: FaceRuntime;
+  readonly peerSessionId: string;
+  readonly waiterSessionId: string;
+}): boolean {
+  const peer = input.peerSessionId.trim();
+  const waiter = input.waiterSessionId.trim();
+  if (!peer || !waiter || peer === waiter) return false;
+  const waiters = input.runtime.peerCollabWaiters;
+  // Peer is sync-waiting for us → cycle.
+  if (!waiters.isSyncWaitingFor(peer, waiter)) return false;
+  waiters.downgradeToAsync(peer, waiter);
+  waiters.downgradeToAsync(waiter, peer);
+  input.runtime.drain.wake(peer);
+  input.runtime.drain.wake(waiter);
+  return true;
+}
+
+/** Tool / Status copy when mutual wait:true was downgraded to async. */
+export function formatMutualPeerWaitAsyncNotice(
+  peerSessionId: string,
+): string {
+  return (
+    `delivered to ${peerSessionId} (async — peer is also wait:true on this session; ` +
+    `blocking would deadlock both turns). Reply arrives as [会话协作] handoff. ` +
+    `For simultaneous 会话协作 prefer wait=false.`
+  );
 }
 
 /**
@@ -226,6 +311,13 @@ export function armPeerCollabAfterPrompt(input: {
     seqAtSend: input.seqAtSend,
     mode: input.wait ? "sync-promoted" : "async",
   });
+  // Overview mutual 委派方: both sessions paint each other on the left stack.
+  // Label `collab` (not auto-mesh `sibling`) so Status can include the edge.
+  input.runtime.agentTeams.linkPeers(
+    input.waiterSessionId,
+    input.peerSessionId,
+    "collab",
+  );
   if (input.wait) return;
   const slice = readSessionEvents(
     input.runtime.store,
@@ -247,6 +339,33 @@ export function flushPeerCollabIfPeerIdle(
   deliverPeerCollabIdleHandoffs(runtime, peerSessionId, {
     includePromoted: true,
   });
+}
+
+/**
+ * wait:true aborted or timed out while the peer may still be live.
+ *
+ * Sync-promoted arms are skipped by the normal idle deliver path (so a
+ * successful tool reply is not doubled). After a failed sync wait we must
+ * downgrade to async — otherwise the peer's later reply is never steered as
+ * `[会话协作]` and the waiter looks stuck / "context reset" (RC.2 zip
+ * `sess_mwlyd4o4_czvp5f`: thread_message → Error: tool call aborted).
+ *
+ * @returns true when a sync-promoted arm was downgraded to async.
+ */
+export function promoteFailedSyncPeerWait(input: {
+  readonly runtime: FaceRuntime;
+  readonly peerSessionId: string;
+  readonly waiterSessionId: string;
+}): boolean {
+  const peer = input.peerSessionId.trim();
+  const waiter = input.waiterSessionId.trim();
+  if (!peer || !waiter || peer === waiter) return false;
+  const changed = input.runtime.peerCollabWaiters.downgradeToAsync(peer, waiter);
+  // Peer already quiet → flush now (includePromoted covers a race where the
+  // arm was still sync when idle fired). Peer still running → async arm
+  // delivers on the next drain-idle.
+  flushPeerCollabIfPeerIdle(input.runtime, peer);
+  return changed;
 }
 
 /** Drop the arm when wait:true already returned the reply in the tool result. */
@@ -289,7 +408,7 @@ export function deliverPeerCollabIdleHandoffs(
       .then((agent) => {
         agent.admit(text, {
           delivery: "steer",
-          source: peerCollabNoticeSource(peerSessionId),
+          source: peerCollabNoticeSource(runtime, peerSessionId),
         });
         runtime.drain.wake(w.waiterSessionId);
       })
@@ -321,7 +440,7 @@ export function deliverPeerCollabStopHandoffs(
       .then((agent) => {
         agent.admit(text, {
           delivery: "steer",
-          source: peerCollabNoticeSource(peerSessionId),
+          source: peerCollabNoticeSource(runtime, peerSessionId),
         });
         runtime.drain.wake(w.waiterSessionId);
       })

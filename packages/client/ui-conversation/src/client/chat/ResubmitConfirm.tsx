@@ -19,11 +19,18 @@ export interface ResubmitConfirmProps {
   readonly cancelLabel: string
   readonly keepFilesLabel: string
   readonly revertFilesLabel: string
+  /** X button aria-label; defaults to English Modal fallback without this. */
+  readonly closeLabel: string
+  /**
+   * `three-way` = cancel / keep files / revert files (edit·delete·regenerate).
+   * `confirm` = cancel / primary (restore workspace) — primary resolves as keep-files.
+   */
+  readonly mode?: 'three-way' | 'confirm'
   readonly busy?: boolean
   readonly onChoice: (choice: ResubmitConfirmChoice) => void
 }
 
-/** Three-way confirm for edit-resubmit / delete of a past transcript message. */
+/** Confirm for edit-resubmit / delete / regenerate / restore-workspace. */
 export function ResubmitConfirm({
   open,
   title,
@@ -31,6 +38,8 @@ export function ResubmitConfirm({
   cancelLabel,
   keepFilesLabel,
   revertFilesLabel,
+  closeLabel,
+  mode = 'three-way',
   busy = false,
   onChoice,
 }: ResubmitConfirmProps) {
@@ -39,6 +48,7 @@ export function ResubmitConfirm({
       open={open}
       onClose={() => { if (!busy) onChoice('cancel') }}
       title={title}
+      closeLabel={closeLabel}
       layout="inset"
       className={css.dialog ?? ''}
       contentClassName={css.body ?? ''}
@@ -60,14 +70,16 @@ export function ResubmitConfirm({
           >
             {keepFilesLabel}
           </Button>
-          <Button
-            variant="outline"
-            className={css.action}
-            disabled={busy}
-            onClick={() => { onChoice('revert-files') }}
-          >
-            {revertFilesLabel}
-          </Button>
+          {mode === 'three-way' ? (
+            <Button
+              variant="outline"
+              className={css.action}
+              disabled={busy}
+              onClick={() => { onChoice('revert-files') }}
+            >
+              {revertFilesLabel}
+            </Button>
+          ) : null}
         </div>
       )}
     >

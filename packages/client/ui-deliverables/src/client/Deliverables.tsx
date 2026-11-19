@@ -1,4 +1,5 @@
 /** Combined turn-tail: changed-files card + created / modified / deleted chip rows. */
+import { allowNativeWorkspaceOpen } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { TurnTailOwnerProps } from '@xrkseek/client-ui-conversation/client'
 import { ChangedFiles, type LoadFileDiff } from './ChangedFiles.tsx'
@@ -35,7 +36,7 @@ function Deliverables({
   matched: DeliverablesMatch
 } & PropsLocale<typeof NS> & InjectFace<DeliverablesInjected>) {
   const hostCanOpenPath = useHostDescription(description => description?.canOpenPath === true)
-  const canOpenPath = isLoopback && hostCanOpenPath
+  const canOpenPath = allowNativeWorkspaceOpen(isLoopback, hostCanOpenPath)
   const hasLaneFiles = matched.lanes.created.length > 0
     || matched.lanes.modified.length > 0
     || matched.lanes.deleted.length > 0

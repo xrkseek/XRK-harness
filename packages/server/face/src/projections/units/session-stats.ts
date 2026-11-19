@@ -17,11 +17,17 @@ export interface SessionStatsProjection {
 
 interface SessionStatsState extends SessionStatsProjection {
   readonly lastTurnId: string | null;
+  /**
+   * Open until `step/end` (not cleared on `assistant/message`) so the live
+   * wire view does not dip between assemble and close.
+   */
   readonly openStep: {
     readonly turnId: string;
     readonly stepId: string;
     readonly startTime: number;
     readonly firstTokenTime: number | null;
+    /** True once this step's `assistant/message` has accrued wall times. */
+    readonly assembled: boolean;
   } | null;
   readonly pendingCalls: Readonly<Record<string, number>>;
 }
@@ -98,6 +104,7 @@ export function createSessionStatsProjectionUnit(): ProjectionDefinition<
               stepId: event.stepId,
               startTime: event.ts,
               firstTokenTime: null,
+              assembled: false,
             },
           };
         case "assistant/chunk": {
@@ -109,7 +116,11 @@ export function createSessionStatsProjectionUnit(): ProjectionDefinition<
           ) {
             return state;
           }
-          if (open.firstTokenTime !== null || !isFirstOutputChunk(event)) {
+          if (
+            open.assembled ||
+            open.firstTokenTime !== null ||
+            !isFirstOutputChunk(event)
+          ) {
             return state;
           }
           return {
@@ -126,10 +137,12 @@ export function createSessionStatsProjectionUnit(): ProjectionDefinition<
           ) {
             return state;
           }
+          // Keep openStep until step/end so live footer counts do not dip.
+          if (open.assembled) return state;
           let next: SessionStatsState = {
             ...state,
             llmMs: state.llmMs + Math.max(0, event.ts - open.startTime),
-            openStep: null,
+            openStep: { ...open, assembled: true },
           };
           if (open.firstTokenTime !== null) {
             next = {
@@ -195,16 +208,24 @@ export function createSessionStatsProjectionUnit(): ProjectionDefinition<
       }
     },
     wire: {
-      view: (state) => ({
-        turns: state.turns,
-        steps: state.steps,
-        llmMs: state.llmMs,
-        toolMs: state.toolMs,
-        ttftMs: state.ttftMs,
-        ttftSteps: state.ttftSteps,
-        decodeMs: state.decodeMs,
-        decodeTokens: state.decodeTokens,
-      }),
+      view: (state) => {
+        // Surface the in-flight step so the composer gauge advances on
+        // step/start, not only after step/end (closed-only lagged one step).
+        const openStep = state.openStep;
+        const liveStep = openStep !== null;
+        const liveNewTurn =
+          liveStep && openStep.turnId !== state.lastTurnId;
+        return {
+          turns: state.turns + (liveNewTurn ? 1 : 0),
+          steps: state.steps + (liveStep ? 1 : 0),
+          llmMs: state.llmMs,
+          toolMs: state.toolMs,
+          ttftMs: state.ttftMs,
+          ttftSteps: state.ttftSteps,
+          decodeMs: state.decodeMs,
+          decodeTokens: state.decodeTokens,
+        };
+      },
       parse(value: unknown): SessionStatsProjection {
         if (!value || typeof value !== "object") {
           throw new Error("sessionStats projection must be an object");

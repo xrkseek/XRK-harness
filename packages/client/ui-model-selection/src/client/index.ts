@@ -19,7 +19,9 @@ import type { CommandUiContract, SelectOption } from '@xrkseek/client-ui-command
 import type {} from '@xrkseek/client-ui-conversation/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@xrkseek/client-locale/client'
-import type { TranslateNS } from '@xrkseek/client-ui-slots'
+import type {
+  MaybeSnapshotSelectorHook, SnapshotSelectorHook, TranslateNS,
+} from '@xrkseek/client-ui-slots'
 import type { ModelDirectoryState } from './directory.ts'
 import { ModelDirectoryResolver } from './service.ts'
 import type { ModelSelectInjected } from './slots.ts'
@@ -27,7 +29,7 @@ import { ModelSelect } from './ModelSelect.tsx'
 import { en, ja, zh, type ModelKey } from './locales.ts'
 
 export { ModelDirectory } from './directory.ts'
-export type { ModelDirectoryState } from './directory.ts'
+export type { ModelDirectoryState, ModelSelectionActions } from './directory.ts'
 export { ModelDirectoryResolver } from './service.ts'
 export type { ModelSelectInjected } from './slots.ts'
 export type { ModelKey } from './locales.ts'
@@ -36,6 +38,27 @@ declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
     /** The model selection surfaces' copy (/model popup + composer seat). */
     model: ModelKey
+  }
+
+  /**
+   * Model-selection members of the session standard kit (same channel as
+   * `useInput` / `inputActions`): every session-scope slot component can read
+   * the shared directory without injecting `ctx.modelDirectories`.
+   */
+  interface SessionStandardProps {
+    /** Selector hook over the session's shared {@link ModelDirectoryState}. */
+    useModelSelection: SnapshotSelectorHook<ModelDirectoryState>
+    /**
+     * Switch / reload the shared directory (same `selectModel` path as the
+     * composer seat). Prefer this over injecting `ctx.modelDirectories`.
+     */
+    modelSelectionActions: import('./directory.ts').ModelSelectionActions
+  }
+
+  /** Model-selection members while current session is optional. */
+  interface SessionMaybeStandardProps {
+    useModelSelection: MaybeSnapshotSelectorHook<ModelDirectoryState>
+    modelSelectionActions: import('./directory.ts').ModelSelectionActions | undefined
   }
 }
 
@@ -115,6 +138,26 @@ export function apply(ctx: ClientContext): void {
   // The composer-block reason is this plugin's own copy, read at raise time so
   // a locale change reaches the next publish.
   ctx.plugin(ModelDirectoryResolver, { blockReason: () => t('blocked.composer') })
+
+  // Standard-kit feed: composer / dock / header slot components read the same
+  // directory the model seat uses, without each plugin wiring modelDirectories.
+  ctx.inject(['modelDirectories', 'sessions'], (scope: ClientContext) => {
+    const models = scope.modelDirectories
+    const sessions = scope.sessions
+    scope.effect(() => sessions.provide({
+      hooks: ['modelSelection'],
+      props: ['modelSelectionActions'],
+      resolve: (binding) => {
+        const directory = models.directoryFor(binding.sessionId)
+        // Populate `current` for readers; failures stay on the store.
+        directory.load().catch(() => undefined)
+        return {
+          hooks: { modelSelection: directory.store },
+          props: { modelSelectionActions: directory.actions },
+        }
+      },
+    }), 'ui-model-selection: modelSelection standard-kit')
+  })
 
   // Entry 1: decorate Host `/model` with popupSelect (same pattern as
   // /permission and /feedback). Must not `register` — a contribution that

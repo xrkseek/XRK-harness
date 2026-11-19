@@ -4,6 +4,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
+import { AUTO_CONTINUE_ON_MAX_TOKENS_TEXT } from "@xrkseek/core-agent-loop";
 import { createHarnessComposition } from "../preset.js";
 
 describe("harness autoContinueOnMaxTokens forward", () => {
@@ -39,7 +40,7 @@ describe("harness autoContinueOnMaxTokens forward", () => {
     );
     expect(auto).toHaveLength(1);
     expect(auto[0]).toMatchObject({
-      content: "继续",
+      content: AUTO_CONTINUE_ON_MAX_TOKENS_TEXT,
       source: { kind: "auto-continue", round: 1 },
     });
   });

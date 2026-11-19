@@ -101,7 +101,12 @@ export function resolveLlmForSelection(
   return { binding, adapter, selection };
 }
 
-/** Session-scoped routing adapter (DSH hot model switch without agent invalidate). */
+/**
+ * Session-scoped routing adapter (DSH hot model switch).
+ * Always return an adapter shell: a deleted prior model must not prevent
+ * construct — `resolveAdapter` / `ensureRoute` validate the *current* pin
+ * at request time (after the user picks a working model).
+ */
 export function createSessionRoutingLlm(
   runtime: FaceRuntime,
   sessionId: string,
@@ -109,11 +114,9 @@ export function createSessionRoutingLlm(
   const pickSelection = (): FaceModelSelection =>
     runtime.sessionModels.get(sessionId) ??
     resolveSessionModelSelection(runtime, sessionId);
-  try {
-    resolveLlmForSelection(runtime, pickSelection(), { sessionId });
-  } catch {
-    return undefined;
-  }
+  const initial = pickSelection();
+  // Empty pin → no adapter (composer still blocked until selectModel).
+  if (!initial.provider.trim() || !initial.model.trim()) return undefined;
   return createRoutingLlmAdapter({
     id: `session:${sessionId}`,
     getSelection: () => {
@@ -164,13 +167,18 @@ export function resolveLlmForSession(
   const routing = createSessionRoutingLlm(runtime, sessionId);
   if (!routing) return undefined;
   const selection = resolveSessionModelSelection(runtime, sessionId);
-  const config = routing.ensureRoute();
-  return {
-    binding: resolveProviderBinding(runtime, {
-      provider: config.provider,
-      model: config.model,
-    }),
-    adapter: routing,
-    selection,
-  };
+  try {
+    const config = routing.ensureRoute();
+    return {
+      binding: resolveProviderBinding(runtime, {
+        provider: config.provider,
+        model: config.model,
+      }),
+      adapter: routing,
+      selection,
+    };
+  } catch {
+    // Missing key / unroutable pin — callers treat as "no LLM yet".
+    return undefined;
+  }
 }

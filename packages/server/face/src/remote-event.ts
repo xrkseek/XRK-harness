@@ -15,6 +15,11 @@ export const FACE_HOST_REMOTE_EVENTS = [
   "plugin-inventory/install-log",
   /** Probe cache settled (warm / force / post-mutate) — Settings update badges. */
   "plugin-inventory/updates-changed",
+  /**
+   * Host refreshed live overlay boot (`plugins/web/boot.json` merge).
+   * Settings soft-remounts overlay client halves without a hard refresh.
+   */
+  "plugin-inventory/boot-changed",
   "settings/document-updated",
   // ui-presence titleScheme / title* — Host remounts Agents for agentLabel.
   "settings/seat-titles-updated",

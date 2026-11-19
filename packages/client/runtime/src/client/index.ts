@@ -54,10 +54,12 @@ export {
 } from './workspaces/service.ts'
 export { formatAttachmentSummary, isAttachmentAddress, normalizeAttachmentId, resolveWorkspacePath } from './workspaces/path.ts'
 export {
+  allowNativeWorkspaceOpen,
   basenameForDownload,
   bytesToBase64,
   downloadWorkspaceFile,
   isObjectDownloadUrl,
+  isPhoneThinShell,
   looksLikeDirectoryPath,
   triggerBrowserOrShellDownload,
   workspaceFileDownloadUrl,
@@ -75,6 +77,7 @@ export type {
 } from './contract/settings-scope.ts'
 export type { Session } from './sessions/session.ts'
 export { JUMP_PAGE_MESSAGES } from './sessions/session.ts'
+export { exclusiveBeforeSeqForWireSeq } from './sessions/exclusive-before-seq.ts'
 export type {
   BeginSubmissionInput, ISession, PendingSubmissionRetirement, ProjectionsFace, SessionFace,
   SubmissionHandle,
@@ -109,6 +112,14 @@ export {
   formatSeatChannelEchoPrefix,
   withSeatChannelEchoPrefix,
 } from './seat-channel-echo.ts'
+export {
+  bindSpeechSeatTitles,
+  notifySpeechSeatTitlesChanged,
+  resolveSpeechSeatTitles,
+  speechSeatTitlesSnapshot,
+  subscribeSpeechSeatTitles,
+} from './speech-seat-titles.ts'
+export type { SpeechSeatTitles } from './speech-seat-titles.ts'
 export type {
   EngineStoreHandle, EngineStoreInstance, ObservableSnapshot, SnapshotStore,
 } from './contract/store.ts'
@@ -129,7 +140,10 @@ export {
 export { emptyAssistantBlock, toolCallBlockIndex } from './sessions/partial.ts'
 export { isTokenDelta, isDecodableSample, MIN_DECODE_SAMPLE_MS } from './sessions/assistant-timing.ts'
 export { contextForm, contextProvenance, sessionRecallLabels } from './sessions/context-provenance.ts'
-export { projectTranscriptChrome } from './sessions/transcript-chrome.ts'
+export {
+  projectTranscriptChrome,
+  isHumanOwnedUserMessage,
+} from './sessions/transcript-chrome.ts'
 export { displayFailureMessage } from './sessions/failure-display.ts'
 export type {
   ConversationContext, ConversationContextOriginKind,

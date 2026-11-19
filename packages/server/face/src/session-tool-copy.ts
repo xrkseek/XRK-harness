@@ -16,6 +16,21 @@ import {
   type SessionKind,
 } from "./session-kind.js";
 import { readWorkspaceDiscoverySettings } from "./workspace-discovery.js";
+import {
+  DEFAULT_SEAT_TITLE_SCHEME,
+  seatTitlesForScheme,
+  type SeatTitles,
+} from "./seat-titles.js";
+
+/** Test / omitted-titles fallback — same office×zh preset as Settings default. */
+const DEFAULT_TITLES: SeatTitles = seatTitlesForScheme(
+  DEFAULT_SEAT_TITLE_SCHEME,
+  "zh",
+);
+
+function titlesOrDefault(titles?: SeatTitles): SeatTitles {
+  return titles ?? DEFAULT_TITLES;
+}
 
 export function threadMessageDescription(input: {
   readonly kind: SessionKind;
@@ -27,14 +42,16 @@ export function threadMessageDescription(input: {
   readonly siblingIds?: readonly string[];
   /** IM / 奇创 when this seat is an orchestrator. */
   readonly surface?: OrchestratorSurface;
-  /** True when this seat sits on a 干员 agent-home canvas. */
+  /** True when this seat sits on an agent-kind home canvas. */
   readonly fromAgentHome?: boolean;
 }): string {
   if (input.messageOnly || input.kind === "delegated_child") {
     return (
       "Message a sibling (same parent) or team peer-edge by session_id. " +
       "Ids: turn-start squad board or session_inspect. " +
-      "wait=true (default) → reply in tool; wait=false → async steer when they finish. " +
+      "会话协作: prefer wait=false when both sides may message at once " +
+      "(mutual wait=true deadlocks). " +
+      "wait=true → one-way ask, reply in tool; wait=false → async [会话协作] handoff. " +
       "Parent→child uses send_message / followup_task."
     );
   }
@@ -45,8 +62,9 @@ export function threadMessageDescription(input: {
       : "same lane only — Never agent-home";
   return (
     `Message a parent peer by session_id (${lane}). ` +
-    "主线 pin optional. Peer keeps its chat; delivery=steer. " +
-    "wait=true (default) → reply in tool; wait=false → async steer when they finish."
+    "主线 pin optional. Peer keeps its chat; delivery=steer (会话协作 · mutual 委派方). " +
+    "Prefer wait=false for simultaneous messaging (mutual wait=true deadlocks both turns). " +
+    "wait=true → one-way ask, reply in tool; wait=false → async [会话协作] handoff."
   );
 }
 
@@ -56,8 +74,8 @@ export function threadMessageDescription(input: {
  */
 export function packShareFlowHint(): string {
   return (
-    "Mint/revise: team_save (skill xrk-delegate). " +
-    "Export: team_export · install: team_import · catalog mem_seed_* cannot export."
+    "Member: team_save / team_import. Home: team_home. " +
+    "Export: team_export. Catalog mem_seed_* cannot export."
   );
 }
 
@@ -80,12 +98,14 @@ export function teamListDescription(input: {
    * `collab_board` and in this tool's result body (KV-cache stable tools[]).
    */
   readonly catalog?: string;
+  readonly titles?: SeatTitles;
 }): string {
   void input.catalog;
+  const t = titlesOrDefault(input.titles);
   const head = input.listOnly
     ? input.selfRevise
       ? "team_list + team_self: revise YOUR playbook/inject/tools (durable; next spawn + export). " +
-        "Editing your 干员工作区 AGENTS.md also hot-syncs the same playbook. No mint/export/remove of others."
+        `Editing your ${t.agent}工作区 AGENTS.md also hot-syncs the same playbook. No mint/export/remove of others.`
       : "Read-only roster. Siblings: squad board + thread_message."
     : `Spawn: subagent member_id (applies that member's tools+inject+playbook). ${packShareFlowHint()}`;
   return (
@@ -96,15 +116,16 @@ export function teamListDescription(input: {
 
 export function workspaceListDescription(
   surface: OrchestratorSurface | undefined,
-  options?: { readonly fromAgentHome?: boolean },
+  options?: { readonly fromAgentHome?: boolean; readonly titles?: SeatTitles },
 ): string {
+  const t = titlesOrDefault(options?.titles);
   const next = options?.fromAgentHome
-    ? "Next: workspace_session_prompt → thread_message (向阳 or peer homes)."
+    ? `Next: workspace_session_prompt → thread_message (向阳 or peer ${t.agent}工作区).`
     : surface === "im"
       ? "Next: subagent(workspace_id) or workspace_session_prompt → thread_message."
       : surface === "qichuang"
-        ? "Next: workspace_session_prompt → keep session_id → thread_message (no nested subagent)."
-        : "Next: workspace_session_prompt → thread_message.";
+        ? `Next: create? → prompt 其它${t.manager}工作区 | team_home → ${t.agent}工作区 (no nested subagent).`
+        : `Next: workspace_session_prompt → thread_message (其它${t.manager} peer).`;
   return (
     `List workspaces (id·title·path·sessions). Active-only default (Settings workspace-discovery). ` +
     `Dormant: query or includeInactive. ${next}`
@@ -116,17 +137,20 @@ export function workspaceSessionPromptDescription(input: {
   /** Fallback label when not orchestrator (coding). */
   readonly codingLabel?: string;
   readonly fromAgentHome?: boolean;
+  readonly titles?: SeatTitles;
 }): string {
+  const t = titlesOrDefault(input.titles);
   const from = input.fromAgentHome
-    ? "agent-home peer / 向阳 only — never project coding."
+    ? `${t.agent}工作区 peer / 向阳 only — never coding ${t.manager}工作区.`
     : input.surface === "im"
       ? "IM peer (not your child). Coding child = subagent(workspace_id)."
       : input.surface === "qichuang"
-        ? "Qichuang peer only — no nested subagent. Implement there."
-        : `${input.codingLabel ?? "coding"} peer. Nested work here → subagent.`;
+        ? `其它${t.manager}工作区 peer (they ship). No nested subagent.`
+        : `${input.codingLabel ?? "coding"} ${t.manager}工作区 peer. Nested work here → subagent.`;
   return (
     `${from} Keep sessionId → thread_message. ` +
-    `wait=true → reply in tool; wait=false → async steer when they finish.`
+    `Prefer wait=false when both peers may prompt at once. ` +
+    `wait=true → one-way ask, reply in tool; wait=false → async [会话协作] handoff.`
   );
 }
 

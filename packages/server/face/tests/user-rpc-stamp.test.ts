@@ -94,6 +94,79 @@ describe("Face pendingUserRpc stamp", () => {
     expect(runtime.pendingUserRpc.has(session.id)).toBe(false);
   });
 
+  it("seat promote does not poison the next human rpcId stamp", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const runtime = createBareFaceRuntime({ store });
+    runtime.admitRpcMap.set("admit_peer", "rpc_peer");
+    runtime.admitRpcMap.set("admit_human", "rpc_human");
+
+    store.append(session.id, {
+      type: "prompt/admitted",
+      ts: 1,
+      admitId: "admit_peer",
+      content: "peer hello",
+      rpcId: "rpc_peer",
+      source: {
+        kind: "seat",
+        form: "speech",
+        channel: "peer",
+        fromSessionId: "sess_peer",
+      },
+    });
+    store.append(session.id, {
+      type: "prompt/promoted",
+      ts: 2,
+      admitId: "admit_peer",
+    });
+    // Seat speech settles the promote but must not enqueue pendingUserRpc.
+    store.append(session.id, {
+      type: "user/message",
+      ts: 3,
+      turnId: "t_peer",
+      messageId: "umsg_peer",
+      content: "peer hello",
+      source: {
+        kind: "seat",
+        form: "speech",
+        channel: "peer",
+        fromSessionId: "sess_peer",
+      },
+    });
+    expect(runtime.pendingUserRpc.has(session.id)).toBe(false);
+
+    store.append(session.id, {
+      type: "prompt/admitted",
+      ts: 4,
+      admitId: "admit_human",
+      content: "?",
+      rpcId: "rpc_human",
+      source: { kind: "user" },
+    });
+    store.append(session.id, {
+      type: "prompt/promoted",
+      ts: 5,
+      admitId: "admit_human",
+    });
+    store.append(session.id, {
+      type: "user/message",
+      ts: 6,
+      turnId: "t_human",
+      messageId: "umsg_human",
+      content: "?",
+      source: { kind: "user" },
+    });
+
+    const human = store.get(session.id).events.find(
+      (e) => e.type === "user/message" && e.messageId === "umsg_human",
+    );
+    expect(human?.type).toBe("user/message");
+    if (human?.type === "user/message") {
+      expect(human.rpcId).toBe("rpc_human");
+    }
+    expect(runtime.pendingUserRpc.has(session.id)).toBe(false);
+  });
+
   it("coalesced steers stamp every echo id on the single user/message", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);

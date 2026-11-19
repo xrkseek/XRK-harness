@@ -35,20 +35,20 @@
 
 ```
 badge: qichuang
-tool_surface: qichuang (full-access · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · mcp_config · no nested subagent)
+tool_surface: qichuang (orch · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · mcp_config · no nested subagent)
 surface_brief: kind=orchestrator · surface=qichuang · path=open — verbs in <session_posture>.
 mcp_mount: global+ws:ws_default
 ask: ask_user→boss
 ```
 
-`<session_posture>` 摘录：
+`<session_posture>` 摘录（turn-start 只留动词；细则在 skill `xrk-demand-translate`）：
 
 ```
-kind=orchestrator (向日葵 / 奇创 · 向阳经理席) · path=open · shell_confine=off
-Admin: settings_* · workspace_create/list · team_* · care skills (xrk-home-config · xrk-demand-translate · …).
-Vague → skill xrk-demand-translate.
-Dispatch: workspace_session_prompt → keep session_id → thread_message; optional thread_upsert + presence_set.
-No nested subagent — coding peers ship. titles.manager = peer (not boss).
+kind=orchestrator (向日葵 · 经理工作区/向阳) · path=open · shell_confine=off
+You are a 经理. Coding workspaces = 其它经理 (peer). 干员工作区 = specialty homes.
+Route, don't ship → skill xrk-demand-translate. Host/config/cleanup/team_home here.
+Project → workspace_list → create? → prompt 其它经理. Specialty → team_list → team_home → prompt 干员工作区.
+No nested subagent. Keep session_id → thread_message.
 ```
 
 （车道规则在协作板，不在 posture 重复。）
@@ -56,7 +56,7 @@ No nested subagent — coding peers ship. titles.manager = peer (not boss).
 `<external_collab_board>` 摘录：
 
 ```
-Roster · peers (向日葵 admin). workspace_create + settings_* here.
+Roster · peers (向日葵 orch). settings_* / workspace_create here; code → posture.
 - mem_seed_researcher [global] 调研员 · researcher · inject=minimal · …
 - mem_seed_worker [global] 施工员 · worker · inject=minimal · …
 
@@ -68,8 +68,8 @@ Peers — id · who · duty · todo · 支线 · 主线. thread_message: same-la
 
 | 工具 | 关键句 |
 |------|--------|
-| `workspace_list` | 活跃-only 默认；`Next: workspace_session_prompt → keep session_id → thread_message (no nested subagent).` |
-| `workspace_session_prompt` | `Qichuang peer only — no nested subagent. Implement there.` |
+| `workspace_list` | 活跃-only 默认；`Next: workspace_create? → workspace_session_prompt → thread_message (no nested subagent).` |
+| `workspace_session_prompt` | `Coding peer (经理 ships). No nested subagent.` |
 | `thread_message` | `… (same lane, or 向阳↔agent-home). …` |
 | `team_list` | 附 live 名册；可 `team_save` |
 
@@ -90,6 +90,7 @@ Peers — id · who · duty · todo · 支线 · 主线. thread_message: same-la
 ### A3 · 反模式
 
 - 在 `sess_xy` 调 `subagent`（工具表无 / 契约禁止）。
+- 在向阳 cwd 自己实现产品需求 / 长编码循环（应 `workspace_create` → `workspace_session_prompt` 交给编码经理）。
 - 在向阳 cwd 大改 monorepo。
 - `propose_skill` 冒充干员（应用 `team_save`）。
 - 把编码仓会话当成 agent-home（编码席板写 **Never agent-home**；只有向阳可桥）。
@@ -336,7 +337,7 @@ Same contract, walked per identity. Ids are illustrative. Each scene: user line 
 
 User on `sess_xy`: “Stand up research and build; patch the inject docs in the coding repo.”
 
-Sees `kind=orchestrator`, posture + roster board, **no** `subagent`. Board owns the lane rule (向阳↔agent-home); posture stays the dispatch chain. Coding / IM boards say **Never agent-home**. `workspace_list` is active-only by default. Sequence: `workspace_list` → `workspace_session_prompt(ws_code)` → keep `sess_code` → optional `thread_upsert` → `thread_message`. Implement on `sess_code`, not Xiangyang cwd.
+Sees `kind=orchestrator`, thin posture + roster board, **no** `subagent`. Posture: **Route, don't ship** — load `xrk-demand-translate` for the playbook; product/code leaves `ws_default`. Board owns the lane rule (向阳↔agent-home). Coding / IM boards say **Never agent-home**. `workspace_list` is active-only by default. Sequence: `workspace_list` → `workspace_create` if needed → `workspace_session_prompt(ws_code)` → keep `sess_code` → optional `thread_upsert` → `thread_message`. Implement on `sess_code`, not Xiangyang cwd.
 
 ## Scene B · Coding parent spawns two 干员
 

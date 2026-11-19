@@ -268,6 +268,19 @@ declare module '@xrkseek/xrk-typert-protocol' {
     pluginInventory: {
       list: () => Promise<RemoteResult<PluginInventorySnapshot>>
       /**
+       * Live user-overlay client boot graph for product soft remount
+       * (install / enable / update without full HMR or hard refresh).
+       */
+      clientBoot: () => Promise<RemoteResult<{
+        readonly rev: string
+        readonly entries: readonly {
+          readonly id: string
+          readonly url: string
+          readonly rev: string
+          readonly inject: readonly string[]
+        }[]
+      }>>
+      /**
        * Probe managed plugins for newer npm versions (registry + local advisory).
        * Host may return a warm cache (`status: checking | ready`).
        * Pass `force: true` to re-run; optional `entryIds` limits the probe.

@@ -257,4 +257,50 @@ describe("cold subagent queue reconstitution", () => {
       a.admitId,
     );
   });
+
+  it("rewritePendingAdmit preserves seat/handoff source tags", () => {
+    const store = createMemorySessionStore();
+    store.create("s");
+    const seatSource = {
+      kind: "seat" as const,
+      form: "speech" as const,
+      channel: "parent" as const,
+      fromSessionId: "sess_mgr",
+      label: "经理",
+    };
+    const handoffSource = {
+      kind: "handoff" as const,
+      form: "notice" as const,
+      via: "subagent" as const,
+      fromSessionId: "sess_child",
+      label: "发版员",
+    };
+    admitPrompt(store, "s", "keep", { source: seatSource });
+    const edit = admitPrompt(store, "s", "edit-me", { source: handoffSource });
+    admitPrompt(store, "s", "tail", {
+      source: {
+        kind: "plugin",
+        plugin: "job-completion",
+        form: "notice",
+      },
+    });
+    const maps = {
+      admitRpcMap: new Map<string, string>(),
+      rpcAdmitMap: new Map<string, string>(),
+    };
+    rewritePendingAdmit(store, "s", edit.admitId, "edited", "steer", maps);
+    const pending = listPendingAdmits(store.get("s").events, "s");
+    expect(pending.map((row) => row.content)).toEqual([
+      "keep",
+      "edited",
+      "tail",
+    ]);
+    expect(pending[0]?.source).toEqual(seatSource);
+    expect(pending[1]?.source).toEqual(handoffSource);
+    expect(pending[1]?.delivery).toBe("steer");
+    expect(pending[2]?.source).toMatchObject({
+      kind: "plugin",
+      plugin: "job-completion",
+    });
+  });
 });

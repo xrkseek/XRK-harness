@@ -1,13 +1,15 @@
 /**
  * Session-scoped inject documents for skill.list / skill.read — the same
  * turn-start fragments Host actually injects (authority · capability · posture ·
- * boss · seat · collab), so the Inject catalog stays honest.
+ * boss · seat · collab · memory card), so the Inject catalog stays honest.
  */
 
 import {
   createInstructionAuthorityRegistry,
 } from "@xrkseek/workspace";
+import { createLayeredCuratedMemoryStore } from "@xrkseek/exec-memory";
 import type { FaceRuntime } from "./context.js";
+import { sessionSeatMemberId } from "./agent-home-boundary.js";
 import {
   formatBossStatusInjectBody,
   isBossStatusAudienceSession,
@@ -46,8 +48,8 @@ export const SESSION_COLLAB_PATH = "session://collab-board";
 export const SESSION_LANES_PATH = "session://lanes";
 
 /**
- * Logical path for curated-memory discovery (pointer only — full rows via
- * the `memory` tool; never dump the whole store into inject).
+ * Logical path for curated-memory discovery (zone census + pointer — full rows
+ * via the `memory` tool / system freeze / live fragment; never dump bodies here).
  */
 export const SESSION_MEMORY_PATH = "session://memory";
 
@@ -176,26 +178,71 @@ export function listSessionInjectDocuments(
   return out;
 }
 
-/** Thin curated-memory card for Inject catalog / skill.read — tool-first. */
+/**
+ * Inject-catalog card: which zones this seat opens, entry counts, default write
+ * scope. Bodies stay on the system freeze + live `<external_curated_memory>`
+ * fragment — never dump MEMORY.md here.
+ */
 function formatSessionMemoryDocument(
   runtime: FaceRuntime,
   sessionId: string,
 ): string {
-  const snap = runtime.curatedMemoryConsolidate;
+  const workspaceId = runtime.workspaces.workspaceIdOf(sessionId);
+  const treeRoot =
+    runtime.subagents.humanFacingSessionId(sessionId) ?? sessionId;
+  const agentId = sessionSeatMemberId(runtime, sessionId);
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const localeUser = runtime.settingsNamespaces.view("locale")
+    .value as Record<string, unknown>;
+  const titles = readSeatTitles(
+    presenceUser,
+    readUiLocalePreference(localeUser),
+  );
+  const layered = createLayeredCuratedMemoryStore({
+    sessionId: treeRoot,
+    ...(workspaceId ? { workspaceId } : {}),
+    ...(agentId ? { agentId } : {}),
+    defaultScope: agentId ? "agent" : "session",
+    agentLabel: titles.agent,
+  });
   const lines = [
     "<session_memory>",
-    "Curated memory is layered (global / workspace / session / agent).",
-    "Discover and mutate with the `memory` tool (list / add / replace / remove).",
-    "Do not expect a full dump in inject — this card is a pointer only.",
+    "Channels:",
+    "  · system freeze at session start (standing MEMORY.md / USER.md snapshot)",
+    "  · live `<external_curated_memory>` when disk moves past that freeze",
+    "  · `memory` tool for list / mutate (default write zone below)",
+    `This seat: treeRoot=${treeRoot}` +
+      (workspaceId ? ` · workspace=${workspaceId}` : "") +
+      (agentId ? ` · agent=${agentId}` : " · agent=(none)") +
+      ` · defaultWrite=${layered.defaultScope}.`,
+    "Zone census (entry counts; bodies stay on freeze / live fragment / memory tool):",
   ];
+  for (const layer of layered.layers) {
+    const memoryEntries = layer.store.listEntries("memory");
+    const userEntries = layer.store.listEntries("user");
+    const memN = Array.isArray(memoryEntries) ? memoryEntries.length : 0;
+    const userN = Array.isArray(userEntries) ? userEntries.length : 0;
+    lines.push(
+      `  zone ${layer.scope}: MEMORY ${memN} · USER ${userN}` +
+        (layer.scope === layered.defaultScope ? " ← default write" : ""),
+    );
+  }
+  const snap = runtime.curatedMemoryConsolidate;
   if (snap && snap.sessionId === sessionId) {
     lines.push(
       `Last consolidate: phase1 +${snap.phase1Written}, phase2=${snap.phase2}` +
         (snap.phase2Written ? ` +${snap.phase2Written}` : "") +
         (snap.skipped ? ` (skipped: ${snap.skipped})` : "") +
+        (snap.providerKind ? ` · provider=${snap.providerKind}` : "") +
         ".",
     );
+  } else {
+    lines.push("Last consolidate: (none for this session yet).");
   }
+  lines.push(
+    "Full rows: call `memory` with action=list (or read the freeze / live fragment). This card is a census, not a dump.",
+  );
   lines.push("</session_memory>");
   return lines.join("\n");
 }

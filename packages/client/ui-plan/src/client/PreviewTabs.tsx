@@ -28,6 +28,10 @@ import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
 import { BossStatusSheet } from './BossStatusSheet.tsx'
 import { PresenceBall, useBossMood, usePresenceEnabled, useSeatTitles } from './PresenceBall.tsx'
 import { PENDING_MEMBER_LOOK } from './pending-member-look.ts'
+import {
+  delegateParentDepthFromLead,
+  resolveDelegateParentLook,
+} from './delegate-parent-look.ts'
 import { mergeTeamRosterLiveLook } from './team-live-look.ts'
 import {
   readTeamRosterLive,
@@ -38,9 +42,7 @@ import {
   childDelegateSeatCaption,
   memberDisplayLabel,
   parentDelegateSeatCaption,
-  withLiveNickname,
 } from './seat-caption.ts'
-import { allBuiltInSeatTitles } from '../presence-settings.ts'
 import { useOverviewOpen } from './overview-open.ts'
 import { PRESENCE_RAIL_HANDOFF_MS } from './presence-handoff.ts'
 import {
@@ -417,6 +419,27 @@ const CONTEXT_BROWSER_LIMIT = 48
 
 type SpillEntry = NonNullable<SessionStatusView['compaction']['spillPaths']>[number]
 
+/** Localize common spill tool wire names shown in Overview peek rows. */
+function previewSpillToolLabel(
+  tool: string,
+  t: PreviewTabsProps['t'],
+): string {
+  switch (tool) {
+    case 'job_output':
+      return t('preview.status.spillTool.job_output')
+    case 'job_kill':
+      return t('preview.status.spillTool.job_kill')
+    case 'job_list':
+      return t('preview.status.spillTool.job_list')
+    case 'bash':
+      return t('preview.status.spillTool.bash')
+    case 'pwsh':
+      return t('preview.status.spillTool.pwsh')
+    default:
+      return tool
+  }
+}
+
 /** Shared spill peek rows for Compaction (Status) and Context browser. */
 function SpillEntries({
   entries,
@@ -434,9 +457,9 @@ function SpillEntries({
           <div className={css.teamTaskBody}>
             <span className={css.itemTitle} title={entry.path}>{entry.name}</span>
             <span className={css.itemMeta}>
-              {entry.tool ? `${entry.tool} · ` : ''}
+              {entry.tool ? `${previewSpillToolLabel(entry.tool, t)} · ` : ''}
               {entry.bytes !== undefined
-                ? `${entry.bytes} B`
+                ? t('preview.status.spillBytes', { bytes: entry.bytes })
                 : t('preview.status.spillMissing')}
             </span>
             {entry.preview
@@ -469,6 +492,148 @@ function todoStatusLabel(
   if (status === 'in_progress') return t('preview.todos.status.in_progress')
   if (status === 'completed') return t('preview.todos.status.completed')
   return status
+}
+
+/** Localize wire job.status — never dump English enums into the Overview list. */
+function previewJobStatusLabel(
+  status: string,
+  t: PreviewTabsProps['t'],
+): string {
+  switch (status) {
+    case 'running':
+      return t('preview.status.job.running')
+    case 'stopping':
+      return t('preview.status.job.stopping')
+    case 'completed':
+      return t('preview.status.job.completed')
+    case 'killed':
+      return t('preview.status.job.killed')
+    case 'failed':
+      return t('preview.status.job.failed')
+    default:
+      return status
+  }
+}
+
+/** Localize curated-memory Phase2 wire status for Overview. */
+function previewCuratedMemoryPhase2Label(
+  phase2: string,
+  t: PreviewTabsProps['t'],
+): string {
+  switch (phase2) {
+    case 'written':
+      return t('preview.status.curatedMemoryPhase2.written')
+    case 'skipped':
+      return t('preview.status.curatedMemoryPhase2.skipped')
+    case 'failed':
+      return t('preview.status.curatedMemoryPhase2.failed')
+    case 'no-llm':
+      return t('preview.status.curatedMemoryPhase2.no-llm')
+    default:
+      return phase2
+  }
+}
+
+function previewCuratedMemoryPhase2Tone(
+  phase2: string,
+): 'ok' | 'warn' | 'danger' | undefined {
+  if (phase2 === 'written') return 'ok'
+  if (phase2 === 'failed') return 'danger'
+  if (phase2 === 'no-llm' || phase2 === 'skipped') return 'warn'
+  return undefined
+}
+
+/** Localize compaction phase for Overview meta / detail rows. */
+function previewCompactionPhaseLabel(
+  phase: string,
+  t: PreviewTabsProps['t'],
+): string {
+  if (phase === 'idle') return t('preview.status.compactionPhase.idle')
+  if (phase === 'busy') return t('preview.status.compactionPhase.busy')
+  return phase
+}
+
+/** Localize compaction strategy wire ids. */
+function previewCompactionStrategyLabel(
+  strategy: string,
+  t: PreviewTabsProps['t'],
+): string {
+  switch (strategy) {
+    case 'prune-summary':
+      return t('preview.status.compactionStrategy.pruneSummary')
+    case 'prune-only':
+      return t('preview.status.compactionStrategy.pruneOnly')
+    case 'summary-only':
+      return t('preview.status.compactionStrategy.summaryOnly')
+    case 'off':
+      return t('preview.status.compactionStrategy.off')
+    default:
+      return strategy
+  }
+}
+
+/** Localize one compaction pipeline stage token (`prune` / `summary` / …). */
+function previewCompactionStageLabel(
+  stage: string,
+  t: PreviewTabsProps['t'],
+): string {
+  switch (stage) {
+    case 'prune':
+      return t('preview.status.compactionStage.prune')
+    case 'summary':
+      return t('preview.status.compactionStage.summary')
+    case 'none':
+      return t('preview.status.compactionStage.none')
+    case 'prune→summary':
+      return t('preview.status.compactionStrategy.pruneSummary')
+    default:
+      return stage
+  }
+}
+
+/** Localize curated-memory Phase2 status wire ids. */
+function previewCuratedMemoryPhase2Label(
+  phase2: string,
+  t: PreviewTabsProps['t'],
+): string {
+  switch (phase2) {
+    case 'written':
+      return t('preview.status.curatedMemoryPhase2.written')
+    case 'skipped':
+      return t('preview.status.curatedMemoryPhase2.skipped')
+    case 'failed':
+      return t('preview.status.curatedMemoryPhase2.failed')
+    case 'no-llm':
+      return t('preview.status.curatedMemoryPhase2.no-llm')
+    default:
+      return phase2
+  }
+}
+
+function previewCuratedMemoryPhase2Tone(
+  phase2: string,
+): 'ok' | 'warn' | 'danger' | undefined {
+  if (phase2 === 'written') return 'ok'
+  if (phase2 === 'failed') return 'danger'
+  if (phase2 === 'no-llm' || phase2 === 'skipped') return 'warn'
+  return undefined
+}
+
+/** Localize compaction lastReason wire ids. */
+function previewCompactionReasonLabel(
+  reason: string,
+  t: PreviewTabsProps['t'],
+): string {
+  switch (reason) {
+    case 'auto':
+      return t('preview.status.compactionReason.auto')
+    case 'overflow':
+      return t('preview.status.compactionReason.overflow')
+    case 'manual':
+      return t('preview.status.compactionReason.manual')
+    default:
+      return reason
+  }
 }
 
 function injectEventLabel(ev: Extract<LiveTimelineEvent, { kind: 'inject' }>): string {
@@ -575,7 +740,7 @@ function StatusJobsList({
                   className={expanded ? css.jobChevronOpen : css.jobChevron}
                 />
                 <span className={css.itemTitle}>{label}</span>
-                <span className={css.itemMeta}>{job.status}</span>
+                <span className={css.itemMeta}>{previewJobStatusLabel(job.status, t)}</span>
               </button>
               {live && killJob !== undefined
                 ? (
@@ -833,6 +998,14 @@ function StatusPanel({
     || status.compaction.summaryCount > 0
     || status.compaction.spillCount > 0
     || (status.compaction.spillPaths?.length ?? 0) > 0
+  const curatedMemory = status.curatedMemory
+  const hasCuratedMemory = curatedMemory !== undefined
+  const curatedMemoryPhase2Tone = curatedMemory
+    ? previewCuratedMemoryPhase2Tone(curatedMemory.phase2)
+    : undefined
+  const curatedMemoryPhase2Label = curatedMemory
+    ? previewCuratedMemoryPhase2Label(curatedMemory.phase2, t)
+    : ''
   const hasChannels =
     status.channels.process.length > 0
     || wiredIm.length > 0
@@ -1296,7 +1469,10 @@ function StatusPanel({
         title={t('preview.status.jobs')}
         signal={collapseSignal}
         defaultOpen={false}
-        meta={`${runningJobs.length}/${status.jobs.length} running`}
+        meta={t('preview.status.jobsRunningMeta', {
+          running: runningJobs.length,
+          total: status.jobs.length,
+        })}
       >
         <StatusJobsList
           jobs={status.jobs}
@@ -1304,6 +1480,66 @@ function StatusPanel({
           {...(peekJobOutput ? { peekJobOutput } : {})}
           {...(killJob ? { killJob } : {})}
         />
+      </SectionCard>
+        )
+        : null}
+
+      {hasCuratedMemory && curatedMemory
+        ? (
+      <SectionCard
+        t={t}
+        label={t('preview.status.curatedMemory')}
+        title={t('preview.status.curatedMemory')}
+        signal={collapseSignal}
+        defaultOpen={false}
+        meta={t('preview.status.curatedMemoryMeta', {
+          phase1: String(curatedMemory.phase1Written),
+          phase2: curatedMemoryPhase2Label,
+        })}
+      >
+        <div className={css.row}>
+          <span className={css.label}>{t('preview.status.curatedMemoryAt')}</span>
+          <span className={css.valueStrong} title={new Date(curatedMemory.at).toISOString()}>
+            {new Date(curatedMemory.at).toLocaleString()}
+          </span>
+        </div>
+        <div className={css.row}>
+          <span className={css.label}>{t('preview.status.curatedMemoryPhase1')}</span>
+          <span className={css.valueStrong}>+{curatedMemory.phase1Written}</span>
+        </div>
+        <div className={css.row}>
+          <span className={css.label}>{t('preview.status.curatedMemoryPhase2')}</span>
+          <span className={css.curatedMemoryPhase2}>
+            <span
+              className={css.valueChip}
+              {...(curatedMemoryPhase2Tone
+                ? { 'data-tone': curatedMemoryPhase2Tone }
+                : {})}
+            >
+              {curatedMemoryPhase2Label}
+            </span>
+            {curatedMemory.phase2Written > 0
+              ? <span className={css.valueStrong}>+{curatedMemory.phase2Written}</span>
+              : null}
+          </span>
+        </div>
+        {curatedMemory.providerKind
+          ? (
+            <div className={css.row}>
+              <span className={css.label}>{t('preview.status.curatedMemoryProvider')}</span>
+              <span className={css.valueChip}>{curatedMemory.providerKind}</span>
+            </div>
+          )
+          : null}
+        {curatedMemory.skipped
+          ? (
+            <div className={css.row}>
+              <span className={css.label}>{t('preview.status.curatedMemorySkipped')}</span>
+              <span className={css.valueChip} data-tone="warn">{curatedMemory.skipped}</span>
+            </div>
+          )
+          : null}
+        <p className={css.note} role="note">{t('preview.status.curatedMemoryHint')}</p>
       </SectionCard>
         )
         : null}
@@ -1318,8 +1554,10 @@ function StatusPanel({
         defaultOpen={false}
         meta={(
           <>
-            {status.compaction.phase}
-            {status.compaction.strategy ? ` · ${status.compaction.strategy}` : ''}
+            {previewCompactionPhaseLabel(status.compaction.phase, t)}
+            {status.compaction.strategy
+              ? ` · ${previewCompactionStrategyLabel(status.compaction.strategy, t)}`
+              : ''}
           </>
         )}
       >
@@ -1327,10 +1565,10 @@ function StatusPanel({
           <span className={css.label}>{t('preview.status.compactionPipeline')}</span>
           <span>
             {status.compaction.stages.length > 0
-              ? status.compaction.stages.join(' → ')
-              : status.compaction.pipeline}
+              ? status.compaction.stages.map((stage) => previewCompactionStageLabel(stage, t)).join(' → ')
+              : previewCompactionStageLabel(status.compaction.pipeline, t)}
             {status.compaction.lastReason
-              ? ` · ${status.compaction.lastReason}`
+              ? ` · ${previewCompactionReasonLabel(status.compaction.lastReason, t)}`
               : ''}
             {status.compaction.lastShadowedTokens !== undefined
               ? ` · ${t('preview.status.timelineShadowed')} ${status.compaction.lastShadowedTokens}`
@@ -1341,14 +1579,14 @@ function StatusPanel({
           ? (
             <div className={css.row}>
               <span className={css.label}>{t('preview.status.compactionStrategy')}</span>
-              <span>{status.compaction.strategy}</span>
+              <span>{previewCompactionStrategyLabel(status.compaction.strategy, t)}</span>
             </div>
           )
           : null}
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.compactionPhase')}</span>
           <span data-live={status.compaction.phase === 'busy' || undefined}>
-            {status.compaction.phase}
+            {previewCompactionPhaseLabel(status.compaction.phase, t)}
           </span>
         </div>
         <div className={css.row}>
@@ -1430,7 +1668,6 @@ function StatusPanel({
         title={t('preview.status.timeline')}
         signal={collapseSignal}
         defaultOpen
-        meta={t('preview.status.timelineSource')}
       >
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.timelineTotal')}</span>
@@ -1550,12 +1787,13 @@ function StatusPanel({
         title={t('preview.status.channels')}
         signal={collapseSignal}
         defaultOpen={false}
-        meta={(
-          <>
-            {status.channels.process.length} process · {status.channels.im.length} im
-            {wiredIm.length > 0 ? ` · ${wiredIm.length} gateway` : ''}
-          </>
-        )}
+        meta={t('preview.status.channelsMeta', {
+          process: status.channels.process.length,
+          im: status.channels.im.length,
+          gateway: wiredIm.length > 0
+            ? t('preview.status.channelsMetaGateway', { count: wiredIm.length })
+            : '',
+        })}
       >
             <ul className={css.itemList}>
               {status.channels.process.map((p) => (
@@ -1917,34 +2155,37 @@ export function PreviewTabs({
     teamRosterLiveRevision,
     () => 0,
   )
+  // Member ids come from Face relationships only — never invent seed ids.
   const childMemberId = status?.delegate?.childMemberId
-    ?? (status?.delegate?.childSeat === 'manager' ? 'mem_seed_manager' : undefined)
   const parentMemberId = status?.delegate?.parentMemberId
-    ?? (officeBossSeat ? undefined : 'mem_seed_manager')
   const liveChild = childMemberId ? readTeamRosterLive(childMemberId) : undefined
   const liveParent = parentMemberId ? readTeamRosterLive(parentMemberId) : undefined
-  // Office: Settings boss title + nick. Child: Face parentLabel, with live nick overlay.
-  const knownSeatTitles = [
-    seatTitles.boss,
-    seatTitles.manager,
-    seatTitles.agent,
-    ...allBuiltInSeatTitles(),
-  ]
+  // Office: Settings boss title + nick. Opener / tool child: Face parentLabel
+  // as-is (never retitle 向日葵 →「干员 · 向日葵」).
   const bossSeatLabel = officeBossSeat
     ? parentDelegateSeatCaption(seatTitles.boss, {
         officeBossSeat: true,
         bossNickname: bossMood.bossNickname || undefined,
         managerTitle: seatTitles.manager,
       })
-    : withLiveNickname(
-      parentMemberId === 'mem_seed_manager'
-        ? seatTitles.manager
-        : seatTitles.agent,
-      status?.delegate?.parentLabel ?? seatTitles.manager,
-      liveParent?.nickname,
-      undefined,
-      knownSeatTitles,
-    )
+    : (() => {
+      const face = status?.delegate?.parentLabel?.trim()
+      if (liveParent?.nickname !== undefined) {
+        const faceFormal = face
+          ?.replace(/[（(][^）)]*[）)]\s*$/u, '')
+          .trim()
+        const composed = memberDisplayLabel(
+          liveParent.name?.trim() || faceFormal,
+          liveParent.nickname,
+        )
+        if (composed) return composed
+      }
+      return parentDelegateSeatCaption(seatTitles.boss, {
+        officeBossSeat: false,
+        parentLabel: face,
+        managerTitle: seatTitles.manager,
+      })
+    })()
   // Identity agent-home / tool children → 干员; project home → 经理; 向阳 → name.
   const childSeat = status?.delegate?.childSeat
   // Live nick overlay → Face childLabel (Host formal（nick）). Name-only live
@@ -1981,15 +2222,18 @@ export function PreviewTabs({
       : snapshotParentLook),
     [snapshotParentLook, liveParentLook, leftSeatLiveBossLook],
   )
-  // Boss seat: Settings mood only (`pinned` — no TTL / idle / turn overwrite).
+  // Settings boss mood — used for office home AND stacked `:boss` when the
+  // human later speaks into an opener-led seat (officeBossSeat is then false).
+  const settingsBossPresence = {
+    emotionId: bossMood.moodId,
+    source: 'tool' as const,
+    pinned: true as const,
+    updatedAt: bossMood.moodAt || Date.now(),
+    ...(bossMood.statusLine ? { tips: bossMood.statusLine } : {}),
+  }
+  // Lead AI 委派方 falls back to Face parentPresence when not the boss layer.
   const bossPresence = officeBossSeat
-    ? {
-        emotionId: bossMood.moodId,
-        source: 'tool' as const,
-        pinned: true as const,
-        updatedAt: bossMood.moodAt || Date.now(),
-        ...(bossMood.statusLine ? { tips: bossMood.statusLine } : {}),
-      }
+    ? settingsBossPresence
     : status?.parentPresence
   // Cold empty only — keep prior Status on screen while soft-refreshing.
   const paintPending = !ready && status === null
@@ -2023,27 +2267,83 @@ export function PreviewTabs({
       (row) => row?.origin === 'subagent' && row.parentId === sessionId && row.running,
     )
   })
-  // Child Overview's 委派方 seat + team graph follow the home session's mux,
-  // not this child's own catalog. Face `delegate.parentSessionId` fills in
-  // before the session-list row carries `parentId`.
-  const homeMuxId = parentId || status?.delegate?.parentSessionId
+  // 委派方 stack: mux every real parent sessionId (lead + ancestors + peers).
+  // Face `delegate.parentSessionId` fills in before list rows carry `parentId`.
+  // Synthetic `:boss` is Settings mood — not a live session mux key.
+  const homeMuxId = (() => {
+    const lead = parentId || status?.delegate?.parentSessionId
+    if (!lead || lead.endsWith(':boss')) return undefined
+    return lead
+  })()
+  const parentMuxIds = (() => {
+    const ids: string[] = []
+    const seen = new Set<string>()
+    const push = (id: string | undefined): void => {
+      const next = id?.trim() || ''
+      if (!next || next.endsWith(':boss') || seen.has(next)) return
+      seen.add(next)
+      ids.push(next)
+    }
+    push(homeMuxId)
+    for (const row of status?.delegate?.parents ?? []) {
+      if (row.kind === 'boss') continue
+      push(row.sessionId)
+    }
+    return ids
+  })()
+  // Parallel Overviews: each left-stack ball follows that session's 支线 live
+  // (captionHint), not only the focused child session.
+  const parentSidelineFingerprint = useSessions((s) => (
+    parentMuxIds
+      .map((id) => `${id}\0${s.byId[id]?.sideline?.trim() ?? ''}`)
+      .join('\n')
+  ))
+  const sidelineByParentId = useMemo(() => {
+    const map = new Map<string, string>()
+    if (!parentSidelineFingerprint) return map
+    for (const row of parentSidelineFingerprint.split('\n')) {
+      const split = row.indexOf('\0')
+      if (split <= 0) continue
+      const id = row.slice(0, split)
+      const line = row.slice(split + 1).trim()
+      if (line) map.set(id, line)
+    }
+    return map
+  }, [parentSidelineFingerprint])
+  // Left-stack paint rows: Face parents[] or a single real parent session.
+  // Collapsed rail mounts lead only — never N engines then CSS-hide.
+  const delegateParentFullChain = status?.delegate?.parents?.length
+    ? status.delegate.parents
+    : [{
+        sessionId: status?.delegate?.parentSessionId
+          ?? homeMuxId
+          ?? sessionId,
+        label: bossSeatLabel,
+        ...(parentMemberId ? { memberId: parentMemberId } : {}),
+      }]
+  const delegateParentPaintChain = presenceRailCompact
+    ? delegateParentFullChain.slice(-1)
+    : delegateParentFullChain
+  // Fingerprint the whole stack so ancestor/peer drain wakes soft-poll.
   const homeCatalogRev = useSessions((s) => {
-    if (homeMuxId === undefined || homeMuxId === '') return ''
-    const run = s.byId[homeMuxId]?.running ? '1' : '0'
-    const catalog = s.subagentsByParent[homeMuxId]
-    if (catalog === undefined) return run
-    const rows = catalog.entries
-      .filter((entry): entry is Extract<typeof entry, { kind: 'child' }> => entry.kind === 'child')
-      .map((entry) => `${entry.id}:${entry.activity ?? ''}`)
-    return `${run}:${catalog.state}:${catalog.entries.length}:${rows.join(',')}`
+    if (parentMuxIds.length === 0) return ''
+    return parentMuxIds.map((id) => {
+      const run = s.byId[id]?.running ? '1' : '0'
+      const catalog = s.subagentsByParent[id]
+      if (catalog === undefined) return `${id}:${run}`
+      const rows = catalog.entries
+        .filter((entry): entry is Extract<typeof entry, { kind: 'child' }> => entry.kind === 'child')
+        .map((entry) => `${entry.id}:${entry.activity ?? ''}`)
+      return `${id}:${run}:${catalog.state}:${catalog.entries.length}:${rows.join(',')}`
+    }).join('|')
   })
+  // Lead-ball turn/subs: only the immediate 委派方. Stack layers paint from
+  // Face `parents[].delivery` — do not OR ancestor/peer into the lead seat.
   const homeTurnActive = useSessions((s) => (
-    homeMuxId !== undefined && homeMuxId !== ''
-      ? (s.byId[homeMuxId]?.running ?? false)
-      : false
+    homeMuxId !== undefined ? (s.byId[homeMuxId]?.running ?? false) : false
   ))
   const homeSubsRunning = useSessions((s) => {
-    if (homeMuxId === undefined || homeMuxId === '') return 0
+    if (homeMuxId === undefined) return 0
     const catalog = s.subagentsByParent[homeMuxId]
     const fromCatalog = catalog?.entries.filter(
       (entry) => entry.kind === 'child' && entry.activity === 'running',
@@ -2053,6 +2353,18 @@ export function PreviewTabs({
     ).length
     return Math.max(fromCatalog, fromRows)
   })
+  const stackParentsBusy = useSessions((s) => (
+    parentMuxIds.some((id) => {
+      if (s.byId[id]?.running) return true
+      const catalog = s.subagentsByParent[id]
+      if (catalog?.entries.some(
+        (entry) => entry.kind === 'child' && entry.activity === 'running',
+      )) return true
+      return Object.values(s.byId).some(
+        (row) => row?.origin === 'subagent' && row.parentId === id && row.running,
+      )
+    })
+  ))
   const jobsBusy = useSessions((s) => {
     const jobs = s.jobsBySession[sessionId] ?? []
     return jobs.some((job) => job.status === 'running' || job.status === 'stopping')
@@ -2061,6 +2373,7 @@ export function PreviewTabs({
     || childRunning
     || homeTurnActive
     || homeSubsRunning > 0
+    || stackParentsBusy
     || jobsBusy
     || (status?.subagents.live.some((row) => row.activity === 'running') ?? false)
     || (status?.jobs.some((job) => (
@@ -2161,7 +2474,7 @@ export function PreviewTabs({
 
   useEffect(() => {
     setStatusTick((n) => n + 1)
-  }, [catalogRev, jobsRev, agentPresetRev, parentRunning, childRunning, jobsBusy, homeCatalogRev, rosterLiveRev])
+  }, [catalogRev, jobsRev, agentPresetRev, parentRunning, childRunning, jobsBusy, homeCatalogRev, stackParentsBusy, rosterLiveRev])
 
   // Soft-poll session.status so presence / delivery / fleet flip without a
   // membership bump (presence_set is sticky outside the turn latch). Presence
@@ -2495,62 +2808,88 @@ export function PreviewTabs({
             >
               <div
                 className={css.delegateFromStack}
-                data-count={String(
-                  Math.max(1, status?.delegate?.parents?.length ?? 1),
-                )}
+                data-count={String(delegateParentPaintChain.length)}
               >
-                {(status?.delegate?.parents?.length
-                  ? status.delegate.parents
-                  : [{
-                      sessionId: status?.delegate?.parentSessionId
-                        ?? `${sessionId}:from`,
-                      label: bossSeatLabel,
-                      ...(parentMemberId ? { memberId: parentMemberId } : {}),
-                    }]
-                ).map((parent, index, chain) => {
+                {delegateParentPaintChain.map((parent, index, chain) => {
                   const isLead = index === chain.length - 1
-                  const label = isLead
-                    ? bossSeatLabel
-                    : (parent.label?.trim() || t('preview.status.subagentRole.delegator'))
+                  const depthFromLead = delegateParentDepthFromLead(index, chain.length)
+                  // Boss layer: Face kind/`:boss`, Settings boss title, or
+                  // office home lead with no roster member. Do not treat a bare
+                  // tool-parent row (no memberId yet) as 老板.
+                  const isBossLayer = parent.kind === 'boss'
+                    || parent.sessionId.endsWith(':boss')
+                    || parent.label?.trim() === seatTitles.boss
+                    || (isLead && leftSeatLiveBossLook && !parent.memberId)
+                  const label = parent.label?.trim()
+                    || (isBossLayer ? seatTitles.boss : undefined)
+                    || (isLead ? bossSeatLabel : undefined)
+                    || t('preview.status.subagentRole.delegator')
+                  const useBossLook = isBossLayer || (isLead && leftSeatLiveBossLook)
+                  const layerLook = resolveDelegateParentLook({
+                    parent,
+                    isLead,
+                    isBossLayer: useBossLook,
+                    leadSnapshot: parentMemberLook,
+                  })
+                  // Each ball is that source session — sync its own presence/delivery.
+                  const layerPresence = useBossLook
+                    ? settingsBossPresence
+                    : (parent.presence
+                      ?? (isLead ? status?.parentPresence : undefined))
+                  const layerDelivery = parent.delivery
+                  const layerTurn = useBossLook
+                    ? false
+                    : Boolean(
+                      layerDelivery?.turnActive
+                      ?? (isLead ? fromTurnActive : false),
+                    )
+                  const layerQueued = useBossLook
+                    ? 0
+                    : (layerDelivery?.queued ?? (isLead ? fromQueued : 0))
+                  const layerSteering = useBossLook
+                    ? 0
+                    : (layerDelivery?.steering ?? (isLead ? fromSteering : 0))
+                  const layerSubs = useBossLook
+                    ? 0
+                    : (layerDelivery?.runningSubs ?? (isLead ? fromSubs : 0))
                   return (
                     <div
                       key={parent.sessionId}
                       className={css.delegateFromLayer}
+                      data-depth={String(depthFromLead)}
+                      data-lead={isLead ? '' : undefined}
                       style={{ zIndex: index + 1 }}
+                      {...(!isLead ? { 'aria-hidden': true } : {})}
                     >
                       <PresenceBall
                         sessionId={parent.sessionId}
-                        // Lead (immediate parent): live Settings boss / Face parent look.
-                        // Ancestors: label-only compact seats (no frozen Team look chase).
-                        {...(isLead && parentMemberLook && !leftSeatLiveBossLook
-                          ? { memberLook: parentMemberLook }
-                          : {})}
-                        {...(isLead && bossPresence ? { presence: bossPresence } : {})}
+                        {...(layerLook && !useBossLook ? { memberLook: layerLook } : {})}
+                        {...(layerPresence ? { presence: layerPresence } : {})}
                         pairSeat
                         seat="from"
                         roleLabel={label}
-                        turnActive={isLead
-                          ? (officeBossSeat ? false : fromTurnActive)
-                          : false}
+                        turnActive={layerTurn}
                         runningJobs={0}
-                        runningSubs={isLead && !officeBossSeat ? fromSubs : 0}
+                        runningSubs={layerSubs}
                         fleetHealth="ok"
-                        queued={isLead && !officeBossSeat ? fromQueued : 0}
-                        steering={isLead && !officeBossSeat ? fromSteering : 0}
-                        activityAt={isLead ? (bossPresence?.updatedAt ?? 0) : 0}
-                        compact={presenceRailCompact || !isLead}
+                        queued={layerQueued}
+                        steering={layerSteering}
+                        activityAt={layerPresence?.updatedAt ?? 0}
+                        // Stack depth uses CSS scale — never force compact chips on ancestors.
+                        compact={presenceRailCompact}
                         engineActive={Boolean(
-                          isLead && overviewOpen && presenceEngineReady && status,
+                          overviewOpen && presenceEngineReady && status,
                         )}
+                        {...(!useBossLook && sidelineByParentId.get(parent.sessionId)
+                          ? { captionHint: sidelineByParentId.get(parent.sessionId) }
+                          : {})}
                         t={t as (key: string, params?: Record<string, string>) => string}
                         loadingLabel={t('preview.status.presenceLoading')}
                         errorLabel={t('preview.status.presenceError')}
-                        clickHint={isLead
-                          ? (officeBossSeat
-                            ? t('preview.status.bossEditHint', { boss: bossSeatLabel })
-                            : t('preview.status.presenceClick'))
+                        clickHint={useBossLook
+                          ? t('preview.status.bossEditHint', { boss: seatTitles.boss })
                           : t('preview.status.presenceClick')}
-                        {...(isLead && officeBossSeat
+                        {...(useBossLook
                           ? {
                               onStageClick: () => {
                                 setBossEditorOpen((prev) => !prev)
@@ -2568,7 +2907,16 @@ export function PreviewTabs({
                   <polygon points="40,11 47,16 40,21" />
                 </svg>
                 {!presenceRailCompact
-                  ? <span className={css.delegateCaption}>{t('preview.status.presenceDelegate')}</span>
+                  ? (
+                    <span
+                      className={css.delegateCaption}
+                      data-live={stackParentsBusy || undefined}
+                    >
+                      {t(stackParentsBusy
+                        ? 'preview.status.presenceDelegateLive'
+                        : 'preview.status.presenceDelegate')}
+                    </span>
+                  )
                   : null}
               </div>
               <PresenceBall
@@ -2598,29 +2946,28 @@ export function PreviewTabs({
                 errorLabel={t('preview.status.presenceError')}
                 clickHint={t('preview.status.presenceClick')}
               />
-              {officeBossSeat && !presenceRailCompact
+              {!presenceRailCompact && officeBossSeat
                 ? (
-                  <>
-                    <button
-                      type="button"
-                      className={css.bossSharedChip}
-                      onClick={() => { setBossEditorOpen((prev) => !prev) }}
-                    >
-                      <span className={css.bossSharedLabel}>{t('preview.status.bossShared', { boss: bossSeatLabel })}</span>
-                      <span className={css.bossSharedText}>
-                        {bossMood.statusLine
-                          || t(`preview.status.emotion.${bossMood.moodId}` as PlanKey)
-                          || t('preview.status.bossSharedEmpty')}
-                      </span>
-                    </button>
-                    <BossStatusSheet
-                      open={bossEditorOpen}
-                      onClose={() => { setBossEditorOpen(false) }}
-                      t={t}
-                    />
-                  </>
+                  <button
+                    type="button"
+                    className={css.bossSharedChip}
+                    onClick={() => { setBossEditorOpen((prev) => !prev) }}
+                  >
+                    <span className={css.bossSharedLabel}>{t('preview.status.bossShared', { boss: bossSeatLabel })}</span>
+                    <span className={css.bossSharedText}>
+                      {bossMood.statusLine
+                        || t(`preview.status.emotion.${bossMood.moodId}` as PlanKey)
+                        || t('preview.status.bossSharedEmpty')}
+                    </span>
+                  </button>
                 )
                 : null}
+              {/* Sheet mounts for office chip and for stacked `:boss` stage clicks. */}
+              <BossStatusSheet
+                open={bossEditorOpen}
+                onClose={() => { setBossEditorOpen(false) }}
+                t={t}
+              />
             </div>
           )
           : presenceEnabled

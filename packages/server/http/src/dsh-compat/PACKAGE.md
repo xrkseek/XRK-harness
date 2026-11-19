@@ -3,6 +3,9 @@
 > **读者 / Audience**：维护者 / Maintainers  
 > （抽出 `@xrkseek/dsh-compat` 时的检查单 / Checklist for extracting `@xrkseek/dsh-compat`）
 
+**目标窗口 / Target window**：**产品线 0.9** — 包名 **`@xrkseek/dsh-compat`**（npmjs 单发；本仓 Host 改为 peer / 可选挂载）。  
+原生壳扩展（槽位 · `useModelSelection` · `ThemeRuntime`）**不**经本目录；见 [client-plugin-development.md](../../../../docs/client-plugin-development.md)。
+
 实现现位于 `@xrkseek/server-http` 的 `src/dsh-compat/`，经 **`@xrkseek/server-http/dsh-compat`** 与根入口再导出。目标：目录可 **整夹迁出** 为独立包而不重写业务模块。
 
 Implementation currently lives under `@xrkseek/server-http` at `src/dsh-compat/`, re-exported via **`@xrkseek/server-http/dsh-compat`** and the package root. The goal is **whole-folder extraction** into a standalone package without rewriting feature modules.
@@ -33,10 +36,16 @@ Implementation currently lives under `@xrkseek/server-http` at `src/dsh-compat/`
 4. Point the extension dependency at the new package; drop `private` when publishing.  
 5. Run `dsh-compat` / mobile-gate / gateway tests and `pnpm check`.
 
+## Host 挂载现状（0.9 前）/ Host wiring today (pre-0.9)
+
+- Built-in fiber：`extensions/dsh-compat`（`kind: host` · id `dsh-compat-host`）随产品 Host boot 接线；Settings **拒** soft-disable builtin。  
+- **评估结论**：尚无独立「关桥」env；0.9 迁出后 Host 应改为 **peer 依赖 + 显式 opt-in**（装包 / 配置开启才 `createDshCompatHostPlugin`），避免原生作者路径默认背负社区形状。本切片不改 Host 硬绑。
+
 ## 红线 / Hard Rules
 
 - Do not import `apps/`, Face runtime, or per-package forks into `underlying/`.  
 - Panel Face (`dynamicCordisRunner/*`) stays in `server-face`; this package only exposes apply / RPC bridges the panel calls.  
 - New capabilities extend the capability table plus named modules; do not stack adapters for a single community package.  
+- **Do not** land native composer / model-selection / theme author APIs here — those stay in `packages/client` / Face.  
 - Community clients install on the user’s machine; this package only provides the **XRK Host contract**.
 - Regression shapes for HTTP/RPC live in `tests/fixtures/compat-host-suite.json` (`shapes`), not as per-package adapter forks.

@@ -446,6 +446,23 @@ describe('dispatch (menu column)', () => {
     })
   })
 
+  it('host bare with caret-collapsed span (「命令」launcher) → bare-token consume', async () => {
+    const { source, mint, warm, executeCalls } = await bench()
+    const scope = mint('s1')
+    const consumes: ConsumeTokenRequest[] = []
+    scope.ctx.on('slash/input-consume-token', (r) => {
+      consumes.push(r)
+      return true
+    })
+    await warm(proj('s1'))
+    // end === start → collapsed caret; span consume would no-op in the input.
+    expect(menuPick(source, 'plan', proj('s1'), 0)).toBe('handled')
+    expect(consumes).toEqual([{ guard: { kind: 'bare-token', token: '/plan' } }])
+    await vi.waitFor(() => {
+      expect(executeCalls).toEqual([{ sessionId: sid('s1'), line: '/plan' }])
+    })
+  })
+
   it('a name the directory no longer serves → undefined (snapshot swapped between menu and pick)', async () => {
     const { source, warm } = await bench()
     await warm(proj('s1'))

@@ -129,12 +129,19 @@ export const InputBar = memo(function InputBar({
     && !(resubmitIntent !== null && resubmitIntent.sessionId === sessionId)
   const cancelEditStaging = useCallback(() => {
     clearEditStaging()
+    // editAt hydrates media into the draft rail — setDraft('') alone left
+    // thumbnails after Escape / 「取消编辑」, so the next send looked attached.
+    // Read imageIds at click time (not a render snapshot) so a late Escape
+    // after hydrate / re-attach still clears every thumb.
+    if (removeImage !== undefined) {
+      for (const id of [...input.imageIds]) removeImage(id)
+    }
     inputActions?.setDraft('')
     const ed = keyboard?.editor
     if (!ed) return
     ed.getRootElement()?.focus({ preventScroll: true })
     ed.focus()
-  }, [inputActions, keyboard])
+  }, [input, inputActions, keyboard, removeImage])
 
   // Escape exits edit staging (a11y: every transient mode needs a keyboard exit).
   useEffect(() => {
@@ -289,7 +296,8 @@ export const InputBar = memo(function InputBar({
     && (input?.queue.some(row => row.placement === 'queued') ?? false)
   // Chord hints only when a non-empty draft can actually submit — empty Enter
   // is a no-op; whole-queue flush is Cmd/Ctrl+Enter only.
-  const busyEnterHint = deliveryBusy && steeringAvailable && !canSteerQueue && !disabled && !empty
+  // Edit-resubmit confirm owns the send gesture — do not hint queue/steer.
+  const busyEnterHint = deliveryBusy && !stagingActive && steeringAvailable && !canSteerQueue && !disabled && !empty
     ? resolveSubmitMode(busyEnter, deliveryBusy, 'enter', steeringAvailable)
     : null
 
@@ -584,17 +592,21 @@ export const InputBar = memo(function InputBar({
   // primary while the draft is empty, exactly like a top-level session. The
   // separate square Stop that used to sit beside it is gone — one composer,
   // one primary action (and the voice button takes that freed seat).
-  const primaryStops = agentActive && (empty || blocked !== undefined)
+  const primaryStops = agentActive && (empty || blocked !== undefined) && !stagingActive
   const primarySubmitMode = resolveSubmitMode(busyEnter, deliveryBusy, 'enter', steeringAvailable)
   const plainMessageDraft = !empty && input?.phase === 'plain' && !draft.trimStart().startsWith('/')
+  // Staged edit → confirm+truncate, never queue/steer — keep 「发送消息」 even
+  // while the Host turn is still running (tryStagedEditSubmit runs first).
+  const showBusyDeliveryLabel = deliveryBusy && !stagingActive && steeringAvailable
+    && !disabled && !filesNotReady && plainMessageDraft
   const primaryLabel = primaryStops
     ? t('input.stop')
-    : deliveryBusy && steeringAvailable && !disabled && !filesNotReady && plainMessageDraft
+    : showBusyDeliveryLabel
       ? t(primarySubmitMode === 'steer' ? 'input.send.steer' : 'input.send.queue')
       : t('input.send')
   const primaryHint = primaryStops
     ? t('input.stop')
-    : deliveryBusy && steeringAvailable && !disabled && !filesNotReady && plainMessageDraft
+    : showBusyDeliveryLabel
       ? t(primarySubmitMode === 'steer' ? 'input.send.steer.hint' : 'input.send.queue.hint')
       : t('input.send')
   const onPrimary = (): void => {
@@ -605,7 +617,9 @@ export const InputBar = memo(function InputBar({
     if (keyboard === undefined) return // absent machine: the button is disabled
     /* v8 ignore next -- defensive: the primary button is disabled for empty, disabled, and pending-upload states. */
     if (empty || disabled || machineBusy || filesNotReady) return
-    keyboard.submit(primarySubmitMode)
+    // Edit staging always submits as queue mode into tryStagedEditSubmit;
+    // the busy-Enter policy must not steer/queue the truncated resend.
+    keyboard.submit(stagingActive ? 'queue' : primarySubmitMode)
     dismissSoftKeyboard(keyboard.editor)
   }
 

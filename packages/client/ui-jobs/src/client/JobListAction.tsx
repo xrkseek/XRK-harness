@@ -14,7 +14,7 @@ import type { PropsLocale, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-
 import { NS } from './locales.ts'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import { isLiveJob, orderedJobs } from './job-list-shared.ts'
-import { JobRows } from './JobRows.tsx'
+import { JobOutputPanel, JobRows } from './JobRows.tsx'
 import { useJobClock } from './use-job-clock.ts'
 import css from './JobListAction.module.css'
 
@@ -60,7 +60,7 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
   const [fixedPos, setFixedPos] = useState<CSSProperties | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const menuRef = useRef<HTMLUListElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const rows = useMemo(() => orderedJobs(jobs), [jobs])
   const settledRows = useMemo(() => rows.filter((job) => !isLiveJob(job)), [rows])
@@ -163,17 +163,39 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
     onToggleExpand,
   }
 
+  const expandedJob = expandedId === undefined
+    ? undefined
+    : settledRows.find((job) => job.id === expandedId)
+
   const menu = open
     ? (
-      <ul
+      <div
         ref={menuRef}
         className={css.menu}
         style={fixedPos ?? MEASURE_STYLE}
-        aria-label={t('list.aria')}
         data-job-list-portal=""
+        data-output-open={expandedJob !== undefined ? '' : undefined}
       >
-        <JobRows rows={settledRows} {...rowProps} />
-      </ul>
+        <ul className={css.menuList} aria-label={t('list.aria')}>
+          <JobRows
+            rows={settledRows}
+            {...rowProps}
+            embedOutput={false}
+          />
+        </ul>
+        {expandedJob !== undefined
+          ? (
+            <div className={css.outputSlot}>
+              <JobOutputPanel
+                job={expandedJob}
+                live={false}
+                t={rowProps.t}
+                css={css}
+              />
+            </div>
+          )
+          : null}
+      </div>
     )
     : null
 

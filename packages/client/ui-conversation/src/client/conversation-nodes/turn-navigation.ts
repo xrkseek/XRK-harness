@@ -21,6 +21,18 @@ function preview(parts: Iterable<string>): string {
 }
 
 function promptText(node: ChatNode): string {
+  if (node.kind === 'context') {
+    const source = node.data.source
+    if (source !== null && typeof source === 'object') {
+      const summary = (source as { summary?: unknown }).summary
+      if (typeof summary === 'string' && summary.trim() !== '') {
+        return preview([summary])
+      }
+    }
+    return preview(node.data.content.flatMap(block => (
+      'type' in block && block.type === 'text' && typeof block.text === 'string' ? [block.text] : []
+    )))
+  }
   if (node.kind !== 'user') return ''
   return preview(node.data.content.flatMap(block => (
     'type' in block && block.type === 'text' && typeof block.text === 'string' ? [block.text] : []
@@ -55,9 +67,9 @@ export function sameTurnNavigationItem(
 /**
  * Project one loaded Host turn into a 轮次 rail item.
  *
- * 轮次 is not Host `turn`. A 轮次 exists only when this turn has an opening
- * `user` message. 插话 (`steering`) never opens a 轮次, even if it is the
- * only human row in that Host turn.
+ * 轮次 is not Host `turn`. Prefer a human `user` opener; otherwise a wake
+ * `context` notice (job-completion / handoff) may open the next 轮次.
+ * 插话 (`steering`) never opens a 轮次 on its own.
  */
 export function turnNavigationItem(
   turn: number,
@@ -68,12 +80,16 @@ export function turnNavigationItem(
     .map(key => nodes.get(key))
     .filter((node): node is ChatNode => node !== undefined && node.visibility === 'visible')
   const user = loaded.find(node => node.kind === 'user')
-  if (user === undefined) return undefined
+  const wake = user === undefined
+    ? loaded.find(node => node.kind === 'context')
+    : undefined
+  const opener = user ?? wake
+  if (opener === undefined) return undefined
   const response = loaded.findLast(node => responseText(node) !== '')
   return {
     turn,
-    anchorKey: user.key,
-    prompt: promptText(user),
+    anchorKey: opener.key,
+    prompt: promptText(opener),
     response: response === undefined ? '' : responseText(response),
   }
 }

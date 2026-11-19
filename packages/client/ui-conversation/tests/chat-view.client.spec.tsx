@@ -1352,14 +1352,16 @@ describe('ChatView', () => {
     }
     const h = makeHarness({
       chat: chatSnapshotFixture({
-        nodes: [user(1, '111'), thinkAndTool, toolResult(3, 'call-stop', 'presence_set')],
+        // Opener must sit on the turn so regenerateSource sees human speech.
+        nodes: [userOnTurn(1, '111', 1), thinkAndTool, toolResult(3, 'call-stop', 'presence_set')],
         turnTimings: new Map([[1, { startTime: 1_000, endTime: 8_000 }]]),
         turnEnds: new Map([[1, 4]]),
         turnEndReasons: new Map([[1, { kind: 'aborted' }]]),
       }),
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.getAllByText('已停止')).toHaveLength(1)
+    // Think+tool-only has no assistant prose → noReply copy (not bare 「已停止」).
+    expect(view.getAllByText('已停止 · 未生成回复')).toHaveLength(1)
     expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
     expect(view.getByRole('button', { name: /用时 7秒/ })).toBeTruthy()
   })
@@ -1415,19 +1417,45 @@ describe('ChatView', () => {
     expect(view.getByRole('button', { name: /用时 7秒/ })).toBeTruthy()
   })
 
-  it('empty-closing abort still paints 已停止 on the turn-tail', () => {
+  it('empty-closing abort with a human opener paints 已停止 · 未生成回复', () => {
     const h = makeHarness({
       chat: chatSnapshotFixture({
-        nodes: [user(1, '111')],
+        nodes: [userOnTurn(1, '111', 1)],
         turnTimings: new Map([[1, { startTime: 1_000, endTime: 8_000 }]]),
         turnEnds: new Map([[1, 4]]),
         turnEndReasons: new Map([[1, { kind: 'aborted' }]]),
       }),
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.getAllByText('已停止')).toHaveLength(1)
+    expect(view.getAllByText('已停止 · 未生成回复')).toHaveLength(1)
+    expect(view.queryByText('已停止', { exact: true })).toBeNull()
     expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
     expect(view.getByRole('button', { name: /用时 7秒/ })).toBeTruthy()
+  })
+
+  it('inject-only abort suppresses the lonely 已停止 turn-tail', () => {
+    // Overview seed / catalog inject with no human speech — bare Stop chrome
+    // reads as a broken empty session. Context chip stays; stop chrome goes.
+    const h = makeHarness({
+      chat: chatSnapshotFixture({
+        nodes: [{
+          kind: 'context',
+          seq: 1,
+          time: 500,
+          content: [{ type: 'text', text: '技能目录' }],
+          source: null,
+          provenance: { role: 'inject', label: 'skill-catalog' },
+          form: null,
+        } as const satisfies ConversationNode],
+        turnTimings: new Map([[1, { startTime: 500, endTime: 900 }]]),
+        turnEnds: new Map([[1, 2]]),
+        turnEndReasons: new Map([[1, { kind: 'aborted' }]]),
+      }),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.queryByText('已停止')).toBeNull()
+    expect(view.queryByText('已停止 · 未生成回复')).toBeNull()
+    expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(0)
   })
 
   it('hides tip-turn ending chrome while session.running (false 已停止)', () => {
@@ -1526,15 +1554,16 @@ describe('ChatView', () => {
     expect(view.queryByText(/首 token|tok\/s/)).toBeNull()
   })
 
-  it('user and assistant message containers scope the hover-revealed time chrome', () => {
+  it('settled turn-tail actions stay always-visible (no hover gate)', () => {
     const h = makeHarness({
       nodes: [user(1, 'hi'), assistant(2, 'answer')],
       turnTimings: new Map([[1, { startTime: 1_000, endTime: 2_000 }]]),
       turnEnds: new Map([[1, 2]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    // The user row and the settled assistant's Turn Tail each own one clock scope.
-    expect(view.container.querySelectorAll('[data-time-hover-root]')).toHaveLength(2)
+    const tails = view.container.querySelectorAll('[data-turn-tail]')
+    expect(tails).toHaveLength(1)
+    expect(tails[0]?.getAttribute('data-actions-reveal')).toBe('always')
   })
 
   it('the run-time label is withheld when the turn start is outside the window', () => {

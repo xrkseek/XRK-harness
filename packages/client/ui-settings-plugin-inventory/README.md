@@ -17,4 +17,4 @@ None.
 ## Known Limitations and Deferred Work
 
 - **One snapshot per Settings mount or retry** — no Loader subscription; reopen Settings for a fresh list.
-- **Client halves** may need a hard refresh after install/update (`needsRestart` when applicable).
+- **Client halves** soft-remount on install / enable / update / reload and soft-unload on disable / delete; hard-refresh only when that path fails (`needsRestart` / refresh banner).

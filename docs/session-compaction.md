@@ -131,7 +131,7 @@ SDK 仍可在 `compaction.maxRequestTokens` 等字段显式覆盖。**Settings �
 | 用途 | API（`@xrkseek/core-session`） | 说明 |
 |------|-------------------------------|------|
 | 压缩预算、挑选 `recent`、软预算 | `estimateTokens` · `estimateMessagesTokens` · `estimateRequestTokens` · `projectedInputPressureTokens` · `resolveSoftBudgetTokens` · `resolveSoftBudgetCeiling` | 软预算取本地估价与提供方投影压力的较大值；纯文本约 chars/4；含 reasoning / 非文本块 |
-| Context meter、`shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` · `projectedInputPressureTokens` | meter 分子与软预算共用提供方投影；压缩事件用 `shadowedTokenCount` 做有符号缩小（缺省不缩小） |
+| Context meter、`shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` · `projectedInputPressureTokens` · `estimateSystemTokens` | meter 分子与软预算共用提供方投影；**system 段**用软预算 CJK 密度（站立/策展中文不再按 chars/4 低估）；压缩事件用 `shadowedTokenCount` 做有符号缩小（缺省不缩小） |
 
 日志位置与读面见 [session-log.md](./session-log.md)。
 
@@ -271,7 +271,7 @@ Tool bodies are bounded **before** they enter the log (one spill policy): over *
 | Use | API (`@xrkseek/core-session`) | Notes |
 |------|-------------------------------|------|
 | Compaction budget, picking `recent`, soft budget | `estimateTokens` · `estimateMessagesTokens` · `estimateRequestTokens` · `projectedInputPressureTokens` · `resolveSoftBudgetTokens` · `resolveSoftBudgetCeiling` | Soft budget takes the larger of local estimate and provider projected pressure; plain text ≈ chars/4; includes reasoning / non-text blocks |
-| Context meter, `shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` · `projectedInputPressureTokens` | Meter numerator shares provider projection with soft budget; compaction uses `shadowedTokenCount` for a signed shrink (absent → no shrink) |
+| Context meter, `shadowedTokenCount` | `foldSurfaceTokens` · `priceCurrentSurfaceWindow` · `projectedInputPressureTokens` · `estimateSystemTokens` | Meter numerator shares provider projection with soft budget; **system** uses soft-budget CJK density (standing / curated Chinese no longer under-priced at chars/4); compaction uses `shadowedTokenCount` for a signed shrink (absent → no shrink) |
 
 Log positions / read surface: [session-log.md](./session-log.md).
 

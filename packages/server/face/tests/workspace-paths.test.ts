@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { defaultWorkspaceTitle } from "../src/workspace-paths.js";
+import {
+  defaultWorkspaceTitle,
+  outsideWorkspaceJobNotice,
+} from "../src/workspace-paths.js";
 import { fullyQualified } from "../src/host-directory.js";
 
 describe("workspace path title + create absolute check", () => {
@@ -21,5 +24,33 @@ describe("workspace path title + create absolute check", () => {
     expect(fullyQualified(".", "win32")).toBe(false);
     expect(fullyQualified("/work", "linux")).toBe(true);
     expect(fullyQualified("work", "linux")).toBe(false);
+  });
+});
+
+describe("outsideWorkspaceJobNotice", () => {
+  it("warns when the prompt names absolute paths outside the workspace root", () => {
+    const note = outsideWorkspaceJobNotice(
+      "C:\\Users\\xrkseek\\Desktop\\主仓库\\XRK-harness",
+      "工作目录：C:\\Users\\xrkseek\\Desktop\\function\\hwgen — 写画像",
+    );
+    expect(note).toBeTruthy();
+    expect(note).toContain("Desktop\\function\\hwgen");
+    expect(note).toContain("IM only");
+    expect(note).toContain("inherits this session workspace");
+  });
+
+  it("stays quiet when paths stay inside the workspace", () => {
+    expect(
+      outsideWorkspaceJobNotice(
+        "C:\\Users\\xrkseek\\Desktop\\主仓库\\XRK-harness",
+        "edit C:\\Users\\xrkseek\\Desktop\\主仓库\\XRK-harness\\packages\\core\\agent-loop\\src\\index.ts",
+      ),
+    ).toBeUndefined();
+    expect(
+      outsideWorkspaceJobNotice(
+        "/Users/me/proj",
+        "relative path only: packages/foo",
+      ),
+    ).toBeUndefined();
   });
 });

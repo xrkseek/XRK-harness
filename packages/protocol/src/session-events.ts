@@ -99,11 +99,42 @@ export interface StepEndEvent extends SessionEventBase {
 
 /**
  * Durable producer of a `user/message` (DSH MessageSource subset).
- * `kind: "user"` (or omit) = human / promoted admit. Other kinds render as
- * Face「上下文注入」and stay model-visible via `deriveMessages`.
+ * `kind: "user"` (or omit) = human / promoted admit.
+ * `seat` / `handoff` = identity speech bubbles (group chat with 经理).
+ * Catalog / plugin / fragment kinds = Face「上下文注入」disclosure chrome.
+ * All stay model-visible via `deriveMessages`.
  */
 export type UserMessageSource =
   | { readonly kind: "user" }
+  | {
+      /**
+       * AI / peer seat speech admitted as a model-visible `user/message`.
+       * Not human UI composer — use {@link isHumanUserMessageSource} to tell.
+       * `channel: "parent"` = 委派方 (opener / subagent parent).
+       * `channel: "peer"` = 协作对端 (mutual).
+       */
+      readonly kind: "seat";
+      readonly form: "speech";
+      readonly channel: "parent" | "peer";
+      /** Real author session id (not a synthetic `:opener` / `:boss`). */
+      readonly fromSessionId: string;
+      readonly memberId?: string;
+      readonly label?: string;
+    }
+  | {
+      /**
+       * Async report-back / stop steered into a waiter session
+       * (subagent · peer-collab · thread-stop). Transcript paints as an
+       * identity speech bubble (`form` stays `"notice"` on the wire for
+       * model-facing notice bodies; UI classifies by `kind`).
+       */
+      readonly kind: "handoff";
+      readonly form: "notice";
+      readonly via: "subagent" | "peer-collab" | "thread-stop";
+      readonly fromSessionId: string;
+      readonly label?: string;
+      readonly memberId?: string;
+    }
   | {
       readonly kind: "skill-catalog";
       readonly form: "catalog";
@@ -232,6 +263,69 @@ export function isHumanUserMessageSource(
   source: UserMessageSource | undefined,
 ): boolean {
   return source === undefined || source.kind === "user";
+}
+
+/**
+ * True when this `user/message` settles a promoted admit (closes the
+ * promote→user/message crash window). Includes seat / handoff / plugin steers
+ * and auto-continue — not durable context injects (skill-catalog, …).
+ */
+export function isAdmitSpeechUserMessageSource(
+  source: UserMessageSource | undefined,
+): boolean {
+  if (source === undefined || source.kind === "user") return true;
+  if (source.kind === "seat" || source.kind === "handoff") return true;
+  if (source.kind === "auto-continue") return true;
+  if (source.kind === "plugin") return true;
+  return false;
+}
+
+/**
+ * Speech / handoff role for Overview + transcript chrome.
+ * - boss: UI composer (`kind: "user"`)
+ * - delegator: seat speech from opener / parent AI
+ * - peer: seat speech from a collab partner
+ * - handoff: async report-back notice (not live speech)
+ * - inject: every other durable producer
+ */
+export type MessageSpeechRole =
+  | "boss"
+  | "delegator"
+  | "peer"
+  | "handoff"
+  | "inject";
+
+export function messageSpeechRole(
+  source: UserMessageSource | undefined,
+): MessageSpeechRole {
+  if (source === undefined || source.kind === "user") return "boss";
+  if (source.kind === "seat") {
+    return source.channel === "peer" ? "peer" : "delegator";
+  }
+  if (source.kind === "handoff") return "handoff";
+  return "inject";
+}
+
+/** Author session id when source carries one (seat / handoff / plugin bags). */
+export function messageAuthorSessionId(
+  source: UserMessageSource | undefined,
+): string | undefined {
+  if (!source) return undefined;
+  if (source.kind === "seat" || source.kind === "handoff") {
+    const id = source.fromSessionId?.trim();
+    return id || undefined;
+  }
+  if (source.kind === "plugin") {
+    const peer = typeof source.peerSessionId === "string"
+      ? source.peerSessionId.trim()
+      : "";
+    if (peer) return peer;
+    const child = typeof source.childSessionId === "string"
+      ? source.childSessionId.trim()
+      : "";
+    if (child) return child;
+  }
+  return undefined;
 }
 
 export interface AssistantChunkEvent extends SessionEventBase {

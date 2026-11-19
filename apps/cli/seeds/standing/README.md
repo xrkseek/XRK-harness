@@ -2,7 +2,7 @@
 
 **Audience:** product employees (every seat). Write **handbook** behavior here — not inject architecture, fingerprint policy, or monorepo maintainer notes (those stay in repo-root `AGENTS.md` · `docs/workspace-inject.md` · skill `xrk-inject-layer`).
 
-`AGENTS.md` / `SOUL.md` are shared across **every** product surface (coding · 干员 · Xiangyang · IM). Keep that layer **common** — no badge-, workspace-, or tool-gated playbooks.
+`AGENTS.md` / `SOUL.md` are shared across **every** product surface (coding · 干员工作区 · Xiangyang · IM). Keep that layer **common** — no badge-, workspace-, or tool-gated playbooks. Product axis in AGENTS: **经理工作区** vs **干员工作区**; seat-specific who/report stays in Face `<seat_identity>` / posture.
 
 | File | Policy | Inject | Purpose |
 |------|--------|--------|---------|

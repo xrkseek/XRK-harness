@@ -27,7 +27,7 @@ Paths under product home. Prefer the listed tool; do not archaeology SQLite / ha
 | `recipes/*.yaml` | Slash `/id` | `/id` or matching skill |
 | `sessions/` | Session DB | `session_search` · `inspect` · `read` — **keep** DB |
 | `session-threads/` | 主线 pins | `thread_*` → `xrk-thread-pin` |
-| `agent-homes/` · `agent-rosters/` | 干员家 / roster | `team_*` / `subagent` → `xrk-delegate` |
+| `agent-homes/` · `agent-rosters/` | agent-kind homes / roster | `team_home` · `team_*` / `subagent` → `xrk-delegate`（member≠home） |
 | `canvases/<wsId>/` | Canvas docs | `canvas_*` → `xrk-canvas` |
 | `attachments/v1/` | Content-addressed | id + tools → `xrk-attachment` |
 | `spill/` · `tmp/` · `logs/` · `cache/` | Overflow / temp / rebuildable | Read tool-given paths; OK to clear when reclaiming |
@@ -38,7 +38,7 @@ Paths under product home. Prefer the listed tool; do not archaeology SQLite / ha
 | `plugins/` | Process plugins | `xrkh plugin` · `xrk-plugin` |
 | `cron/` | Cron jobs + runs | Settings → Plugins → Cron |
 | `memories/` | Curated memory | `memory` when bound — not cache |
-| `xiangyang-workspace/` | Xiangyang tree | Orch only; coding seats rarely need it |
+| `xiangyang-workspace/` | 向阳 manager-kind tree | Orch only; peer coding seats rarely need it |
 
 ## Reclaim
 

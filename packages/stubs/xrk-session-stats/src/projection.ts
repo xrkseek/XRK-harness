@@ -56,8 +56,19 @@ interface SessionStatsTotals {
 interface SessionStatsState extends SessionStatsTotals {
   /** Turn of the last counted `step/end`; null before the first. */
   lastTurn: number | null
-  /** The open step's boundary facts; null outside a step or after its message assembled. */
-  openStep: { turn: number; step: number; startTime: number; firstTokenTime: number | null } | null
+  /**
+   * The open step's boundary facts; null outside a step or after `step/end`.
+   * Kept until `step/end` (not cleared on `assistant/message`) so the live
+   * view does not dip between assemble and close.
+   */
+  openStep: {
+    turn: number
+    step: number
+    startTime: number
+    firstTokenTime: number | null
+    /** True once this step's `assistant/message` has accrued wall times. */
+    assembled: boolean
+  } | null
   /** Dispatch times of tool calls whose result has not landed, by callId. */
   pendingCalls: Record<string, number>
 }
@@ -108,23 +119,30 @@ export const sessionStatsProjectionDefinition: ProjectionDefinition<'sessionStat
       case 'step/start':
         return {
           ...state,
-          openStep: { turn: event.data.turn, step: event.data.step, startTime: event.time, firstTokenTime: null },
+          openStep: {
+            turn: event.data.turn,
+            step: event.data.step,
+            startTime: event.time,
+            firstTokenTime: null,
+            assembled: false,
+          },
         }
       case 'assistant/chunk': {
         const open = state.openStep
         if (open === null || open.turn !== event.data.turn || open.step !== event.data.step) return state
-        if (open.firstTokenTime !== null || !isTokenDelta(event.data.chunk)) return state
+        if (open.assembled || open.firstTokenTime !== null || !isTokenDelta(event.data.chunk)) return state
         return { ...state, openStep: { ...open, firstTokenTime: event.time } }
       }
       case 'assistant/message': {
         const open = state.openStep
         if (open === null || open.turn !== event.data.turn || open.step !== event.data.step) return state
-        // One assembled message per step: closing the boundary means a
-        // defensive duplicate cannot accrue twice.
+        // One assembled message per step — keep openStep until step/end so
+        // the live footer does not drop the in-flight count mid-finalize.
+        if (open.assembled) return state
         const next: SessionStatsState = {
           ...state,
           llmMs: state.llmMs + Math.max(0, event.time - open.startTime),
-          openStep: null,
+          openStep: { ...open, assembled: true },
         }
         if (open.firstTokenTime !== null) {
           next.ttftMs += Math.max(0, open.firstTokenTime - open.startTime)
@@ -170,15 +188,21 @@ export const sessionStatsProjectionDefinition: ProjectionDefinition<'sessionStat
         return state
     }
   },
-  view: state => ({
-    turns: state.turns,
-    steps: state.steps,
-    llmMs: state.llmMs,
-    toolMs: state.toolMs,
-    ttftMs: state.ttftMs,
-    ttftSteps: state.ttftSteps,
-    decodeMs: state.decodeMs,
-    decodeTokens: state.decodeTokens,
-  }),
+  view: (state) => {
+    // While a step is open, surface it in the composer gauge so the footer
+    // tracks the live turn (closed-only counts lagged one full step behind).
+    const liveStep = state.openStep !== null
+    const liveNewTurn = liveStep && state.openStep!.turn !== state.lastTurn
+    return {
+      turns: state.turns + (liveNewTurn ? 1 : 0),
+      steps: state.steps + (liveStep ? 1 : 0),
+      llmMs: state.llmMs,
+      toolMs: state.toolMs,
+      ttftMs: state.ttftMs,
+      ttftSteps: state.ttftSteps,
+      decodeMs: state.decodeMs,
+      decodeTokens: state.decodeTokens,
+    }
+  },
   stateVersion: 1,
 }

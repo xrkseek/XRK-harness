@@ -379,6 +379,16 @@ describe('ToolRow', () => {
     expect(view.container.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('stamps Voice×Lane chrome on settled and running tool rows', () => {
+    const settled = render(<ToolRow {...rowProps} toolName="bash" />)
+    const settledRoot = settled.container.querySelector('[data-voice="seat"][data-lane="act"]')
+    expect(settledRoot).not.toBeNull()
+    expect(settledRoot?.getAttribute('data-tool')).toBe('bash')
+    cleanup()
+    const running = render(<ToolRow {...rowProps} toolName="bash" state="running" />)
+    expect(running.container.querySelector('[data-voice="seat"][data-lane="act"][data-state="running"]')).not.toBeNull()
+  })
+
   it('row click expands: chevron leading, summary kept inline, body in the scrolling card', () => {
     const view = render(<ToolRow {...rowProps} />)
     fireEvent.click(view.getByRole('button'))
@@ -714,6 +724,32 @@ describe('GenericToolCard', () => {
     expect(view.getByText('工具调用')).toBeTruthy()
     expect(view.container.querySelector('[data-variant="others"]')).not.toBeNull()
     expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()
+  })
+
+  it('job_output uses an owned title and keeps job id in the summary only', () => {
+    expect(classifyTool('job_output')).toBe('others')
+    const view = render(
+      <GenericToolCard {...props('job_output', running({
+        name: 'job_output',
+        argsRaw: '{"job_id":"bash-1"}',
+      }))} />,
+    )
+    expect(view.getByText('任务输出')).toBeTruthy()
+    expect(view.getByText('bash-1')).toBeTruthy()
+    expect(view.queryByText(/job_output/)).toBeNull()
+    expect(view.container.querySelector('[data-tool="job_output"]')).not.toBeNull()
+  })
+
+  it('browser_open uses an owned title and keeps the url as summary', () => {
+    const view = render(
+      <GenericToolCard {...props('browser_open', running({
+        name: 'browser_open',
+        argsRaw: '{"url":"https://example.com"}',
+      }))} />,
+    )
+    expect(view.getByText('打开浏览器')).toBeTruthy()
+    expect(view.getByText('https://example.com')).toBeTruthy()
+    expect(view.queryByText(/browser_open/)).toBeNull()
   })
 
   it('renders edit with its dedicated title, icon variant, and path summary', () => {

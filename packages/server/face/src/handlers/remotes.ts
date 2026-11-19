@@ -20,6 +20,7 @@ import {
   lookupManagedPluginSourceAt,
   reconcileManagedClientBoot,
 } from "../plugin-inventory.js";
+import { ensureClientBootUrlRev } from "../plugin-boot.js";
 import { openNativePath } from "../host-open-path.js";
 import { buildFaceChannelDiscover, resolveImGatewayWired } from "../process-channels.js";
 import { publishRemoteEvent } from "../remote-event.js";
@@ -176,6 +177,20 @@ export const pluginInventoryList: FaceHandler = async (runtime) => ({
     agentPresets: listFaceAgentPresetGroups(runtime),
   },
 });
+
+/**
+ * Live user-overlay client boot rows for product soft remount (no full HMR).
+ * Empty when Host has no overlay or the getter is unwired.
+ * Normalizes legacy boot rows missing / stale `?rev=` so soft remount cache-busts.
+ */
+export const pluginInventoryClientBoot: FaceHandler = async (runtime) => {
+  const raw = runtime.clientBootOverlay?.() ?? { rev: "none", entries: [] };
+  const entries = raw.entries.map((e) => {
+    const rev = e.rev || "0";
+    return { ...e, rev, url: ensureClientBootUrlRev(e.url, rev) };
+  });
+  return { ok: true, value: { rev: raw.rev, entries } };
+};
 
 /**
  * Probe managed plugins for newer npm versions.

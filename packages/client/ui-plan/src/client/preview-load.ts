@@ -235,11 +235,39 @@ export interface SessionStatusView {
     readonly childSeat?: 'manager' | 'agent' | 'sunflower'
     readonly childMemberId?: string
     readonly parentMemberId?: string
-    /** N 委派方 (root → … → immediate); UI left stack → 1 child. */
+    /** N 委派方 (root → … → immediate); UI left stack → 1 child. Cap 4. */
     readonly parents?: readonly {
       readonly sessionId: string
       readonly label?: string
       readonly memberId?: string
+      readonly kind?: 'boss' | 'opener' | 'peer' | 'ancestor'
+      /** Live look of that source session (not a hardcoded seat skin). */
+      readonly look?: {
+        readonly shape: string
+        readonly color: string
+        readonly size?: number
+        readonly kit?: string
+        readonly kitHat?: string
+        readonly kitGlasses?: string
+        readonly kitHeld?: string
+        readonly overlayHat?: string
+        readonly overlayGlasses?: string
+        readonly overlayHeld?: string
+      }
+      /** Live presence of that source session (independent ball). */
+      readonly presence?: {
+        readonly emotionId: string
+        readonly tips?: string
+        readonly source: 'tool'
+        readonly updatedAt: number
+      }
+      /** Live delivery of that source session. */
+      readonly delivery?: {
+        readonly turnActive: boolean
+        readonly queued: number
+        readonly steering: number
+        readonly runningSubs: number
+      }
     }[]
   }
   readonly timeline: {
@@ -1019,10 +1047,95 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
           if (!sessionId) return []
           const label = str((row as { label?: unknown }).label)
           const memberId = str((row as { memberId?: unknown }).memberId)
+          const kindRaw = str((row as { kind?: unknown }).kind)
+          const kind =
+            kindRaw === 'boss'
+            || kindRaw === 'opener'
+            || kindRaw === 'peer'
+            || kindRaw === 'ancestor'
+              ? kindRaw
+              : undefined
+          const lookRaw = (row as { look?: unknown }).look
+          let look: {
+            readonly shape: string
+            readonly color: string
+            readonly size?: number
+            readonly kit?: string
+            readonly kitHat?: string
+            readonly kitGlasses?: string
+            readonly kitHeld?: string
+            readonly overlayHat?: string
+            readonly overlayGlasses?: string
+            readonly overlayHeld?: string
+          } | undefined
+          if (lookRaw && typeof lookRaw === 'object') {
+            const shape = str((lookRaw as { shape?: unknown }).shape)
+            const color = str((lookRaw as { color?: unknown }).color)
+            if (shape && color) {
+              const size = num((lookRaw as { size?: unknown }).size)
+              const kit = str((lookRaw as { kit?: unknown }).kit)
+              const kitHat = str((lookRaw as { kitHat?: unknown }).kitHat)
+              const kitGlasses = str((lookRaw as { kitGlasses?: unknown }).kitGlasses)
+              const kitHeld = str((lookRaw as { kitHeld?: unknown }).kitHeld)
+              const overlayHat = str((lookRaw as { overlayHat?: unknown }).overlayHat)
+              const overlayGlasses = str((lookRaw as { overlayGlasses?: unknown }).overlayGlasses)
+              const overlayHeld = str((lookRaw as { overlayHeld?: unknown }).overlayHeld)
+              look = {
+                shape,
+                color,
+                ...(size !== undefined ? { size } : {}),
+                ...(kit ? { kit } : {}),
+                ...(kitHat ? { kitHat } : {}),
+                ...(kitGlasses ? { kitGlasses } : {}),
+                ...(kitHeld ? { kitHeld } : {}),
+                ...(overlayHat ? { overlayHat } : {}),
+                ...(overlayGlasses ? { overlayGlasses } : {}),
+                ...(overlayHeld ? { overlayHeld } : {}),
+              }
+            }
+          }
+          const presenceRaw = (row as { presence?: unknown }).presence
+          let presence: {
+            readonly emotionId: string
+            readonly tips?: string
+            readonly source: 'tool'
+            readonly updatedAt: number
+          } | undefined
+          if (presenceRaw && typeof presenceRaw === 'object') {
+            const emotionId = str((presenceRaw as { emotionId?: unknown }).emotionId)
+            const updatedAt = num((presenceRaw as { updatedAt?: unknown }).updatedAt)
+            if (emotionId && updatedAt !== undefined) {
+              const tips = str((presenceRaw as { tips?: unknown }).tips)
+              presence = {
+                emotionId,
+                source: 'tool',
+                updatedAt,
+                ...(tips ? { tips } : {}),
+              }
+            }
+          }
+          const deliveryRaw = (row as { delivery?: unknown }).delivery
+          let delivery: {
+            readonly turnActive: boolean
+            readonly queued: number
+            readonly steering: number
+            readonly runningSubs: number
+          } | undefined
+          if (deliveryRaw && typeof deliveryRaw === 'object') {
+            const turnActive = (deliveryRaw as { turnActive?: unknown }).turnActive === true
+            const queued = num((deliveryRaw as { queued?: unknown }).queued) ?? 0
+            const steering = num((deliveryRaw as { steering?: unknown }).steering) ?? 0
+            const runningSubs = num((deliveryRaw as { runningSubs?: unknown }).runningSubs) ?? 0
+            delivery = { turnActive, queued, steering, runningSubs }
+          }
           return [{
             sessionId,
             ...(label ? { label } : {}),
             ...(memberId ? { memberId } : {}),
+            ...(kind ? { kind } : {}),
+            ...(look ? { look } : {}),
+            ...(presence ? { presence } : {}),
+            ...(delivery ? { delivery } : {}),
           }]
         })
       : undefined

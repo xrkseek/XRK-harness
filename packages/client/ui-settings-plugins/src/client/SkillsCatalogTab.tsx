@@ -177,6 +177,7 @@ function documentTitle(
   if (doc.path === 'session://boss-status') return t('skillsBossStatusPathLabel')
   if (doc.path === 'session://seat-identity') return t('skillsSeatIdentityPathLabel')
   if (doc.path === 'session://collab-board') return t('skillsCollabPathLabel')
+  if (doc.path === 'session://lanes') return t('skillsLanesPathLabel')
   if (doc.path === 'session://memory') return t('skillsMemoryPathLabel')
   return doc.path
 }
@@ -200,6 +201,23 @@ function documentKindLabel(
 function matchesDocument(doc: InjectDocumentEntry, query: string): boolean {
   if (!query) return true
   return doc.path.toLowerCase().includes(query.toLowerCase())
+}
+
+/** Host turn-start priority (high → low) — keep Inject catalog in the same order. */
+const SESSION_DOC_ORDER: readonly string[] = [
+  'session://instruction-authority',
+  'session://capability',
+  'session://posture',
+  'session://lanes',
+  'session://boss-status',
+  'session://seat-identity',
+  'session://collab-board',
+  'session://memory',
+]
+
+function sessionDocRank(path: string): number {
+  const i = SESSION_DOC_ORDER.indexOf(path)
+  return i < 0 ? SESSION_DOC_ORDER.length : i
 }
 
 function groupSkills(
@@ -320,7 +338,9 @@ function SkillsCatalogSession({
         setRefreshing(false)
         if (paintSkillsCatalog(sessionId) !== undefined) return
         const message = error instanceof Error ? error.message : undefined
-        setState({ status: 'error', message })
+        setState(message
+          ? { status: 'error', message }
+          : { status: 'error' })
       },
     )
     return () => {
@@ -378,7 +398,16 @@ function SkillsCatalogSession({
   const documents = useMemo(() => {
     if (state.status !== 'ready') return []
     if (filter !== 'all' && filter !== 'documents') return []
-    return state.value.documents.filter((doc) => matchesDocument(doc, query.trim()))
+    return state.value.documents
+      .filter((doc) => matchesDocument(doc, query.trim()))
+      .toSorted((a, b) => {
+        if (a.layer === 'session' && b.layer === 'session') {
+          return sessionDocRank(a.path) - sessionDocRank(b.path)
+        }
+        if (a.layer === 'session') return -1
+        if (b.layer === 'session') return 1
+        return a.path.localeCompare(b.path)
+      })
   }, [state, filter, query])
 
   const counts = useMemo(() => {
@@ -680,7 +709,12 @@ function DocumentRow({
 }): ReactNode {
   const layerLabel = documentOriginLabel(doc, t)
   return (
-    <li className={css.row}>
+    <li
+      className={css.row}
+      data-kind={doc.kind}
+      data-layer={doc.layer}
+      data-open={open ? 'true' : undefined}
+    >
       <button
         type="button"
         className={css.rowButton}
@@ -688,13 +722,20 @@ function DocumentRow({
         onClick={onOpen}
       >
         <div className={css.rowHead}>
-          <p className={css.name}>{documentTitle(doc, t)}</p>
+          <p className={css.name} data-kind="document">{documentTitle(doc, t)}</p>
           <span className={css.badge}>{documentKindLabel(doc, t)}</span>
           <span className={css.badgeMuted}>{layerLabel}</span>
         </div>
         <p className={css.desc}>
-          {doc.path === 'skills://catalog' ? null : `${doc.path} · `}
-          {t('skillsDocumentBytes', { bytes: String(doc.bytes) })}
+          {doc.path === 'skills://catalog'
+            ? t('skillsDocumentBytes', { bytes: String(doc.bytes) })
+            : (
+              <>
+                <span className={css.docPath}>{doc.path}</span>
+                {' · '}
+                {t('skillsDocumentBytes', { bytes: String(doc.bytes) })}
+              </>
+            )}
         </p>
       </button>
       {open ? <BodyPanel body={body} t={t} /> : null}

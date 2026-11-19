@@ -67,6 +67,11 @@
 }
 
 .centerCol {
+  /* Above shell.overlay (z 20): community pets (大肥鱼) float in overlay and
+     otherwise steal Send / Cancel-edit hits on the sticky composer. Below
+     phone drawers/sheets (28+) so those still cover chat when open. */
+  position: relative;
+  z-index: 21;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -80,8 +85,6 @@
    paint a full-bleed base fill (details uses inset:0 while closed). Absolute
    overlays are out of flow — pin the center to the sole 1fr track. */
 .frame[data-phone] .centerCol {
-  position: relative;
-  z-index: 1;
   grid-column: 1;
 }
 
@@ -162,6 +165,8 @@
   border-color: var(--dsw-alias-border-l3);
 }
 
+/* Floats above columns except centerCol (z 21): pets stay visible in the
+   side margins / details gap without covering the composer dock. */
 .overlayLayer {
   position: absolute;
   inset: 0;

@@ -94,9 +94,8 @@ export function orderSkillsForCatalogBudget(
  * so editing one left the other telling readers a different place to look.
  */
 const SKILL_CATALOG_CLIPPED_SUFFIX =
-  "\n[skill catalog truncated] Prefer `skill` by exact name. "
-  + "Else shell-list Product home `skills/*/SKILL.md` + workspace `.agents/skills/` "
-  + "(公文包 / xrk-* / workspace kept first).";
+  "\n[skill catalog truncated] Prefer `skill` by exact name; else shell-list "
+  + "`skills/*/SKILL.md` + `.agents/skills/` (公文包 / workspace kept first).";
 
 export function formatAvailableSkillsXml(
   skills: readonly SkillSummary[],
@@ -110,7 +109,7 @@ export function formatAvailableSkillsXml(
     "<available_skills>",
     ...lines,
     "</available_skills>",
-    "Progressive skills: catalog = name+blurb; call `skill` with the exact name for the body (no skill_search — tool_search is for deferred tools). Head prefers 公文包 (when present), then this workspace's own skills; product seeds and globals may be truncated — then shell-list Product home `skills/*/SKILL.md` / workspace `.agents/skills/`.",
+    "Catalog = name+blurb; `skill` loads body (no skill_search). Head: 公文包 → workspace → product/globals.",
     "</system-reminder>",
   ].join("\n");
 }

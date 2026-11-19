@@ -11,6 +11,7 @@ import {
 } from "./agent-roster-store.js";
 import {
   catalogSeedDisplayLabel,
+  sunflowerFormalName,
 } from "./catalog-seed-labels.js";
 import {
   readSeatTitles,
@@ -18,6 +19,7 @@ import {
   type SeatTitleLocale,
   type SeatTitles,
 } from "./seat-titles.js";
+import { readSessionOpener } from "./session-opener.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 
 const BOSS_NICKNAME_MAX = 24;
@@ -199,16 +201,19 @@ export function formatSeatIdentity(
       titles,
       locale,
     );
-    const parent = parentSeat.label;
     const humanFace = runtime.subagents.humanFacingSessionId(sessionId);
-    // Channel markers use live Settings titles (titleBoss/Manager/Agent or scheme),
-    // never hardcoded 老板/经理. UI → [titles.boss…]; parent tool → [report seat].
-    // Ask channel lives in <session_capability> — do not restate here.
+    // manager/xiangyang spawn → parent project cwd, not agent-home.
+    // identity spawn → under that member's agent workspace.
+    const lane =
+      parentSeat.surface === "identity"
+        ? `lane: ${titles.agent}工作区 spawn`
+        : parentSeat.surface === "nested"
+          ? `lane: nested under ${parentSeat.label}`
+          : `lane: ${titles.manager}工作区 spawn · not ${titles.agent}工作区`;
     return [
       `you: ${you} (subagent · parent_surface=${parentSeat.surface})`,
-      `report: ${parent}`,
-      `human_face: ${boss} (${humanFace})`,
-      `channels: UI→[${boss}] …; parent_tool→[${parent}] …`,
+      `report: ${parentSeat.label}（委派方） · ui: ${boss} (${humanFace})`,
+      lane,
       titlesLine,
     ].join("\n");
   }
@@ -221,12 +226,23 @@ export function formatSeatIdentity(
       titles,
       locale,
     ).label;
+    const opener = readSessionOpener(runtime, sessionId);
+    if (opener) {
+      const openerSeat = resolveMemberSeat(
+        runtime,
+        opener.memberId,
+        titles,
+        locale,
+      );
+      return [
+        `you: ${you} (${titles.agent}工作区)`,
+        `opener: ${openerSeat.label} (${opener.sourceSessionId}) · ui: ${boss}（直接对话）`,
+        titlesLine,
+      ].join("\n");
+    }
     return [
-      `you: ${you} (agent-home)`,
-      `speaker: ${boss}`,
-      // Same-lane only: agent-home ↔ agent-home.
-      `collab: thread_message agent-home↔agent-home only`,
-      `report: ${titles.boss}`,
+      `you: ${you} (${titles.agent}工作区)`,
+      `ui: ${boss}（直接对话）`,
       titlesLine,
     ].join("\n");
   }
@@ -239,22 +255,31 @@ export function formatSeatIdentity(
       titles,
       locale,
     ).label;
-    // Peer domains: 向日葵 ↔ project manager — same tier, never each other's boss.
     return [
-      `you: ${you} (xiangyang · mid-tier · 向阳空间)`,
-      `speaker: ${boss}`,
-      `report: ${boss} only (not ${titles.manager})`,
-      `peer: project ${titles.manager} = peer (not boss)`,
-      "nickname: locked",
+      `you: ${you} (${titles.manager}工作区 · 向阳)`,
+      `ui: ${boss} · peer: 其它${titles.manager}工作区 · nickname: locked`,
       titlesLine,
     ].join("\n");
   }
 
+  const opener = readSessionOpener(runtime, sessionId);
+  if (opener) {
+    const openerSeat = resolveMemberSeat(
+      runtime,
+      opener.memberId,
+      titles,
+      locale,
+    );
+    return [
+      `you: ${managerSeat(runtime, titles, locale)} (${titles.manager}工作区)`,
+      `opener: ${openerSeat.label} (${opener.sourceSessionId}) · ui: ${boss}`,
+      `peer: 其它${titles.manager}（含${sunflowerFormalName(locale)}）`,
+      titlesLine,
+    ].join("\n");
+  }
   return [
-    `you: ${managerSeat(runtime, titles, locale)} (project · mid-tier)`,
-    `speaker: ${boss}`,
-    `report: ${boss} only`,
-    `peer: 向日葵@向阳 = peer (not boss)`,
+    `you: ${managerSeat(runtime, titles, locale)} (${titles.manager}工作区)`,
+    `ui: ${boss} · peer: 其它${titles.manager}（含${sunflowerFormalName(locale)}）`,
     titlesLine,
   ].join("\n");
 }

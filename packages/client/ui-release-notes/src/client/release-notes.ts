@@ -54,8 +54,8 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
       en: 'Special thanks to 何润景, 文具盒, 刘雅婷, 炫彩马桶, 乔晨欣, 张利民, 徐航, 王乐, 焦雅, 贺吉诚, 寇瑞哲, and 周易恒.',
     },
     {
-      zh: '11.1 祝续航生日快乐！',
-      en: 'Nov 1 — happy birthday, 续航!',
+      zh: '11.17 祝乔晨欣生日快乐！',
+      en: 'Nov 17 — happy birthday, 乔晨欣!',
     },
   ],
 }
@@ -68,6 +68,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  * sees no dot.
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  {
+    version: '0.8.0',
+    date: '2026-11-19',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '0.8.x 正式线首发，接管 @latest（并入 rc.1/rc.2）：协作/子代理回传一条纪律、干员家 self、每回合主线/支线、Voice×Lane（含工具行）。',
+        en: 'Opens 0.8.x @latest (folds rc.1/rc.2): one collab/subagent report-back, agent-home self-edit, live 主线/支线, Voice×Lane including tool rows.',
+      },
+      {
+        zh: '策展记忆 live 刷新 + Inject 区划普查 + 概况巩固卡；CJK 软预算；创建者/委派方 TTS 与工具门禁。',
+        en: 'Curated-memory live refresh + Inject zone census + Overview consolidate; CJK soft-budget; creator/delegator TTS and tool gates.',
+      },
+      {
+        zh: 'Settings soft remount/unload；远程=本机 xrk-phone；Desktop 更新按时区选镜像；手机/Web 半开 WS 不再卡「思考中」。',
+        en: 'Settings soft remount/unload; shared xrk-phone; Desktop timezone mirror ladder; Mobile/Web half-open WS no longer sticks on thinking.',
+      },
+      {
+        zh: '原生 client 插件教科书与金样；向阳技能减负；概况球并联热切；编辑重发可增删媒体；席位 chip 跟 Settings。完整清单见 docs/releases/v0.8.0.md。',
+        en: 'Native client-plugin textbook + gold samples; thinned Xiangyang skills; Overview parallel/hot balls; edit-resend media add/remove; seat chips follow Settings. Full list: docs/releases/v0.8.0.md.',
+      },
+    ],
+  },
   {
     version: '0.8.0-rc.2',
     date: '2026-11-16',

@@ -7,6 +7,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { HostDescriptionSource } from '@xrkseek/client-connection/client'
+import { allowNativeWorkspaceOpen } from '@xrkseek/client-runtime/client'
 import { Menu } from '@xrkseek/client-ui-primitives'
 import type { InjectFace, PropsLocale } from '@xrkseek/client-ui-slots'
 import type { TurnTailOwnerProps } from '@xrkseek/client-ui-conversation/client'
@@ -157,7 +158,7 @@ export function ProducedFiles({
   showInFolder,
 }: ProducedFilesProps) {
   const hostCanOpenPath = useHostDescription(description => description?.canOpenPath === true)
-  const canOpenPath = isLoopback && hostCanOpenPath
+  const canOpenPath = allowNativeWorkspaceOpen(isLoopback, hostCanOpenPath)
   const limit = Math.min(paths.length, SHOWN_LIMIT)
   const [shownCount, setShownCount] = useState(limit)
   const rowRef = useRef<HTMLDivElement>(null)

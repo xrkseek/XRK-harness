@@ -339,6 +339,26 @@ export function routeServed(runtime: FaceRuntime, provider: string): boolean {
   return providerRouteServed(runtime, provider);
 }
 
+/**
+ * Whether the composer can send on this pin: provider credentials + (when the
+ * catalog lists models) the pinned model id still exists. A deleted catalog
+ * row must flip `session.models.routable` false so the UI blocks send until
+ * the user picks a live route — provider-only checks left dead pins "green".
+ */
+export function selectionRoutable(
+  runtime: FaceRuntime,
+  selection: FaceModelSelection | null | undefined,
+): boolean {
+  if (!selection) return false;
+  const provider = selection.provider.trim();
+  const model = selection.model.trim();
+  if (!provider || !model) return false;
+  if (!routeServed(runtime, provider)) return false;
+  const known = lookupProviderModelIds(runtime, provider);
+  if (known.length === 0) return true;
+  return known.includes(model);
+}
+
 /** Provider-grouped catalog for composer + `llm.models` (no `"default"` placeholders). */
 export function buildFaceModelCatalog(
   runtime: FaceRuntime,

@@ -65,6 +65,7 @@ import {
   statusSnapshotRevision,
   writeStatusSnapshotCache,
 } from "./status-snapshot-cache.js";
+import { readSessionOpener } from "./session-opener.js";
 
 export interface SessionStatusJobRow {
   readonly id: string;
@@ -453,13 +454,42 @@ export interface SessionStatusSnapshot {
     /** Roster id of the 委派方 when it is a Team seat (optional). */
     readonly parentMemberId?: string;
     /**
-     * N 委派方 (root → … → immediate parent). UI paints left stack → 1 child.
-     * First entry is the furthest ancestor; last is `parentSessionId`.
+     * N 委派方 (root → … → immediate). UI paints left stack → 1 child.
+     * Order: optional `:boss`, collab peers, opener / subagent ancestors;
+     * last entry is `parentSessionId` (lead). Cap 4. AI layers may carry `look`.
+     * Same roster seat from different sessions is keyed by real `sessionId`.
      */
     readonly parents?: readonly {
       readonly sessionId: string;
       readonly label?: string;
       readonly memberId?: string;
+      /** Live look of that session (roster / spawn) — not a hardcoded seat skin. */
+      readonly look?: NonNullable<SessionStatusSnapshot["companionBall"]>;
+      /**
+       * Why this layer is on the left stack.
+       * - boss: UI composer (human)
+       * - opener: inheritFrom / orch create source session
+       * - peer: session collab (mutual)
+       * - ancestor: subagent walk mid-chain
+       */
+      readonly kind?: "boss" | "opener" | "peer" | "ancestor";
+      /**
+       * Live presence of the source session (same emotion/tips as that
+       * session's own Overview ball). Omitted for `:boss`.
+       */
+      readonly presence?: {
+        readonly emotionId: string;
+        readonly tips?: string;
+        readonly source: "tool";
+        readonly updatedAt: number;
+      };
+      /** Live delivery of the source session (turn / queue / steer / subs). */
+      readonly delivery?: {
+        readonly turnActive: boolean;
+        readonly queued: number;
+        readonly steering: number;
+        readonly runningSubs: number;
+      };
     }[];
   };
   readonly timeline: SessionStatusTimeline;
@@ -1031,6 +1061,331 @@ function childSeatForMemberId(
   return "agent";
 }
 
+type PresenceLookWire = NonNullable<
+  SessionStatusSnapshot["companionBall"]
+>;
+
+type DelegateParentPaint = NonNullable<
+  NonNullable<SessionStatusSnapshot["delegate"]>["parents"]
+>[number];
+
+/** Short token so two 经理 seats from different sessions stay distinguishable. */
+function shortSessionToken(sessionId: string): string {
+  const id = sessionId.trim();
+  if (id.length <= 8) return id;
+  return id.slice(-8);
+}
+
+function withSessionGlance(label: string, sessionId: string): string {
+  const short = shortSessionToken(sessionId);
+  if (!label.trim()) return short;
+  if (label.includes(short)) return label;
+  return `${label} · ${short}`;
+}
+
+/**
+ * Collab peers for Overview left stack. Skip auto-mesh `sibling` — teammate
+ * links, not mutual 委派方. `collab` (and other explicit labels) stay.
+ */
+function listCollabPeerSessionIds(
+  runtime: FaceRuntime,
+  sessionId: string,
+): string[] {
+  const hops = runtime.agentTeams.neighbors(sessionId, "peer");
+  const out: string[] = [];
+  for (const hop of hops) {
+    if (hop.label === "sibling") continue;
+    if (!runtime.store.has(hop.id)) continue;
+    out.push(hop.id);
+  }
+  return out;
+}
+
+/**
+ * Look for a real session ball: prefer that session's own spawn/identity
+ * appearance, else its office seat roster — never a fixed 经理 skin.
+ */
+function lookForSourceSession(
+  runtime: FaceRuntime,
+  sourceSessionId: string,
+  dressingStickers: ReturnType<typeof dressingFromPresence>["stickers"],
+  seatTitles: SeatTitles,
+  uiLocale: SeatTitleLocale,
+): {
+  readonly look?: PresenceLookWire;
+  readonly memberId?: string;
+  readonly label: string;
+} {
+  const asChild = runtime.subagents.getByChild(sourceSessionId);
+  if (asChild && asChild.mode !== "fork") {
+    const look = companionBallForMember(runtime, asChild, dressingStickers);
+    const seat = resolveChildParentSeat(
+      runtime,
+      sourceSessionId,
+      seatTitles,
+      uiLocale,
+    );
+    const label =
+      asChild.label?.trim() || seat.label?.trim() || seatTitles.agent;
+    return {
+      ...(look ? { look } : {}),
+      ...(seat.memberId
+        ? { memberId: seat.memberId }
+        : asChild.memberId
+          ? { memberId: asChild.memberId }
+          : {}),
+      label,
+    };
+  }
+  const identity = runtime.sessionIdentities.get(sourceSessionId);
+  if (identity?.memberId) {
+    const look = companionBallForMember(
+      runtime,
+      { memberId: identity.memberId },
+      dressingStickers,
+    );
+    const seat = resolveChildParentSeat(
+      runtime,
+      sourceSessionId,
+      seatTitles,
+      uiLocale,
+    );
+    return {
+      ...(look ? { look } : {}),
+      memberId: identity.memberId,
+      label: seat.label?.trim() || seatTitles.agent,
+    };
+  }
+  const seat = resolveChildParentSeat(
+    runtime,
+    sourceSessionId,
+    seatTitles,
+    uiLocale,
+  );
+  const look = seat.memberId
+    ? companionBallForMember(
+        runtime,
+        { memberId: seat.memberId },
+        dressingStickers,
+      )
+    : undefined;
+  return {
+    ...(look ? { look } : {}),
+    ...(seat.memberId ? { memberId: seat.memberId } : {}),
+    label: seat.label?.trim() || seatTitles.manager,
+  };
+}
+
+function paintSessionAsDelegateParent(
+  runtime: FaceRuntime,
+  peerSessionId: string,
+  dressingStickers: ReturnType<typeof dressingFromPresence>["stickers"],
+  seatTitles: SeatTitles,
+  uiLocale: SeatTitleLocale,
+  kind: "opener" | "peer" | "ancestor",
+): DelegateParentPaint {
+  const painted = lookForSourceSession(
+    runtime,
+    peerSessionId,
+    dressingStickers,
+    seatTitles,
+    uiLocale,
+  );
+  return {
+    sessionId: peerSessionId,
+    label: withSessionGlance(painted.label, peerSessionId),
+    ...(painted.memberId ? { memberId: painted.memberId } : {}),
+    ...(painted.look ? { look: painted.look } : {}),
+    kind,
+  };
+}
+
+function pushUniqueParent(
+  parents: DelegateParentPaint[],
+  row: DelegateParentPaint,
+): void {
+  if (parents.some((p) => p.sessionId === row.sessionId)) return;
+  parents.push(row);
+}
+
+/** Cap at 4: keep optional `:boss` + lead; drop oldest AI ancestors. */
+function capDelegateParents(
+  parents: DelegateParentPaint[],
+): DelegateParentPaint[] {
+  const next = [...parents];
+  while (next.length > 4) {
+    const drop = next[0]?.sessionId.endsWith(":boss") ? 1 : 0;
+    if (drop === 1 && next.length <= 2) break;
+    next.splice(drop, 1);
+  }
+  return next;
+}
+
+/**
+ * Office / identity Overview pair.
+ * - UI composer → 老板 (Settings mood); stacks ahead when human spoke on an
+ *   opener- or peer-led seat.
+ * - Opened by 经理·向日葵·干员 (distinct seat) → source session is 委派方
+ *   (keyed by real source session id).
+ * - Session collab peers → mutual 委派方 (each paints the other).
+ */
+function paintOfficeDelegatePair(args: {
+  readonly runtime: FaceRuntime;
+  readonly sessionId: string;
+  readonly identity: { readonly memberId: string } | undefined;
+  readonly workspaceId: string | undefined;
+  readonly dressingStickers: ReturnType<typeof dressingFromPresence>["stickers"];
+  readonly bossBall: PresenceLookWire;
+  readonly managerBall: PresenceLookWire | undefined;
+  readonly sunflowerBall: PresenceLookWire | undefined;
+  readonly managerMember: RosterMemberRow | undefined;
+  readonly uiLocale: SeatTitleLocale;
+  readonly seatTitles: SeatTitles;
+}): {
+  companionBall: PresenceLookWire | undefined;
+  parentCompanionBall: PresenceLookWire | undefined;
+  delegate: NonNullable<SessionStatusSnapshot["delegate"]>;
+} {
+  const {
+    runtime,
+    sessionId,
+    identity,
+    workspaceId,
+    dressingStickers,
+    bossBall,
+    managerBall,
+    sunflowerBall,
+    managerMember,
+    uiLocale,
+    seatTitles,
+  } = args;
+
+  let companionBall: PresenceLookWire | undefined;
+  let childMemberId: string;
+  let childSeat: "manager" | "agent" | "sunflower";
+  let childLabel: string;
+
+  if (identity) {
+    const identityMember = rosterMemberById(runtime, identity.memberId);
+    companionBall = companionBallForMember(
+      runtime,
+      { memberId: identity.memberId },
+      dressingStickers,
+    );
+    childMemberId = identity.memberId;
+    childSeat = childSeatForMemberId(identity.memberId);
+    childLabel = paintRosterMemberLabel(
+      identity.memberId,
+      identityMember,
+      uiLocale,
+      seatTitles,
+      identity.memberId,
+    );
+  } else if (workspaceId === XIANGYANG_WORKSPACE_ID) {
+    companionBall = sunflowerBall;
+    childMemberId = SUNFLOWER_MEMBER_ID;
+    childSeat = "manager";
+    childLabel = sunflowerDisplayLabel(uiLocale);
+  } else {
+    companionBall = managerBall;
+    childMemberId = MANAGER_MEMBER_ID;
+    childSeat = "manager";
+    childLabel = paintRosterMemberLabel(
+      MANAGER_MEMBER_ID,
+      managerMember,
+      uiLocale,
+      seatTitles,
+      seatTitles.manager,
+    );
+  }
+
+  const opener = readSessionOpener(runtime, sessionId);
+  const openerSourceId = opener?.sourceSessionId ?? "";
+  const humanSpoke = runtime.sessionHumanSpoke.has(sessionId);
+
+  const parents: DelegateParentPaint[] = [];
+  for (const peerId of listCollabPeerSessionIds(runtime, sessionId)) {
+    if (openerSourceId && peerId === openerSourceId) continue;
+    pushUniqueParent(
+      parents,
+      paintSessionAsDelegateParent(
+        runtime,
+        peerId,
+        dressingStickers,
+        seatTitles,
+        uiLocale,
+        "peer",
+      ),
+    );
+  }
+
+  // Opener owns lead when a distinct source session dispatched this seat.
+  // Same roster member is fine (经理 A → 经理 B): `sourceSessionId` keeps the
+  // two sessions distinguishable — do not drop opener just because memberId
+  // matches the child seat (that used to leave only 老板 on B).
+  if (openerSourceId && openerSourceId !== sessionId) {
+    pushUniqueParent(
+      parents,
+      paintSessionAsDelegateParent(
+        runtime,
+        openerSourceId,
+        dressingStickers,
+        seatTitles,
+        uiLocale,
+        "opener",
+      ),
+    );
+  }
+
+  if (humanSpoke && parents.length > 0) {
+    parents.unshift({
+      sessionId: `${sessionId}:boss`,
+      label: seatTitles.boss,
+      kind: "boss",
+    });
+  }
+
+  const capped = capDelegateParents(parents);
+  const lead = capped.length > 0 ? capped[capped.length - 1] : undefined;
+
+  if (lead && lead.kind !== "boss") {
+    const leadLook =
+      lead.look
+      ?? (lead.memberId
+        ? companionBallForMember(
+            runtime,
+            { memberId: lead.memberId },
+            dressingStickers,
+          )
+        : undefined);
+    return {
+      companionBall,
+      parentCompanionBall: leadLook ?? bossBall,
+      delegate: {
+        parentSessionId: lead.sessionId,
+        childLabel,
+        childSeat,
+        childMemberId,
+        ...(lead.label ? { parentLabel: lead.label } : {}),
+        ...(lead.memberId ? { parentMemberId: lead.memberId } : {}),
+        parents: capped,
+      },
+    };
+  }
+
+  // Default / human-joined seat: 老板 is 委派方 (Settings mood).
+  return {
+    companionBall,
+    parentCompanionBall: bossBall,
+    delegate: {
+      parentSessionId: sessionId,
+      childLabel,
+      childSeat,
+      childMemberId,
+    },
+  };
+}
+
 /** Catalog seed → locale formal（nick）; else live roster formal（nick）. */
 function paintRosterMemberLabel(
   memberId: string,
@@ -1572,14 +1927,27 @@ export function buildSessionStatusSnapshotUncached(
       uiLocale,
       seatTitles,
     );
-    const parents: Array<{
-      sessionId: string;
-      label?: string;
-      memberId?: string;
-    }> = [];
+    const parents: DelegateParentPaint[] = [];
+    // Collab peers first (behind lead); subagent walk ends with immediate parent.
+    for (const peerId of listCollabPeerSessionIds(runtime, sessionId)) {
+      if (peerId === childLink.parentSessionId) continue;
+      pushUniqueParent(
+        parents,
+        paintSessionAsDelegateParent(
+          runtime,
+          peerId,
+          dressing.stickers,
+          seatTitles,
+          uiLocale,
+          "peer",
+        ),
+      );
+    }
     let walkId: string | undefined = childLink.parentSessionId;
     const seenParents = new Set<string>();
-    while (walkId && !seenParents.has(walkId) && parents.length < 4) {
+    const walkRows: DelegateParentPaint[] = [];
+    // Leave room for optional `:boss` so the stack never exceeds 4.
+    while (walkId && !seenParents.has(walkId) && walkRows.length < 3) {
       seenParents.add(walkId);
       const asChild = runtime.subagents.getByChild(walkId);
       const walkSeat = resolveChildParentSeat(
@@ -1588,133 +1956,162 @@ export function buildSessionStatusSnapshotUncached(
         seatTitles,
         uiLocale,
       );
-      const label =
+      const rawLabel =
         walkId === childLink.parentSessionId
           ? parentLabel
           : asChild?.label?.trim() || walkSeat.label;
-      parents.unshift({
+      const look = asChild
+        ? companionBallForMember(runtime, asChild, dressing.stickers)
+        : walkSeat.memberId
+          ? companionBallForMember(
+              runtime,
+              { memberId: walkSeat.memberId },
+              dressing.stickers,
+            )
+          : undefined;
+      walkRows.unshift({
         sessionId: walkId,
-        ...(label ? { label } : {}),
+        ...(rawLabel
+          ? { label: withSessionGlance(rawLabel, walkId) }
+          : {}),
         ...(walkSeat.memberId ? { memberId: walkSeat.memberId } : {}),
+        ...(look ? { look } : {}),
+        // Immediate parent is the lead 委派方; higher links are ancestors.
+        kind:
+          walkId === childLink.parentSessionId ? "opener" : "ancestor",
       });
       walkId = asChild?.parentSessionId;
     }
+    for (const row of walkRows) pushUniqueParent(parents, row);
+    // Boss typed into this child → stack 老板 ahead of the AI 委派方 chain.
+    if (runtime.sessionHumanSpoke.has(sessionId)) {
+      const alreadyBoss = parents[0]?.kind === "boss"
+        || parents[0]?.sessionId.endsWith(":boss");
+      if (!alreadyBoss) {
+        parents.unshift({
+          sessionId: `${sessionId}:boss`,
+          label: seatTitles.boss,
+          kind: "boss",
+        });
+      }
+    }
+    const cappedParents = capDelegateParents(parents);
+    const leadParent =
+      cappedParents.find((p) => p.sessionId === childLink.parentSessionId)
+      ?? cappedParents[cappedParents.length - 1];
     delegate = {
       parentSessionId: childLink.parentSessionId,
       childLabel: childPaint.childLabel,
       childSeat: childPaint.childSeat,
-      parentLabel,
-      parents,
+      parentLabel: leadParent?.label ?? parentLabel,
+      parents: cappedParents,
       ...(childPaint.childMemberId
         ? { childMemberId: childPaint.childMemberId }
         : {}),
       ...(parentSeat.memberId ? { parentMemberId: parentSeat.memberId } : {}),
     };
-  } else if (identity) {
-    companionBall = companionBallForMember(
-      runtime,
-      { memberId: identity.memberId },
-      dressing.stickers,
-    );
-    parentCompanionBall = bossBall;
-    const identityMember = rosterMemberById(runtime, identity.memberId);
-    delegate = {
-      parentSessionId: sessionId,
-      childLabel: paintRosterMemberLabel(
-        identity.memberId,
-        identityMember,
-        uiLocale,
-        seatTitles,
-        identity.memberId,
-      ),
-      childSeat: childSeatForMemberId(identity.memberId),
-      childMemberId: identity.memberId,
-    };
-  } else if (workspaceId === XIANGYANG_WORKSPACE_ID) {
-    companionBall = sunflowerBall;
-    parentCompanionBall = bossBall;
-    // 经理 · 向日葵（xrkseek） — mid-tier seat, not a bare name-only ball.
-    delegate = {
-      parentSessionId: sessionId,
-      childLabel: sunflowerDisplayLabel(uiLocale),
-      childSeat: "manager",
-      childMemberId: SUNFLOWER_MEMBER_ID,
-    };
   } else {
-    companionBall = managerBall;
-    parentCompanionBall = bossBall;
-    // Boss seat = human operator mood from Settings `ui-presence` (not AI presence_set).
-    // Omit parentLabel — UI role already shows titles.boss; echoing made「老板 · 老板」.
-    // childLabel = `经理` or `经理（老王）` — UI detects role prefix and keeps as-is.
-    delegate = {
-      parentSessionId: sessionId,
-      childLabel: paintRosterMemberLabel(
-        MANAGER_MEMBER_ID,
-        managerMember,
-        uiLocale,
-        seatTitles,
-        seatTitles.manager,
-      ),
-      childSeat: "manager",
-      childMemberId: MANAGER_MEMBER_ID,
-    };
+    // Office / identity home: opener (经理·向日葵·干员) may own the left seat;
+    // default left is 老板. When the human later speaks, stack 老板 + opener.
+    const officePaint = paintOfficeDelegatePair({
+      runtime,
+      sessionId,
+      identity,
+      workspaceId,
+      dressingStickers: dressing.stickers,
+      bossBall,
+      managerBall,
+      sunflowerBall,
+      managerMember,
+      uiLocale,
+      seatTitles,
+    });
+    companionBall = officePaint.companionBall;
+    parentCompanionBall = officePaint.parentCompanionBall;
+    delegate = officePaint.delegate;
   }
+  // Lead 委派方 = real source session when present (opener / peer / parent).
+  // Never invent a synthetic id — balls are individuals keyed by sessionId.
+  const leadParentId = (() => {
+    const id = delegate?.parentSessionId?.trim() || "";
+    if (!id || id === sessionId) return undefined;
+    if (id.endsWith(":boss")) return undefined;
+    return id;
+  })();
   const homeId =
-    childLink?.parentSessionId ??
-    team.edges.find((e) => e.kind === "delegates" && e.to === sessionId)?.from;
-  // Office Boss mood also drives the left seat on identity agent-homes
-  // (Boss → 干员), same shared ui-presence fields as Boss → 经理.
-  const officeBossPresence =
-    !childLink
-      ? (() => {
-          const moodRaw =
-            typeof presenceUser.moodId === "string"
-              ? presenceUser.moodId.trim()
-              : "";
-          const moodId = moodRaw || "16";
-          const statusLine =
-            typeof presenceUser.statusLine === "string"
-              ? presenceUser.statusLine.trim().slice(0, 80)
-              : "";
-          const moodAt =
-            typeof presenceUser.moodAt === "number" &&
-            Number.isFinite(presenceUser.moodAt)
-              ? presenceUser.moodAt
-              : Date.now();
-          return {
-            emotionId: moodId,
-            source: "tool" as const,
-            updatedAt: moodAt,
-            ...(statusLine ? { tips: statusLine } : {}),
-          };
-        })()
-      : undefined;
-  const parentPresence =
-    officeBossPresence ?? (homeId ? listedPresence(homeId) : undefined);
-  const parentDelivery = homeId
+    childLink?.parentSessionId
+    ?? leadParentId
+    ?? team.edges.find((e) => e.kind === "delegates" && e.to === sessionId)?.from;
+  // Settings boss mood only when this session's left seat IS the human boss
+  // (parentSessionId === self). Opener-/peer-led seats sync the source session.
+  const officeBossSeat =
+    !childLink && delegate?.parentSessionId === sessionId;
+  const officeBossPresence = officeBossSeat
     ? (() => {
-        const parentLatch = runtime.drain.isActive(homeId);
-        const parentTurn = parentLatch && !runtime.isTurnUiIdle(homeId);
-        const parentEvents = runtime.store.has(homeId)
-          ? readSessionEvents(runtime.store, homeId)
-          : [];
-        const parentPending = listPendingAdmits(parentEvents, homeId);
-        let parentQueued = 0;
-        let parentSteering = 0;
-        for (const admit of parentPending) {
-          if (admit.delivery === "steer") parentSteering += 1;
-          else parentQueued += 1;
-        }
+        const moodRaw =
+          typeof presenceUser.moodId === "string"
+            ? presenceUser.moodId.trim()
+            : "";
+        const moodId = moodRaw || "16";
+        const statusLine =
+          typeof presenceUser.statusLine === "string"
+            ? presenceUser.statusLine.trim().slice(0, 80)
+            : "";
+        const moodAt =
+          typeof presenceUser.moodAt === "number" &&
+          Number.isFinite(presenceUser.moodAt)
+            ? presenceUser.moodAt
+            : Date.now();
         return {
-          turnActive: parentTurn,
-          queued: parentQueued,
-          steering: parentSteering,
-          runningSubs: (childrenOf.get(homeId) ?? []).filter((n) =>
-            activeOwn.has(n.id) || isChildSessionActive(runtime, n.id),
-          ).length,
+          emotionId: moodId,
+          source: "tool" as const,
+          updatedAt: moodAt,
+          ...(statusLine ? { tips: statusLine } : {}),
         };
       })()
     : undefined;
+
+  const deliveryOf = (id: string) => {
+    if (!id || id.endsWith(":boss") || !runtime.store.has(id)) return undefined;
+    const parentLatch = runtime.drain.isActive(id);
+    const parentTurn = parentLatch && !runtime.isTurnUiIdle(id);
+    const parentEvents = readSessionEvents(runtime.store, id);
+    const parentPending = listPendingAdmits(parentEvents, id);
+    let parentQueued = 0;
+    let parentSteering = 0;
+    for (const admit of parentPending) {
+      if (admit.delivery === "steer") parentSteering += 1;
+      else parentQueued += 1;
+    }
+    return {
+      turnActive: parentTurn,
+      queued: parentQueued,
+      steering: parentSteering,
+      runningSubs: (childrenOf.get(id) ?? []).filter((n) =>
+        activeOwn.has(n.id) || isChildSessionActive(runtime, n.id),
+      ).length,
+    };
+  };
+
+  // Each parents[] layer carries that session's own presence + delivery so
+  // Overview balls stay independent individuals (no shared hardcoded skin).
+  if (delegate?.parents && delegate.parents.length > 0) {
+    const enriched = delegate.parents.map((row) => {
+      if (row.kind === "boss" || row.sessionId.endsWith(":boss")) return row;
+      const rowPresence = listedPresence(row.sessionId);
+      const rowDelivery = deliveryOf(row.sessionId);
+      return {
+        ...row,
+        ...(rowPresence ? { presence: rowPresence } : {}),
+        ...(rowDelivery ? { delivery: rowDelivery } : {}),
+      };
+    });
+    delegate = { ...delegate, parents: enriched };
+  }
+
+  const parentPresence =
+    officeBossPresence ?? (homeId ? listedPresence(homeId) : undefined);
+  const parentDelivery = homeId ? deliveryOf(homeId) : undefined;
 
   return {
     sessionId,

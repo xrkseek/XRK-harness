@@ -74,6 +74,9 @@ export function steerPlanMessage(
 ): string | undefined {
   const message = rawInput.trim();
   if (message === "" || message === "off") return undefined;
-  admitPrompt(store, sessionId, message, { delivery: "steer" });
+  admitPrompt(store, sessionId, message, {
+    delivery: "steer",
+    source: { kind: "plugin", plugin: "plan-mode", form: "notice" },
+  });
   return message;
 }

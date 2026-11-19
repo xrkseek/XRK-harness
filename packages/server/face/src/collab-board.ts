@@ -15,6 +15,15 @@ import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { readWorkspaceDiscoverySettings } from "./workspace-discovery.js";
 import type { FaceSubagentLink } from "./subagent-registry.js";
+import { sunflowerFormalName } from "./catalog-seed-labels.js";
+import {
+  DEFAULT_SEAT_TITLE_SCHEME,
+  readSeatTitles,
+  readUiLocalePreference,
+  seatTitlesForScheme,
+  type SeatTitleLocale,
+  type SeatTitles,
+} from "./seat-titles.js";
 
 /** Parent 主线 rows whose thread was updated in the last day. */
 export const COLLAB_BOARD_THREAD_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -68,54 +77,65 @@ export function formatCollabBoardText(input: {
   readonly surface?: CollabBoardSurface;
   /** Parent peers with no 主线 pin — listed when the pin window is empty. */
   readonly unboundPeers?: readonly CollabBoardPeerRow[];
+  /** Live Settings titles — defaults office×zh when omitted (tests). */
+  readonly titles?: SeatTitles;
+  /** Locale sunflower formal name — defaults zh 向日葵 when omitted (tests). */
+  readonly sunflower?: string;
 }): string {
   const now = input.now ?? Date.now();
   const cutoff = now - COLLAB_BOARD_THREAD_WINDOW_MS;
   const recent = input.threads.filter((row) => row.updatedAt >= cutoff);
   const canSpawn = input.canSpawn !== false;
   const surface = input.surface ?? "coding";
+  const t = input.titles
+    ?? seatTitlesForScheme(DEFAULT_SEAT_TITLE_SCHEME, "zh");
+  const sunflower = input.sunflower ?? sunflowerFormalName("zh");
+  const mgrWs = `${t.manager}工作区`;
+  const agentWs = `${t.agent}工作区`;
   // Ids + lane spout. Dispatch chains live in <session_posture> (when present).
   // Lane rule said once here — tools only reinforce when opened.
   const teamLead =
     surface === "im"
-      ? "Roster · peers (IM). Channel→im_send. Spawn: subagent+workspace_id. Mint→向阳."
+      ? "Roster (IM): channel→im_send · spawn+workspace_id · mint→向阳"
       : surface === "qichuang"
-        ? "Roster · peers (向日葵 admin). workspace_create + settings_* here."
+        ? `Roster (向阳·${mgrWs}): config/team_home/create-WS · peer=其它${mgrWs} · specialty→${agentWs}`
         : surface === "agent-home"
-          ? "Roster · peers (干员家). Speech↔向阳. Project coding canvases closed."
+          ? `Roster (${agentWs}): specialty · ${t.boss} may speak · never ${mgrWs} coding`
           : canSpawn
-            ? "Roster · peers (经理). Spawn: subagent member_id. WS create/delete → 向阳."
-            : "Roster (no subagent) — skill-load matching work. Members:";
+            ? `Roster (${mgrWs}): spawn member_id · peer=其它${t.manager}(含${sunflower}) · specialty→${agentWs} · WS create/delete→向阳`
+            : "Roster (no subagent): skill-load matching work";
   const peerLane =
     surface === "qichuang"
-      ? "thread_message: same-lane or 向阳↔agent-home (id from workspace_session_prompt). *=you."
+      ? `thread_message same-lane|向阳↔${agentWs} (其它${t.manager} id from workspace_session_prompt) · *=you`
       : surface === "agent-home"
-        ? "thread_message: same-lane homes or agent-home↔向阳. Never project coding. *=you."
-        : "thread_message: same-lane only. Never agent-home. *=you.";
-  const lines = [teamLead, input.membersCatalog];
-  lines.push("", `Peers — id · who · duty · todo · 支线 · 主线. ${peerLane}`);
-  if (recent.length === 0) {
-    const peers = input.unboundPeers ?? [];
-    if (peers.length === 0) {
-      lines.push("(none)");
-    } else {
+        ? `thread_message ${agentWs}↔${agentWs}|↔向阳 · never coding ${mgrWs} · *=you`
+        : `thread_message same-lane only · never ${agentWs} · *=you`;
+  const lines = [teamLead];
+  if (input.membersCatalog.trim()) lines.push(input.membersCatalog);
+  const peers = input.unboundPeers ?? [];
+  if (recent.length === 0 && peers.length === 0) {
+    // Idle first-turn: one line, no empty peer table lecture.
+    lines.push(`Peers: none · ${peerLane}`);
+  } else {
+    lines.push(`Peers · ${peerLane}`);
+    if (recent.length === 0) {
       for (const peer of peers) {
         lines.push(`- ${formatPeerLine(peer)}`);
       }
-    }
-  } else {
-    for (const thread of recent) {
-      const sessions = thread.sessions
-        .map((s) => {
-          const mark = s.self ? "*" : "";
-          const tip = s.sideline ? ` · 支线=${clipBrief(s.sideline)}` : "";
-          return `${s.sessionId}${mark}${tip}`;
-        })
-        .join("; ");
-      const brief = thread.brief ? ` — ${clipBrief(thread.brief)}` : "";
-      lines.push(
-        `- 主线 ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
-      );
+    } else {
+      for (const thread of recent) {
+        const sessions = thread.sessions
+          .map((s) => {
+            const mark = s.self ? "*" : "";
+            const tip = s.sideline ? ` · 支线=${clipBrief(s.sideline)}` : "";
+            return `${s.sessionId}${mark}${tip}`;
+          })
+          .join("; ");
+        const brief = thread.brief ? ` — ${clipBrief(thread.brief)}` : "";
+        lines.push(
+          `- 主线 ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
+        );
+      }
     }
   }
   return lines.join("\n").slice(0, BOARD_MAX_CHARS);
@@ -158,6 +178,8 @@ function countOpenTodos(runtime: FaceRuntime, sessionId: string): number | undef
 function peerIdentityBits(
   runtime: FaceRuntime,
   sessionId: string,
+  titles: SeatTitles,
+  locale: SeatTitleLocale,
 ): {
   readonly identity?: string;
   readonly nickname?: string;
@@ -179,9 +201,14 @@ function peerIdentityBits(
     };
   }
   const badge = effectiveSessionAgentPreset(runtime, sessionId);
-  if (badge === "qichuang") return { identity: "向日葵", duty: "admin/orchestrator" };
+  if (badge === "qichuang") {
+    return {
+      identity: sunflowerFormalName(locale),
+      duty: "admin/orchestrator",
+    };
+  }
   if (badge === "im") return { identity: "IM", duty: "channel orchestrator" };
-  return { identity: "经理", duty: "coding parent" };
+  return { identity: titles.manager, duty: "coding parent" };
 }
 
 /**
@@ -192,7 +219,16 @@ export function listUnboundParentPeers(
   runtime: FaceRuntime,
   workspaceId: string,
   selfId: string,
+  titles?: SeatTitles,
+  locale?: SeatTitleLocale,
 ): CollabBoardPeerRow[] {
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const localeUser = runtime.settingsNamespaces.view("locale")
+    .value as Record<string, unknown>;
+  const resolvedLocale = locale ?? readUiLocalePreference(localeUser);
+  const resolvedTitles = titles
+    ?? readSeatTitles(presenceUser, resolvedLocale);
   const bound = new Set(
     runtime.sessionThreads
       .listBinds(workspaceId)
@@ -223,7 +259,12 @@ export function listUnboundParentPeers(
     const mainline = bind
       ? runtime.sessionThreads.get(workspaceId, bind.threadId)?.title
       : undefined;
-    const who = peerIdentityBits(runtime, id);
+    const who = peerIdentityBits(
+      runtime,
+      id,
+      resolvedTitles,
+      resolvedLocale,
+    );
     const todoOpen = countOpenTodos(runtime, id);
     const hints = runtime.store.listHints?.(id);
     const sortAt = Math.max(hints?.lastEventTs ?? 0, meta?.lastPromptAt ?? 0);
@@ -272,15 +313,14 @@ export function formatTeamMateBoardText(input: {
   readonly mates: readonly TeamMateRow[];
   readonly ownTask?: TeamMateOwnTask;
 }): string {
+  // Same facts as before; dense so child turns stay cheap.
   const lines = [
-    `squad · parent=${input.parentSessionId} · * = you`,
-    "siblings → thread_message; each child mints its own 主线 (thread_upsert). Parent↔you = send_message / followup_task. FINAL→parent.",
-    "",
-    "Teammates — id · who · duty · todo · 支线 · 主线:",
+    `squad · parent=${input.parentSessionId} · *=you · siblings→thread_message · mint own 主线 (thread_upsert) · parent↔you=send_message/followup_task · FINAL→parent`,
   ];
   if (input.mates.length === 0) {
-    lines.push("(none)");
+    lines.push("Teammates: none");
   } else {
+    lines.push("Teammates:");
     for (const mate of input.mates) {
       const mark = mate.self ? "*" : "";
       const who = mate.nickname
@@ -306,7 +346,6 @@ export function formatTeamMateBoardText(input: {
   }
   if (input.ownTask) {
     lines.push(
-      "",
       `your_task: ${input.ownTask.id} 「${clipBrief(input.ownTask.title)}」 status=${input.ownTask.status}` +
         (input.ownTask.resultPreview
           ? ` · ${clipBrief(input.ownTask.resultPreview)}`
@@ -429,16 +468,32 @@ export function formatCollabBoard(
   const recent = threads.filter(
     (row) => row.updatedAt >= now - COLLAB_BOARD_THREAD_WINDOW_MS,
   );
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const localeUser = runtime.settingsNamespaces.view("locale")
+    .value as Record<string, unknown>;
+  const locale = readUiLocalePreference(localeUser);
+  const titles = readSeatTitles(presenceUser, locale);
   return formatCollabBoardText({
     membersCatalog: formatRosterCatalog(
       runtime.agentRoster.listVisible(workspaceId),
     ),
     threads,
     ...(recent.length === 0
-      ? { unboundPeers: listUnboundParentPeers(runtime, workspaceId, sessionId) }
+      ? {
+          unboundPeers: listUnboundParentPeers(
+            runtime,
+            workspaceId,
+            sessionId,
+            titles,
+            locale,
+          ),
+        }
       : {}),
     canSpawn,
     surface,
+    titles,
+    sunflower: sunflowerFormalName(locale),
     now,
   });
 }

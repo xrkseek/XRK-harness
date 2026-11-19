@@ -1,10 +1,6 @@
-/** System-prompt fragment for video_analyze (boundary vs browser_vision). */
+/** System-prompt fragment for video_analyze (boundary vs browser_vision / video_generate). */
 
 export const VIDEO_ANALYZE_PROMPT_TEXT = [
-  "## Video analysis",
-  "Use `video_analyze` for video files or video URLs (mp4/webm/mov/…). ",
-  "It sends the whole clip to a video-capable multimodal model and returns a text analysis — not frame extraction. ",
-  "Do **not** use it for live browser pages (use `browser_vision`) or static images (use `read_image`). ",
-  "Do **not** use `video_generate` here — that tool creates videos, it does not understand them. ",
-  "Large clips (>20 MB) may be slow; hard limit ~50 MB.",
-].join("");
+  "Video analysis (`video_analyze`): whole clip → multimodal text analysis (not frame extract).",
+  "Not for live pages (`browser_vision`), stills (`read_image`), or creating video (`video_generate`). ~50 MB hard cap.",
+].join(" ");

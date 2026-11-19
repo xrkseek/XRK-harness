@@ -117,13 +117,16 @@ export function isModelOnlyText(block: ContentBlock): boolean {
 
 /**
  * Reader-facing plain text: same as {@link flattenText} minus `modelOnly`
- * handle text. Use for anything a human reads (bubbles, titles, transcripts).
+ * handle text and captions that lost `modelOnly` on older wire. Use for
+ * anything a human reads (bubbles, titles, transcripts).
  */
 export function readerText(content: MessageContent): string {
   if (typeof content === "string") return content;
   const parts: string[] = [];
   for (const block of content) {
     if (isTextBlock(block) && !isModelOnlyText(block)) {
+      // Defense when an older log dropped `modelOnly` on handle captions.
+      if (looksLikeAttachmentHandleCaption(block.text)) continue;
       parts.push(block.text);
       continue;
     }
@@ -296,7 +299,10 @@ export function looksLikeAttachmentHandleCaption(text: string): boolean {
     // Digest may be followed by `；源路径 …` before the closing paren.
     /^\[文件附件 .+（sha256:[a-f0-9]+/u.test(t) ||
     /^\[图\d+\s+sha256:[a-f0-9]+/u.test(t) ||
-    /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+/u.test(t)
+    /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+/u.test(t) ||
+    // Text-only LLM wire stubs ({@link textOnlyImageText}) that leaked into
+    // durable history before agent-loop stopped rewriting user/message.
+    /^\[image omitted because this model accepts text only;/u.test(t)
   );
 }
 

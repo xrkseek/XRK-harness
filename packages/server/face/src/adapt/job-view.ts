@@ -47,6 +47,15 @@ export interface FaceJobsSource {
   onJobsChanged(listener: () => void): () => void;
 }
 
+/** Collapsed-row one-liner for a job-completion `notice` (≤120 chars). */
+export function jobCompletionNoticeSummary(job: JobView): string {
+  const detail = job.detail !== undefined && job.detail !== ''
+    ? `${job.status}, ${job.detail}`
+    : job.status
+  const line = `${job.id} [${detail}]`
+  return line.length <= 120 ? line : `${line.slice(0, 119)}…`
+}
+
 /** Face tool-jobs `fitCompletionNotice` (optional UTF-8 cap). */
 export function formatJobCompletionNotice(
   job: JobView,

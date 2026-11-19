@@ -20,6 +20,12 @@ describe('round-label', () => {
     expect(userRoundLabelKind('user:continue', 1, openers, 'auto-continue')).toBeNull()
   })
 
+  it('marks mid-turn seat / handoff as 插话; wake opener stays 第 N 轮', () => {
+    expect(userRoundLabelKind('user:handoff', 1, openers, 'handoff')).toBe('steer')
+    expect(userRoundLabelKind('user:seat', 1, openers, 'seat')).toBe('steer')
+    expect(userRoundLabelKind('user:opener', 1, openers, 'handoff')).toBe('turn')
+  })
+
   it('keeps opener wording while the rail has not resolved the turn yet', () => {
     expect(userRoundLabelKind('user:fresh', 9, openers, 'user')).toBe('turn')
     expect(userRoundLabelKind('user:fresh', undefined, openers, 'user')).toBe('turn')

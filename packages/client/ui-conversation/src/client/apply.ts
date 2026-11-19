@@ -2,7 +2,13 @@
 import type { Context } from '@xrkseek/cordis'
 import { resolveSlotLabel, type BoundActions } from '@xrkseek/client-ui-slots'
 import {
-  createSnapshotStore, downloadWorkspaceFile, resolveWorkspacePath, type ISessions, type SessionId,
+  allowNativeWorkspaceOpen,
+  createSnapshotStore,
+  downloadWorkspaceFile,
+  isHumanOwnedUserMessage,
+  resolveWorkspacePath,
+  type ISessions,
+  type SessionId,
 } from '@xrkseek/client-runtime/client'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 // Type-only: the ctx.settingsScope Context merge. Cross-plugin collaboration
@@ -40,12 +46,19 @@ import { StatsLine } from './chat/StatsLine.tsx'
 import {
   beginEditStaging,
   clearEditStaging,
+  getEditStaging,
   requestResubmitConfirm,
 } from './chat/resubmit-intent.ts'
 import {
   confirmAndExecuteResubmit,
   executeResubmitAfterChoice,
+  type ResubmitEcho,
 } from './chat/resubmit-execute.ts'
+import {
+  durableAttachmentsIn,
+  promptPartsFromDurableAttachments,
+  userMessageText,
+} from './chat/user-message-media.ts'
 import { ApprovalPanel } from './skeleton/ApprovalPanel.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { modBandDockEntry } from './skeleton/ModBandDock.tsx'
@@ -64,7 +77,7 @@ import './turn-outline-projection.ts'
 import { CONVERSATION_SETTINGS_NAMESPACE, type ConversationSettings } from '../submission-settings.ts'
 
 /**
- * Delete path: confirm immediately, then fork (no re-prompt).
+ * Delete path: confirm immediately, then in-place truncate (no re-prompt).
  */
 async function deleteFromSeq(
   sessions: ISessions,
@@ -86,14 +99,48 @@ async function regenerateFromUserSeq(
   sessions: ISessions,
   sessionId: SessionId,
   seq: number,
-  text: string,
+  content: readonly unknown[],
+  conversation: IConversation | undefined,
 ): Promise<void> {
   clearEditStaging()
+  // Defense in depth: seat / auto-continue openers must never re-admit as 老板.
+  const snapshot = sessions.binding(sessionId)?.session?.getSnapshot()
+  const target = snapshot === undefined
+    ? undefined
+    : [...snapshot.chat.nodes.values()].find((n) => n.kind === 'user' && n.data.seq === seq)
+  if (target === undefined || !isHumanOwnedUserMessage(target.data.source)) return
+  const text = userMessageText(content)
+  const media = durableAttachmentsIn(content)
+  const parts = [
+    ...promptPartsFromDurableAttachments(media),
+    ...(text === '' ? [] : [{ type: 'text' as const, text }]),
+  ]
+  if (parts.length === 0) return
+  const session = sessions.binding(sessionId)?.session
+  // Prefer blob thumbs for images so regenerate never flashes waiting-line-only.
+  // Fall back to file cards only when conversation/session cannot hydrate.
+  let echo: ResubmitEcho = {
+    text,
+    attachments: media.flatMap((part) => (
+      part.kind === 'file'
+        ? [{ type: 'file' as const, value: part.attachment }]
+        : []
+    )),
+  }
+  let onEchoRetire: ((retirement: { readonly reason: 'observed' | 'failed' }) => void) | undefined
+  if (conversation !== undefined && session !== undefined && media.length > 0) {
+    const built = await conversation.buildResubmitEchoFromDurable(session, text, media)
+    echo = built.echo
+    onEchoRetire = () => { built.release() }
+  }
   await confirmAndExecuteResubmit(sessions, {
     sessionId,
     seq,
     text,
     kind: 'regenerate',
+    content: parts,
+    echo,
+    ...(onEchoRetire === undefined ? {} : { onEchoRetire }),
   })
 }
 
@@ -542,12 +589,26 @@ export function apply(ctx: Context): void {
           : (selection) => {
             shell.dismissPopup()
             const snapshot = shell.snapshot
+            // 「命令」hands a caret-collapsed selection. If the draft already
+            // holds a leading `/token`, widen the hit to that token so a later
+            // bare-command pick can consume it (caret span start===end is a
+            // no-op in consumeToken and left `/status` stuck after run).
+            const draft = snapshot.draft
+            const slashEnd = draft.startsWith('/')
+              ? (() => {
+                const ws = draft.search(/\s/)
+                return ws === -1 ? draft.length : ws
+              })()
+              : -1
+            const span = slashEnd > 0
+              ? { start: 0, end: slashEnd, draftRev: snapshot.draftRev }
+              : { ...selection, draftRev: snapshot.draftRev }
             inputTriggers.toggleSource('command', {
               trigger: '/',
-              query: '',
+              query: slashEnd > 0 ? draft.slice(1, slashEnd) : '',
               quoted: false,
-              position: snapshot.draft.slice(0, selection.start).trim() === '' ? 'leading' : 'inline',
-              span: { ...selection, draftRev: snapshot.draftRev },
+              position: draft.slice(0, span.start).trim() === '' ? 'leading' : 'inline',
+              span,
             })
           },
         stop: () => {
@@ -626,10 +687,12 @@ export function apply(ctx: Context): void {
         openFile: (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
           const resolved = resolveWorkspacePath(cwd, path)
-          // Cascade (DSH-shaped): workbench → OS open on privileged surfaces →
-          // Host `/sidebar/file?download=1`. Never widen OS open to WAN/remote.
-          const allowNativeOpen = ctx.connection.isLoopback
-            && ctx.connection.hostDescription.getSnapshot()?.canOpenPath === true
+          // Cascade: workbench → OS open on Desktop/LAN → Host download.
+          // Phone APK: allowNativeWorkspaceOpen is false → XrkShell share sheet.
+          const allowNativeOpen = allowNativeWorkspaceOpen(
+            ctx.connection.isLoopback,
+            ctx.connection.hostDescription.getSnapshot()?.canOpenPath === true,
+          )
           return routeChatOpenFile(
             resolved,
             (p) => workspaces.openPath(p),
@@ -677,30 +740,109 @@ export function apply(ctx: Context): void {
         },
         forkAt: (seq) => {
           sessions.fork({ sessionId, atSeq: seq, increaseTitle: true })
-            .then((childId) => { sessions.open(childId) })
-            .catch(() => {
-              // Fork or child-rename failure keeps the source view untouched.
+            .then((childId) => {
+              sessions.open(childId)
+              // Opening the child is easy to miss when the title only gains "(1)".
+              inputHub.shell(childId).notify('info', t('message.branch.opened'))
+            })
+            .catch((error: unknown) => {
+              sessions.binding(sessionId)?.session?.reportError('fork', {
+                code: 'internal',
+                message: error instanceof Error ? error.message : String(error),
+                details: {},
+              })
             })
         },
         restoreAt: (seq) => {
           const session = sessions.binding(sessionId)?.session
           if (session === undefined) return
-          // Same slash path as InputBar command — Face executes /rollback (files only).
-          void session.command(`/rollback seq:${seq}`).catch(() => {
-            // Missing checkpoint / git → slash error text in the transcript.
-          })
+          // Files-only rollback is as irreversible as regenerate's "revert files"
+          // path — confirm first. One-click + silent no-op was the product bug.
+          void (async () => {
+            const choice = await requestResubmitConfirm({
+              sessionId,
+              kind: 'restore',
+              seq,
+            })
+            if (choice === 'cancel') return
+            const shell = inputHub.shell(sessionId)
+            try {
+              const result = await session.command(`/rollback seq:${seq}`)
+              if (!result.ok) {
+                // Same toast channel as success — avoid "失败/rollback" + English Face mashup.
+                shell.notify(
+                  'error',
+                  result.error.message.trim() || t('message.restore.failed'),
+                )
+                return
+              }
+              if (!result.value.matched) {
+                shell.notify('error', t('message.restore.failed'))
+                return
+              }
+              const outcome = result.value.outcome
+              if (outcome?.kind === 'error') {
+                // Unknown checkpoint / restore failure — don't claim success.
+                const detail = outcome.text?.trim()
+                shell.notify(
+                  'error',
+                  detail
+                    ? `${t('message.restore.failed')}：${detail}`
+                    : t('message.restore.failed'),
+                )
+                return
+              }
+              shell.notify(
+                'info',
+                outcome?.text?.trim() || t('message.restore.done'),
+              )
+            } catch (error: unknown) {
+              shell.notify(
+                'error',
+                error instanceof Error && error.message.trim()
+                  ? error.message
+                  : t('message.restore.failed'),
+              )
+            }
+          })()
         },
-        editAt: (seq, text) => {
-          // Edit = load into composer first; truncate confirm runs on send.
+        editAt: (seq, content) => {
+          // Edit = seed composer (text + media) first; truncate confirm on send.
           const shell = inputHub.shell(sessionId)
-          shell.setDraft(text)
+          const conversation = ctx.get('conversation') as IConversation | undefined
+          // Drop any prior draft media so the rail matches this message.
+          if (conversation !== undefined) {
+            for (const id of [...shell.snapshot.imageIds]) {
+              shell.removeImage(id)
+              conversation.releaseDraftImage(id)
+            }
+          }
+          shell.setDraft(userMessageText(content))
           beginEditStaging({ sessionId, seq })
           shell.focus()
+          const media = durableAttachmentsIn(content)
+          if (media.length === 0 || conversation === undefined) return
+          const session = sessions.binding(sessionId)?.session
+          if (session === undefined) return
+          void conversation.hydrateDraftsFromMessage(session, media).then((ids) => {
+            if (getEditStaging()?.sessionId !== sessionId || getEditStaging()?.seq !== seq) {
+              for (const id of ids) conversation.releaseDraftImage(id)
+              return
+            }
+            shell.addImages(ids)
+          }).catch((error: unknown) => {
+            sessions.binding(sessionId)?.session?.reportError('resubmit', {
+              code: 'internal',
+              message: error instanceof Error ? error.message : String(error),
+              details: {},
+            })
+          })
         },
-        regenerateAt: (seq, text) => {
+        regenerateAt: (seq, content) => {
           // Surface unexpected throws in the composer strip — do not swallow.
           // Truncate failures are already reportError'd inside executeResubmit.
-          void regenerateFromUserSeq(sessions, sessionId, seq, text).catch((error: unknown) => {
+          const conversation = ctx.get('conversation') as IConversation | undefined
+          void regenerateFromUserSeq(sessions, sessionId, seq, content, conversation).catch((error: unknown) => {
             sessions.binding(sessionId)?.session?.reportError('resubmit', {
               code: 'internal',
               message: error instanceof Error ? error.message : String(error),

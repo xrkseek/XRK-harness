@@ -18,13 +18,33 @@
 
 向阳而生，驭光而行
 
+**综合个人智能体、编码智能体与专业智能体的开山之作——无代餐。**
+
 XRK-Harness 为自研 TypeScript Agent Harness + Server Kit。设计吸收 Codex 与业界 agent harness 在会话、工具与壳交互上的长处；契约以本仓为准。
+
+![本地 Host · 对话与概况](./docs/assets/screenshots/host-overview.png)
+
+<p align="center">
+  <img src="./docs/assets/screenshots/host-chat.png" alt="对话" width="48%" />
+  <img src="./docs/assets/screenshots/host-settings.png" alt="设置" width="48%" />
+</p>
+
+![官网首屏](./docs/assets/screenshots/site-hero-zh.png)
+
+<p align="center">
+  <img src="./docs/assets/screenshots/site-workbench-zh.png" alt="官网工作台预览" width="48%" />
+  <img src="./docs/assets/screenshots/site-download-zh.png" alt="下载" width="48%" />
+</p>
+
+<p align="center">
+  <img src="./docs/assets/screenshots/operators-zh.png" alt="干员站" width="72%" />
+</p>
 
 [入门](./docs/getting-started.md) · [配置](./docs/configuration.md) · [能力矩阵](./docs/status.md) · [文档中心](./docs/README.md) · [v0.5.16 发行说明](./docs/releases/v0.5.16.md)
 
 ## 这是什么
 
-XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agent 运行时与 Server Kit。
+综合个人智能体、编码智能体与专业智能体——开山之作，无代餐。XRK-Harness（npm **`@xrkseek/*`**）是纯 **TypeScript / Node ≥26** 的 Agent 运行时与 Server Kit。
 
 | 能力 | 说明 |
 |------|------|
@@ -52,7 +72,7 @@ npm install -g @xrkseek/harness-cli@latest
 xrkh web
 ```
 
-`@latest` 当前为 **v0.6.23**（`0.6.x` 预览线收官）。下一正式线过程号 **v0.7.0-rc.3** 走 `npm i -g @xrkseek/harness-cli@rc`（不抢 latest）。上一正式线 `0.3.11` 仍可精确安装。
+`@latest` 当前为 **v0.8.0**（`0.8.x` 正式线首发）。上一正式线 `0.7.22`、回退钉 `0.3.11` 仍可精确安装。
 
 默认 **harness** preset（含 `web_search` / `web_fetch`）。仅要 fs 烟测时加 `--preset minimal`。
 
@@ -95,7 +115,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 多厂商 LLM Registry | **能跑** |
 | 社区 client（自研兼容器） | **能跑**（IM WS/sidecar · Vision · 记忆 · GenUI npm · TongFlow；`xrkh doctor`） |
 | 产品网页与浏览器 E2E | **能跑**（Playwright **17/17**；`pnpm test:web` 不进 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（当前 **v0.6.23** = `@latest`；过程号 **v0.7.0-rc.3** = `@rc`；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（当前 **v0.8.0** = `@latest`；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
 
 完整说明：[docs/status.md](./docs/status.md)。
 
@@ -111,7 +131,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.6.23](./docs/releases/v0.6.23.md) = `@latest` · 过程号 [v0.7.0-rc.3](./docs/releases/v0.7.0-rc.3.md) = `@rc` · 回退钉 [v0.3.11](./docs/releases/v0.3.11.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.8.0](./docs/releases/v0.8.0.md) = `@latest` · 上一正式线 [v0.7.22](./docs/releases/v0.7.22.md) · 回退钉 [v0.3.11](./docs/releases/v0.3.11.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ## 仓库里有什么
@@ -142,9 +162,13 @@ docs/ 用法与契约教科书
 
 更多：[troubleshooting](./docs/troubleshooting.md)。
 
+## 致谢
+
+[Codex](https://github.com/openai/codex) · [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) · [Emotion Ball](https://github.com/sam70361/aora-bot/tree/emotion-ball) — 见 [THIRD_PARTY.md](./THIRD_PARTY.md)。
+
 ## 许可证
 
-[MIT](./LICENSE) © [xrkseek](https://github.com/xrkseek)
+[MIT](./LICENSE) © [xrkseek](https://github.com/xrkseek)。第三方：[THIRD_PARTY.md](./THIRD_PARTY.md)。
 
 ## 开发与贡献
 
@@ -154,6 +178,7 @@ docs/ 用法与契约教科书
 | [docs/maintainer.md](./docs/maintainer.md) | 日常命令 · 交接 |
 | [docs/publishing.md](./docs/publishing.md) | npmjs + GitHub Release |
 | [docs/audiences.md](./docs/audiences.md) | 文档读者分层 |
+| [THIRD_PARTY.md](./THIRD_PARTY.md) | 致谢 · 第三方许可 |
 | [AGENTS.md](./AGENTS.md) | 改码角色与红线 |
 
 ---
@@ -162,13 +187,33 @@ docs/ 用法与契约教科书
 
 Grow toward the sun. Harness the light.
 
+**The pioneering work that unites personal, coding, and specialist agents — not a substitute meal.**
+
 XRK-Harness is an independently developed TypeScript Agent Harness + Server Kit. It absorbs strengths from Codex and peer agent harnesses; this repo’s contracts are authoritative.
+
+![Local Host · chat and overview](./docs/assets/screenshots/host-overview.png)
+
+<p align="center">
+  <img src="./docs/assets/screenshots/host-chat.png" alt="Chat" width="48%" />
+  <img src="./docs/assets/screenshots/host-settings.png" alt="Settings" width="48%" />
+</p>
+
+![Marketing site hero](./docs/assets/screenshots/site-hero-en.png)
+
+<p align="center">
+  <img src="./docs/assets/screenshots/site-workbench-zh.png" alt="Marketing workbench preview" width="48%" />
+  <img src="./docs/assets/screenshots/site-download-zh.png" alt="Downloads" width="48%" />
+</p>
+
+<p align="center">
+  <img src="./docs/assets/screenshots/operators-en.png" alt="Operators site" width="72%" />
+</p>
 
 [Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Status](./docs/status.md) · [Docs hub](./docs/README.md) · [v0.5.16 release notes](./docs/releases/v0.5.16.md)
 
 ## What this is
 
-XRK-Harness (npm **`@xrkseek/*`**) is a pure **TypeScript / Node ≥26** Agent runtime and Server Kit.
+Personal, coding, and specialist agents in one pioneering stack — not a substitute meal. XRK-Harness (npm **`@xrkseek/*`**) is a pure **TypeScript / Node ≥26** Agent runtime and Server Kit.
 
 | Capability | Description |
 |------------|-------------|
@@ -195,7 +240,7 @@ npm install -g @xrkseek/harness-cli@latest
 xrkh web
 ```
 
-`@latest` is currently **v0.6.23** (end of the `0.6.x` preview line). The next formal-line process number **v0.7.0-rc.3** is `npm i -g @xrkseek/harness-cli@rc` (does not take latest). Prior formal line `0.3.11` remains installable by exact pin.
+`@latest` is currently **v0.8.0** (opens the `0.8.x` formal line). Prior formal line `0.7.22` and rollback pin `0.3.11` remain installable by exact pin.
 
 The default preset is **harness** (includes `web_search` / `web_fetch`). For an fs-only smoke test, add `--preset minimal`.
 
@@ -285,9 +330,13 @@ Run **`xrkh restart`** after install; use `xrkh doctor` for staging and optional
 
 More: [troubleshooting](./docs/troubleshooting.md).
 
+## Acknowledgments
+
+[Codex](https://github.com/openai/codex) · [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) · [Emotion Ball](https://github.com/sam70361/aora-bot/tree/emotion-ball) — [THIRD_PARTY.md](./THIRD_PARTY.md).
+
 ## License
 
-[MIT](./LICENSE) © [xrkseek](https://github.com/xrkseek)
+[MIT](./LICENSE) © [xrkseek](https://github.com/xrkseek). Third parties: [THIRD_PARTY.md](./THIRD_PARTY.md).
 
 ## Development & contributing
 
@@ -297,4 +346,5 @@ More: [troubleshooting](./docs/troubleshooting.md).
 | [docs/maintainer.md](./docs/maintainer.md) | Day-to-day · handoff |
 | [docs/publishing.md](./docs/publishing.md) | npmjs + GitHub Release |
 | [docs/audiences.md](./docs/audiences.md) | Doc audience standard |
+| [THIRD_PARTY.md](./THIRD_PARTY.md) | Acknowledgments · third-party licenses |
 | [AGENTS.md](./AGENTS.md) | Coding roles and red lines |

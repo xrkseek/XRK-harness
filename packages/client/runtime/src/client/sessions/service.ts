@@ -366,6 +366,8 @@ export class SessionRuntime implements ISessions {
   private watched: SessionId | undefined
   /** Removed-while-staged sessions whose teardown waits for the stage to move away. */
   private readonly deferredRemovals = new Set<SessionId>()
+  /** Ids currently inside {@link dropScope}; blocks re-entrant remint of the same id. */
+  private readonly droppingIds = new Set<SessionId>()
 
   /**
    * @param ctx - client root context (scope fibers mount under it).
@@ -404,17 +406,6 @@ export class SessionRuntime implements ISessions {
     // The manager owns wire truth; the store is its projection. Manager
     // notifications are already microtask-batched.
     this.manager.subscribe(() => { this.projectList() })
-    // Stage follower: every current write (open() and projection alike)
-    // re-evaluates staging, so startup restore (persisted selection validated
-    // by the projection) and reconnect resurfacing open their window with no
-    // dedicated code path. Safe to run synchronously inside the store notify:
-    // the follower writes no list state — session.open()'s synchronous prefix
-    // touches only session-side state and its own microtask-batched notifier.
-    // The current-provide projection follows the same current writes.
-    this.list.subscribe(() => {
-      this.followCurrent()
-      this.provideChannel.publishCurrent()
-    })
     this.provideChannel = new SessionProvideChannel({
       rebuildBundles: () => {
         for (const record of this.scopes.values()) {
@@ -424,6 +415,27 @@ export class SessionRuntime implements ISessions {
       resolveCurrent: () => this.maybeProvideInfo(this.list.getSnapshot().current),
     })
     this.currentProvideInfo = this.provideChannel.currentProvideInfo
+    // Stage follower: every current write (open() and projection alike)
+    // re-evaluates staging, so startup restore (persisted selection validated
+    // by the projection) and reconnect resurfacing open their window with no
+    // dedicated code path. Safe to run synchronously inside the store notify:
+    // the follower writes no list state — session.open()'s synchronous prefix
+    // touches only session-side state and its own microtask-batched notifier.
+    // The current-provide projection follows the same current writes.
+    // Isolate each step so a mint failure cannot skip publishCurrent (that
+    // freezes the conversation pane while the sidebar already moved).
+    this.list.subscribe(() => {
+      try {
+        this.followCurrent()
+      } catch (error) {
+        console.error('sessions.followCurrent failed:', error)
+      }
+      try {
+        this.provideChannel.publishCurrent()
+      } catch (error) {
+        console.error('sessions.publishCurrent failed:', error)
+      }
+    })
     let registryRebuildQueued = false
     const scheduleRegistryRebuild = (): void => {
       if (registryRebuildQueued) return
@@ -685,6 +697,8 @@ export class SessionRuntime implements ISessions {
       await session.resealProjectionsAfterTruncate(result.value.projections)
       return
     }
+    // applyTruncateCut already armed the ghost barrier + cleared queue/pending
+    // before returning false; resync rebuilds the kept prefix from Host.
     session.projections.clear()
     await session.resync()
   }
@@ -778,18 +792,29 @@ export class SessionRuntime implements ISessions {
     // A masked gap (current blanked while the selection's session is
     // transiently absent) holds the stage: tearing down on the gap would
     // destroy exactly the frozen scope the mask exists to preserve.
-    if (current === undefined || snapshot.byId[current] === undefined || current === this.watched) return
-    this.watched = current
-    this.sweepDeferred()
-    const record = this.resolve(current)
-    /* v8 ignore next 3 -- defensive: current is always a listed id (open()
-     * validates and the projection masks absent selections), so resolve
-     * cannot miss; kept so a future current writer cannot crash the notify. */
-    if (record !== undefined) {
-      void record.session.open()
-      void this.manager.refreshSubagents(current)
+    if (current === undefined || snapshot.byId[current] === undefined) return
+    const stageMoved = current !== this.watched
+    if (stageMoved) {
+      this.watched = current
+      this.sweepDeferred()
+    } else if (this.scopes.has(current)) {
+      return
     }
-    this.reclaimOffStageScopes()
+    // Same watched id with no scopes entry remints (orphan recovery after a
+    // failed mint / dispose reentry). Stage moves reclaim in finally so a
+    // throw during resolve still releases the previous off-stage scopes.
+    try {
+      const record = this.resolve(current)
+      /* v8 ignore next 3 -- defensive: current is always a listed id (open()
+       * validates and the projection masks absent selections), so resolve
+       * cannot miss; kept so a future current writer cannot crash the notify. */
+      if (record !== undefined) {
+        void record.session.open()
+        void this.manager.refreshSubagents(current)
+      }
+    } finally {
+      if (stageMoved) this.reclaimOffStageScopes()
+    }
   }
 
   /**
@@ -801,23 +826,42 @@ export class SessionRuntime implements ISessions {
   private resolve(id: SessionId): ScopeRecord | undefined {
     const existing = this.scopes.get(id)
     if (existing !== undefined) return existing
+    if (this.droppingIds.has(id)) return undefined
     if (!this.eligible(id)) return undefined
-    const { fiber, ctx } = createScope(this.rootCtx, id)
     const session = this.manager.get(id)
-    // The Session owns its scoped dispatch point (host Agent.loopCtx mirror);
-    // mint and bind are one step so a live scope record implies a bound actx.
-    session.bindScope(ctx)
-    const binding: SessionBinding = { sessionId: id, session, ctx }
-    const record: ScopeRecord = {
-      fiber,
-      ctx,
-      binding,
-      session,
+    // Map miss with a leftover actx is an orphan (dispose-before-unbind used
+    // to leave this). Clear before mint so bindScope cannot throw.
+    session.unbindScope()
+    let fiber: Fiber | undefined
+    try {
+      const created = createScope(this.rootCtx, id)
+      fiber = created.fiber
+      const { ctx } = created
+      // The Session owns its scoped dispatch point (host Agent.loopCtx mirror);
+      // mint and bind are one step so a live scope record implies a bound actx.
+      session.bindScope(ctx)
+      const binding: SessionBinding = { sessionId: id, session, ctx }
+      // Publish the map entry BEFORE materializeInfo. Provide resolvers
+      // (e.g. ui-model-selection directoryFor → sessions.scope) re-enter
+      // resolve for this id; if the entry is missing they remint forever
+      // (Maximum call stack in createScope) and freeze currentProvideInfo.
+      const record: ScopeRecord = {
+        fiber,
+        ctx,
+        binding,
+        session,
+        provideInfo: undefined as unknown as SessionProvideInfo,
+      }
+      this.scopes.set(id, record)
       // Sources are bare observables; React binds selector hooks at its own boundary.
-      provideInfo: this.provideChannel.materializeInfo(binding),
+      record.provideInfo = this.provideChannel.materializeInfo(binding)
+      return record
+    } catch (error) {
+      this.scopes.delete(id)
+      session.unbindScope()
+      if (fiber !== undefined) void fiber.dispose()
+      throw error
     }
-    this.scopes.set(id, record)
-    return record
   }
 
   /** The one aliveness predicate shared by scope mint and prune: host-listed or currently addressed. */
@@ -1004,14 +1048,21 @@ export class SessionRuntime implements ISessions {
    * durable truth, a reopen lazily rebuilds and backfills via open().
    */
   private dropScope(id: SessionId, record: ScopeRecord): void {
-    void record.fiber.dispose()
-    // Release the Session's dispatch point with the scope it belongs to (a
-    // surviving instance — the live Intent — rebinds when resolve re-mints).
-    record.session.unbindScope()
-    // Optional lookup: slots and sessions are sibling services with no
-    // declared dependency; a slots-less boot (object-layer tests) skips.
-    this.rootCtx.get('slots')?.pruneStoreScope(id)
-    this.manager.drop(id)
+    this.droppingIds.add(id)
+    try {
+      // Unbind before dispose. Callers already deleted the scopes map entry;
+      // if a disposer re-enters resolve for this id, droppingIds refuses remint
+      // and the Session is already free of actx (HEAD disposed first, which
+      // let reentry hit "already has a bound scope" and freeze provideInfo).
+      record.session.unbindScope()
+      void record.fiber.dispose()
+      // Optional lookup: slots and sessions are sibling services with no
+      // declared dependency; a slots-less boot (object-layer tests) skips.
+      this.rootCtx.get('slots')?.pruneStoreScope(id)
+      this.manager.drop(id)
+    } finally {
+      this.droppingIds.delete(id)
+    }
   }
 
   /** Run deferred teardowns whose session is no longer staged (called when the stage moves). */

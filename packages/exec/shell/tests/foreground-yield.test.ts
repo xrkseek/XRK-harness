@@ -90,11 +90,28 @@ describe("bash foreground yield semantics", () => {
       const content = String(out.content);
       expect(content).toContain("npm ERR! code E409");
       expect(content).toContain("[stderr]");
-      expect(content).toContain("[output truncated]");
+      expect(content).toContain("[truncated]");
       expect(content).toContain("[exit code: 1]");
+      // Omit marker only — must not leave a second false trailer.
+      expect(content).not.toContain("[output truncated]");
     } finally {
       await shell.dispose();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not stamp [truncated] on under-budget settled output", async () => {
+    const shell = makeShell();
+    try {
+      // Generous cap: short "hi" + exit marker must fit without an omit marker.
+      const bash = bashToolWithBudget(shell, 15_000, 64_000);
+      const out = await bash.execute({ command: FAST });
+      const content = String(out.content);
+      expect(content).toContain("hi");
+      expect(content).not.toContain("[truncated]");
+      expect(content).not.toContain("[output truncated]");
+    } finally {
+      await shell.dispose();
     }
   });
 

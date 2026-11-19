@@ -198,6 +198,35 @@ describe("newSession / admit", () => {
     expect(listSessionsNeedingInboxRecover(store)).not.toContain(s.id);
   });
 
+  it("listDanglingPromotedAdmits closes on seat speech (not only kind:user)", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const seatSource = {
+      kind: "seat" as const,
+      form: "speech" as const,
+      channel: "parent" as const,
+      fromSessionId: "sess_mgr",
+    };
+    const receipt = admitPrompt(store, s.id, "from-manager", {
+      source: seatSource,
+    });
+    promoteNextAdmit(store, s.id);
+    expect(listDanglingPromotedAdmits(store.get(s.id).events, s.id)).toHaveLength(1);
+    store.append(s.id, {
+      type: "user/message",
+      ts: Date.now(),
+      turnId: "t-seat",
+      content: "from-manager",
+      source: seatSource,
+    });
+    expect(listDanglingPromotedAdmits(store.get(s.id).events, s.id)).toHaveLength(0);
+    // A later pending must promote, not re-resolve the settled seat admit.
+    admitPrompt(store, s.id, "next");
+    const resolved = resolveAdmitsForTurn(store, s.id);
+    expect(resolved.text).toBe("next");
+    expect(resolved.receipts[0]?.admitId).not.toBe(receipt.admitId);
+  });
+
   it("resolveAdmitsForTurn: dangling queue wins over newer pending", () => {
     const store = createMemorySessionStore();
     const s = newSession(store);

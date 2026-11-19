@@ -150,6 +150,16 @@ export interface FaceRuntime {
     string,
     { provider: string; model: string; reasoningEffort?: string }
   >;
+  /**
+   * sessionId → roster member that opened / dispatched the session
+   * (Overview 委派方 when not the human 老板 alone).
+   */
+  readonly sessionOpeners: Map<
+    string,
+    import("./session-opener.js").SessionOpenerRecord
+  >;
+  /** Sessions where the UI composer (human_face) has admitted at least once. */
+  readonly sessionHumanSpoke: Set<string>;
   /** sessionId → agentPreset id */
   readonly sessionAgentPresets: Map<string, string>;
   /** sessionId → project cwd (DSH session.list / blank reuse). */
@@ -320,11 +330,26 @@ export interface FaceRuntime {
    * After soft-disable / remove / update mutates disk: Host reconciles the
    * in-process plugin loader (unload disabled / missing, load newly enabled).
    * Pass `reloadIds` after install/update so already-live process plugins
-   * remount from disk. Client half still needs a browser reload (`needsRestart`).
+   * remount from disk. Client overlay soft-remounts on install / enable /
+   * update / reload and soft-unloads on disable / delete via
+   * `clientBootOverlay` + boot-changed (hard-refresh only on failure).
    */
   syncManagedProcessPlugins?(options?: {
     readonly reloadIds?: readonly string[];
   }): Promise<void>;
+  /**
+   * Live user-overlay client boot graph (`{pluginsDir}/web/boot.json` after
+   * soft-disable filter). Settings soft-remounts these without product HMR.
+   */
+  clientBootOverlay?(): {
+    readonly rev: string;
+    readonly entries: readonly {
+      readonly id: string;
+      readonly url: string;
+      readonly rev: string;
+      readonly inject: readonly string[];
+    }[];
+  };
   /**
    * Standing tool registry (preset layer) when no live agent is remembered.
    * Host wires Isolating WorkflowEngine `tools.*` from this.

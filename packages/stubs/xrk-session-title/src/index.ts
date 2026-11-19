@@ -24,6 +24,20 @@ import { fallbackSessionTitle, normalizeSessionTitle } from './normalize.ts'
 
 export { fallbackSessionTitle, normalizeSessionTitle, truncateTitleUtf8 } from './normalize.ts'
 
+/**
+ * Attachment handle captions that may lack `modelOnly` on older wire paths.
+ * Kept local so this Cordis stub does not depend on `@xrkseek/protocol`.
+ */
+function looksLikeAttachmentHandleCaption(text: string): boolean {
+  const t = text.trim()
+  return (
+    /^\[文件附件 .+（sha256:[a-f0-9]+/u.test(t)
+    || /^\[图\d+\s+sha256:[a-f0-9]+/u.test(t)
+    || /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+/u.test(t)
+    || /^\[image omitted because this model accepts text only;/u.test(t)
+  )
+}
+
 /** Identifies one session-title provider registration. */
 export type SessionTitleProviderId = Branded<'SessionTitleProviderId'>
 
@@ -175,8 +189,13 @@ export function collectSessionTitleMessages(
     const content = event.data.content
     const text = content
       // Model-only handle text (image/file attachment ids) is not something the
-      // reader wrote, so it must not become a session title.
-      .filter((block): block is Extract<(typeof content)[number], { type: 'text' }> => block.type === 'text' && block.modelOnly !== true)
+      // reader wrote, so it must not become a session title. Also drop captions
+      // that lost `modelOnly` on the wire (same heuristic as reader UI).
+      .filter((block): block is Extract<(typeof content)[number], { type: 'text' }> => (
+        block.type === 'text'
+        && block.modelOnly !== true
+        && !looksLikeAttachmentHandleCaption(block.text)
+      ))
       .map(block => block.text)
       .join('\n')
     if (normalizeSessionTitle(text, Number.MAX_SAFE_INTEGER).length === 0) continue

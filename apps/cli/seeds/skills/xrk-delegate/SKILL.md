@@ -1,61 +1,66 @@
 ---
 name: xrk-delegate
 description: >-
-  When and how to spawn subagents without wasting tokens, and how to write
-  干员 playbooks for team_save — including advanced 公文包 (briefcase). Use when
-  the user asks to parallelize, spawn agents, 「开子代理」「并行」「delegate」
-  「fan out」, 干员/Agent Team 总结经验·建干员·委派·分享·导入·就绪·修订, or
-  after Frugal/Shallow badge questions about subagents. For the session that
-  manages Team / mints members — not a default load for every spawned 干员.
+  Manager-kind parents only (coding / 向阳 / IM): spawn, team_save/import/ready,
+  team_home. Not for agent-kind identity seats or delegated children — they
+  follow playbook + <seat_identity>. Triggers: 开子代理 / 并行 / Team / 建干员 /
+  开家 / Frugal·Shallow subagent questions.
 ---
 
 # 委派子代理
 
-Each child = a full model session. Prefer doing it yourself. Spawn only when the task is independent or would pollute this context.
+Each child = a full model session. Prefer doing it yourself.
 
-**Who loads this skill：** coding / 向阳 / IM **父会话**在建干员、派活、导入、准备环境、导出时。已派出去的干员默认跟自己的 **playbook** 干活，不必再 `skill xrk-delegate`（除非任务明确要求再建干员）。
+**Load here:** manager-kind parent. **Skip:** agent-kind seat / subagent (playbook + `<seat_identity>` `report`/`ui`/`lane`).
 
-**Parity：** `team_*` = Team Roster UI. Settings/MCP → `xrk-capability-attach`. Skill habits → `xrk-create-skill`（不是干员）.
+**Parity:** `team_*` = Team UI. Settings → `xrk-capability-attach`. Habits → `xrk-create-skill`.
+
+## Two kinds · two dispatch faces
+
+Names follow Settings titles (`<seat_identity>`). Do not invent seat words.
+
+| Face | When | Call | cwd |
+|------|------|------|-----|
+| Agent-kind home | Specialty / human speaks | `team_home` → `workspace_session_prompt` | agent-home |
+| Manager-kind spawn | Parallel slice in coding lead seat | `subagent member_id=` (ready) | **parent manager-kind** |
+
+Roster member ≠ agent-kind home. `team_save` / import / `team_ready` do **not** mint homes — only `team_home` / UI.
+
+Children: **no** `workspace_*` / TTS·ASR — parent opens peers. Tool map → `xrk-tool-surfaces`.
 
 ```
 - [ ] 1. Badge: Frugal/minimal/shell = no spawn; Shallow depth≤1; Harness nests
 - [ ] 2. Prefer team_list → member_id; else role
-- [ ] 3. Standalone prompt (paths · acceptance); short description; do not re-paste playbook
+- [ ] 3. Standalone prompt (paths · acceptance); do not re-paste playbook
 - [ ] 4. Default continuable; one-shot only if user asked to wait
 - [ ] 5. Caps: ≤2 live, depth ≤2 — Settings → Plugins → Agent loop
 ```
 
-## 干员生态（主会话知情）
+## Roster ecology (manager-kind parents)
 
-| 类型 | 有什么 | 会话 cwd |
-|------|--------|----------|
-| **thin** | name + playbook（+ inject/tools） | 继承父工作区 |
-| **advanced** | playbook.md · **公文包 (briefcase)**（`workspace/` 材料）· `skills/<id>/`（含 references/）· `env/SETUP.md` | 仍继承父工作区；公文包路径动态注入 |
-
-现实路径：做完一件事 → 总结进 playbook → `team_save` →（高级）按 `env/SETUP.md` 准备环境 → `team_ready` → `subagent member_id=…`。
+| Type | Has | Spawn cwd |
+|------|-----|-----------|
+| **thin** | name + playbook（+ inject/tools） | parent workspace |
+| **advanced** | playbook.md · **公文包**（`workspace/` · `skills/` · `env/SETUP.md`） | parent + briefcase inject |
 
 | Intent | Call |
 |--------|------|
-| 建 thin | `team_save` name + playbook（+ inject/tools） |
-| 建 **高级** | `team_save` `kind=advanced` + skills/files/env_prep |
-| 导入朋友文件 | `team_import` `card=` 或 `pack=` → 读 envPrep → `team_ready` |
-| 非法包 | 酌情查看/修复 → 再 `team_import` → 准备 → `team_ready` |
-| 修订 / 加料 | `team_save` `id=`（可只改 playbook，或再 merge skills/files/env_prep） |
-| 子改自己 | `team_self` |
-| 导出给用户 | `team_export` id= [`dir=`]（thin→JSON，advanced→zip） |
-| 卸载 | `team_remove` id= + scope= |
-| 派活 | `subagent` `member_id=`（须 ready） |
+| Mint thin / advanced | `team_save`（高级 + skills/files/env_prep） |
+| Open agent-kind home / human speak | reuse mem_ → `team_home` → prompt（禁无故再 mint advanced） |
+| Import | `team_import` → envPrep → `team_ready` → need home → `team_home` |
+| Revise / export / remove | `team_save id=` / `team_export` / `team_remove` |
+| Parallel inside manager-kind | `subagent member_id=`（须 ready） |
 
 ```
-- [ ] Playbook = 你总结的可重复流程，不是「从会话自动练」
-- [ ] 高级才有 公文包 (briefcase)；thin 没有
-- [ ] 主会话写高级 playbook 时写清公文包里有什么（材料 / skills / references）
-- [ ] 勿用 propose_skill 代替干员
+- [ ] Playbook = repeatable flow you wrote — not auto-trained from chat
+- [ ] Advanced only has 公文包; thin does not
+- [ ] Advanced playbook must name briefcase contents
+- [ ] Do not use propose_skill as a roster member
 ```
 
-## Playbook 怎么写（主会话模板）
+## Playbook (parent template)
 
-**Playbook authority：** put task-level rules in the playbook header + `<seat_identity>`. Do not paste manager `XRK.md` into child prompts. Home layout → **`xrk-product-home`**.
+**Authority:** playbook header + `<seat_identity>`. Do not paste parent `XRK.md` into children. Disk map → **`xrk-product-home`**.
 
 **Thin：**
 
@@ -92,11 +97,11 @@ Each child = a full model session. Prefer doing it yourself. Spawn only when the
 
 **Example — 收到 zip**
 
-1. `team_import pack=…`（非法则修后再导）
-2. `team_list` 看 envPrep / packHome / skills
-3. 主会话按 SETUP 准备环境 → `team_ready`
-4. 需要加料：`team_save id=… files=[…] skills=[…]` 或改 playbook
-5. `subagent member_id=…`；分享：`team_export id=… dir=…`
+1. `team_import pack=…`（成员 only，无家）
+2. `team_list` 看 envPrep / packHome
+3. envPrep → `team_ready`
+4. `team_home` → `workspace_session_prompt(homeWorkspaceId)` 或 `subagent member_id=…`
+5. 加料：`team_save id=…`；分享：`team_export id=…`
 
 ## When / Shape（委派）
 

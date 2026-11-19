@@ -236,6 +236,10 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     mode: delivery,
     content: p.content,
     seatChannel,
+    // Parent AI follow-up → 委派方; human through this RPC → 老板 (no from).
+    ...(seatChannel === "parent"
+      ? { fromSessionId: parentSessionId }
+      : {}),
     ...(typeof p.clientTimeZone === "string"
       ? { clientTimeZone: p.clientTimeZone }
       : {}),

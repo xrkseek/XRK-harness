@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   estimateRequestTokens,
+  estimateSystemTokens,
   estimateText,
   estimateTextForSoftBudget,
 } from "../src/index.js";
@@ -12,6 +13,15 @@ describe("soft-budget text density", () => {
     // Two CJK chars: fixed /4 → 1; soft-budget → 2.
     expect(estimateText("你好")).toBe(1);
     expect(estimateTextForSoftBudget("你好")).toBe(2);
+  });
+
+  it("estimateSystemTokens densifies CJK standing prompts", () => {
+    const ascii = estimateSystemTokens("abcd");
+    const cjk = estimateSystemTokens("你好");
+    // Both are 2 code units before overhead under fixed chars/4, but soft
+    // density prices the CJK pair as 2 tokens (+ ROLE_OVERHEAD).
+    expect(cjk).toBeGreaterThan(ascii);
+    expect(cjk).toBe(estimateTextForSoftBudget("你好") + 4);
   });
 
   it("estimateRequestTokens density soft-budget raises CJK message cost only", () => {

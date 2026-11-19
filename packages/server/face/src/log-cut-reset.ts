@@ -8,6 +8,7 @@ import {
 } from "@xrkseek/core-session";
 import { forgetSessionProcessCaches } from "@xrkseek/core-agent-loop";
 import type { FaceRuntime } from "./context.js";
+import { clearStatusSnapshotCache } from "./status-snapshot-cache.js";
 
 export function resetFaceStateAfterLogCut(
   runtime: FaceRuntime,
@@ -21,6 +22,8 @@ export function resetFaceStateAfterLogCut(
     readSessionEvents(runtime.store, sessionId),
   );
   runtime.inboxWire.clear(sessionId);
+  // Soft-poll Overview must not keep a pre-cut delivery.queued note.
+  clearStatusSnapshotCache(sessionId);
   // Mirror pathAllowlist: drop then re-seed from the *remaining* log so
   // edit-resubmit / truncate does not leave expand empty until the next
   // tool_search (hydrate only runs on first ToolRegistry bind).

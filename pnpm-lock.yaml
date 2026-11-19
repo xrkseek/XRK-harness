@@ -183,6 +183,8 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  apps/operators-site: {}
+
   apps/site: {}
 
   apps/web:
@@ -253,6 +255,10 @@ importers:
       '@xrkseek/server-http':
         specifier: workspace:*
         version: link:../../packages/server/http
+
+  extensions/example-composer-action: {}
+
+  extensions/example-theme-tokens: {}
 
   packages/a2a:
     dependencies:
@@ -3079,6 +3085,9 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      '@xrkseek/exec-memory':
+        specifier: workspace:*
+        version: link:../../exec/memory
       '@xrkseek/exec-shell':
         specifier: workspace:*
         version: link:../../exec/shell
@@ -10260,7 +10269,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       '@types/keyv': 3.1.4
-      '@types/node': 22.20.1
+      '@types/node': 26.6.6
       '@types/responselike': 1.0.3
 
   '@types/chai@5.2.3':
@@ -10280,7 +10289,7 @@ snapshots:
 
   '@types/fs-extra@9.0.13':
     dependencies:
-      '@types/node': 22.20.1
+      '@types/node': 26.6.6
 
   '@types/hast@3.0.5':
     dependencies:
@@ -10296,7 +10305,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 22.20.1
+      '@types/node': 26.6.6
 
   '@types/mdast@4.0.4':
     dependencies:
@@ -10329,7 +10338,7 @@ snapshots:
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 22.20.1
+      '@types/node': 26.6.6
 
   '@types/retry@0.12.0': {}
 
@@ -10861,7 +10870,7 @@ snapshots:
 
   buffer-image-size@0.6.4:
     dependencies:
-      '@types/node': 22.20.1
+      '@types/node': 26.6.6
 
   builder-util-runtime@9.7.0(supports-color@7.2.0):
     dependencies:
@@ -11684,7 +11693,7 @@ snapshots:
 
   happy-dom@20.14.5:
     dependencies:
-      '@types/node': 22.20.1
+      '@types/node': 26.6.6
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.2
       buffer-image-size: 0.6.4

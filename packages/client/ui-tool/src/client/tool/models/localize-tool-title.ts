@@ -35,6 +35,17 @@ const TOOL_NAME_KEYS: Record<string, string> = {
   cordis_run: 'tool.name.cordisRun',
   cordis_stop: 'tool.name.cordisStop',
   cordis_undefine: 'tool.name.cordisUndefine',
+  job_list: 'tool.name.jobList',
+  job_output: 'tool.name.jobOutput',
+  job_kill: 'tool.name.jobKill',
+  browser_open: 'tool.name.browserOpen',
+  browser_snapshot: 'tool.name.browserSnapshot',
+  browser_act: 'tool.name.browserAct',
+  browser_wait: 'tool.name.browserWait',
+  browser_tabs: 'tool.name.browserTabs',
+  browser_get: 'tool.name.browserGet',
+  browser_find: 'tool.name.browserFind',
+  browser_reload: 'tool.name.browserReload',
 }
 
 /**

@@ -1076,20 +1076,98 @@ describe('applyTruncateCut', () => {
     ])
     await session.open()
     expect(session.getSnapshot().nodes).toHaveLength(4)
+    session.handleRunning(true)
+    expect(session.getSnapshot().running).toBe(true)
     expect(session.applyTruncateCut(6)).toBe(true)
     const snapshot = session.getSnapshot()
     expect(snapshot.openState).toBe('open')
+    expect(snapshot.running).toBe(false)
     expect(snapshot.nodes.map(n => n.seq)).toEqual([2, 4])
     expect(api.callsOf('session.history')).toHaveLength(1)
   })
 
-  it('returns false when the kept prefix is not in the loaded window', async () => {
+  it('returns false when the kept prefix is not in the loaded window but still arms the ghost barrier', async () => {
     const { api, session } = makeSession()
     api.onHistory = () => histResponse(plainTurn(20, 2, 'late', 'page'), true)
     await session.open()
+    session.handleRunning(true)
+    session.handleMuxEnvelope('q' as never, {
+      type: 'session/queue',
+      sessionId: SID,
+      items: [{
+        id: 'admit-miss',
+        placement: 'queued',
+        message: {
+          id: 'm-miss',
+          role: 'user',
+          content: [{ type: 'text', text: 'ghost dock' }],
+          source: { kind: 'user', rpcId: 'rpc-miss' },
+        },
+      }],
+    } as never)
     expect(session.applyTruncateCut(10)).toBe(false)
-    expect(session.getSnapshot().openState).toBe('open')
+    const after = session.getSnapshot()
+    expect(after.openState).toBe('open')
+    expect(after.nodes).toHaveLength(2)
+    expect(after.running).toBe(false)
+    expect(after.queue).toEqual([])
+    session.handleMuxEnvelope('ghost-miss' as never, {
+      type: 'session/event',
+      sessionId: SID,
+      event: ev.assistant(22, 2, 'must not land after miss-window cut'),
+    })
     expect(session.getSnapshot().nodes).toHaveLength(2)
+  })
+
+  it('empties the window in place when kept is 0 (delete opener / wipe)', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(1, 0, 'opener', 'reply'))
+    await session.open()
+    session.handleRunning(true)
+    expect(session.getSnapshot().composerPhase).toBe('active')
+    expect(session.applyTruncateCut(0)).toBe(true)
+    const after = session.getSnapshot()
+    expect(after.openState).toBe('open')
+    expect(after.running).toBe(false)
+    expect(after.nodes).toEqual([])
+    expect(after.blank).toBe(true)
+    expect(after.composerPhase).toBe('blank')
+    session.handleMuxEnvelope('ghost-empty' as never, {
+      type: 'session/event',
+      sessionId: SID,
+      event: ev.assistant(4, 0, 'must not revive wiped log'),
+    })
+    expect(session.getSnapshot().nodes).toEqual([])
+  })
+
+  it('clears stale title projections when wipe-to-empty omits a Host baseline', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(1, 0, 'opener', 'reply'))
+    await session.open()
+    session.projections.seed({
+      asOfSeq: 12,
+      values: { title: 'stale-after-wipe' },
+    })
+    expect(session.applyTruncateCut(0)).toBe(true)
+    api.onHistory = () => Promise.resolve(ok({
+      events: [] as never[],
+      hasMore: false,
+    }))
+    await session.resealProjectionsAfterTruncate()
+    expect(session.projections.get('title')).toBeUndefined()
+  })
+
+  it('reseals empty Host baseline and drops pre-cut title', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(1, 0, 'opener', 'reply'))
+    await session.open()
+    session.projections.seed({
+      asOfSeq: 12,
+      values: { title: 'before-wipe' },
+    })
+    expect(session.applyTruncateCut(0)).toBe(true)
+    await session.resealProjectionsAfterTruncate({ asOfSeq: 3, values: {} })
+    expect(session.projections.get('title')).toBeUndefined()
   })
 
   it('reseals projections from a post-cut history baseline without emptying the chat', async () => {
@@ -1113,6 +1191,64 @@ describe('applyTruncateCut', () => {
     expect(session.projections.get('title')).toBe('after-cut')
     expect(session.getSnapshot().openState).toBe('open')
     expect(session.getSnapshot().nodes.map(n => n.seq)).toEqual([2, 4])
+  })
+
+  it('drops late cancelled-tail mux frames and clears queue / pending chrome', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse([
+      ...plainTurn(1, 0, 'a', 'b'),
+      ...plainTurn(7, 1, 'c', 'd'),
+    ])
+    await session.open()
+    session.handleMuxEnvelope('q' as never, {
+      type: 'session/queue',
+      sessionId: SID,
+      items: [{
+        id: 'admit-1',
+        placement: 'queued',
+        message: {
+          id: 'm1',
+          role: 'user',
+          content: [{ type: 'text', text: 'queued ghost' }],
+          source: { kind: 'user', rpcId: 'rpc-q1' },
+        },
+      }],
+    } as never)
+    session.handleMuxEnvelope('ra' as never, {
+      type: 'approval/requested',
+      sessionId: SID,
+      approvalId: 'ap-cut' as never,
+      toolName: 'rm',
+    })
+    session.beginSubmission({ mode: 'queue', text: 'stale echo', attachments: [] })
+    session.handleRunning(true)
+    expect(session.getSnapshot().queue).toHaveLength(1)
+    expect(session.getSnapshot().pending).toHaveLength(1)
+    expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
+
+    expect(session.applyTruncateCut(6)).toBe(true)
+    const after = session.getSnapshot()
+    expect(after.running).toBe(false)
+    expect(after.queue).toEqual([])
+    expect(after.pending).toEqual([])
+    expect(after.pendingSubmissions).toEqual([])
+    expect(after.nodes.map(n => n.seq)).toEqual([2, 4])
+
+    // Ghost from the cancelled turn (seq still in the retired range).
+    session.handleMuxEnvelope('ghost' as never, {
+      type: 'session/event',
+      sessionId: SID,
+      event: ev.assistant(10, 1, 'should not reappear'),
+    })
+    expect(session.getSnapshot().nodes.map(n => n.seq)).toEqual([2, 4])
+
+    // Post-cut admit uses a mux seq above the retired watermark.
+    session.handleMuxEnvelope('fresh' as never, {
+      type: 'session/event',
+      sessionId: SID,
+      event: ev.user(13, 'resend after cut'),
+    })
+    expect(session.getSnapshot().nodes.some(n => n.seq === 13)).toBe(true)
   })
 })
 

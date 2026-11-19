@@ -8,6 +8,7 @@ import {
   createFaceOnlyServer,
   createFaceRuntime,
   formatJobCompletionNotice,
+  jobCompletionNoticeSummary,
   jobViews,
   type FaceJobsSource,
   type JobView,
@@ -270,6 +271,19 @@ describe("job completion notices (DSH tool-jobs wakeup)", () => {
     ).toBe(
       "background job pty-send-1 (pty-send: pty-1: ls) finished [status: completed, wait: stdin_read]. Read its output with job_output.",
     );
+  });
+
+  it("jobCompletionNoticeSummary is the collapsed notice one-liner", () => {
+    expect(
+      jobCompletionNoticeSummary({
+        id: "bash-2",
+        kind: "bash",
+        label: "echo hi",
+        status: "completed",
+        startedAt: 1,
+        finishedAt: 2,
+      }),
+    ).toBe("bash-2 [completed]");
   });
 
   it("idle agent: admit + wake on settle; already-settled at bind is silent", async () => {

@@ -170,9 +170,9 @@ declare module '@xrkseek/client-ui-slots' {
      * Entries render by ascending `order`; negative values are reserved for
      * static session context that precedes interactive actions. The owner
      * passes nothing: everything a control needs comes from the framework
-     * session kit (`sessionId`, `useSession`, `useInput`, `inputActions`) and
-     * from the registrant's own inject face, so an empty owner share means
-     * self-sufficient, not starved.
+     * session kit (`sessionId`, `useSession`, `useInput`, `inputActions`,
+     * `useModelSelection`, `modelSelectionActions`) and from the registrant's
+     * own inject face, so an empty owner share means self-sufficient, not starved.
      */
     'conversation.session.header.actions': { kind: 'list'; scope: 'session'; owner: ConversationHeaderActionOwnerProps }
     /**
@@ -302,7 +302,9 @@ declare module '@xrkseek/client-ui-slots' {
      */
     'conversation.composer.dock': { kind: 'list'; scope: 'session'; owner: InputZone }
     /**
-     * The left end of the tool row INSIDE the composer card, after the
+     * The left end of the tool row INSIDE the composer card — registrants get
+     * the session standard kit (`useInput`, `inputActions`, `useModelSelection`)
+     * plus the {@link InputZone} owner share. After the
      * resident chrome (access mode, plan, attach) — the seat for a small
      * always-visible control. Entries sit beside that chrome, never replace
      * it. Same {@link InputZone} owner share; use `.right` for a control that
@@ -314,8 +316,9 @@ declare module '@xrkseek/client-ui-slots' {
      * The right end of the same tool row, before the primary send button —
      * the seat for a control the user reaches on the way to sending (the
      * model select sits in its own named seat just left of here). Same
-     * {@link InputZone} owner share and the same one-row height budget as
-     * `conversation.input.left`.
+     * {@link InputZone} owner share, the same one-row height budget as
+     * `conversation.input.left`, and the session standard kit including
+     * `useModelSelection` / `useInput` / `inputActions`.
      */
     'conversation.input.right': { kind: 'list'; scope: 'session'; owner: InputZone }
     /**
@@ -516,15 +519,16 @@ export interface ChatNodeOwnerProps {
    */
   restoreAt: (seq: number) => void
   /**
-   * Edit-resubmit a past user message: confirm truncate (in-place beforeSeq) and
-   * optionally workspace revert, then prompt the child with `text`.
+   * Edit-resubmit a past user message: seed composer from content (text + media),
+   * confirm truncate on send, optionally revert workspace files.
    */
-  editAt: (seq: number, text: string) => void
+  editAt: (seq: number, content: readonly unknown[]) => void
   /**
-   * Regenerate from a past user message: truncate later turns and re-prompt
-   * the same text (confirm when a live turn or later nodes would be dropped).
+   * Regenerate from a past user message: truncate later turns and re-prompt the
+   * same content including durable media (confirm when a live turn or later
+   * nodes would be dropped).
    */
-  regenerateAt: (seq: number, text: string) => void
+  regenerateAt: (seq: number, content: readonly unknown[]) => void
   /**
    * Delete/recall from a past user message: confirm truncate before this seq
    * (in-place beforeSeq) and optionally workspace revert.
@@ -1006,9 +1010,9 @@ export interface ChatViewInjected {
    */
   restoreAt: (seq: number) => void
   /** Edit-resubmit confirm → truncate before `seq` (+ optional rollback) → prompt. */
-  editAt: (seq: number, text: string) => void
-  /** One-click regenerate from user `seq` with the same `text`. */
-  regenerateAt: (seq: number, text: string) => void
+  editAt: (seq: number, content: readonly unknown[]) => void
+  /** One-click regenerate from user `seq` with the same content (text + media). */
+  regenerateAt: (seq: number, content: readonly unknown[]) => void
   /** Delete/recall confirm → truncate before `seq` (+ optional rollback). */
   deleteAt: (seq: number) => void
   /** Withdraw one still-pending next-step steer (Host `updateQueue` remove). */

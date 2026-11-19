@@ -53,14 +53,16 @@ describe("session_capability", () => {
     const text = formatSessionCapability(runtime, sessionId);
     expect(text).toMatch(/permission: .*path=/);
     expect(text).toMatch(/shell_confine=/);
-    expect(text).toMatch(/permission_brief:/);
+    expect(text).toMatch(/^gate:/m);
+    expect(text).not.toMatch(/permission_label:/);
+    expect(text).not.toMatch(/permission_brief:/);
+    expect(text).not.toMatch(/surface_brief:/);
     expect(text).toMatch(/tool_surface: harness \(/);
-    expect(text).toMatch(/surface_brief: kind=coding_parent/);
-    expect(text).toMatch(/full peer\+subagents/);
+    expect(text).toMatch(/kind=coding_parent/);
+    expect(text).toMatch(/prefer team_list member_id/);
     expect(text).toMatch(/^model:/m);
     expect(text).toMatch(/^modality: (multimodal|text-only)/m);
     expect(text).not.toMatch(/modality_brief:/);
-    expect(text).toMatch(/path_allowlist: \d+ objects/);
 
     const provider = createSessionCapabilityFragmentProvider(runtime);
     const frags = provider.produce({ sessionId });
@@ -87,10 +89,12 @@ describe("session_capability", () => {
     if (!xy.result.ok) return;
     const xyId = (xy.result.value as { sessionId: string }).sessionId;
     const xyText = formatSessionCapability(runtime, xyId);
-    expect(xyText).toMatch(/tool_surface: qichuang \(full-access/);
+    expect(xyText).toMatch(/tool_surface: qichuang \(orch/);
     expect(xyText).toMatch(/settings\+team_\*/);
+    expect(xyText).toMatch(/session_prompt/);
     expect(xyText).toMatch(/path=open/);
     expect(xyText).toMatch(/shell_confine=off/);
+    expect(xyText).toMatch(/kind=orchestrator|verbs in <session_posture>/);
   });
 
   it("preamble includes inherited permission and weakened tool_surface", () => {
@@ -283,7 +287,9 @@ describe("session_capability", () => {
     expect(text).toContain(`materials: ${materials}`);
     expect(text).not.toContain(`playbook: ${path.join(packHome, "playbook.md")}`);
     expect(text).toContain(`ask: ask→${parentId}`);
-    expect(text).toContain("answer_ask");
+    // Child card only routes ask→parent; answer_ask lives on the parent tool
+    // surface (and capability child_ask_pending when live).
+    expect(text).not.toContain("answer_ask");
     expect(text).toContain("omitted:");
     expect(text).toContain("ask_user");
     expect(text).not.toMatch(/tool_surface: harness/);

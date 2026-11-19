@@ -20,7 +20,7 @@ import type {} from '@xrkseek/xrk-api-remotes/client'
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 import {
-  downloadWorkspaceFile, resolveWorkspacePath, routeWorkspaceOpenFile,
+  allowNativeWorkspaceOpen, downloadWorkspaceFile, resolveWorkspacePath, routeWorkspaceOpenFile,
 } from '@xrkseek/client-runtime/client'
 import type { BoundActions } from '@xrkseek/client-ui-slots'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.plan seat).
@@ -222,9 +222,11 @@ export function apply(ctx: ClientContext): void {
       openChangedFile: async (path: string) => {
         const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
         const resolved = resolveWorkspacePath(cwd, path)
-        // Same cascade as chat openFile: workbench → OS open → download.
-        const allowNativeOpen = connection.isLoopback
-          && connection.hostDescription.getSnapshot()?.canOpenPath === true
+        // Same cascade as chat openFile (APK thin shell skips guest OS open).
+        const allowNativeOpen = allowNativeWorkspaceOpen(
+          connection.isLoopback,
+          connection.hostDescription.getSnapshot()?.canOpenPath === true,
+        )
         await routeWorkspaceOpenFile(
           resolved,
           async (p) => {

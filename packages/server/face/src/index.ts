@@ -218,6 +218,15 @@ export {
   type SessionCollabLane,
 } from "./agent-home-boundary.js";
 export {
+  applyBossVoiceToolMask,
+  BOSS_VOICE_TOOL_NAMES,
+  markSessionHumanSpoke,
+  readSessionOpener,
+  rememberSessionOpener,
+  sessionCreatedByBoss,
+  type SessionOpenerRecord,
+} from "./session-opener.js";
+export {
   listWorkspacesForDiscovery,
   readWorkspaceDiscoverySettings,
   WORKSPACE_DISCOVERY_DEFAULTS,
@@ -297,6 +306,13 @@ export {
   type SeatChannel,
 } from "./seat-channel.js";
 export {
+  bossStatusBroadcastSource,
+  buildAdmitSpeechSource,
+  peerCollabHandoffSource,
+  subagentHandoffSource,
+  threadStopHandoffSource,
+} from "./message-source.js";
+export {
   DEFAULT_SEAT_TITLE_SCHEME,
   SEAT_TITLE_SCHEMES,
   allBuiltInSeatTitles,
@@ -345,13 +361,16 @@ export {
 export {
   FacePeerCollabWaiters,
   armPeerCollabAfterPrompt,
+  breakMutualPeerSyncWait,
   clearPeerCollabAfterSyncReply,
   deliverPeerCollabIdleHandoffs,
   deliverPeerCollabStopHandoffs,
   flushPeerCollabIfPeerIdle,
+  formatMutualPeerWaitAsyncNotice,
   formatPeerCollabCompletionNotice,
   formatPeerCollabStopHandoffNotice,
   peerCollabNoticeSource,
+  promoteFailedSyncPeerWait,
   type PeerCollabWaitMode,
   type PeerCollabWaiter,
 } from "./peer-collab-handoff.js";
@@ -415,6 +434,7 @@ export {
   SessionTitleInvalidError,
   normalizeSessionTitle,
   fallbackSessionTitle,
+  humanTitleSourceText,
   type FaceProjectionMap,
   type FaceProjectionRegistry,
   type ProjectionSnapshot,
@@ -480,6 +500,7 @@ export {
   faceToolLookup,
   jobViews,
   formatJobCompletionNotice,
+  jobCompletionNoticeSummary,
   formatSubagentCompletionNotice,
   formatSubagentStopNotice,
   formatSubagentUserPromptNotice,
@@ -729,6 +750,8 @@ export {
 } from "./llm-resolve.js";
 export {
   resolveSessionModelSelection,
+  selectionRoutable,
+  routeServed,
   type FaceModelSelection,
 } from "./model-catalog.js";
 export {

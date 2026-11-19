@@ -33,10 +33,10 @@ describe("formatCollabBoardText", () => {
       ],
     });
     expect(text).toContain("mem_68a69c0a9fdc4b53");
-    expect(text).toContain("Spawn: subagent member_id");
+    expect(text).toContain("spawn member_id");
     expect(text).toContain("thread_message");
-    expect(text).toContain("Never agent-home");
-    expect(text).toContain("Roster · peers (经理)");
+    expect(text).toContain("never 干员工作区");
+    expect(text).toContain("Roster (经理工作区)");
     expect(text).toContain("th_fresh");
     expect(text).toContain("sess_parent*");
     expect(text).toContain("写 changelog");
@@ -51,9 +51,9 @@ describe("formatCollabBoardText", () => {
       membersCatalog: "(no Agent Team members yet)",
       threads: [],
     });
-    expect(text).toContain("(none)");
+    expect(text).toContain("Peers: none");
     expect(text).toContain("no Agent Team members yet");
-    expect(text).toContain("todo · 支线 · 主线");
+    expect(text).toContain("thread_message");
   });
 
   it("lists unpinned parents with who · duty · todo · 支线 · 主线", () => {
@@ -76,7 +76,7 @@ describe("formatCollabBoardText", () => {
         { sessionId: "sess_self", title: "当前会话", identity: "经理", self: true },
       ],
     });
-    expect(text).not.toContain("(none)");
+    expect(text).not.toContain("Peers: none");
     expect(text).toContain("sess_peer");
     expect(text).toContain("写注入目录");
     expect(text).toContain("who=发版员");
@@ -99,7 +99,7 @@ describe("formatCollabBoardText", () => {
     });
     expect(text).toContain("no subagent");
     expect(text).toContain("skill-load");
-    expect(text).not.toContain("Spawn: subagent");
+    expect(text).not.toContain("spawn member_id");
   });
 
   it("IM surface keeps thread_message and points subagent at coding workspaces", () => {
@@ -121,7 +121,7 @@ describe("formatCollabBoardText", () => {
     expect(text).toContain("thread_message");
     expect(text).toContain("th_x");
     expect(text).toContain("im_send");
-    expect(text).toContain("Never agent-home");
+    expect(text).toContain("never 干员工作区");
   });
 
   it("奇创 surface prefers admin tools and peer dispatch", () => {
@@ -132,14 +132,14 @@ describe("formatCollabBoardText", () => {
       membersCatalog: "- mem_y",
       threads: [],
     });
-    expect(text).toContain("向阳↔agent-home");
+    expect(text).toContain("向阳↔干员工作区");
     expect(text).toContain("workspace_session_prompt");
     expect(text).toContain("thread_message");
-    expect(text).toContain("向日葵 admin");
-    expect(text).toContain("settings_*");
-    expect(text).toContain("workspace_create");
-    expect(text).not.toContain("Spawn: subagent");
-    expect(text).not.toContain("Never agent-home");
+    expect(text).toContain("向阳·经理工作区");
+    expect(text).toContain("team_home");
+    expect(text).toContain("其它经理工作区");
+    expect(text).toContain("干员工作区");
+    expect(text).not.toContain("spawn member_id");
   });
 
   it("agent-home surface bridges 向阳 and closes project coding", () => {
@@ -150,11 +150,11 @@ describe("formatCollabBoardText", () => {
       membersCatalog: "- mem_home",
       threads: [],
     });
-    expect(text).toContain("干员家");
-    expect(text).toContain("agent-home↔向阳");
-    expect(text).toContain("Never project coding");
-    expect(text).not.toContain("Never agent-home");
-    expect(text).not.toContain("Spawn: subagent member_id");
+    expect(text).toContain("干员工作区");
+    expect(text).toContain("specialty");
+    expect(text).toContain("↔向阳");
+    expect(text).toContain("never coding 经理工作区");
+    expect(text).not.toContain("spawn member_id");
   });
 });
 
@@ -189,6 +189,7 @@ describe("formatTeamMateBoardText", () => {
       },
     });
     expect(text).toContain("squad · parent=sess_parent");
+    expect(text).toContain("*=you");
     expect(text).toContain("sess_a*");
     expect(text).toContain("member=mem_scout");
     expect(text).toContain("who=调研");

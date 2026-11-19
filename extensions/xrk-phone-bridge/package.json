@@ -1,0 +1,24 @@
+{
+  "name": "@xrkseek/xrk-phone-bridge",
+  "version": "0.7.25",
+  "description": "Remote phone_* bridge (host HTTP + Settings whitelist + materialize tools/prompt/xrk-phone skill)",
+  "type": "module",
+  "files": [
+    "client.js",
+    "lib",
+    "materialize.mjs",
+    "plugin.mjs",
+    "README.md",
+    "skills",
+    "xrk.plugin.json"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "xrk": {
+    "client": {
+      "inject": ["@xrkseek/client-runtime"]
+    }
+  }
+}

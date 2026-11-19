@@ -43,10 +43,9 @@ describe("seat-identity", () => {
       bossNickname: "阿凯",
     });
     const text = formatSeatIdentity(runtime, sessionId);
-    expect(text).toContain("you: 经理（阿经） (project · mid-tier)");
-    expect(text).toContain("speaker: 老板（阿凯）");
-    expect(text).toContain("report: 老板（阿凯） only");
-    expect(text).toContain("peer: 向日葵@向阳 = peer (not boss)");
+    expect(text).toContain("you: 经理（阿经） (经理工作区)");
+    expect(text).toContain("ui: 老板（阿凯）");
+    expect(text).toContain("peer: 其它经理（含向日葵）");
     expect(text).toContain("titles: 老板 / 经理 / 干员");
   });
 
@@ -69,8 +68,9 @@ describe("seat-identity", () => {
       preference: "en",
     });
     const text = formatSeatIdentity(runtime, sessionId);
-    expect(text).toContain("you: Lead (project · mid-tier)");
-    expect(text).toContain("speaker: CEO（阿凯）");
+    expect(text).toContain("you: Lead (Lead工作区)");
+    expect(text).toContain("ui: CEO（阿凯）");
+    expect(text).toContain("peer: 其它Lead（含Sunflower）");
     expect(text).toContain("titles: CEO / Lead / Specialist");
   });
 
@@ -95,8 +95,10 @@ describe("seat-identity", () => {
       titleAgent: "干员",
     });
     const text = formatSeatIdentity(runtime, sessionId);
-    expect(text).toContain("you: 经理 (project · mid-tier)");
-    expect(text).toContain("speaker: 老板");
+    expect(text).toContain("you: 经理 (经理工作区)");
+    expect(text).toContain("ui: 老板");
+    // Custom titles keep Chinese; sunflower formal still follows UI locale (ja).
+    expect(text).toContain("peer: 其它经理（含ひまわり）");
     expect(text).toContain("titles: 老板 / 经理 / 干员");
   });
 
@@ -112,11 +114,8 @@ describe("seat-identity", () => {
     if (!created.ok) return;
     const sessionId = String((created.value as { sessionId: string }).sessionId);
     const text = formatSeatIdentity(runtime, sessionId);
-    expect(text).toContain(
-      "you: 向日葵（xrkseek） (xiangyang · mid-tier · 向阳空间)",
-    );
-    expect(text).toContain("report: 老板 only (not 经理)");
-    expect(text).toContain("peer: project 经理 = peer (not boss)");
+    expect(text).toContain("you: 向日葵（xrkseek） (经理工作区 · 向阳)");
+    expect(text).toContain("peer: 其它经理工作区");
     expect(text).toContain("nickname: locked");
     expect(runtime.agentRoster.get("global", SUNFLOWER_MEMBER_ID)?.name).toBe(
       "向日葵",
@@ -149,8 +148,10 @@ describe("seat-identity", () => {
     if (!created.ok) return;
     const homeId = String((created.value as { sessionId: string }).sessionId);
     expect(formatSeatIdentity(runtime, homeId)).toContain(
-      "you: 施工员自定义（小工） (agent-home)",
+      "you: 施工员自定义（小工） (干员工作区)",
     );
+    expect(formatSeatIdentity(runtime, homeId)).toContain("ui: 老板（直接对话）");
+    expect(formatSeatIdentity(runtime, homeId)).toContain("ui: 老板（直接对话）");
 
     const child = await sessionCreate(runtime, "c1", {
       workspaceId: home.workspaceId,
@@ -172,10 +173,9 @@ describe("seat-identity", () => {
     expect(childText).toContain(
       "you: 施工员自定义（小工） (subagent · parent_surface=identity)",
     );
-    expect(childText).toContain("report: 施工员自定义（小工）");
-    expect(childText).toMatch(/human_face: 老板 \(/);
-    expect(childText).toContain("channels: UI→[老板]");
-    expect(childText).toContain("parent_tool→[施工员自定义（小工）]");
+    expect(childText).toContain("report: 施工员自定义（小工）（委派方）");
+    expect(childText).toContain("lane: 干员工作区 spawn");
+    expect(childText).toMatch(/ui: 老板 \(sess_/);
     expect(childText).not.toMatch(/speaker: 老板/);
 
     const frags = createSeatIdentityFragmentProvider(runtime).produce({
@@ -223,11 +223,11 @@ describe("seat-identity", () => {
       label: "施工员",
     });
     const text = formatSeatIdentity(runtime, childId);
-    expect(text).toContain("report: 经理（阿经）");
+    expect(text).toContain("report: 经理（阿经）（委派方）");
     expect(text).toContain("parent_surface=manager");
-    expect(text).toContain("human_face: 老板（阿凯）");
-    expect(text).toContain("channels: UI→[老板（阿凯）]");
-    expect(text).toContain("parent_tool→[经理（阿经）]");
+    expect(text).toContain("lane: 经理工作区 spawn · not 干员工作区");
+    expect(text).toContain("ui: 老板（阿凯）");
+    expect(text).toMatch(/ui: 老板（阿凯） \(sess_/);
     expect(text).not.toMatch(/speaker: 老板/);
   });
 
@@ -269,11 +269,41 @@ describe("seat-identity", () => {
       label: "先锋甲",
     });
     const text = formatSeatIdentity(runtime, childId);
-    expect(text).toContain("report: 军师");
-    expect(text).toContain("human_face: 主公（阿凯）");
-    expect(text).toContain("channels: UI→[主公（阿凯）]");
-    expect(text).toContain("parent_tool→[军师]");
+    expect(text).toContain("report: 军师（委派方）");
+    expect(text).toContain("ui: 主公（阿凯）");
+    expect(text).toMatch(/ui: 主公（阿凯） \(sess_/);
+    expect(text).toContain("lane: 军师工作区 spawn · not 先锋工作区");
     expect(text).toContain("titles: 主公 / 军师 / 先锋");
+  });
+
+  it("project opened by 向阳: opener≠老板", async () => {
+    const runtime = createBareFaceRuntime();
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    const xy = await sessionCreate(runtime, "xy-open", {
+      workspaceId: XIANGYANG_WORKSPACE_ID,
+    });
+    expect(xy.ok).toBe(true);
+    if (!xy.ok) return;
+    const xyId = String((xy.value as { sessionId: string }).sessionId);
+    const root = path.join(runtime.productDir!, "proj-opened");
+    mkdirSync(root, { recursive: true });
+    const { workspace } = runtime.workspaces.create(root);
+    const proj = await sessionCreate(runtime, "proj-open", {
+      workspaceId: workspace.workspaceId,
+      inheritFrom: xyId,
+    });
+    expect(proj.ok).toBe(true);
+    if (!proj.ok) return;
+    const projId = String((proj.value as { sessionId: string }).sessionId);
+    const text = formatSeatIdentity(runtime, projId);
+    expect(text).toContain("you: 经理 (经理工作区)");
+    expect(text).toContain("opener:");
+    expect(text).toContain(xyId);
+    expect(text).toContain("向日葵");
+    expect(text).toContain("peer: 其它经理（含向日葵）");
+    expect(text).not.toMatch(/^speaker: 老板/m);
   });
 
   it("rejects sunflower nickname patch", () => {

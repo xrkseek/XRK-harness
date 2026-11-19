@@ -161,4 +161,47 @@ describe("isAbortError / formatAbortReason", () => {
     expect(formatAbortReason({ kind: "user" })).toBe("aborted by user");
     expect(formatAbortReason({ kind: "user" })).not.toBe("[object Object]");
   });
+
+  it("treats AbortError / ABORTED even when signal is not yet aborted", () => {
+    const live = new AbortController();
+    const named = new DOMException("aborted", "AbortError");
+    expect(live.signal.aborted).toBe(false);
+    expect(isAbortError(named, live.signal)).toBe(true);
+    const coded = new Error("openai-compatible: aborted");
+    (coded as { code?: string }).code = "ABORTED";
+    expect(isAbortError(coded, live.signal)).toBe(true);
+  });
+});
+
+describe("AbortError without signal.aborted closes as aborted", () => {
+  it("does not paint turn/end error UNKNOWN for stream AbortError", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const ac = new AbortController();
+
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "go",
+        store,
+        llm: {
+          id: "abort-race",
+          async chat() {
+            throw new DOMException("aborted", "AbortError");
+          },
+        },
+        tools: createToolRegistry(),
+        signal: ac.signal,
+        llmRetry: false,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    const turnEnd = store.get(session.id).events.find((e) => e.type === "turn/end");
+    expect(turnEnd?.type === "turn/end" && turnEnd.reason).toMatchObject({
+      kind: "aborted",
+    });
+    expect(
+      turnEnd?.type === "turn/end" && turnEnd.reason.kind === "error",
+    ).toBe(false);
+  });
 });

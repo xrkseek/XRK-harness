@@ -1,19 +1,115 @@
-/* Figma 10:2482: 24px Tool calls header, 4px gap, 141px code block cap. */
+/* Centered runtime notice chip — quiet mid-column card, not a ToolRow. */
 
-.root {
+.noticeRow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 0;
+}
+
+.noticeCard {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
+  width: min(100%, 420px);
   min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1)) 65%, transparent);
+  border-radius: 18px;
+  background: color-mix(
+    in srgb,
+    var(--dsw-specific-tip, var(--dsw-alias-bg-l1, #fff)) 92%,
+    var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.03)) 8%
+  );
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-caption, #000) 4%, transparent);
 }
 
-.root[data-open] {
-  padding-bottom: 4px;
+.noticeCard[data-open] {
+  border-radius: 16px;
+  border-color: color-mix(
+    in srgb,
+    var(--dsw-alias-state-business-primary, #3b82f6) 16%,
+    var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12))
+  );
+  background: color-mix(in srgb, var(--dsw-specific-tip, var(--dsw-alias-bg-l1, #fff)) 97%, transparent);
+  box-shadow: none;
 }
 
-.chevron {
+.noticeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 16px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.noticeHeader:hover {
+  background: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 70%, transparent);
+}
+
+.noticeHeader:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
+}
+
+.noticeLeading {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
   color: var(--dsw-alias-label-secondary);
 }
 
-/* Separator and producer name beside the role title: ToolRow's summary geometry,
-   so the two disclosure rows keep one 24px rhythm and one separator shape. */
+.noticeGlyph,
+.noticeDisclosure {
+  display: inline-flex;
+  grid-area: 1 / 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.noticeDisclosure {
+  opacity: 0;
+}
+
+.noticeHeader:hover .noticeGlyph,
+.noticeHeader:focus-visible .noticeGlyph {
+  opacity: 0;
+}
+
+.noticeHeader:hover .noticeDisclosure,
+.noticeHeader:focus-visible .noticeDisclosure {
+  opacity: 1;
+}
+
+.noticeTitle {
+  flex: none;
+  max-width: 42%;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary-dimmed, var(--dsw-alias-label-secondary));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sep {
   flex: none;
   width: 2px;
@@ -25,38 +121,36 @@
 
 .source {
   flex: none;
+  max-width: 26%;
   min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 14px;
-  line-height: 24px;
+  font-size: 12px;
+  line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* A notice's one-line account: the reason it rarely needs expanding. */
 .summary {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 14px;
-  line-height: 24px;
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .body {
   box-sizing: border-box;
-  width: calc(100% - 22px);
-  max-height: 141px;
-  margin: 4px 0 0 22px;
+  max-height: 160px;
+  margin: 0 12px 12px;
   overflow: auto;
-  padding: 10px 16px 12px 12px;
-  border: none;
-  border-radius: 8px;
-  background: var(--dsw-alias-markdown-code-block);
-  color: var(--dsw-alias-label-tertiary);
-  /* Figma 10:2482 code text: the form bodies inherit it from the scrollport. */
-  font: 400 11px/16px var(--ds-font-family-code);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--dsw-alias-markdown-code-block, color-mix(in srgb, var(--dsw-alias-label-caption) 8%, transparent));
+  color: var(--dsw-alias-label-secondary);
+  font: 400 12px/18px var(--ds-font-family-code, ui-monospace, monospace);
 }

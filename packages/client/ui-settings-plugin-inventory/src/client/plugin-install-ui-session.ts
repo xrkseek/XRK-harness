@@ -73,6 +73,12 @@ export function markPluginClientRefreshHint(): void {
   patch({ clientRefreshHint: true });
 }
 
+/** Clear the hard-refresh hint after a successful overlay soft remount. */
+export function clearPluginClientRefreshHint(): void {
+  if (!state.clientRefreshHint) return;
+  patch({ clientRefreshHint: false });
+}
+
 /** Clear settled log / success when the user edits the install field (not mid-run). */
 export function clearPluginInstallSettledUi(): void {
   if (state.busy) return;
@@ -200,12 +206,13 @@ export async function runPluginCliMutateUi(
   try {
     const log = await options.run(requestId);
     if (generation !== runGeneration) return;
+    // Soft remount / unload (boot-changed) owns the client half; the refresh
+    // hint is marked only when that path fails.
     patch({
       log,
       success: true,
       okSpec: spec,
       kind: options.kind,
-      clientRefreshHint: true,
       busy: false,
       activeSpec: "",
       error: null,

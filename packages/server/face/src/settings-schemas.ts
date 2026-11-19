@@ -480,12 +480,12 @@ const AsrConfig = Schema.object({
 /**
  * Text-to-speech (Plugins → TTS card). Env `XRK_VOICE` remains CI bypass.
  *
- * `enabled` binds `text_to_speech` on every tool surface (including Minimal /
- * IM), which is the only switch the agent sees. `engine: edge` speaks through
- * Microsoft's Read Aloud neural voices (free, no key, needs network);
- * `engine: local` renders with the Host OS voices (SAPI / say / espeak-ng) as
- * the offline fallback; `engine: openai` posts to an OpenAI-compatible
- * `/audio/speech` endpoint.
+ * `enabled` binds `text_to_speech` on **老板-created** seats only (sidebar /
+ * composer — including Minimal / IM when the boss opened them). Seat-opened
+ * peers and delegated children never get it, even if the boss later speaks.
+ * `engine: edge` speaks through Microsoft's Read Aloud neural voices (free,
+ * no key, needs network); `engine: local` uses Host OS voices; `engine: openai`
+ * posts to an OpenAI-compatible `/audio/speech` endpoint.
  */
 /** Edge Chinese default — keep Settings + engine fallback on the same short name. */
 export const TTS_DEFAULT_VOICE_ZH = "zh-CN-XiaoxiaoNeural";

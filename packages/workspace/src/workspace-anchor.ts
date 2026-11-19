@@ -154,6 +154,7 @@ export function formatWorkspaceRootAnchor(
     ...(title ? [`Display name: ${title} (sidebar label — not a filesystem path).`] : []),
     "All relative tool paths resolve here. Shell tools default their cwd to this root — `pwd` / `Get-Location` must show this path, not the Host process directory.",
     "Do not search other drives for the project.",
+    "If the real job lives in another folder, open that folder as the workspace first — coding nested subagents inherit this root and cannot retarget via workspace_id/cwd (IM only).",
   ];
   const productBlock = formatProductHomeAnchor(productHome ?? "");
   if (productBlock) lines.push("", productBlock);

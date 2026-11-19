@@ -161,6 +161,157 @@ describe("FaceTitleController", () => {
     expect(registry.snapshot(session.id).values.title).toBe("My Session");
   });
 
+  it("skips attachment handle captions when choosing a fallback title", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    installDefaultFaceProjections(registry);
+
+    const titles = new FaceTitleController({
+      append: (id, ev) => {
+        const frozen = store.append(id, ev);
+        const seq = store.get(id).events.length;
+        registry.drive(id, frozen, seq);
+        return frozen;
+      },
+      getEvents: (id) => store.get(id).events,
+      projections: registry,
+    });
+
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t",
+      content: [
+        {
+          type: "text",
+          modelOnly: true,
+          text: "[图1 sha256:abcdef0123456789（10×10 image/png）。视觉模型直接看块]",
+        },
+      ],
+      source: { kind: "user" },
+    });
+    store.append(session.id, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t",
+      content: [
+        { type: "text", text: "请描述这张图" },
+      ],
+      source: { kind: "user" },
+    });
+    registry.drive(session.id, store.get(session.id).events[0]!, 1);
+    registry.drive(session.id, store.get(session.id).events[1]!, 2);
+
+    titles.ensureFallbackFromLog(session.id);
+    expect(registry.snapshot(session.id).values.title).toMatch(/请描述这张图/);
+    expect(String(registry.snapshot(session.id).values.title)).not.toMatch(/sha256/);
+  });
+
+  it("prefers reader prose over a leaked handle caption without modelOnly", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    installDefaultFaceProjections(registry);
+    const titles = new FaceTitleController({
+      append: (id, ev) => {
+        const frozen = store.append(id, ev);
+        registry.drive(id, frozen, store.get(id).events.length);
+        return frozen;
+      },
+      getEvents: (id) => store.get(id).events,
+      projections: registry,
+    });
+
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t",
+      content: [
+        {
+          type: "text",
+          text: "[图1 sha256:abcdef0123456789（10×10 image/png）。视觉模型直接看块]",
+        },
+        {
+          type: "image",
+          attachment: {
+            attachmentId: "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+            mediaType: "image/png",
+            bytes: 78,
+            width: 10,
+            height: 10,
+            name: "sample.png",
+          },
+        },
+        { type: "text", text: "IMAGE_TEST2: say one word: seen" },
+      ],
+      source: { kind: "user" },
+    });
+    registry.drive(session.id, store.get(session.id).events[0]!, 1);
+    titles.ensureFallbackFromLog(session.id);
+    expect(registry.snapshot(session.id).values.title).toMatch(/IMAGE_TEST2/);
+    expect(String(registry.snapshot(session.id).values.title)).not.toMatch(/sha256/);
+  });
+
+  it("repairs a leaked caption fallback and soft-titles pure media", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    installDefaultFaceProjections(registry);
+    const titles = new FaceTitleController({
+      append: (id, ev) => {
+        const frozen = store.append(id, ev);
+        registry.drive(id, frozen, store.get(id).events.length);
+        return frozen;
+      },
+      getEvents: (id) => store.get(id).events,
+      projections: registry,
+    });
+
+    const image = {
+      attachmentId: "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      mediaType: "image/png" as const,
+      bytes: 78,
+      width: 10,
+      height: 10,
+      name: "vacation.png",
+    };
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t",
+      content: [
+        {
+          type: "text",
+          text: "[图1 sha256:abcdef0123456789（10×10 image/png）。视觉模型直接看块]",
+        },
+        { type: "image", attachment: image },
+      ],
+      source: { kind: "user" },
+    });
+    // Simulate an older Host that titled from flattenText.
+    store.append(session.id, {
+      type: "session/title",
+      ts: 2,
+      title: "[图1 sha256:abcdef0123456789（10×10 image/png）。视觉模型直接",
+      source: { kind: "fallback" },
+      messageSeqs: [1],
+    });
+    for (const [i, ev] of store.get(session.id).events.entries()) {
+      registry.drive(session.id, ev, i + 1);
+    }
+    expect(String(registry.snapshot(session.id).values.title)).toMatch(/sha256/);
+
+    titles.ensureFallbackFromLog(session.id);
+    expect(registry.snapshot(session.id).values.title).toBe("vacation.png");
+  });
+
   it("ensureFallbackFromLog backfills when hydrate skipped live title", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);

@@ -59,7 +59,8 @@ describe("plugin-install-ui-session", () => {
     expect(getPluginInstallUiSnapshot().busy).toBe(false);
     expect(getPluginInstallUiSnapshot().success).toBe(true);
     expect(getPluginInstallUiSnapshot().kind).toBe("install");
-    expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(true);
+    // Soft remount owns the client half; hard-refresh hint stays off until failure.
+    expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(false);
     expect(seen.some(Boolean)).toBe(true);
   });
 
@@ -104,11 +105,17 @@ describe("plugin-install-ui-session", () => {
       success: true,
       kind: "update",
       okSpec: "xrkh-better-sidebar",
-      clientRefreshHint: true,
+      clientRefreshHint: false,
     });
   });
 
-  it("preserves success refresh hint across resets of settled log only via clear", async () => {
+  it("keeps an explicit hard-refresh hint across settled-log clear", async () => {
+    const {
+      clearPluginInstallSettledUi,
+      markPluginClientRefreshHint,
+      clearPluginClientRefreshHint,
+    } = await import("../src/client/plugin-install-ui-session.ts");
+
     await runPluginInstallUi({
       spec: "done-pkg",
       install: async () => ({
@@ -117,15 +124,18 @@ describe("plugin-install-ui-session", () => {
         exitCode: 0,
       }),
     });
-    expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(true);
+    expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(false);
     expect(getPluginInstallUiSnapshot().success).toBe(true);
 
-    const { clearPluginInstallSettledUi } = await import(
-      "../src/client/plugin-install-ui-session.ts"
-    );
+    markPluginClientRefreshHint();
+    expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(true);
+
     clearPluginInstallSettledUi();
     expect(getPluginInstallUiSnapshot().success).toBe(false);
     expect(getPluginInstallUiSnapshot().log).toBeNull();
     expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(true);
+
+    clearPluginClientRefreshHint();
+    expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(false);
   });
 });

@@ -1,11 +1,13 @@
 /* Live background-job strip in the composer context stack: same dock column
    as Todo / GoalBar. Collapsed multi-job chrome stays one thin row so Stop
-   stays reachable without expanding; a single job skips the chrome entirely. */
+   stays reachable without expanding; a single job skips the chrome entirely.
+   Expanded output mounts beside the row list (not inside it) so multi-job
+   expand keeps one short list scrollport + one TerminalBlock scrollport. */
 
 .root {
   box-sizing: border-box;
   flex: none;
-  /* Tuck into the stack gap like QueueDock 閳?less empty air above the input. */
+  /* Tuck into the stack gap like QueueDock — less empty air above the input. */
   margin: 0 auto calc(0px - var(--dsh-composer-stack-gap, 6px));
   width: calc(
     100% -
@@ -93,12 +95,20 @@
   margin: 0;
   padding: 0 4px 4px;
   list-style: none;
-  /* Tall enough for one expanded TerminalBlock; the panel inside scrolls. */
+  /* Row list only — output lives in .outputSlot. */
   max-height: min(42vh, 380px);
   overflow-y: auto;
-  /* Capped job list: an overscroll at its bottom must not pull the
-     surrounding dock or the page along with it. */
   overscroll-behavior: contain;
+}
+
+/* Watching output: shrink the row list so TerminalBlock keeps the floor. */
+.body[data-output-open] .list {
+  max-height: min(22vh, 160px);
+}
+
+.outputSlot {
+  flex: none;
+  padding: 0 4px 4px;
 }
 
 /* Single-job: the list is the whole card — keep one quiet pad. */
@@ -115,5 +125,9 @@
 
   .list {
     max-height: min(22vh, 160px);
+  }
+
+  .body[data-output-open] .list {
+    max-height: min(16vh, 120px);
   }
 }

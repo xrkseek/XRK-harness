@@ -9,13 +9,17 @@ user-invocable: false
 
 # 笔记 · 社区插件与 dsh-compat
 
-教科书：[docs/community-plugins.md](../../../docs/community-plugins.md) · 实现笔记：[packages/server/http/src/dsh-compat/README.md](../../../packages/server/http/src/dsh-compat/README.md)。
+教科书：[docs/community-plugins.md](../../../docs/community-plugins.md) · 实现笔记：[packages/server/http/src/dsh-compat/README.md](../../../packages/server/http/src/dsh-compat/README.md) · 迁出检查单：[PACKAGE.md](../../../packages/server/http/src/dsh-compat/PACKAGE.md)（**0.9 → `@xrkseek/dsh-compat`**）。
+
+**不要**把第一方原生产品插件当社区包：`xrk-sunflower-free` · `@xrkseek/xrk-phone-bridge` · `xrkh-better-sidebar` · `xrkh-better-sidebar-plugin-office`（清单：[client-plugin-development.md](../../../docs/client-plugin-development.md)）。侧栏 HTTP 契约可对照 community-plugins「侧栏」节，但分类仍是原生。
+
+**原生壳扩展不走本 skill** → [client-plugin-development.md](../../../docs/client-plugin-development.md)。
 
 ## 架构（一句话）
 
 社区 **`client.js`** 走 Face / 同源 HTTP → **能力表** + XRK 底层（`~/.xrk`）→ **bridge** → 未列路径诚实 JSON（非 SPA 404）。
 
-内置兼容器：`extensions/dsh-compat`（`kind: host`）。
+内置兼容器：`extensions/dsh-compat`（`kind: host`；可选桥，非原生作者前置）。
 
 ## 接入层级 A–J（装包前先归类）
 

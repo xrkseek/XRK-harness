@@ -81,6 +81,8 @@ type SessionListMutation =
   | { kind: 'activity'; sessionId: SessionId; updatedAt: number }
   /** Local first-send flip: the sender clears blank without waiting for a host frame. */
   | { kind: 'engaged'; sessionId: SessionId }
+  /** Truncate wiped speech: restore list blank so Hero / New Session chrome returns. */
+  | { kind: 'reblank'; sessionId: SessionId }
   /** Local composer draft bit: blank New Session rows with unsent text stay visible. */
   | { kind: 'draft'; sessionId: SessionId; hasDraft: boolean }
   /** Live 主线 / 支线 chrome from host/session-thread. */
@@ -336,6 +338,9 @@ export class SessionManager {
       // session surfaces (lists filter on blank) before any host frame lands.
       onEngaged: (engaged) => {
         this.recordMutation({ kind: 'engaged', sessionId: engaged.sessionId })
+      },
+      onReblank: (session) => {
+        this.recordMutation({ kind: 'reblank', sessionId: session.sessionId })
       },
       // A New Session that still holds an unsent draft stays on the sidebar
       // after the user navigates away (the row returns until cleared).
@@ -789,12 +794,23 @@ export class SessionManager {
     if (
       frame.type === 'session/event'
       && frame.event.type === 'user/message'
-      && frame.event.data.source.kind === 'user'
     ) {
-      // session.list supplies the cold baseline, while a direct prompt or an
-      // admitted steer advances it between pulls. Max keeps replayed or
-      // repaired older user messages from moving the row backwards.
-      this.recordMutation({ kind: 'activity', sessionId: frame.sessionId, updatedAt: frame.event.time })
+      // Speech that opens / advances a turn: human, seat (委派方), handoff
+      // courier, auto-continue. Durable injects (skill-catalog / …) skip.
+      const kind = frame.event.data.source?.kind
+      const speech =
+        kind === undefined
+        || kind === 'user'
+        || kind === 'seat'
+        || kind === 'handoff'
+        || kind === 'auto-continue'
+        || kind === 'plugin'
+      if (speech) {
+        // session.list supplies the cold baseline, while a direct prompt or an
+        // admitted steer advances it between pulls. Max keeps replayed or
+        // repaired older user messages from moving the row backwards.
+        this.recordMutation({ kind: 'activity', sessionId: frame.sessionId, updatedAt: frame.event.time })
+      }
     }
     if (frame.type === 'session/projection') {
       // Finished host-computed value: land it in the resident store whether or
@@ -1393,6 +1409,10 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
     case 'engaged':
       return summaries.map(summary => summary.sessionId === mutation.sessionId && summary.blank
         ? { ...summary, blank: false }
+        : summary)
+    case 'reblank':
+      return summaries.map(summary => summary.sessionId === mutation.sessionId && !summary.blank
+        ? { ...summary, blank: true }
         : summary)
     case 'draft':
       return summaries.map(summary => summary.sessionId === mutation.sessionId

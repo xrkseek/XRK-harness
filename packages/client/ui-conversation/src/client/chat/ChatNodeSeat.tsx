@@ -78,7 +78,9 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   // re-render per row on every settle. Re-introducing paint containment means
   // bringing the grace back (git history: use-post-stream-live.ts).
   const routedOwner = { ...owner, node: routedNode } as RoutedChatNodeOwner
-  const round = hostTurn === undefined ? undefined : roundByTurn.get(hostTurn)
+  // Prefer Face outline round; fall back to Host wire turn so a brief rail
+  // miss after truncate/resubmit does not drop 「第 N 轮」 entirely.
+  const round = hostTurn === undefined ? undefined : (roundByTurn.get(hostTurn) ?? hostTurn)
   const sourceKind = routedNode.data !== null && typeof routedNode.data === 'object'
     && 'source' in routedNode.data
     && routedNode.data.source !== null
@@ -86,11 +88,18 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && 'kind' in routedNode.data.source
     ? String((routedNode.data.source as { kind: unknown }).kind)
     : undefined
+  // Wake opener (handoff / human) → 「第 N 轮」; mid-turn 回传 / 插话 → 「插话」.
+  // Job-completion stays a context chip (may also open a 轮次 when it is the
+  // rail opener).
   const labelKind: RoundLabelKind | null = routedNode.kind === 'steering'
     ? 'steer'
     : routedNode.kind === 'user'
       ? userRoundLabelKind(routedNode.key, hostTurn, openerKeyByTurn, sourceKind)
-      : null
+      : routedNode.kind === 'context'
+        && hostTurn !== undefined
+        && openerKeyByTurn.get(hostTurn) === routedNode.key
+        ? 'turn'
+        : null
   return (
     <div
       className={css.flowItem}

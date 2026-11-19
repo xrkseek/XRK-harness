@@ -523,13 +523,12 @@ export const teamCapture: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!member) {
     return { ok: false, error: { code: "invalid-payload", message: "could not save member" } };
   }
-  const home = await mintAgentHomeForMember(runtime, member, canvasId);
+  // Capture saves the member only — 干员家 requires explicit mintHome / team_home.
   return {
     ok: true,
     value: {
       workspaceId: scope === "global" ? "global" : canvasId,
       member,
-      homeWorkspaceId: home.workspaceId,
     },
   };
 };
@@ -797,7 +796,7 @@ export const teamImportPack: FaceHandler = async (runtime, _rpcId, payload) => {
     memberId: member.id,
     productHome: runtime.agentRoster.home,
   });
-  const home = await mintAgentHomeForMember(runtime, member, canvasId);
+  // Import installs the member only — 干员家 requires explicit mintHome / team_home.
   return {
     ok: true,
     value: {
@@ -809,7 +808,6 @@ export const teamImportPack: FaceHandler = async (runtime, _rpcId, payload) => {
       skillNames: placed.skillNames,
       ...(placed.envPrep ? { envPrep: placed.envPrep } : {}),
       ready: false,
-      homeWorkspaceId: home.workspaceId,
     },
   };
 };

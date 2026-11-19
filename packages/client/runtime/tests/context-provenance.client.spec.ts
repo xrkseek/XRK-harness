@@ -12,6 +12,38 @@ describe('contextProvenance', () => {
       .toEqual({ role: 'inject', label: 'dsh-tool-skill' })
   })
 
+  it('names seat speech as delegator / peer (never human boss)', () => {
+    expect(contextProvenance({
+      kind: 'seat',
+      form: 'speech',
+      channel: 'parent',
+      fromSessionId: 's-parent',
+      label: '经理（老王）',
+    })).toEqual({ role: 'inject', label: '经理（老王）' })
+    expect(contextProvenance({
+      kind: 'seat',
+      form: 'speech',
+      channel: 'peer',
+      fromSessionId: 's-peer',
+    })).toEqual({ role: 'inject', label: 'peer' })
+  })
+
+  it('names handoff notices by via / label', () => {
+    expect(contextProvenance({
+      kind: 'handoff',
+      form: 'notice',
+      via: 'subagent',
+      fromSessionId: 'child',
+      label: '发版员',
+    })).toEqual({ role: 'inject', label: '发版员' })
+    expect(contextProvenance({
+      kind: 'handoff',
+      form: 'notice',
+      via: 'peer-collab',
+      fromSessionId: 'peer',
+    })).toEqual({ role: 'inject', label: 'peer-collab' })
+  })
+
   it('names workspace instructions by the files they reconciled, deduplicated in first-seen order', () => {
     expect(contextProvenance({
       kind: 'agent-instructions',
@@ -84,6 +116,12 @@ describe('contextForm', () => {
     expect(contextForm({ kind: 'plugin', form: 'notice', summary: 'x' })).toBe('notice')
     expect(contextForm({ kind: 'subagent-report', form: 'relay' })).toBe('relay')
     expect(contextForm({ kind: 'session-reference', form: 'recall' })).toBe('recall')
+    expect(contextForm({
+      kind: 'seat',
+      form: 'speech',
+      channel: 'parent',
+      fromSessionId: 's',
+    })).toBe('speech')
   })
 
   it('degrades to the opaque presentation for anything this version does not present', () => {

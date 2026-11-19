@@ -220,9 +220,15 @@ export function estimateAssistantSurface(
   return tokens;
 }
 
+/**
+ * Standing system prompt is CJK-heavy in this product (AGENTS / SOUL / skills /
+ * curated memory). Use soft-budget density so Context meter / timeline system
+ * bars do not sit far below provider tokenizer reality before the first usage
+ * sample arrives.
+ */
 export function estimateSystemTokens(system: string | undefined): number {
   if (!system?.trim()) return 0;
-  return estimateText(system) + ROLE_OVERHEAD;
+  return estimateTextForSoftBudget(system) + ROLE_OVERHEAD;
 }
 
 export function estimateToolsTokens(

@@ -60,9 +60,12 @@ export function rewritePendingAdmit(
     withdrawAdmit(store, sessionId, row.admitId);
   }
 
+  // Preserve durable producer tags (seat / handoff / plugin). Dropping
+  // `source` would re-admit as human `kind:"user"` and break 委派方 chrome.
   const head = admitPrompt(store, sessionId, content, {
     delivery,
     admitId: newAdmitId(),
+    ...(tail[0]?.source !== undefined ? { source: tail[0].source } : {}),
   });
   remaps(maps, itemId, head.admitId);
 
@@ -70,6 +73,7 @@ export function rewritePendingAdmit(
     const next = admitPrompt(store, sessionId, row.content, {
       delivery: row.delivery,
       admitId: newAdmitId(),
+      ...(row.source !== undefined ? { source: row.source } : {}),
     });
     remaps(maps, row.admitId, next.admitId);
   }

@@ -291,8 +291,10 @@ describe("formatSubagentStopNotice", () => {
       ],
     );
     expect(text).toContain("ended abnormally (stopped at max tokens)");
-    expect(text).toContain('already sent "继续" as a user message 2 time(s)');
-    expect(text).toContain('send_message(agent_id, "继续")');
+    expect(text).toContain("already auto-continued 2 time(s)");
+    expect(text).toContain("Incomplete tool calls on a max-tokens finish are discarded");
+    expect(text).toContain("send_message with a split-write instruction");
+    expect(text).toContain("do not send bare");
   });
 });
 

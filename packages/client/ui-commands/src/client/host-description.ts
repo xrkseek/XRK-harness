@@ -19,11 +19,16 @@ export const HOST_DESCRIPTION_KEYS = new Map<string, CommandKey>([
   ["theme", "description.theme"],
   ["skills", "description.skills"],
   ["auto-review", "description.auto-review"],
+  ["rollback", "description.rollback"],
 ]);
+
+/** Face recipe rows append this English trailer; rewrite for the active UI locale. */
+export const RECIPE_EXPAND_SUFFIX_EN = " (expands into the prompt)" as const;
 
 /**
  * Translate exact built-in Host copy while preserving scoped or third-party
- * descriptors verbatim.
+ * descriptors verbatim. Recipe discovery rows keep their title but swap the
+ * English "(expands into the prompt)" trailer for the UI locale.
  * @param name - command name without the leading slash.
  * @param description - Host or override description text.
  * @param translate - `command`-namespace translator for the active locale.
@@ -34,7 +39,12 @@ export function localizeHostCommandDescription(
   translate: (key: CommandKey) => string,
 ): string {
   const key = HOST_DESCRIPTION_KEYS.get(name);
-  return key !== undefined && description === en[key]
-    ? translate(key)
-    : description;
+  if (key !== undefined && description === en[key]) {
+    return translate(key);
+  }
+  if (description.endsWith(RECIPE_EXPAND_SUFFIX_EN)) {
+    const base = description.slice(0, -RECIPE_EXPAND_SUFFIX_EN.length);
+    return `${base}${translate("recipe.expandSuffix")}`;
+  }
+  return description;
 }

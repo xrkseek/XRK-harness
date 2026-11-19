@@ -700,6 +700,9 @@ export function toolNameDenied(
  * Parent-only tools a delegated child never keeps, even when it inherits the
  * parent's catalog or an allow-list names them. Nested children use the same
  * mask. `ask` stays (human questions walk to the human-facing ancestor).
+ *
+ * Workspace orch (`workspace_*`) stays on parents / peer seats only — children
+ * ship inside the parent's cwd; opening other canvases is a parent job.
  */
 export const DELEGATED_INHERIT_DENY = [
   "ask_user",
@@ -911,12 +914,13 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "subagent",
       kind: "thin",
       ready: true,
-      brief: "Xiangyang lead seat — owns 向阳空间; peer of project 经理.",
+      brief: "Xiangyang orchestrator — routes demand; coding 经理 ships.",
       playbook:
         CATALOG_AUTHORITY_LINE +
         " 向日葵 (nick locked xrkseek): mid-tier of 向阳空间 (<seat_identity>). Report titles.boss only. " +
-        "titles.manager = project peer (not boss; never answer 「你的经理是谁」 with human or that seat). " +
-        "Dispatch coding peers; no ws_default impl. Multi-step → todo_write. Ask only on deliverable change — one blocker.",
+        "titles.manager = coding peer (not boss; never answer 「你的经理是谁」 with human or that seat). " +
+        "Orchestrate: skill xrk-demand-translate → workspace_list/create → workspace_session_prompt. " +
+        "Never implement product/code in ws_default. Multi-step → todo_write. Ask only on deliverable change — one blocker.",
     },
     {
       id: "mem_seed_researcher",

@@ -13,6 +13,8 @@ describe("workspace root anchor", () => {
     expect(text).toContain("Display name: XRK-AGT");
     expect(text).toContain("not a filesystem path");
     expect(text).toContain("Do not search other drives");
+    expect(text).toContain("open that folder as the workspace first");
+    expect(text).toContain("IM only");
     expect(text).toMatch(/pwd|Get-Location/);
     expect(text).toContain("Host process");
   });

@@ -147,7 +147,16 @@ export function ReasoningRow({
         collapsedContent={(
           <>
             <span className={css.separator} aria-hidden />
-            <span ref={summaryRef} className={css.summary} data-follow-end={running || undefined}>{summary}</span>
+            {/* Visual peek only — keep the disclosure name as 「思考」, not the
+                whole first reasoning line (screen readers were dumping essays). */}
+            <span
+              ref={summaryRef}
+              className={css.summary}
+              data-follow-end={running || undefined}
+              aria-hidden
+            >
+              {summary}
+            </span>
           </>
         )}
       >

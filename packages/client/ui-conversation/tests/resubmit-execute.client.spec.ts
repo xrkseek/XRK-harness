@@ -32,11 +32,21 @@ function makeSessions(opts: {
       throw new Error('session truncate failed: truncate-failed: cut failed')
     }
   })
+  const beginSubmission = vi.fn((input: {
+    readonly onRetire?: (retirement: { readonly reason: 'observed' | 'failed' }) => void
+  }) => ({
+    requestId: 'req-resubmit',
+    abandon: vi.fn(() => {
+      input.onRetire?.({ reason: 'failed' })
+    }),
+  }))
   const session = {
     prompt,
     reportError,
     command,
     cancel,
+    beginSubmission,
+    exclusiveBeforeSeqForWireSeq: (seq: number) => Math.max(0, Math.floor(seq) - 1),
     getSnapshot: () => ({
       running: opts.live === true,
       runningCalls: [],

@@ -32,11 +32,11 @@
 | **Credentials** | openai：`XRK_IMAGE_GEN_OPENAI_KEY` · fal：`XRK_IMAGE_GEN_FAL_KEY` · xai：`XRK_IMAGE_GEN_XAI_KEY` · openrouter：`XRK_IMAGE_GEN_OPENROUTER_KEY` · deepinfra：`XRK_IMAGE_GEN_DEEPINFRA_KEY` · krea：`XRK_IMAGE_GEN_KREA_KEY` · meta-ai：`XRK_IMAGE_GEN_META_KEY`（各有公开 env 回落） |
 | **仅 env** | `XRK_IMAGE_GEN=memory` · `=1` / `openai` / `fal` / `xai` / `openrouter` / `deepinfra` / `krea` / `meta-ai`（旁路 Settings）· 可选 `XRK_IMAGE_GEN_BASE_URL` / `XRK_IMAGE_GEN_MODEL` |
 
-保存 Settings 后热切换（下次 agent 重建）。非空 `XRK_IMAGE_GEN` 为 CI 旁路。
+**热挂载**：Settings → Plugins → **图像生成** 选 mode，并在 Credentials 填对应密钥后，Face 发 `settings/document-updated`（`image-gen`）或 `credentials/updated` → Host `invalidateAgents` 重建 composition，**下一轮**起 `image_generate` 进 catalog（忙会话等回合结束）。关掉 mode / 清密钥同理卸下。非空 `XRK_IMAGE_GEN` 为 CI 旁路。
 
 | Settings / env | 行为 |
 |----------------|------|
-| （未设 / 关） | 工具仍登记；execute **诚实失败** |
+| （未设 / 关 / 无密钥） | **不登记** `image_generate`（省 catalog + 引导句） |
 | `memory`（仅 env） | 内存 Provider（1×1 PNG；支持 edit 路径测例） |
 | `1` / openai | OpenAI Images；需钥；默认最多 16 张参考图 |
 | `fal` | FAL queue（Hermes 满编 catalog；默认 `fal-ai/flux-2/klein/9b`） |
@@ -74,4 +74,10 @@ Precedence: **Settings (product SoT)** → **Credentials (secrets)** → **env (
 | **Credentials** | openai · fal · xai · openrouter · deepinfra · krea · meta-ai slots (with public env fallbacks) |
 | **Env-only** | `XRK_IMAGE_GEN=memory` · `=1` / `openai` / `fal` / `xai` / `openrouter` / `deepinfra` / `krea` / `meta-ai` |
 
-Live after the next agent rebuild. Non-empty `XRK_IMAGE_GEN` is the CI bypass. Custom Providers inject via `ImageGenService`. Hermes-scale matrix: OpenAI · FAL (full catalog) · xAI · OpenRouter · DeepInfra (t2i-only) · Krea · Meta Muse (t2i-only).
+**Hot remount**: Settings → Plugins → **Image gen** + Credentials → Face `settings/document-updated` (`image-gen`) or `credentials/updated` → Host `invalidateAgents` rebuilds composition; `image_generate` appears on the **next turn** (busy sessions wait for drain). Clearing mode/key unmounts the same way. Non-empty `XRK_IMAGE_GEN` is the CI bypass. Custom Providers inject via `ImageGenService`.
+
+| Settings / env | Behavior |
+|----------------|----------|
+| (unset / off / no key) | **Does not register** `image_generate` |
+| `memory` (env only) | In-memory Provider |
+| `1` / openai · fal · xai · openrouter · deepinfra · krea · meta-ai | Needs matching key; see Chinese table above |

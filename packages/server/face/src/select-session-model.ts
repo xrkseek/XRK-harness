@@ -250,6 +250,15 @@ export async function selectSessionModel(
   }
   // Live pin now counts — drop the pending credit.
   switchSlot.release();
+  // Remount this session only when the route changed. A deleted / unroutable
+  // model leaves `createSessionRoutingLlm` undefined at Agent build time; the
+  // routing adapter hot-reads `sessionModels`, but a failed construct never
+  // recovers until invalidate. Scoped to one session — not Settings fan-out.
+  if (routeChanged) {
+    await Promise.resolve(
+      runtime.invalidateAgent?.(sessionId, { force: true }),
+    ).catch(() => undefined);
+  }
   // Per-session only — do NOT write Settings `agent-default-model` here.
   // That publish used to fan out `settings/document-updated` → Host
   // `invalidateAgents()` and remount / cut other sessions mid-flight.

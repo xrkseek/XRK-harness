@@ -37,6 +37,23 @@ function isCompactionCheckpoint(event: Parameters<ConversationNodeDefinition['ma
   return source.kind === 'plugin' && source.plugin === 'compact'
 }
 
+/**
+ * Transcript speech bubbles (identity-bearing rows — future avatar seats).
+ * - `user` — human UI composer (经理 / 老板)
+ * - `auto-continue` — loop "继续"
+ * - `seat` — 委派方 / 协作对端 live speech
+ * - `handoff` — 干员 / 协作回传 (subagent · peer-collab · thread-stop)
+ *
+ * Runtime-only notices (job-completion, goals, catalogs, …) stay on the
+ * centered ContextInjectionRow disclosure path.
+ */
+function isTranscriptSpeechSource(source: { readonly kind: string }): boolean {
+  return source.kind === 'user'
+    || source.kind === 'auto-continue'
+    || source.kind === 'seat'
+    || source.kind === 'handoff'
+}
+
 /** User, steering, and injected-context message classification Definition. */
 export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
   kind: 'input-message',
@@ -49,18 +66,7 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
   start: (_context, match, reader) => {
     if (match.event.type !== 'user/message') throw new Error('input-message start requires user/message')
     const event = match.event
-    // Auto-continue is a real user-identity "继续" the loop already sent.
-    // Keep it on the transcript as that message; other producers stay context.
-    if (event.data.source.kind === 'auto-continue') {
-      return {
-        kind: 'user',
-        seq: event.seq,
-        time: event.time,
-        content: event.data.content,
-        source: event.data.source,
-      }
-    }
-    if (event.data.source.kind !== 'user') {
+    if (!isTranscriptSpeechSource(event.data.source)) {
       return {
         kind: 'context',
         seq: event.seq,
@@ -71,21 +77,43 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         form: contextForm(event.data.source),
       }
     }
+    // Seat / handoff / auto-continue skip the human inbox claim path below —
+    // they are still speech bubbles (Voice×Lane from projectTranscriptChrome).
+    const speechKind = event.data.source.kind
+    if (speechKind === 'auto-continue' || speechKind === 'seat' || speechKind === 'handoff') {
+      return {
+        kind: 'user',
+        seq: event.seq,
+        time: event.time,
+        content: event.data.content,
+        source: event.data.source,
+      }
+    }
     const inboxClaim = reader.previous<InboxState>('inbox-next-step')?.state.claimed
     // The transient inbox row is keyed by `admitId`, while this durable row
     // answers to a freshly minted `messageId` plus the echoed prompt rpcId(s)
     // the Host stamped on promote. Consult every durable identity: a claim
     // matched on `id` alone is empty in production (admitId ≠ `umsg_<uuid>`)
     // and silently degrades a mid-turn steer to an ordinary user message.
-    const raw = event.data as { readonly rpcIds?: unknown; readonly source?: { readonly rpcId?: unknown } }
+    const raw = event.data as {
+      readonly rpcId?: unknown
+      readonly rpcIds?: unknown
+      readonly source?: { readonly rpcId?: unknown }
+    }
     const rpcIds = Array.isArray(raw.rpcIds)
       ? (raw.rpcIds as readonly unknown[]).filter((id): id is string => typeof id === 'string' && id.length > 0)
       : []
     const sourceRpc = raw.source
+    const primaryRpc =
+      typeof sourceRpc?.rpcId === 'string' && sourceRpc.rpcId.length > 0
+        ? sourceRpc.rpcId
+        : typeof raw.rpcId === 'string' && raw.rpcId.length > 0
+          ? raw.rpcId
+          : undefined
     const durableIds = [
       String(event.data.id),
       ...rpcIds,
-      ...(typeof sourceRpc?.rpcId === 'string' ? [sourceRpc.rpcId] : []),
+      ...(primaryRpc !== undefined ? [primaryRpc] : []),
     ]
     const claimed = inboxClaim !== undefined && durableIds.some(id => inboxClaim.has(id))
     // A claimed next-step at a brand-new turn (no step has started) is the

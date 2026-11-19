@@ -156,4 +156,4 @@ export function presentLspResult(
 }
 
 export const LSP_PROMPT_TEXT =
-  "Use search/read for ordinary navigation. Use lsp when textual matches are ambiguous or before a change requires precise definitions, implementations, or references. Positions are one-based line and character (UTF-16) at the cursor; an off-symbol position may return no results. findReferences always includes the declaration.";
+  "Prefer search/read for ordinary nav; `lsp` when matches are ambiguous or you need precise def/impl/refs. Positions=1-based line+UTF-16 char at cursor (off-symbol may be empty). findReferences includes the declaration.";

@@ -56,6 +56,12 @@ export interface LlmChatResponse {
   readonly finishReason?: LlmFinishReason;
   /** Set when {@link finishReason} is `error` (DSH unknown finish_reason). */
   readonly finishError?: { readonly code: string; readonly message: string };
+  /**
+   * Tool names stripped by {@link applyMaxTokensKeepDrop} on a max-tokens
+   * finish. Loop auto-continue copy can name them so the model does not retry
+   * the same giant call blind.
+   */
+  readonly droppedToolNames?: readonly string[];
 }
 
 /** Streaming events from OpenAI-compatible SSE (text + reasoning + tool-call). */
@@ -150,11 +156,19 @@ export function applyMaxTokensKeepDrop(
   if (response.finishReason !== "max-tokens" || !response.toolCalls?.length) {
     return response;
   }
+  const droppedToolNames = [
+    ...new Set(
+      response.toolCalls
+        .map((c) => String(c.name ?? "").trim())
+        .filter((n) => n.length > 0),
+    ),
+  ];
   return {
     content: response.content,
     ...(response.reasoning ? { reasoning: response.reasoning } : {}),
     ...(response.usage ? { usage: response.usage } : {}),
     finishReason: "max-tokens",
+    ...(droppedToolNames.length ? { droppedToolNames } : {}),
   };
 }
 

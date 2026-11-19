@@ -1,9 +1,9 @@
-import { useMemo, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { JobView } from '@xrkseek/client-runtime/client'
 import type { PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } from '@xrkseek/client-ui-primitives'
 import { isLiveJob, orderedJobs, type JobListActions } from './job-list-shared.ts'
-import { JobRows } from './JobRows.tsx'
+import { JobOutputPanel, JobRows, KillButton } from './JobRows.tsx'
 import type { JobListInjected } from './JobListAction.tsx'
 import { useJobClock } from './use-job-clock.ts'
 import { NS } from './locales.ts'
@@ -20,6 +20,9 @@ export type JobInputDockProps =
  * Input-zone strip for live background jobs (TodoDock posture): visible while
  * at least one job is running so Stop / Background stay near the composer.
  * One live job renders the action row directly (no empty collapsible chrome).
+ *
+ * Multi-job expand mounts {@link JobOutputPanel} *beside* the row list so the
+ * list stays a short scrollport and TerminalBlock owns output scrolling.
  * @param props - session jobs mirror plus stop/background actions.
  * @returns dock card or null when nothing is live.
  */
@@ -29,31 +32,47 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
   const [collapsed, setCollapsed] = useState(true)
   const [expandedId, setExpandedId] = useState<string | undefined>(undefined)
   const now = useJobClock(liveJobs.length > 0)
+  const rows = useMemo(() => orderedJobs(liveJobs), [liveJobs])
+
+  useEffect(() => {
+    if (expandedId === undefined) return
+    if (!rows.some((job) => job.id === expandedId)) setExpandedId(undefined)
+  }, [rows, expandedId])
 
   if (liveJobs.length === 0) return null
 
-  const rows = orderedJobs(liveJobs)
   const actions: JobListActions = { killJob, backgroundJob }
   const single = rows.length === 1
-  const expanded = single || !collapsed
+  const listOpen = single || !collapsed
   const primary = rows[0]
+  const expandedJob = expandedId === undefined
+    ? undefined
+    : rows.find((job) => job.id === expandedId)
 
-  const onStopPrimary = (event: MouseEvent<HTMLButtonElement>): void => {
-    event.stopPropagation()
-    if (primary !== undefined) killJob(primary.id)
+  const onToggleExpand = (jobId: string): void => {
+    if (!single && collapsed) setCollapsed(false)
+    setExpandedId((current) => (current === jobId ? undefined : jobId))
   }
 
   return (
     <section className={css.root} data-testid="job-input-dock" aria-label={t('dock.aria')}>
-      <div className={css.body}>
+      <div
+        className={css.body}
+        data-output-open={expandedJob !== undefined ? '' : undefined}
+      >
         {!single
           ? (
             <div className={css.headerRow}>
               <button
                 type="button"
                 className={css.header}
-                aria-expanded={expanded}
-                onClick={() => { setCollapsed(value => !value) }}
+                aria-expanded={listOpen}
+                onClick={() => {
+                  setCollapsed((value) => {
+                    if (!value) setExpandedId(undefined)
+                    return !value
+                  })
+                }}
               >
                 <span className={css.title}>{t('dock.title')}</span>
                 <span className={css.summary}>
@@ -65,20 +84,18 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
               </button>
               {collapsed && primary !== undefined
                 ? (
-                  <button
-                    type="button"
-                    className={headerCss.action}
-                    aria-label={t('action.stop.aria', { label: primary.label })}
-                    onClick={onStopPrimary}
-                  >
-                    {t('action.stop')}
-                  </button>
+                  <KillButton
+                    job={primary}
+                    t={t}
+                    css={headerCss}
+                    killJob={killJob}
+                  />
                 )
                 : null}
             </div>
           )
           : null}
-        {expanded
+        {listOpen
           ? (
             <ul className={css.list} aria-label={t('list.aria')}>
               <JobRows
@@ -88,11 +105,22 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
                 css={headerCss}
                 {...actions}
                 expandedId={expandedId}
-                onToggleExpand={(jobId) => {
-                  setExpandedId((current) => (current === jobId ? undefined : jobId))
-                }}
+                onToggleExpand={onToggleExpand}
+                embedOutput={false}
               />
             </ul>
+          )
+          : null}
+        {listOpen && expandedJob !== undefined
+          ? (
+            <div className={css.outputSlot}>
+              <JobOutputPanel
+                job={expandedJob}
+                live={isLiveJob(expandedJob)}
+                t={t}
+                css={headerCss}
+              />
+            </div>
           )
           : null}
       </div>

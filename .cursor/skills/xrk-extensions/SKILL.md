@@ -9,7 +9,7 @@ user-invocable: false
 
 # 笔记 · 进程插件 kind
 
-真源：[docs/plugin-development.md](../../../docs/plugin-development.md) · 金样：[extensions/example-tools/](../../../extensions/example-tools/)。
+真源：[docs/plugin-development.md](../../../docs/plugin-development.md) · 原生壳：[docs/client-plugin-development.md](../../../docs/client-plugin-development.md) · 金样：`extensions/example-tools` · `example-composer-action` · `example-theme-tokens`。
 
 ## kind 选型
 
@@ -20,7 +20,7 @@ user-invocable: false
 | **`commands`** | `commands[]` | Face `commands/list` · execute | 斜杠 / 命令面 |
 | **`xrk.client`**（manifest 扩展） | client 包 | `~/.xrk/plugins/web/` 叠加 | 改产品壳 UI，**不是**进程 kind |
 
-Client 叠加与进程插件可同包发布；见 [community-plugins.md](../../../docs/community-plugins.md)。
+Client 作者路径：**原生** [client-plugin-development.md](../../../docs/client-plugin-development.md)（标准工具包：`useInput` · `inputActions` · `useModelSelection` · **`modelSelectionActions`**）。**第一方原生产品插件**（非社区）：`xrk-sunflower-free` · `@xrkseek/xrk-phone-bridge` · `xrkh-better-sidebar`（`registerTab` / `registerFileViewer`）· `xrkh-better-sidebar-plugin-office`。社区兼容器见 [community-plugins.md](../../../docs/community-plugins.md)（可选；0.9 拟迁 `@xrkseek/dsh-compat` peer）。
 
 ## 最小 tools 插件
 

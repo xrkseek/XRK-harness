@@ -8,7 +8,9 @@
  * bail events) and owns the default-sink choreography: every session is a
  * real host entity, so the sink is one unconditional prompt path.
  */
-import type { ClientContext, ISessions, SessionBinding, SessionFace, SessionId } from '@xrkseek/client-runtime/client'
+import type {
+  ClientContext, ISessions, PendingSubmissionAttachment, SessionBinding, SessionFace, SessionId,
+} from '@xrkseek/client-runtime/client'
 import type { InputTriggerController, SubmitImageAttachment, SubmitOutcome } from '@xrkseek/client-ui-input-trigger/client'
 import type { TranslateNS } from '@xrkseek/client-locale/client'
 import { queueReadFaceOf } from '../queue/store.ts'
@@ -41,6 +43,20 @@ interface ConversationAttachmentFace {
   ): Promise<SubmitOutcome>
   serializeDraftImages(imageIds: readonly DraftAttachmentId[]): Promise<readonly SubmitImageAttachment[]>
   releaseDraftImage(id: DraftAttachmentId): void
+  buildPromptParts(
+    text: string,
+    imageIds: readonly DraftAttachmentId[],
+  ): Promise<Parameters<SessionFace['prompt']>[0]>
+  buildResubmitEcho(
+    text: string,
+    imageIds: readonly DraftAttachmentId[],
+  ): {
+    readonly echo: {
+      readonly text: string
+      readonly attachments: readonly PendingSubmissionAttachment[]
+    }
+    readonly release: () => void
+  }
 }
 
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
@@ -178,20 +194,34 @@ export class InputHub implements SessionInputResolver {
     const staged = peekEditStagingFor(sessionId)
     if (staged === null) return false
     const text = shell.snapshot.draft.trim()
-    if (text === '') return false
+    const imageIds = [...shell.snapshot.imageIds]
+    if (text === '' && imageIds.length === 0) return false
     // Slash lines leave edit staging and use the ordinary command path.
     if (text.startsWith('/')) {
       clearEditStaging()
       return false
     }
-    const imageIds = [...shell.snapshot.imageIds]
+    const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
+    if (conversation === undefined) {
+      shell.notify('error', 'conversation service unavailable')
+      return true
+    }
+    let releaseEcho: (() => void) | undefined
     try {
+      // Build parts + echo before truncate so hydrated drafts stay usable and
+      // the bubble paints before Host running (no waiting-line-only flash).
+      const content = await conversation.buildPromptParts(text, imageIds)
+      const built = conversation.buildResubmitEcho(text, imageIds)
+      releaseEcho = built.release
       clearEditStaging()
       const outcome = await confirmAndExecuteResubmit(this.sessions(), {
         sessionId,
         seq: staged.seq,
         text,
         kind: 'edit',
+        content,
+        echo: built.echo,
+        onEchoRetire: () => { built.release() },
       })
       if (outcome === 'cancel') {
         beginEditStaging({ sessionId, seq: staged.seq })
@@ -201,6 +231,7 @@ export class InputHub implements SessionInputResolver {
       this.releaseDraftImages(shell, imageIds)
       return true
     } catch (error) {
+      releaseEcho?.()
       beginEditStaging({ sessionId, seq: staged.seq })
       const message = error instanceof Error ? error.message : String(error)
       shell.notify('error', message)
@@ -237,12 +268,24 @@ export class InputHub implements SessionInputResolver {
     text: string,
     imageIds: readonly DraftAttachmentId[],
   ): Promise<SubmitOutcome> {
+    const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
+    if (conversation === undefined) {
+      beginEditStaging({ sessionId, seq })
+      return { kind: 'error', text: 'conversation service unavailable' }
+    }
+    let releaseEcho: (() => void) | undefined
     try {
+      const content = await conversation.buildPromptParts(text, imageIds)
+      const built = conversation.buildResubmitEcho(text, imageIds)
+      releaseEcho = built.release
       const outcome = await confirmAndExecuteResubmit(this.sessions(), {
         sessionId,
         seq,
         text,
         kind: 'edit',
+        content,
+        echo: built.echo,
+        onEchoRetire: () => { built.release() },
       })
       if (outcome === 'cancel') {
         beginEditStaging({ sessionId, seq })
@@ -251,6 +294,7 @@ export class InputHub implements SessionInputResolver {
       this.releaseDraftImages(undefined, imageIds)
       return { kind: 'success' }
     } catch (error) {
+      releaseEcho?.()
       beginEditStaging({ sessionId, seq })
       const message = error instanceof Error ? error.message : String(error)
       return { kind: 'error', text: message }

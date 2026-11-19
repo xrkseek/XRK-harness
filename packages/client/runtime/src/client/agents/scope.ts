@@ -40,20 +40,26 @@ export interface AgentScopeHandle {
   fiber: Fiber
 }
 
-/** Shared no-op plugin backing each Agent scope fiber. */
-function agentScope(): void {}
-
 /**
  * Mint an Agent scope under `ctx`: a no-op plugin fiber whose context
  * carries the agent tag and the dispatch filter — untagged listeners are
  * admitted globally, tagged listeners only for a matching agent.
  * Registrations through the returned ctx dispose with the fiber.
+ *
+ * Each mint uses a fresh plugin object (`name: agent-scope:<key>`). A shared
+ * callback identity across sessions made a second `ctx.plugin()` under the
+ * product root blow the stack in cordis Fiber construction, so session
+ * switches froze `currentProvideInfo` on the previous selection.
+ *
  * @param ctx - client root context the scope fiber mounts under.
  * @param key - owning agent identity (the routing tag; agent id === session id).
  * @returns the tagged context and its backing fiber.
  */
 export function createScope(ctx: Context, key: SessionId): AgentScopeHandle {
-  const fiber = ctx.plugin(agentScope)
+  const fiber = ctx.plugin({
+    name: `agent-scope:${key}`,
+    apply() {},
+  })
   const scoped = fiber.ctx.extend({
     [kScope]: key,
     [CordisContext.filter](listenerCtx: Context): boolean {

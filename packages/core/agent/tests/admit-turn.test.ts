@@ -343,4 +343,52 @@ describe("continueTurn + admit", () => {
       ),
     ).toEqual([{ role: "user", content: "fix A\n\nfix B" }]);
   });
+
+  it("preserves seat/handoff source on promoted user/message (never forge kind:user)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create("s-seat-source");
+    const agent = createAgent({
+      sessionId: session.id,
+      store,
+      llm,
+      tools: createToolRegistry(),
+    });
+    const seatSource = {
+      kind: "seat" as const,
+      form: "speech" as const,
+      channel: "parent" as const,
+      fromSessionId: "sess_mgr",
+      label: "经理",
+    };
+    agent.admit("delegator task", { source: seatSource });
+    await agent.continueTurn();
+    const users = store
+      .get(session.id)
+      .events.filter((e) => e.type === "user/message");
+    expect(users).toHaveLength(1);
+    expect(users[0]).toMatchObject({
+      content: "delegator task",
+      source: seatSource,
+    });
+
+    const handoffSource = {
+      kind: "handoff" as const,
+      form: "notice" as const,
+      via: "subagent" as const,
+      fromSessionId: "sess_child",
+      label: "发版员",
+    };
+    agent.admit("child done", {
+      delivery: "steer",
+      source: handoffSource,
+    });
+    await agent.continueTurn();
+    const after = store
+      .get(session.id)
+      .events.filter((e) => e.type === "user/message");
+    expect(after[after.length - 1]).toMatchObject({
+      content: "child done",
+      source: handoffSource,
+    });
+  });
 });

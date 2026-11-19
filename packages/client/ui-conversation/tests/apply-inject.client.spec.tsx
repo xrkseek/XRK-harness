@@ -161,6 +161,9 @@ describe('conversation slot inject API', () => {
       method: 'fork', args: [{ sessionId: ROOT, atSeq: 17, increaseTitle: true }],
     })
     chatView.injected.restoreAt(17)
+    // Restore confirms first (same modal channel as regenerate / delete).
+    const { completeResubmitConfirm } = await import('../src/client/chat/resubmit-intent.ts')
+    completeResubmitConfirm('keep-files')
     await vi.waitFor(() => {
       expect(b.sessionFake.command).toHaveBeenCalledWith('/rollback seq:17')
     })

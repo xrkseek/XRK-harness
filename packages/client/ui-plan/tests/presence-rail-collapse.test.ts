@@ -39,6 +39,30 @@ describe('collapsed overview presence rail', () => {
     const block = cssBlock(previewCss, ".presenceRail[aria-hidden='true']")
     expect(block).not.toMatch(/display:\s*none/)
   })
+
+  it('collapsed delegate stack paints lead only (no overlapping compact chips)', () => {
+    const block = cssBlock(
+      previewCss,
+      '.delegatePair[data-collapsed] .delegateFromLayer:not([data-lead])',
+    )
+    expect(block).toMatch(/display:\s*none/)
+  })
+})
+
+describe('delegate stack overlap', () => {
+  it('keeps pair-stage shape via CSS scale (not compact chip mounts)', () => {
+    expect(previewCss).toMatch(
+      /\.delegateFromLayer\[data-depth='1'\][\s\S]*?transform:\s*scale\(0\.88\)/,
+    )
+    expect(previewCss).toMatch(
+      /\.delegateFromLayer\[data-depth='3'\][\s\S]*?transform:\s*scale\(0\.66\)/,
+    )
+  })
+
+  it('tightens overlap on phone / narrow Overview', () => {
+    expect(previewCss).toMatch(/margin-right:\s*-55%/)
+    expect(previewCss).toMatch(/margin-right:\s*-64%/)
+  })
 })
 
 describe('presence ball mount geometry', () => {

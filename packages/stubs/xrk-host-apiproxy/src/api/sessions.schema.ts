@@ -385,8 +385,12 @@ export const imageMediaTypeSchema = z.union([
 ])
 
 /** Prompt wire content is intentionally narrower than merge-extensible durable core content. */
-export const promptContentPartSchema = z.discriminatedUnion('type', [
+export const promptContentPartSchema = z.union([
   z.object({ type: z.literal('text'), text: z.string() }),
+  z.object({
+    type: z.literal('image'),
+    attachmentId: z.string().min(1),
+  }),
   z.object({
     type: z.literal('image'),
     mediaType: imageMediaTypeSchema,
@@ -394,6 +398,10 @@ export const promptContentPartSchema = z.discriminatedUnion('type', [
     name: z.string().optional(),
     /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
     sourcePath: z.string().min(1).optional(),
+  }),
+  z.object({
+    type: z.literal('file'),
+    attachmentId: z.string().min(1),
   }),
   z.object({
     type: z.literal('file'),

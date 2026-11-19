@@ -66,6 +66,15 @@ import {
   maybePrefixDelegatedChildContent,
   parseSeatChannel,
 } from "../seat-channel.js";
+import {
+  buildAdmitSpeechSource,
+  threadStopHandoffSource,
+} from "../message-source.js";
+import {
+  forgetSessionOpenerState,
+  markSessionHumanSpoke,
+  rememberSessionOpener,
+} from "../session-opener.js";
 import { contentPartsToText } from "../external-agent-runtime.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { killLiveSessionJobs } from "./job.js";
@@ -97,7 +106,7 @@ import {
   buildFaceModelCatalog,
   pinInheritedSessionModel,
   resolveSessionModelSelection,
-  routeServed,
+  selectionRoutable,
 } from "../model-catalog.js";
 import { reserveModelSessionSlot } from "../model-session-cap.js";
 import { selectSessionModel } from "../select-session-model.js";
@@ -344,12 +353,14 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     typeof p.inheritFrom === "string" ? p.inheritFrom.trim() : "";
   if (inheritFrom && inheritFrom !== sessionId) {
     pinInheritedSessionModel(runtime, inheritFrom, sessionId);
+    rememberSessionOpener(runtime, sessionId, inheritFrom);
   }
 
   if (parentSessionId) {
     // Freeze the parent's effective route. Resolution is total, so a parent
     // that never picked still pins what it was actually on.
     pinInheritedSessionModel(runtime, parentSessionId, sessionId);
+    rememberSessionOpener(runtime, sessionId, parentSessionId);
     const label =
       typeof p.label === "string" && p.label.trim()
         ? p.label.trim()
@@ -367,7 +378,8 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       parentSessionId,
       childSessionId: sessionId,
       mode: p.mode === "one-shot" ? "one-shot" : "continuable",
-      label: member?.name || label,
+      // Task label for bubble/sidebar; memberId carries roster identity.
+      label: label || member?.name || "subagent",
       ...(isAgentTeamSpawnRole(p.role)
         ? { role: p.role }
         : member?.role && member.role !== "default"
@@ -499,12 +511,11 @@ export const sessionList: FaceHandler = async (runtime) => {
         : runtime.projections.snapshot(sessionId, {
             keys: [...sessionListProjectionKeys(runtime.projections)],
           });
-    // Loaded + untitled: backfill from the first human prompt still in the
-    // log (hydrate skips live fallback; compacted openers still leave text).
-    if (
-      loaded
-      && !(typeof snap?.values.title === "string" && snap.values.title !== "")
-    ) {
+    // Loaded sessions: backfill missing titles, and rewrite leaked handle-
+    // caption fallbacks (older logs / lost modelOnly) when prose or a
+    // filename is available. Hydrate skips live fallback; compacted openers
+    // can still leave reader text in the log.
+    if (loaded) {
       runtime.titles.ensureFallbackFromLog(sessionId);
       snap = runtime.projections.snapshot(sessionId, {
         keys: [...sessionListProjectionKeys(runtime.projections)],
@@ -875,12 +886,18 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       continue;
     }
     if (x.type === "image") {
+      // Edit-resubmit / regenerate may reuse a store id after truncate (bytes
+      // remain content-addressed even when the old user/message row is gone).
+      if (typeof x.attachmentId === "string" && x.attachmentId.trim().length > 0) {
+        parts.push({ type: "image", attachmentId: x.attachmentId.trim() });
+        continue;
+      }
       if (typeof x.mediaType !== "string" || typeof x.data !== "string") {
         return {
           ok: false,
           error: {
             code: "invalid-payload",
-            message: "image part requires mediaType + data",
+            message: "image part requires mediaType + data, or attachmentId",
           },
         };
       }
@@ -896,12 +913,16 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       continue;
     }
     if (x.type === "file") {
+      if (typeof x.attachmentId === "string" && x.attachmentId.trim().length > 0) {
+        parts.push({ type: "file", attachmentId: x.attachmentId.trim() });
+        continue;
+      }
       if (typeof x.data !== "string") {
         return {
           ok: false,
           error: {
             code: "invalid-payload",
-            message: "file part requires data",
+            message: "file part requires data, or attachmentId",
           },
         };
       }
@@ -988,14 +1009,52 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     admitContent = text;
   }
 
-  // Tool-delegated child: tag author with live Settings seat titles
-  // (human_face vs parent). `subagent.prompt` sets seatChannel=parent for
-  // internal tool-/orch- rpcs.
+  // Tag who spoke: UI = 老板 (`kind:user`); tool/orch parent = 委派方 seat;
+  // peer collab = peer seat. First subagent prompt is always parent speech.
+  const seatChannel = parseSeatChannel(p.seatChannel);
+  const fromSessionId =
+    typeof p.fromSessionId === "string" ? p.fromSessionId.trim() : "";
   admitContent = maybePrefixDelegatedChildContent(
     runtime,
     sessionId,
     admitContent,
-    parseSeatChannel(p.seatChannel),
+    seatChannel,
+    fromSessionId || undefined,
+  );
+  // UI composer → 老板 joined this seat; Overview may stack 老板 + opener.
+  if (seatChannel === "human_face" && !isInternalFaceRpc(rpcId)) {
+    markSessionHumanSpoke(runtime, sessionId);
+  }
+  // Peer seat speech = session collab. Mirror thread_message's Overview edge
+  // (label `collab`, not auto-mesh `sibling`) so mutual 委派方 paints without
+  // requiring a tool round-trip. Waiters stay owned by thread_message /
+  // workspace_session_prompt (armPeerCollabAfterPrompt). Skip true parent↔child
+  // pairs — those already paint via subagent walk; a collab edge would double
+  // 委派方 and confuse N→1 Overview.
+  if (
+    seatChannel === "peer" &&
+    fromSessionId &&
+    fromSessionId !== sessionId &&
+    runtime.store.has(fromSessionId)
+  ) {
+    const asChild = runtime.subagents.getByChild(sessionId);
+    const fromChild = runtime.subagents.getByChild(fromSessionId);
+    const isDelegationPair =
+      (asChild != null &&
+        asChild.mode !== "fork" &&
+        asChild.parentSessionId === fromSessionId) ||
+      (fromChild != null &&
+        fromChild.mode !== "fork" &&
+        fromChild.parentSessionId === sessionId);
+    if (!isDelegationPair) {
+      runtime.agentTeams.linkPeers(sessionId, fromSessionId, "collab");
+    }
+  }
+  const speechSource = buildAdmitSpeechSource(
+    runtime,
+    sessionId,
+    seatChannel,
+    fromSessionId || undefined,
   );
 
   runtime.watchSession(sessionId);
@@ -1042,6 +1101,7 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     delivery: mode === "steer" ? "steer" : "queue",
     admitId,
     rpcId: echoRpc,
+    source: speechSource,
   });
   // Echo rpcId is durable on prompt/admitted and mirrored in admitRpcMap.
   // Promote stamps user/message from admitRpcMap → pendingUserRpc FIFO — do
@@ -1091,7 +1151,10 @@ function notifyThreadCollabStopped(
   });
   for (const peerId of peers) {
     void runtime.resolveAgent(peerId).then((peer) => {
-      peer.admit(text, { delivery: "steer" });
+      peer.admit(text, {
+        delivery: "steer",
+        source: threadStopHandoffSource(runtime, sessionId),
+      });
       runtime.drain.wake(peerId);
     }).catch(() => undefined);
   }
@@ -1259,6 +1322,7 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
   runtime.toolDisclosure.forget(sessionId);
   runtime.pathAllowlist.forget(sessionId);
   runtime.sessionModels.delete(sessionId);
+  forgetSessionOpenerState(runtime, sessionId);
   try {
     clearSessionModelSelection(
       sessionModelsPath(runtime.productDir?.trim() || resolveXrkHome()),
@@ -1297,7 +1361,7 @@ export const sessionModels: FaceHandler = async (runtime, _rpcId, payload) => {
   const current =
     resolved.provider.trim() && resolved.model.trim() ? resolved : null;
   const { groups, failures } = buildFaceModelCatalog(runtime);
-  const routable = current ? routeServed(runtime, current.provider) : false;
+  const routable = selectionRoutable(runtime, current);
   return {
     ok: true,
     value: {
@@ -1586,8 +1650,40 @@ export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => 
       ? Math.floor(p.beforeSeq)
       : undefined;
 
-  if (runtime.drain.isActive(sessionId)) {
+  // Peer collab arms survive drain.cancel. Without this, edit-resubmit /
+  // regenerate would leave (a) us waiting on a peer → later idle steers into
+  // the rewritten transcript, and (b) peers waiting on us → stuck forever.
+  const wasActive = runtime.drain.isActive(sessionId);
+  // Optimistic idle before the drain join (same contract as sessionCancel):
+  // edit/delete/regenerate must not leave Stop / waiting chrome pinned while
+  // a stuck tool is still tearing down.
+  if (wasActive) {
+    runtime.bus.publishHost({
+      type: "host/session-status",
+      sessionId,
+      running: false,
+    });
+    runtime.markTurnUiIdle(sessionId);
     await runtime.drain.cancel(sessionId);
+  }
+  const armedWaiters = runtime.peerCollabWaiters
+    .listForPeer(sessionId)
+    .map((w) => w.waiterSessionId);
+  // Always drop arms; only broadcast stop when someone was waiting on us or
+  // we cut a live turn (quiet mid-history edit must not spam 主线 peers).
+  deliverPeerCollabStopHandoffs(
+    runtime,
+    sessionId,
+    "session truncated (edit / regenerate / delete)",
+  );
+  runtime.peerCollabWaiters.clearAsWaiter(sessionId);
+  if (armedWaiters.length > 0 || wasActive) {
+    notifyThreadCollabStopped(
+      runtime,
+      sessionId,
+      { kind: "user" },
+      new Set(armedWaiters),
+    );
   }
 
   const parentEvents = readSessionEvents(runtime.store, sessionId);
@@ -1616,16 +1712,20 @@ export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => 
 
   // Edit-resubmit / checkpoint truncateChat: wire + projections must match the kept prefix.
   const n = resetFaceStateAfterLogCut(runtime, sessionId);
+  // resetFaceState clears inboxWire; push an empty session/queue so the
+  // client dock does not keep ghost backlog after edit/delete interrupt.
+  runtime.publishQueue(sessionId);
 
   // Ship the post-cut projection baseline with truncate so the client can
   // reseal without a follow-up session.history round trip (regenerate /
-  // edit-resubmit latency on phone + LAN).
+  // edit-resubmit latency on phone + LAN). Always include the block — even
+  // `{}` — so a wipe-to-empty cut clears stale title / turn chrome instead of
+  // leaving the pre-cut projection store untouched.
   const historyKeys = sessionHistoryTailProjectionKeys();
   const snap = runtime.projections.snapshot(sessionId, {
     keys: [...historyKeys],
   });
-  const projections =
-    Object.keys(snap.values).length > 0 ? snapshotWireBlock(snap) : undefined;
+  const projections = snapshotWireBlock(snap);
 
   return {
     ok: true,
@@ -1634,7 +1734,7 @@ export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => 
       eventCount: n,
       ...(cut.atSeq !== undefined ? { atSeq: cut.atSeq } : {}),
       ...(cut.beforeSeq !== undefined ? { beforeSeq: cut.beforeSeq } : {}),
-      ...(projections !== undefined ? { projections } : {}),
+      projections,
     },
   };
 };

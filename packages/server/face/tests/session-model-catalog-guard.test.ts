@@ -7,8 +7,10 @@ import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 import {
   lookupCatalogModel,
   lookupProviderModelIds,
+  selectionRoutable,
 } from "../src/model-catalog.js";
 import { selectSessionModel } from "../src/select-session-model.js";
+import { dispatchFaceMethod } from "../src/dispatch.js";
 
 /**
  * deepseek = a provider WITH a catalog inventory (two rows);
@@ -121,6 +123,38 @@ describe("selectSessionModel model-existence guard", () => {
       provider: "deepseek",
       model: "deepseek-v4-flash",
     });
+    expect(
+      selectionRoutable(runtime, {
+        provider: "deepseek",
+        model: "deepseek-v4-flash",
+      }),
+    ).toBe(true);
+  });
+
+  it("session.models reports routable=false when the pinned model left the catalog", async () => {
+    const { runtime, sessionId } = await guardRuntime();
+    runtime.sessionModels.set(sessionId, {
+      provider: "deepseek",
+      model: "deepseek-deleted-row",
+    });
+    expect(
+      selectionRoutable(runtime, {
+        provider: "deepseek",
+        model: "deepseek-deleted-row",
+      }),
+    ).toBe(false);
+
+    const models = await dispatchFaceMethod(runtime, "session.models", "sm-gone", {
+      sessionId,
+    });
+    expect(models.result.ok).toBe(true);
+    if (!models.result.ok) return;
+    const value = models.result.value as {
+      routable: boolean;
+      current: { model: string } | null;
+    };
+    expect(value.current?.model).toBe("deepseek-deleted-row");
+    expect(value.routable).toBe(false);
   });
 
   it("lets a provider with no catalog inventory through (custom gateway)", async () => {

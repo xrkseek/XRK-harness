@@ -100,11 +100,35 @@ export {
   renderDesktopAppUpdateYml,
   resolveDesktopAutoUpdateChannel,
   resolveDesktopAutoUpdateConfig,
+  resolveDesktopGithubAutoUpdateConfig,
   resolveDesktopUploadConfig,
   type DesktopAutoUpdateChannel,
   type DesktopAutoUpdateConfig,
+  type DesktopAutoUpdateProvider,
   type DesktopUploadConfig,
 } from "./desktop-auto-update-environment.js";
+export {
+  DESKTOP_GITHUB_UPDATE_MIRROR,
+  DESKTOP_PUBLIC_UPDATE_MIRRORS,
+  DESKTOP_UPDATE_GITHUB_OWNER,
+  DESKTOP_UPDATE_GITHUB_REPO,
+  DESKTOP_UPDATE_METADATA_CHANNEL,
+  DESKTOP_UPDATE_PREFERRED_MIRROR_KEY,
+  desktopGithubLatestDownloadBase,
+  desktopUpdateFeedStepForMirror,
+  orderedDesktopUpdateFeedSteps,
+  orderedDesktopUpdateMirrors,
+  preferDesktopGithubProxyByTimezone,
+  renderDesktopGithubAppUpdateYml,
+  rewriteDesktopGithubUrl,
+  type DesktopUpdateFeedStep,
+  type DesktopUpdateMirror,
+  type DesktopUpdateMirrorId,
+} from "./desktop-update-mirrors.js";
+export {
+  readPreferredDesktopUpdateMirror,
+  writePreferredDesktopUpdateMirror,
+} from "./desktop-electron-updater.js";
 export {
   createDesktopUploadPlan,
   parseDesktopUpdateMetadataYaml,

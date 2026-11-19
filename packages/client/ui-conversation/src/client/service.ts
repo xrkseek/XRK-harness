@@ -12,7 +12,9 @@ import type { Context } from '@xrkseek/cordis'
 // Type-only imports: a plugin-to-plugin value import is a bundle purity
 // error, so scope resolution goes through the sessions service (scopeOf
 // method) instead of the standalone helper.
-import type { ISessions, SessionFace, SessionId } from '@xrkseek/client-runtime/client'
+import type {
+  ISessions, PendingSubmissionAttachment, SessionFace, SessionId,
+} from '@xrkseek/client-runtime/client'
 import {
   createSnapshotStore,
   withSeatChannelEchoPrefix,
@@ -31,6 +33,7 @@ import { randomUuid } from '@xrkseek/xrk-host-apiproxy/api'
 import type { DraftAttachmentId, SessionInputResolver } from './input/contract.ts'
 import type { InputSubmitMode } from './contract/composer-submission.ts'
 import { desktopPathForFile } from './drop-path-intake.ts'
+import type { DurableMessageAttachment } from './chat/user-message-media.ts'
 
 /**
  * The outward conversation face (`ctx.conversation`): the scope-addressed
@@ -103,6 +106,54 @@ export interface IConversation {
     sessionId: SessionId,
     attachment: ImageAttachmentRef | FileAttachmentRef,
   ): string | undefined
+  /** Release one browser-owned draft attachment (edit staging / send cleanup). */
+  releaseDraftImage(id: DraftAttachmentId): void
+  /**
+   * Fetch durable message media into composer drafts (before truncate).
+   * Drafts remember the store id so edit-resubmit can reuse without re-upload.
+   */
+  hydrateDraftsFromMessage(
+    session: SessionFace,
+    media: readonly DurableMessageAttachment[],
+  ): Promise<readonly DraftAttachmentId[]>
+  /**
+   * Build `session.prompt` parts from draft ids + text (reuse id when hydrated).
+   */
+  buildPromptParts(
+    text: string,
+    imageIds: readonly DraftAttachmentId[],
+  ): Promise<Parameters<SessionFace['prompt']>[0]>
+  /**
+   * Local edit-resubmit echo (text + draft previews) before Host admit.
+   * Clones image blob URLs so `releaseDraftImage` after send cannot crack the
+   * pending bubble; call `release` from `beginSubmission` onRetire.
+   */
+  buildResubmitEcho(
+    text: string,
+    imageIds: readonly DraftAttachmentId[],
+  ): {
+    readonly echo: {
+      readonly text: string
+      readonly attachments: readonly PendingSubmissionAttachment[]
+    }
+    readonly release: () => void
+  }
+  /**
+   * Regenerate / no-composer echo from durable message media.
+   * Clones image blob URLs so the echo survives draft release; call
+   * `release` from `beginSubmission` onRetire (next frame on observed).
+   */
+  buildResubmitEchoFromDurable(
+    session: SessionFace,
+    text: string,
+    media: readonly DurableMessageAttachment[],
+  ): Promise<{
+    readonly echo: {
+      readonly text: string
+      readonly attachments: readonly PendingSubmissionAttachment[]
+    }
+    readonly release: () => void
+  }>
 }
 
 /**
@@ -167,6 +218,16 @@ export class ConversationController extends Service implements IConversation {
   /** Live file-draft encode states (survives session switches until release). */
   readonly fileUploads = createSnapshotStore<DraftFileUploads>({})
   private readonly draftAttachments = new Map<DraftAttachmentId, ComposerAttachment>()
+  /**
+   * Drafts seeded from a durable message keep the store id so edit-resubmit
+   * can admit `{ attachmentId }` after truncate (bytes stay content-addressed).
+   */
+  private readonly draftReuseIds = new Map<DraftAttachmentId, {
+    readonly type: 'image' | 'file'
+    readonly attachmentId: string
+    /** Display leaf from the durable message (image store omits name on read-by-id). */
+    readonly name?: string
+  }>()
   private readonly fileEncodeControllers = new Map<DraftAttachmentId, AbortController>()
   private readonly attachmentUrls = new Map<string, AttachmentUrlEntry>()
   private readonly attachmentGenerations = new Map<SessionId, number>()
@@ -442,6 +503,7 @@ export class ConversationController extends Service implements IConversation {
     const attachment = this.draftAttachments.get(id)
     if (attachment === undefined) return
     this.draftAttachments.delete(id)
+    this.draftReuseIds.delete(id)
     const controller = this.fileEncodeControllers.get(id)
     this.fileEncodeControllers.delete(id)
     controller?.abort()
@@ -453,6 +515,223 @@ export class ConversationController extends Service implements IConversation {
     const next = { ...this.fileUploads.getSnapshot() }
     delete next[id]
     this.fileUploads.set(next)
+  }
+
+  /**
+   * Pull durable attachments into File drafts for the composer rail.
+   * Must run while the message still authorizes `session.attachment` reads
+   * (before edit-resubmit truncate).
+   */
+  async hydrateDraftsFromMessage(
+    session: SessionFace,
+    media: readonly DurableMessageAttachment[],
+  ): Promise<readonly DraftAttachmentId[]> {
+    const files: File[] = []
+    const reuse: Array<{ type: 'image' | 'file'; attachmentId: string; name?: string }> = []
+    for (const part of media) {
+      const result = await session.readAttachment(part.attachment.attachmentId)
+      if (!result.ok) {
+        throw new Error(
+          `conversation.hydrateDraftsFromMessage: ${result.error.code}: ${result.error.message}`,
+        )
+      }
+      const { attachment, data } = result.value
+      if (part.kind === 'image') {
+        // Prefer the durable message's leaf — AttachmentStore read-by-id drops name.
+        const fromMessage = part.attachment.name?.trim()
+        const fromStore = ('name' in attachment && typeof attachment.name === 'string')
+          ? attachment.name.trim()
+          : ''
+        const name = (fromMessage && fromMessage !== '')
+          ? fromMessage
+          : (fromStore !== '' ? fromStore : 'image.png')
+        const type = 'mediaType' in attachment && typeof attachment.mediaType === 'string'
+          ? attachment.mediaType
+          : 'image/png'
+        files.push(new File([data], name, { type }))
+        reuse.push({
+          type: 'image',
+          attachmentId: part.attachment.attachmentId,
+          ...(name !== 'image.png' || fromMessage ? { name } : {}),
+        })
+        continue
+      }
+      const name = 'name' in attachment ? attachment.name : part.attachment.name
+      const type = ('mediaType' in attachment && typeof attachment.mediaType === 'string')
+        ? attachment.mediaType
+        : (part.attachment.mediaType ?? 'application/octet-stream')
+      files.push(new File([data], name, { type }))
+      reuse.push({ type: 'file', attachmentId: part.attachment.attachmentId })
+    }
+    const drafts = this.createDraftImages(files)
+    for (let i = 0; i < drafts.length; i++) {
+      const draft = drafts[i]!
+      const carried = reuse[i]
+      if (carried !== undefined) this.draftReuseIds.set(draft.id, carried)
+    }
+    return drafts.map((d) => d.id)
+  }
+
+  /**
+   * Composer-facing echo for edit-resubmit: same text + draft cards the rail
+   * shows, so truncate → re-prompt never paints a waiting line alone.
+   */
+  buildResubmitEcho(
+    text: string,
+    imageIds: readonly DraftAttachmentId[],
+  ): {
+    readonly echo: {
+      readonly text: string
+      readonly attachments: readonly PendingSubmissionAttachment[]
+    }
+    readonly release: () => void
+  } {
+    const attachments = this.draftImages(imageIds)
+    const pending: PendingSubmissionAttachment[] = []
+    const echoPreviewUrls: string[] = []
+    for (const attachment of attachments) {
+      if (attachment.kind === 'image') {
+        // Clone — do not share the draft object URL (edit success revokes it
+        // while ChatView still paints the echo for one frame).
+        const previewUrl = URL.createObjectURL(attachment.file)
+        this.createdObjectUrls.add(previewUrl)
+        echoPreviewUrls.push(previewUrl)
+        pending.push({
+          type: 'image',
+          value: {
+            previewUrl,
+            ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+            ...(attachment.width === undefined ? {} : { width: attachment.width }),
+            ...(attachment.height === undefined ? {} : { height: attachment.height }),
+          },
+        })
+        continue
+      }
+      const reuse = this.draftReuseIds.get(attachment.id)
+      pending.push({
+        type: 'file',
+        value: {
+          attachmentId: (reuse?.attachmentId ?? `echo:${attachment.id}`) as AttachmentId,
+          name: attachment.file.name || 'file',
+          bytes: Math.max(1, attachment.file.size),
+          ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
+        },
+      })
+    }
+    const release = (): void => {
+      for (const url of echoPreviewUrls) {
+        if (!this.createdObjectUrls.delete(url)) continue
+        revokePreview(url)
+      }
+      echoPreviewUrls.length = 0
+    }
+    return { echo: { text, attachments: pending }, release }
+  }
+
+  /**
+   * Paint regenerate echo with image thumbs before Host admit (composer stays empty).
+   * Image bytes come from `session.attachment` while the opener still authorizes reads.
+   */
+  async buildResubmitEchoFromDurable(
+    session: SessionFace,
+    text: string,
+    media: readonly DurableMessageAttachment[],
+  ): Promise<{
+    readonly echo: {
+      readonly text: string
+      readonly attachments: readonly PendingSubmissionAttachment[]
+    }
+    readonly release: () => void
+  }> {
+    const pending: PendingSubmissionAttachment[] = []
+    const echoPreviewUrls: string[] = []
+    for (const part of media) {
+      if (part.kind === 'file') {
+        pending.push({ type: 'file', value: part.attachment })
+        continue
+      }
+      const result = await session.readAttachment(part.attachment.attachmentId)
+      if (!result.ok) {
+        throw new Error(
+          `conversation.buildResubmitEchoFromDurable: ${result.error.code}: ${result.error.message}`,
+        )
+      }
+      const { attachment, data } = result.value
+      const name = ('name' in attachment && typeof attachment.name === 'string' && attachment.name !== '')
+        ? attachment.name
+        : (part.attachment.name?.trim() || 'image.png')
+      const type = 'mediaType' in attachment && typeof attachment.mediaType === 'string'
+        ? attachment.mediaType
+        : part.attachment.mediaType
+      const previewUrl = URL.createObjectURL(new Blob([data], { type }))
+      this.createdObjectUrls.add(previewUrl)
+      echoPreviewUrls.push(previewUrl)
+      pending.push({
+        type: 'image',
+        value: {
+          previewUrl,
+          name,
+          width: part.attachment.width,
+          height: part.attachment.height,
+        },
+      })
+    }
+    const release = (): void => {
+      for (const url of echoPreviewUrls) {
+        if (!this.createdObjectUrls.delete(url)) continue
+        revokePreview(url)
+      }
+      echoPreviewUrls.length = 0
+    }
+    return { echo: { text, attachments: pending }, release }
+  }
+
+  /**
+   * Prefer store-id reuse for hydrated drafts; encode only newly added files.
+   */
+  async buildPromptParts(
+    text: string,
+    imageIds: readonly DraftAttachmentId[],
+  ): Promise<Parameters<SessionFace['prompt']>[0]> {
+    const attachments = this.draftImages(imageIds)
+    if (attachments.length !== imageIds.length) {
+      throw new Error('conversation.buildPromptParts: one or more draft attachments are no longer available')
+    }
+    const uploads = this.fileUploads.getSnapshot()
+    const content = await Promise.all(attachments.map(async (attachment) => {
+      const reuse = this.draftReuseIds.get(attachment.id)
+      if (reuse !== undefined) {
+        if (reuse.type === 'file') {
+          return { type: 'file' as const, attachmentId: reuse.attachmentId }
+        }
+        const name = reuse.name?.trim() || attachment.file.name.trim()
+        return {
+          type: 'image' as const,
+          attachmentId: reuse.attachmentId,
+          ...(name !== '' ? { name } : {}),
+        }
+      }
+      const sourcePath = desktopPathForFile(attachment.file)
+      if (attachment.kind === 'image') {
+        return {
+          type: 'image' as const,
+          ...await this.encodeImage(attachment.file),
+          ...(sourcePath !== undefined ? { sourcePath } : {}),
+        }
+      }
+      const upload = uploads[attachment.id]
+      if (upload === undefined || upload.status !== 'ready') {
+        throw new Error('conversation.buildPromptParts: one or more files have not finished uploading')
+      }
+      return {
+        type: 'file' as const,
+        data: upload.data,
+        ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+        ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
+        ...(sourcePath !== undefined ? { sourcePath } : {}),
+      }
+    }))
+    return [...content, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
   }
 
   /**

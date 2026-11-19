@@ -57,6 +57,8 @@ export {
   DEFAULT_FALLBACK_MAX_WORDS,
   DEFAULT_TITLE_MAX_BYTES,
   fallbackSessionTitle,
+  humanTitleSourceText,
+  softAttachmentTitleSource,
   normalizeSessionTitle,
   truncateTitleUtf8,
 } from "./title-normalize.js";

@@ -11,25 +11,14 @@ import type {
  * session-scoped `todo_write` / `todo/write`.
  */
 export const CURATED_MEMORY_PROMPT_TEXT =
-  "Curated memory is two files under {XRK_HOME}/memories, frozen into this system "
-  + "prompt at session start: MEMORY.md (durable agent notes) and USER.md (who the "
-  + "user is — this is `{XRK_HOME}/memories/USER.md`, not standing `~/.xrk/USER.md` / "
-  + "`IDENTITY.md` / `SOUL.md`). Use them only for facts that should still be true in "
-  + "every future session (stable preferences, lasting project conventions, who the "
-  + "user is). They are NOT a standing plan, todo list, progress log, or 'continue the "
-  + "previous session' queue — unfinished work belongs in `todo_write` (session-scoped) "
-  + "and does not follow the user into a new session. Do not write session-local WIP, "
-  + "numbered task checklists, or 'we were doing X' handoff notes into memory. Do "
-  + "not volunteer to resume work that appears only in MEMORY unless the user asks. "
-  + "The `memory` tool requires `action` (`add|replace|remove|list`) or a non-empty "
-  + "`operations` batch — do not call it with an empty action. "
-  + "list returns live disk entries for the chosen target. "
-  + "Both files are writable: `target: memory` (default) for agent notes, `target: user` "
-  + "for who-the-user-is facts the user stated about themselves. "
-  + "Writes hit disk immediately and do not change this session's frozen block. "
-  + "This block and the memory tool exist only while Settings → Plugins → Curated memory is on; "
-  + "turning it off drops both on the next agent rebuild (idle sessions now, a busy session after its turn). "
-  + "This is not the Mnemon document library and not standing AGENTS.md / SOUL.md.";
+  "Curated memory: MEMORY.md + USER.md under {XRK_HOME}/memories, frozen into the system "
+  + "prompt at session start (not standing ~/.xrk/USER.md / IDENTITY.md / SOUL.md). "
+  + "Durable facts only — not a standing plan, todo list, or resume queue (`todo_write` "
+  + "is session-scoped). Do not volunteer to resume MEMORY-only WIP unless the user asks. "
+  + "Tool: `action` add|replace|remove|list or non-empty `operations`; `target` memory|user. "
+  + "Writes hit disk immediately; when the files change this turn, a live "
+  + "`<external_curated_memory>` fragment refreshes the window (prefer it over the freeze). "
+  + "Present only while Settings → Plugins → Curated memory is on (not Mnemon, not AGENTS.md).";
 
 const ACTIONS = ["add", "replace", "remove", "list"] as const;
 
@@ -72,7 +61,8 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
       + "Do NOT store session WIP or todo checklists — use `todo_write` for those. "
       + "Required: `action` (`add|replace|remove|list`) or a non-empty `operations` array. "
       + "replace/remove need `old_text` (a unique substring). "
-      + "Writes hit disk immediately; do not change this session's system prompt. "
+      + "Writes hit disk immediately; the system freeze stays, but a live curated-memory "
+      + "fragment refreshes this session when the files change. "
       + "When the char cap blocks a write the error carries `prune_candidates` — the "
       + "longest-untouched entries, i.e. the ones to drop or compress first.",
     parameters: {

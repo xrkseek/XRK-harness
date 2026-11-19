@@ -7,6 +7,8 @@ import type { AttachmentStore } from "@xrkseek/attachment";
 import { AttachmentError, isAttachmentError } from "@xrkseek/attachment";
 import type {
   ContentBlock,
+  FileAttachmentRef,
+  ImageAttachmentRef,
   ImageMediaType,
   MessageContent,
 } from "@xrkseek/protocol";
@@ -23,12 +25,24 @@ export type PromptWirePart =
       readonly sourcePath?: string;
     }
   | {
+      /** Reuse bytes already in AttachmentStore (edit-resubmit / regenerate). */
+      readonly type: "image";
+      readonly attachmentId: string;
+      /** Display leaf; local image objects omit name on read-by-id. */
+      readonly name?: string;
+    }
+  | {
       readonly type: "file";
       readonly data: string;
       readonly name?: string;
       readonly mediaType?: string;
       /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
       readonly sourcePath?: string;
+    }
+  | {
+      /** Reuse bytes already in AttachmentStore (edit-resubmit / regenerate). */
+      readonly type: "file";
+      readonly attachmentId: string;
     };
 
 export type DurablePromptResult =
@@ -46,9 +60,36 @@ export type DurablePromptOptions = {
 
 /** True when content has a non-text part or non-whitespace text (attachment-only OK). */
 export function hasPromptContent(parts: readonly PromptWirePart[]): boolean {
-  return parts.some(
-    (part) => part.type !== "text" || part.text.trim().length > 0,
+  return parts.some((part) => {
+    if (part.type === "text") return part.text.trim().length > 0;
+    if (part.type === "image" || part.type === "file") return true;
+    return false;
+  });
+}
+
+function isReusePart(
+  part: PromptWirePart,
+): part is
+  | { readonly type: "image"; readonly attachmentId: string; readonly name?: string }
+  | { readonly type: "file"; readonly attachmentId: string } {
+  return (
+    (part.type === "image" || part.type === "file") &&
+    "attachmentId" in part &&
+    typeof part.attachmentId === "string" &&
+    part.attachmentId.trim().length > 0 &&
+    !("data" in part)
   );
+}
+
+/** Prefer wire display name when the store object has none (image read-by-id). */
+function withOptionalImageName(
+  ref: ImageAttachmentRef,
+  name: string | undefined,
+): ImageAttachmentRef {
+  const trimmed = typeof name === "string" ? name.trim() : "";
+  if (trimmed === "") return ref;
+  if (ref.name !== undefined && ref.name.trim() !== "") return ref;
+  return { ...ref, name: trimmed };
 }
 
 function decodeBase64(data: string): Uint8Array | undefined {
@@ -112,7 +153,9 @@ export async function durablePromptContent(
         readonly name?: string;
         readonly mediaType?: string;
         readonly sourcePath?: string;
-      };
+      }
+    | { readonly kind: "reuse-image"; readonly ref: ImageAttachmentRef }
+    | { readonly kind: "reuse-file"; readonly ref: FileAttachmentRef };
 
   const pending: Pending[] = [];
   for (const part of parts) {
@@ -120,7 +163,28 @@ export async function durablePromptContent(
       pending.push({ kind: "text", text: part.text });
       continue;
     }
-    if (part.type === "image") {
+    if (isReusePart(part)) {
+      try {
+        if (part.type === "image") {
+          const stored = await attachments.readImage(part.attachmentId.trim());
+          pending.push({
+            kind: "reuse-image",
+            ref: withOptionalImageName(stored.ref, part.name),
+          });
+        } else {
+          const stored = await attachments.readFile(part.attachmentId.trim());
+          pending.push({ kind: "reuse-file", ref: stored.ref });
+        }
+      } catch (err) {
+        if (isAttachmentError(err)) return mapAttachmentError(err);
+        if (err instanceof AttachmentError) {
+          return { ok: false, code: "attachment-error", message: err.message };
+        }
+        throw err;
+      }
+      continue;
+    }
+    if (part.type === "image" && "data" in part) {
       if (!isImageMediaType(part.mediaType)) {
         return {
           ok: false,
@@ -147,7 +211,7 @@ export async function durablePromptContent(
       });
       continue;
     }
-    if (part.type === "file") {
+    if (part.type === "file" && "data" in part) {
       const data = decodeBase64(part.data);
       if (!data || data.byteLength === 0) {
         return {
@@ -209,21 +273,35 @@ export async function durablePromptContent(
   }
 
   const blocks: ContentBlock[] = [];
-  let imageIndex = 0;
-  let fileIndex = 0;
+  let savedImageIndex = 0;
+  let savedFileIndex = 0;
+  let imageOrdinal = 0;
   for (const p of pending) {
     if (p.kind === "text") {
       if (p.text.length > 0) blocks.push({ type: "text", text: p.text });
       continue;
     }
+    if (p.kind === "reuse-image") {
+      imageOrdinal += 1;
+      const imageNo = (options.imageStartIndex ?? 0) + imageOrdinal;
+      blocks.push(imageHandleBlock(imageNo, p.ref));
+      blocks.push({ type: "image", attachment: p.ref });
+      continue;
+    }
     if (p.kind === "image") {
-      const ref = imageRefs[imageIndex++]!;
-      const imageNo = (options.imageStartIndex ?? 0) + imageIndex;
+      const ref = imageRefs[savedImageIndex++]!;
+      imageOrdinal += 1;
+      const imageNo = (options.imageStartIndex ?? 0) + imageOrdinal;
       blocks.push(imageHandleBlock(imageNo, ref));
       blocks.push({ type: "image", attachment: ref });
       continue;
     }
-    const ref = fileRefs[fileIndex++]!;
+    if (p.kind === "reuse-file") {
+      blocks.push(fileUploadHandleBlock(p.ref));
+      blocks.push({ type: "file", attachment: p.ref });
+      continue;
+    }
+    const ref = fileRefs[savedFileIndex++]!;
     blocks.push(fileUploadHandleBlock(ref));
     blocks.push({ type: "file", attachment: ref });
   }

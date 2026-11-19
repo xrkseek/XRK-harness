@@ -6,11 +6,31 @@ import type {} from '@xrkseek/client-ui-settings/client'
 import type { PluginEntryId } from '@xrkseek/xrk-api-remotes/client'
 import type {} from '@xrkseek/xrk-api-remotes/types'
 import { PluginInventorySettingsTab, type PluginInventorySettingsTabInjected } from './PluginInventorySettingsTab.tsx'
+import {
+  clearPluginClientRefreshHint,
+  markPluginClientRefreshHint,
+} from './plugin-install-ui-session.ts'
+import {
+  applyOverlayBootPlan,
+  normalizeOverlayUrls,
+  overlayRevMap,
+  type ClientBootOverlay,
+  type OverlayBootSessionState,
+} from './soft-remount.ts'
 import { en, ja, zh, type PluginInventoryLocaleKey } from './locales.ts'
 
 export type { PluginInventorySettingsTabInjected, PluginInventorySettingsTabProps } from './PluginInventorySettingsTab.tsx'
 export type { PluginInstallLog } from './plugin-install-ui-session.ts'
 export type { PluginInventoryLocaleKey } from './locales.ts'
+export {
+  applyOverlayBootPlan,
+  planOverlayRemount,
+  ensureOverlayUrlRev,
+  overlayRevMap,
+  normalizeOverlayUrls,
+  softRemountClientOverlay,
+  softUnloadClientOverlay,
+} from './soft-remount.ts'
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -29,9 +49,73 @@ function throwRemote(label: string, result: { ok: false; error: { code: string; 
   throw new Error(`${label} failed: ${result.error.code}: ${result.error.message}`)
 }
 
+type OverlayBootSession = OverlayBootSessionState & {
+  chain: Promise<void>
+}
+
+function createOverlayBootSession(): OverlayBootSession {
+  return {
+    lastRevs: new Map(),
+    unloadPending: false,
+    chain: Promise.resolve(),
+  }
+}
+
+function enqueueOverlayBoot(session: OverlayBootSession, task: () => Promise<void>): void {
+  session.chain = session.chain.then(
+    () => task().catch(() => {
+      // Keep the queue alive; hint is set by the task on failure paths.
+    }),
+    () => task().catch(() => undefined),
+  )
+}
+
+/**
+ * Apply Host overlay boot: soft remount on grow/reload; soft unload on shrink.
+ * App-lifetime — runs even when the Plugins tab is closed.
+ */
+async function handleOverlayBootChanged(
+  ctx: ClientContext,
+  session: OverlayBootSession,
+): Promise<void> {
+  const result = await ctx.remote.pluginInventory.clientBoot()
+  if (!result.ok) {
+    markPluginClientRefreshHint()
+    return
+  }
+  const overlay = normalizeOverlayUrls(result.value as ClientBootOverlay)
+  const applied = await applyOverlayBootPlan(ctx, session, overlay)
+  if (applied.unloadFailed || applied.remountFailed) {
+    markPluginClientRefreshHint()
+    return
+  }
+  if (!session.unloadPending) clearPluginClientRefreshHint()
+}
+
+async function seedOverlayRevs(
+  ctx: ClientContext,
+  session: OverlayBootSession,
+): Promise<void> {
+  const result = await ctx.remote.pluginInventory.clientBoot()
+  if (!result.ok) return
+  // Only seed when no boot-changed has landed yet.
+  if (session.lastRevs.size > 0) return
+  session.lastRevs = overlayRevMap(normalizeOverlayUrls(result.value as ClientBootOverlay))
+}
+
 /** Contribute the lazy inventory tab to the Plugins settings section. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-settings-plugin-inventory: dictionaries')
+
+  // Soft remount lives at plugin apply lifetime (not tab mount).
+  // Per-apply session avoids leaked module globals across remounts.
+  const overlaySession = createOverlayBootSession()
+  ctx.effect(() => {
+    enqueueOverlayBoot(overlaySession, () => seedOverlayRevs(ctx, overlaySession))
+    return ctx.remote.$on('plugin-inventory/boot-changed', () => {
+      enqueueOverlayBoot(overlaySession, () => handleOverlayBootChanged(ctx, overlaySession))
+    })
+  }, 'ui-settings-plugin-inventory: overlay soft remount')
 
   const t = ctx.locale.bind(NS)
   const list: PluginInventorySettingsTabInjected['list'] = async () => {
@@ -167,6 +251,12 @@ export function apply(ctx: ClientContext): void {
   ) => ctx.remote.$on('plugin-inventory/updates-changed', () => {
     onChanged()
   })
+  // Tab only refreshes the inventory list; soft remount is apply()-lifetime.
+  const subscribeBootChanged: PluginInventorySettingsTabInjected['subscribeBootChanged'] = (
+    onChanged,
+  ) => ctx.remote.$on('plugin-inventory/boot-changed', () => {
+    onChanged()
+  })
   const open: PluginInventorySettingsTabInjected['open'] = async (entryId) => {
     const result = await ctx.remote.pluginInventory.open(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.open', result)
@@ -197,6 +287,7 @@ export function apply(ctx: ClientContext): void {
     install,
     subscribeInstallLog,
     subscribeUpdatesChanged,
+    subscribeBootChanged,
     open,
     checkUpdates,
   })

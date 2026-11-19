@@ -68,14 +68,22 @@ export function formatJobDuration(elapsedMs: number, t: TranslateNS<'job'>): str
   return t('duration.seconds', { seconds })
 }
 
-/** Status word, with producer detail when present (`已完成 · exit code: 0`). */
+/** Localize known producer detail shapes (wire stays English). */
+function localizeJobDetail(detail: string, t: TranslateNS<'job'>): string {
+  const exit = /^exit code:\s*(\d+)$/iu.exec(detail)
+  if (exit !== null) return t('detail.exitCode', { code: exit[1]! })
+  return detail
+}
+
+/** Status word, with producer detail when present (`已完成 · 退出码 0`). */
 export function jobStatusText(
   job: Pick<JobView, 'status' | 'detail'>,
   t: TranslateNS<'job'>,
 ): string {
   const label = jobStatusLabel(job.status, t)
-  const detail = job.detail?.trim()
-  return detail !== undefined && detail.length > 0 ? `${label} · ${detail}` : label
+  const raw = job.detail?.trim()
+  if (raw === undefined || raw.length === 0) return label
+  return `${label} · ${localizeJobDetail(raw, t)}`
 }
 
 /** Live rows first in start order, then settled rows newest-first. */

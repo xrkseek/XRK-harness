@@ -1075,7 +1075,7 @@ export function TeamRoster({
       open={open}
       onClose={onClose}
       closeLabel={t('close')}
-      title={t('team.title')}
+      title={t('team.title', { agent: seatTitles.agent })}
       className={css.dialogWide}
       contentClassName={css.sheet}
     >

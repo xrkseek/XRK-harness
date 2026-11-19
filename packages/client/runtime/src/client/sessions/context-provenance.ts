@@ -106,6 +106,25 @@ export function contextProvenance(source: unknown): ContextProvenanceView {
     // identifier; the UI translates it (a product label, not a producer name).
     case 'auto-continue':
       return { role: 'inject', label: 'auto-continue' }
+    // AI / peer seat speech (委派方 · 协作对端) — not human 老板.
+    case 'seat': {
+      const seatLabel = readString(record, 'label')
+      const channel = readString(record, 'channel')
+      return {
+        role: 'inject',
+        label: seatLabel
+          ?? (channel === 'peer' ? 'peer' : channel === 'parent' ? 'delegator' : kind),
+      }
+    }
+    // Async report-back (subagent courier / peer-collab / thread stop).
+    case 'handoff': {
+      const handoffLabel = readString(record, 'label')
+      const via = readString(record, 'via')
+      return {
+        role: 'inject',
+        label: handoffLabel ?? via ?? kind,
+      }
+    }
     case 'plugin':
       return { role: 'inject', label: readString(record, 'plugin') ?? kind }
     // A user-explicit skill invocation names the skill it injected.
@@ -125,7 +144,16 @@ export function contextProvenance(source: unknown): ContextProvenanceView {
  * dropping the row, so a log written by a newer or foreign producer still
  * renders.
  */
-const KNOWN_FORMS = ['instructions', 'catalog', 'snapshot', 'notice', 'relay', 'recall', 'fragment'] as const
+const KNOWN_FORMS = [
+  'instructions',
+  'catalog',
+  'snapshot',
+  'notice',
+  'relay',
+  'recall',
+  'fragment',
+  'speech',
+] as const
 
 /** One durable context form this UI version knows how to present. */
 export type KnownContextForm = typeof KNOWN_FORMS[number]

@@ -8,7 +8,13 @@ import type { ReactNode } from 'react'
 import type {
   ModelRetryNode, PendingSubmission, PendingSubmissionAttachment, TurnErrorNode, UserMessageNode,
 } from '@xrkseek/client-runtime/client'
-import { projectTranscriptChrome } from '@xrkseek/client-runtime/client'
+import {
+  isHumanOwnedUserMessage,
+  projectTranscriptChrome,
+  speechSeatTitlesSnapshot,
+  subscribeSpeechSeatTitles,
+  type SpeechSeatTitles,
+} from '@xrkseek/client-runtime/client'
 import type { FileAttachmentRef } from '@xrkseek/xrk-attachment'
 import {
   fileExtension, FileTypeIcon, fileSizeText, JsonBlock, MessageText, StateDot,
@@ -20,6 +26,10 @@ import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import { getEditStaging, subscribeEditStaging } from './resubmit-intent.ts'
+import {
+  clipboardTextForUserMessage,
+  userMessageHasMedia,
+} from './user-message-media.ts'
 import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
@@ -78,6 +88,7 @@ function looksLikeAttachmentHandleCaption(text: string): boolean {
     /^\[文件附件 .+（sha256:[a-f0-9]+/u.test(t)
     || /^\[图\d+\s+sha256:[a-f0-9]+/u.test(t)
     || /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+/u.test(t)
+    || /^\[image omitted because this model accepts text only;/u.test(t)
   )
 }
 
@@ -345,6 +356,84 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
   return <>{parts}</>
 }
 
+/**
+ * Bubble identity chip — Settings `ui-presence` titles (customizable), never
+ * hardcode seat names. Same-session speech:
+ * - composer / steer (`user` / omit) → boss
+ * - seat admit → stamped seat or mid-tier / peer title
+ * - handoff (subagent / peer / job) → stamped label or agent / locale
+ */
+function speechIdentityLabel(
+  source: unknown,
+  t: ChatViewSlotProps['t'],
+  titles: SpeechSeatTitles | null,
+): string | null {
+  if (source === null || typeof source !== 'object') {
+    return titles?.boss || null
+  }
+  const record = source as Record<string, unknown>
+  const kind = typeof record.kind === 'string' ? record.kind : null
+  if (kind === 'auto-continue') return null
+  const stamped = typeof record.label === 'string' && record.label.trim() !== ''
+    ? record.label.trim()
+    : null
+  if (kind === 'seat') {
+    if (stamped !== null) return stamped
+    return record.channel === 'peer'
+      ? t('message.speech.peer')
+      : (titles?.manager || t('message.speech.delegator'))
+  }
+  if (kind === 'handoff') {
+    if (stamped !== null) return stamped
+    const via = typeof record.via === 'string' ? record.via : null
+    if (via === 'subagent') return titles?.agent || t('message.contextHandoff')
+    if (via === 'peer-collab') return t('message.context.handoff.peerCollab')
+    if (via === 'thread-stop') return t('message.context.handoff.threadStop')
+    return t('message.contextHandoff')
+  }
+  if (kind === null || kind === 'user') return titles?.boss || null
+  return null
+}
+
+/**
+ * Prefer the child's answer in the bubble; keep Face's English status block as
+ * optional detail so the group-chat surface does not read like a log dump.
+ */
+function handoffSpeechParts(text: string): { primary: string; detail: string | null } {
+  const marker = /Partial \/ last answer:\s*/i
+  const match = marker.exec(text)
+  if (match === null || match.index === undefined) {
+    return { primary: text, detail: null }
+  }
+  const head = text.slice(0, match.index).trim()
+  let rest = text.slice(match.index + match[0].length).trim()
+  const cut = rest.search(
+    /\n\n(?=Follow up with|Child session|Do not send|Inspect with|Task is paused|Rate limited|Incomplete tool)/i,
+  )
+  const answer = (cut >= 0 ? rest.slice(0, cut) : rest).trim()
+  if (answer === '') return { primary: text, detail: null }
+  const tail = (cut >= 0 ? rest.slice(cut) : '').trim()
+  const detail = [head, tail].filter(part => part !== '').join('\n\n') || null
+  return { primary: answer, detail }
+}
+
+/** Join text segments before handoff split so multi-block notices still peel. */
+function handoffBodiesFromSegments(
+  segments: readonly string[],
+): { bodies: readonly string[]; detail: string | null } {
+  if (segments.length === 0) return { bodies: [], detail: null }
+  if (segments.length === 1) {
+    const parts = handoffSpeechParts(segments[0]!)
+    return { bodies: [parts.primary], detail: parts.detail }
+  }
+  const joined = segments.join('\n\n')
+  const parts = handoffSpeechParts(joined)
+  if (parts.detail === null && parts.primary === joined) {
+    return { bodies: segments, detail: null }
+  }
+  return { bodies: [parts.primary], detail: parts.detail }
+}
+
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
   content, renderMessageImages, renderMessageFiles, actions, steer = false, echo = false,
@@ -370,17 +459,32 @@ function UserStyleBubble({
   source?: unknown
   t: ChatViewSlotProps['t']
 }): ReactNode {
+  // Subscribe so Settings titleScheme / custom titles repaint past turns live.
+  const titles = useSyncExternalStore(
+    subscribeSpeechSeatTitles,
+    speechSeatTitlesSnapshot,
+    speechSeatTitlesSnapshot,
+  )
   const { text, segments, attachments: contentAttachments, rest } = contentParts(content)
   const attachments = previewAttachments ?? contentAttachments
   const compactImages = attachments.length > 1
   const truncated = (total: number): string => t('json.truncated', { total })
-  const bodies = segments.length > 0 ? segments : (text !== '' || rest.length > 0 ? [text] : [])
+  const rawBodies = segments.length > 0 ? segments : (text !== '' || rest.length > 0 ? [text] : [])
+  const isHandoff = source !== null
+    && typeof source === 'object'
+    && 'kind' in source
+    && (source as { kind?: unknown }).kind === 'handoff'
+  const handoffSplit = isHandoff ? handoffBodiesFromSegments(rawBodies) : null
+  const bodies = handoffSplit !== null ? handoffSplit.bodies : rawBodies
+  const handoffDetail = handoffSplit?.detail ?? null
   const showBubble = bodies.length > 0 || rest.length > 0
   // Source overrides surface defaults (subagent notice → courier×handoff).
+  // Voice×Lane stamps only — DressingAvatarSvg mounts later; no bubble dialect.
   const chrome = projectTranscriptChrome({
     surface: steer ? 'steering' : 'user',
     source,
   })
+  const identity = speechIdentityLabel(source, t, titles)
   return (
     <div
       className={css.userRow}
@@ -392,9 +496,13 @@ function UserStyleBubble({
       data-editing={editing || undefined}
       aria-current={editing ? 'true' : undefined}
       aria-describedby={editing ? 'xrk-edit-staging-hint' : undefined}
-      data-time-hover-root
     >
       <div className={css.userStack}>
+        {identity !== null ? (
+          <span className={css.speechIdentity} data-speech-identity>
+            {identity}
+          </span>
+        ) : null}
         {steer ? (
           <span className={css.pendingSteerBadge} role="status">
             {t('message.pendingSteer')}
@@ -450,6 +558,12 @@ function UserStyleBubble({
               : null}
           </div>
         ))}
+        {handoffDetail !== null ? (
+          <details className={css.speechDetail}>
+            <summary>{t('message.speech.detail')}</summary>
+            <pre data-speech-detail>{handoffDetail}</pre>
+          </details>
+        ) : null}
         {referenceLabels.length > 0 && (
           <div className={css.referenceSummary}>
             {t('message.referenceSummary', { labels: referenceLabels.join(t('message.referenceSeparator')) })}
@@ -578,13 +692,16 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
   const pendingSend = hostQueueRow !== undefined && hostQueueRow.placement !== 'steering'
   const liveSteer = steer || pendingAdmitId !== undefined
   const text = useMemo(() => visibleUserTexts(data.content).join(''), [data.content])
-  const canEdit = text.trim() !== ''
+  const copyPayload = useMemo(() => clipboardTextForUserMessage(data.content), [data.content])
+  const canEdit = text.trim() !== '' || userMessageHasMedia(data.content)
   const editStaging = useSyncExternalStore(subscribeEditStaging, getEditStaging, getEditStaging)
   const editing = editStaging !== null && editStaging.seq === data.seq
   const autoContinue = data.source !== null
     && typeof data.source === 'object'
     && 'kind' in data.source
     && data.source.kind === 'auto-continue'
+  // Ownership is protocol (human omit/`kind:user`), not Voice×Lane chrome.
+  const humanOwned = isHumanOwnedUserMessage(data.source)
   const bubble = (
     <UserStyleBubble
       content={data.content}
@@ -596,9 +713,9 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       editing={editing}
       source={data.source}
       t={t}
-      actions={copyText => (
+      actions={() => (
         <MessageIconActions
-          text={copyText}
+          text={copyPayload}
           time={data.time}
           clock="start"
           className={css.actions}
@@ -608,8 +725,16 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           // edit/delete), `pendingAdmitId` is whether a withdrawable steering
           // row still exists. Host may also keep a queued row after pause —
           // `pendingSend` gates actions the same way without offering withdraw.
-          onEdit={liveSteer || pendingSend || !canEdit || editing ? undefined : () => { editAt(data.seq, text) }}
-          onDelete={liveSteer || pendingSend || editing ? undefined : () => { deleteAt(data.seq) }}
+          onEdit={
+            !humanOwned || liveSteer || pendingSend || !canEdit || editing
+              ? undefined
+              : () => { editAt(data.seq, data.content) }
+          }
+          onDelete={
+            !humanOwned || liveSteer || pendingSend || editing
+              ? undefined
+              : () => { deleteAt(data.seq) }
+          }
           onWithdraw={pendingAdmitId === undefined ? undefined : () => { withdrawSteer(pendingAdmitId) }}
           reserveEditDelete={pendingSend}
         />

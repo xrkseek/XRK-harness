@@ -7,6 +7,7 @@ import {
   hardLoopNotice,
   listDanglingPromotedAdmits,
   listPendingAdmits,
+  promotedUserMessageSource,
   resolveAdmitsForTurn,
   sessionHasInboxWork,
   softLoopNotice,
@@ -464,6 +465,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
       let admitId: string | undefined;
       let admitIds: string[] | undefined;
       let steerBatch: boolean | undefined;
+      let userMessageSource: UserMessageSource | undefined;
       if (userText === undefined) {
         // resolveAdmitsForTurn: dangling promote crash window + normal promote.
         const promoted = resolveAdmitsForTurn(
@@ -475,6 +477,8 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
         admitId = promoted.receipts[0]?.admitId;
         admitIds = promoted.receipts.map((r) => r.admitId);
         if (promoted.steerBatch) steerBatch = true;
+        // Carry seat / handoff / plugin tags onto the durable user/message.
+        userMessageSource = promotedUserMessageSource(promoted.receipts);
       }
 
       const turnAbort = new AbortController();
@@ -492,6 +496,9 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
             sessionId: options.sessionId,
             userText,
             userContent: userContent ?? userText,
+            ...(userMessageSource !== undefined
+              ? { userMessageSource }
+              : {}),
             store: options.store,
             llm: options.llm,
             tools: options.tools,

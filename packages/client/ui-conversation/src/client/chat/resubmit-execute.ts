@@ -2,17 +2,75 @@
  * Shared truncate / optional rollback / optional re-prompt after the
  * user confirms regenerate, edit-resubmit, or delete (Cursor-style, same session).
  *
- * Truncate uses exclusive `beforeSeq = seq - 1`, so the row at `seq` and
- * everything after it are dropped; re-prompt (when `text` is set) resends.
+ * Truncate uses exclusive Face `beforeSeq` = durable log index of the target
+ * row (via {@link SessionFace.exclusiveBeforeSeqForWireSeq} — not raw
+ * `muxSeq - 1`, which breaks after a monotonic mux jump post-truncate).
+ * The row at that index and everything after are dropped; re-prompt
+ * (when `content` / `text` is set) resends.
+ *
+ * A still-running turn is stopped by Face `session.truncate` (drain.cancel).
+ * The client paints a local submission echo before the re-prompt so the
+ * waiting line never appears alone above an empty tail.
  *
  * Targets differ; confirm+execute is one path (copy via `kind` only):
  * - regenerate → turn-opening `user` (never mid-turn `steering` / 插话)
  * - edit → that same opener, or a step-injected `steering` 插话
  */
 import type {
-  ConversationSnapshot, ISessions, SessionId,
+  ConversationSnapshot, ISessions, PendingSubmissionAttachment, SessionFace, SessionId,
 } from '@xrkseek/client-runtime/client'
+import type { AttachmentId } from '@xrkseek/xrk-attachment'
 import { requestResubmitConfirm } from './resubmit-intent.ts'
+
+/** Wire parts for `session.prompt` after truncate (text and/or media reuse). */
+type ResubmitPromptContent = Parameters<SessionFace['prompt']>[0][number]
+
+/** Local echo painted before Host admit (avoids waiting-line-only flash). */
+export type ResubmitEcho = {
+  readonly text: string
+  readonly attachments: readonly PendingSubmissionAttachment[]
+}
+
+/**
+ * Best-effort echo from prompt wire parts when the caller did not supply one.
+ * File `attachmentId` reuse keeps a durable card; image reuse needs a blob
+ * preview the caller should pass via {@link ResubmitEcho}.
+ */
+export function echoFromPromptParts(
+  parts: readonly ResubmitPromptContent[],
+): ResubmitEcho {
+  let text = ''
+  const attachments: PendingSubmissionAttachment[] = []
+  for (const part of parts) {
+    if (part.type === 'text') {
+      text += part.text
+      continue
+    }
+    if (part.type === 'file' && 'attachmentId' in part && typeof part.attachmentId === 'string') {
+      attachments.push({
+        type: 'file',
+        value: {
+          attachmentId: part.attachmentId as AttachmentId,
+          name: 'file',
+          bytes: 1,
+        },
+      })
+      continue
+    }
+    if (part.type === 'file' && 'data' in part && typeof part.data === 'string') {
+      attachments.push({
+        type: 'file',
+        value: {
+          attachmentId: 'echo:resubmit-file' as AttachmentId,
+          name: typeof part.name === 'string' && part.name !== '' ? part.name : 'file',
+          bytes: Math.max(1, Math.floor((part.data.length * 3) / 4)),
+          ...(typeof part.mediaType === 'string' ? { mediaType: part.mediaType } : {}),
+        },
+      })
+    }
+  }
+  return { text, attachments }
+}
 
 /**
  * Run `/rollback seq:N` and say why the files could not be restored, or
@@ -35,7 +93,7 @@ async function rollbackFailure(
   try {
     const result = await session.command(`/rollback seq:${seq}`)
     if (!result.ok) return result.error.message
-    if (!result.value.matched) return "the face has no /rollback command"
+    if (!result.value.matched) return 'the face has no /rollback command'
     return undefined
   } catch (error: unknown) {
     return error instanceof Error ? error.message : String(error)
@@ -94,6 +152,18 @@ export async function confirmAndExecuteResubmit(
     readonly seq: number
     readonly text: string
     readonly kind: 'edit' | 'regenerate'
+    /**
+     * Full prompt parts after truncate. Prefer this when the opener carried
+     * media — text-only would drop images/files. When omitted, `text` alone
+     * is admitted (delete path / callers that re-send via sendSession).
+     */
+    readonly content?: readonly ResubmitPromptContent[]
+    /** Optional local echo (text + media cards) painted before Host admit. */
+    readonly echo?: ResubmitEcho
+    /** Revoke cloned echo blob URLs when the pending submission retires. */
+    readonly onEchoRetire?: (retirement: {
+      readonly reason: 'observed' | 'failed'
+    }) => void
   },
 ): Promise<'done' | 'cancel'> {
   const snapshot = sessions.binding(opts.sessionId)?.session?.getSnapshot()
@@ -107,19 +177,26 @@ export async function confirmAndExecuteResubmit(
       text: opts.text,
     })
     : 'keep-files'
-  if (choice === 'cancel') return 'cancel'
+  if (choice === 'cancel') {
+    opts.onEchoRetire?.({ reason: 'failed' })
+    return 'cancel'
+  }
   await executeResubmitAfterChoice(sessions, opts.sessionId, {
     seq: opts.seq,
     choice,
-    text: opts.text,
+    ...(opts.content !== undefined
+      ? { content: opts.content }
+      : { text: opts.text }),
+    ...(opts.echo === undefined ? {} : { echo: opts.echo }),
+    ...(opts.onEchoRetire === undefined ? {} : { onEchoRetire: opts.onEchoRetire }),
   })
   return 'done'
 }
 
 /**
- * After keep/revert: truncate in place before the message, stop a still-
- * running turn (Face truncate also cancels), then re-prompt (edit path).
- * Delete path omits `text`. Stays on the same sessionId.
+ * After keep/revert: truncate in place before the message (Face cancel stops a
+ * live drain), then re-prompt with a local echo so waiting never paints alone.
+ * Delete path omits `text` / `content`. Stays on the same sessionId.
  */
 export async function executeResubmitAfterChoice(
   sessions: ISessions,
@@ -128,9 +205,17 @@ export async function executeResubmitAfterChoice(
     readonly seq: number
     readonly choice: 'keep-files' | 'revert-files'
     readonly text?: string
+    readonly content?: readonly ResubmitPromptContent[]
+    readonly echo?: ResubmitEcho
+    readonly onEchoRetire?: (retirement: {
+      readonly reason: 'observed' | 'failed'
+    }) => void
   },
 ): Promise<void> {
   const source = sessions.binding(sessionId)?.session
+  const retireEcho = (reason: 'observed' | 'failed'): void => {
+    opts.onEchoRetire?.({ reason })
+  }
   if (opts.choice === 'revert-files' && source !== undefined) {
     // `/rollback` finds the checkpoint by the PRE-truncate seq, so it has to run
     // first. If it fails, stop here: continuing would cut the conversation while
@@ -142,14 +227,16 @@ export async function executeResubmitAfterChoice(
         message: `文件没有回退，对话保持原样：${failure}`,
         details: {},
       })
+      retireEcho('failed')
       return
     }
   }
   // Face session.truncate cancels an active drain itself — skip a separate
-  // cancel RPC so regenerate / edit-resubmit is one round trip + prompt.
-  // Face beforeSeq is exclusive; Face then drops the open turn whose
-  // `turn/start` sits before this user row.
-  const beforeSeq = Math.max(0, Math.floor(opts.seq) - 1)
+  // cancel RPC so regenerate / edit-resubmit / delete is one round trip (+ prompt).
+  // Face beforeSeq is an exclusive durable-log offset; mux seq can jump above
+  // the kept length after a prior truncate (monotonic FaceSeqClock).
+  const beforeSeq = source?.exclusiveBeforeSeqForWireSeq(opts.seq)
+    ?? Math.max(0, Math.floor(opts.seq) - 1)
   // ISessions.truncate is Promise<void>: success resolves, business/transport
   // failures throw. Do not read `.ok` on the return (it is undefined → toast
   // "Cannot read properties of undefined (reading 'ok')").
@@ -161,12 +248,40 @@ export async function executeResubmitAfterChoice(
       message: error instanceof Error ? error.message : String(error),
       details: {},
     })
+    retireEcho('failed')
     return
   }
-  if (opts.text === undefined) return
+  const parts = opts.content
+    ?? (opts.text === undefined ? undefined : [{ type: 'text' as const, text: opts.text }])
+  if (parts === undefined || parts.length === 0) {
+    retireEcho('failed')
+    return
+  }
   const session = sessions.binding(sessionId)?.session
   if (session === undefined) {
+    retireEcho('failed')
     throw new Error(`edit-resubmit session "${sessionId}" is not locally addressable`)
   }
-  await session.prompt([{ type: 'text', text: opts.text }], 'queue')
+  const echo = opts.echo ?? echoFromPromptParts(parts)
+  // Paint the bubble before Host admit / running flip — same contract as sendSession.
+  const submission = session.beginSubmission({
+    mode: 'queue',
+    text: echo.text,
+    attachments: echo.attachments,
+    onRetire: (retirement) => {
+      if (retirement.reason === 'failed') {
+        retireEcho('failed')
+        return
+      }
+      // Keep thumbs one paint after the durable node lands (ChatView previewMemory).
+      queuePromise.resolve().then(() => {
+        requestAnimationFrame(() => retireEcho('observed'))
+      })
+    },
+  })
+  const result = await session.prompt([...parts], 'queue', undefined, submission.requestId)
+  if (!result.ok) {
+    submission.abandon()
+    session.reportError('resubmit', result.error)
+  }
 }

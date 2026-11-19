@@ -38,4 +38,19 @@ describe('resolvePresenceStageSize', () => {
       bossSize: 1.2,
     })).toBe(0.86)
   })
+
+  it('pair seats soft-clamp extremes so 委派方 cannot dwarf / shrink vs 被委派方', () => {
+    expect(resolvePresenceStageSize({
+      compact: false,
+      memberLook: undefined,
+      bossSize: 0.8,
+      pairSeat: true,
+    })).toBe(0.94)
+    expect(resolvePresenceStageSize({
+      compact: false,
+      memberLook: { size: 1.2 },
+      bossSize: 0.8,
+      pairSeat: true,
+    })).toBe(1.08)
+  })
 })

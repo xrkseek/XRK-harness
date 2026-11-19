@@ -142,7 +142,10 @@ export interface ISession {
    * @param line - the full command line, leading slash included.
    * @returns the admission result, or the Remote face's error branch.
    */
-  command(line: string): Promise<RemoteResult<{ matched: boolean }>>
+  command(line: string): Promise<RemoteResult<{
+    matched: boolean
+    outcome?: { kind: 'success' | 'error'; text?: string }
+  }>>
   /**
    * Mirror the composer draft into this session so a blank New Session that
    * still holds unsent text stays visible (and clickable) on the sidebar
@@ -150,6 +153,12 @@ export interface ISession {
    * @param draft - current composer text (empty clears the sidebar bit).
    */
   setDraft(draft: string): void
+  /**
+   * Map a chat-node wire/mux seq onto Face truncate's exclusive durable-log
+   * `beforeSeq`. Mux stays monotonic across in-place truncate, so `seq - 1`
+   * is not safe after a cut+re-prompt.
+   */
+  exclusiveBeforeSeqForWireSeq(wireSeq: number): number
 }
 
 /**

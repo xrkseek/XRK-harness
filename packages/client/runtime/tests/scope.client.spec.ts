@@ -81,4 +81,23 @@ describe('createScope', () => {
     a.ctx.emit(a.ctx, 'test/scope-probe', { from: 'late' })
     expect(seen).toEqual([])
   })
+
+  it('mint, dispose, and remint under a loaded root stays finite', async () => {
+    // Product roots carry many plugins; a shared agentScope callback used to
+    // blow the stack on the second ctx.plugin() after reclaim. Unique plugin
+    // names keep each mint independent.
+    const root = new Context()
+    for (let i = 0; i < 24; i++) {
+      root.plugin({ name: `noise-${i}`, apply() {} })
+    }
+    const first = createScope(root, sid('s1'))
+    const second = createScope(root, sid('s2'))
+    expect(scopeOf(first.ctx)).toBe(sid('s1'))
+    expect(scopeOf(second.ctx)).toBe(sid('s2'))
+    await first.fiber.dispose()
+    const reminted = createScope(root, sid('s1'))
+    expect(scopeOf(reminted.ctx)).toBe(sid('s1'))
+    await second.fiber.dispose()
+    await reminted.fiber.dispose()
+  })
 })

@@ -3,7 +3,7 @@ name: xrk-release-chain
 description: >-
   XRK-harness 发包链副作用与终态判据：root devDeps 被 stage 清掉、
   大 tarball 不能用分离进程、E409/E403、文档中英成对、push 必须先于 release。
-  流水线顺序真源是 rule xrk-release-flow；桌面/AGT 真源是 xrk-desktop-update-feed；
+  流水线顺序真源是 rule xrk-release-flow；桌面/GH 更新资产真源是 xrk-desktop-update-feed；
   网络选路真源是 xrk-github-npm-net。跑 release / npm publish / gh release 时使用。
 ---
 
@@ -27,8 +27,8 @@ description: >-
 3. **`pnpm release`**（GH + npmjs）→ 再 `CI=true pnpm install --frozen-lockfile`
 4. **立刻打安装包**（`XRK_DESKTOP_PACKAGE=1` `pnpm package:desktop` @ `C:\xrk-h`；APK 走 `ENGINE_TGZ` + `xrk-mobile-apk`，可与 Desktop **并行**）——**禁止与 stage/release 并行**。  
    **0.7.20 血泪**：CLI `publish` 报 `FETCH_ERROR` / `npm view` 长时间 404 时，Agent 空转等 validate **浪费整段墙钟**；GH Release + 本地 `.release/*.tgz` 已在时，Desktop/APK **必须先开打**。registry 自绿与安装包无关。
-5. 桌面包好后 **先上 AGT**（真源脚本 `scripts/_upload-desktop-agt.py` + `upload-stage-<ver>`；yml **绝对** `…/desktop/bin/win-x64/…`；先 exe+blockmap 再 yml；`HEAD` size 对齐）——`pnpm upload:desktop -- win-x64` **只写本机 mirror**，不等于上 AGT。  
-   **同时** `gh release upload v<ver> <公开名.exe> --clobber`。站点 `apps/site/src/worker.js` 下载按钮首选 **GitHub Release asset**（CN 走 ghfast）——只上 AGT 不挂 asset → 官网 404（v0.7.7 / 0.7.11 实锤）。
+5. 桌面包好后 **挂主仓 GitHub Release 更新资产**（对标手机）：改名去 `unsigned` · yml **相对文件名** · `gh release upload v<ver>` 挂 `exe` + `blockmap` + `nightly.yml`（+ `latest.yml`）。真源 **`xrk-desktop-update-feed`**。  
+   **禁止**再跑 `_upload-desktop-agt.py`（已退役）。站点下载与应用内更新同源 GH asset（CN 走 ghfast 梯子）——漏挂 asset → 官网 / 壳内更新 404（v0.7.7 / 0.7.11 实锤）。
 6. **安卓发行版**（同号发版时与 Desktop **同批必做**；0.7.20 曾漏）：  
    - 手机仓 bump `app/pubspec.yaml` → 重打 APK（`xrk-mobile-apk`）→ `python tooling/release_assets.py --notes notes-<ver>.md` →  
      `gh release create v<ver> dist/* --repo xrkseek/XRK-harness-mobile`  
@@ -127,14 +127,14 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
 
 改版本号**四处一起改**——v0.4.1 那次英文半表漏改、仍停在 v0.4.0，隔一版才发现。侧栏公告是第五处，发版同轮必写。
 
-### 6. 打包桌面 + 上 AGT（必须在 release **之后**）
+### 6. 打包桌面 + 挂 GitHub 更新资产（必须在 release **之后**）
 
-**真源**：skill **`xrk-desktop-update-feed`**（打包命令、volume 判据、stage 改名、**yml 绝对 bin URL**、上传顺序、核对清单）。  
+**真源**：skill **`xrk-desktop-update-feed`**（打包命令、volume 判据、stage 改名、yml **相对文件名**、`gh release upload`、核对清单）。  
 本 skill 只强调：
 
 - **禁止**与 stage / `pnpm release` 并行
 - release 后先 `CI=true pnpm install --frozen-lockfile` 再 `package:desktop`
-- 桌面未上 AGT 前不要改 `apps/site/releases.json`
+- 桌面未挂主仓 GH Release（exe+yml）前不要改 `apps/site/releases.json`
 
 ## Pitfalls
 
@@ -218,8 +218,8 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
   `git checkout -- pnpm-workspace.yaml` 后 `CI=true pnpm install --frozen-lockfile` 仍 exit 0 且不会重写。
   **这条是有条件的、不是每轮必现**——v0.6.5 整轮 `git diff pnpm-workspace.yaml` 全程为空。
   别把它当每次都要处理的固定仪式，但收尾 `git status` 时看到就还原。
-- **上 AGT 的改名 / 绝对 URL yml / 先 bin 后 yml**：真源 **`xrk-desktop-update-feed`**。
-  相对文件名会解析到 `…/desktop/win-x64/<exe>` → 404（0.7.5 客户端报错形态）。
+- **挂 GitHub 更新资产的改名 / 相对文件名 yml / gh upload**：真源 **`xrk-desktop-update-feed`**。
+  旧 AGT 绝对 URL 路径已退役；应用内用 github provider + 镜像梯子拼下载 URL。
 - **`unsigned-artifacts/` 靠 `pnpm prune:local` 裁到 ≤5**，别手删唯一留存的历史包。
 - **`ui-release-notes` 单独 `bundle` 会报 `Cannot resolve entry lib/types/index.js`**（0.7.8）：该包 bundle 入口依赖 tsc emit 的 `lib/types` 图；副作用1 掏空 devDeps 后 emit 未建。先 `tsc -b packages/client/ui-release-notes` 再 bundle + `web:assemble`。
 - **发版中途父席续并新改动**：先核旧 tag 尚无发布物引用（GH 未建 / npm 未发），才可用 `git tag -f` + `push -f` 前移并在报告里如实标注破坏性操作；已有任何发布物引用时禁止移 tag，改动顺延下一版。
@@ -245,11 +245,10 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
   能立刻看出增量。修法已内置 `stage-cli-release.mjs`（stage 后删除这两个目录，并同步摘掉
   staged `package.json` 的 dependencies/bundleDependencies）。**只删目录不改 package.json
   会 pack 失败**。
-- **`gh release upload` 的 exe 这一步最容易漏**（0.7.11 又漏了一次）：只上 AGT 的话
-  `/desktop/bin/...` 是 200，官网下载按钮却 404——站点 `worker.js` 首选
-  `releases/download/<tag>/<filename>`（CN 访客走 `ghfast.top`）。验收必须看
+- **`gh release upload` 的 exe / yml 这一步最容易漏**（0.7.11 又漏了一次）：站点 `worker.js` 与桌面 updater 都认
+  `releases/download/<tag>/<filename>`（CN 走 `ghfast.top` 等梯子）。验收必须看
   `gh api repos/.../releases/tags/v<ver> --jq '.assets[] | .name + " " + (.size|tostring)'`
-  里**同时有 exe + 两个 tgz**，且 exe 字节 == 本地 == AGT `Content-Length`。
+  里**同时有 exe + blockmap + nightly.yml + 两个 tgz**，且 exe 字节 == 本地。
 - **`pnpm package:desktop` 前必须先装回根 devDeps**（0.7.11 连踩两次）：它内部会跑
   `pnpm install --production`（`CI` 未设则 `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`），
   把 490 个 devDeps 全删；紧接着报 `electron-builder is not installed` 或
@@ -267,9 +266,9 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
   `ENGINE_TGZ` 打 APK；CLI registry 用长窗观察或同字节重发诊断（上条），**禁止**在会话里
   反复 Start-Process / 短间隔轮询浪费主人时间。终态：`npm view @xrkseek/harness-cli version`
   最终会追上（本轮后验证已是 0.7.20）。
-- **`pnpm upload:desktop -- win-x64` 不是 AGT 上传**（0.7.20）：它只写
-  `.desktop-build/upload-mirror/`。真上传：stage 改名（去 `unsigned`）+ 绝对 URL yml →
-  `XRK_DESKTOP_UPLOAD_STAGE=… python scripts/_upload-desktop-agt.py`。参数是**位置参数**
+- **`pnpm upload:desktop -- win-x64` 只写本机 mirror**（0.7.20）：真源更新资产是
+  stage 改名（去 `unsigned`）+ **相对文件名** yml → `gh release upload`。
+  `_upload-desktop-agt.py` **已退役**（exit 2）。`upload:desktop` 参数是**位置参数**
   `win-x64`，不是 `--target`（会 `ERR_PARSE_ARGS_UNKNOWN_OPTION`）。
 - **官网 Worker 跟随 GitHub，push 即部署**（0.7.20 纠正）：改 `apps/site/releases.json`
   后 **commit + push main 即收工**。CF 连本仓自动构建 Worker；**不要**手跑

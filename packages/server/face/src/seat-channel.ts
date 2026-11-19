@@ -25,12 +25,19 @@ import {
   readUiLocalePreference,
 } from "./seat-titles.js";
 
-/** Who authored this admit into a delegated child. */
-export type SeatChannel = "human_face" | "parent";
+/**
+ * Who authored this admit.
+ * - human_face: UI composer (老板)
+ * - parent: opener / subagent parent AI (委派方)
+ * - peer: collab partner session (互为委派方)
+ */
+export type SeatChannel = "human_face" | "parent" | "peer";
 
 /** Parse Face payload `seatChannel`; default human_face (UI composer). */
 export function parseSeatChannel(raw: unknown): SeatChannel {
-  return raw === "parent" ? "parent" : "human_face";
+  if (raw === "parent") return "parent";
+  if (raw === "peer") return "peer";
+  return "human_face";
 }
 
 /**
@@ -68,7 +75,8 @@ export function withSeatChannelPrefix(label: string, text: string): string {
 
 /**
  * Resolve the label for a channel on a delegated child.
- * human_face → Settings boss title; parent → immediate parent seat label.
+ * human_face → Settings boss title; parent → immediate parent seat label;
+ * peer → manager title fallback (caller should prefer fromSession label).
  */
 export function resolveSeatChannelLabel(
   runtime: FaceRuntime,
@@ -87,6 +95,9 @@ export function resolveSeatChannelLabel(
   if (channel === "human_face") {
     return bossSeatLabelFromRuntime(runtime, titles);
   }
+  if (channel === "peer") {
+    return titles.manager;
+  }
   const link = runtime.subagents.getByChild(childSessionId);
   if (!link || link.mode === "fork") return titles.manager;
   return resolveChildParentSeat(runtime, link.parentSessionId, titles).label;
@@ -95,16 +106,33 @@ export function resolveSeatChannelLabel(
 /**
  * Apply channel prefix when admitting into a tool-delegated child.
  * Forks and non-children are unchanged.
+ * Prefer `fromSessionId` seat label so nested 干员 / peer speech is not
+ * mistagged as the project 经理 title.
  */
 export function maybePrefixDelegatedChildText(
   runtime: FaceRuntime,
   sessionId: string,
   text: string,
   channel: SeatChannel,
+  fromSessionId?: string,
 ): string {
   const link = runtime.subagents.getByChild(sessionId);
   if (!link || link.mode === "fork") return text;
-  const label = resolveSeatChannelLabel(runtime, sessionId, channel);
+  const from = fromSessionId?.trim() || "";
+  let label: string;
+  if (from && channel !== "human_face") {
+    const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+      .value as Record<string, unknown>;
+    const localeUser = runtime.settingsNamespaces.view("locale")
+      .value as Record<string, unknown>;
+    const titles = readSeatTitles(
+      presenceUser,
+      readUiLocalePreference(localeUser),
+    );
+    label = resolveChildParentSeat(runtime, from, titles).label;
+  } else {
+    label = resolveSeatChannelLabel(runtime, sessionId, channel);
+  }
   return withSeatChannelPrefix(label, text);
 }
 
@@ -117,9 +145,16 @@ export function maybePrefixDelegatedChildContent(
   sessionId: string,
   content: MessageContent,
   channel: SeatChannel,
+  fromSessionId?: string,
 ): MessageContent {
   if (typeof content === "string") {
-    return maybePrefixDelegatedChildText(runtime, sessionId, content, channel);
+    return maybePrefixDelegatedChildText(
+      runtime,
+      sessionId,
+      content,
+      channel,
+      fromSessionId,
+    );
   }
   let done = false;
   return content.map((block) => {
@@ -132,6 +167,7 @@ export function maybePrefixDelegatedChildContent(
         sessionId,
         block.text,
         channel,
+        fromSessionId,
       ),
     };
   });

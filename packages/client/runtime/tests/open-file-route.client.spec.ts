@@ -4,9 +4,11 @@ import {
   routeWorkspaceOpenFile,
 } from '../src/client/workspaces/open-file-route.ts'
 import {
+  allowNativeWorkspaceOpen,
   basenameForDownload,
   bytesToBase64,
   isObjectDownloadUrl,
+  isPhoneThinShell,
   looksLikeDirectoryPath,
   triggerBrowserOrShellDownload,
   workspaceFileDownloadUrl,
@@ -103,6 +105,38 @@ describe('workspace file download URL', () => {
 
   it('encodes bytes as base64 in chunks', () => {
     expect(bytesToBase64(new Uint8Array([97, 98, 99]))).toBe('YWJj')
+  })
+
+  it('detects the Flutter phone thin shell via XrkShell.postMessage', () => {
+    delete (globalThis as { XrkShell?: unknown }).XrkShell
+    expect(isPhoneThinShell()).toBe(false)
+    expect(allowNativeWorkspaceOpen(true, true)).toBe(true)
+    ;(globalThis as { XrkShell?: { postMessage: (raw: string) => void } }).XrkShell = {
+      postMessage: () => {},
+    }
+    expect(isPhoneThinShell()).toBe(true)
+    // Face may still advertise canOpenPath; APK must not OS-open.
+    expect(allowNativeWorkspaceOpen(true, true)).toBe(false)
+    ;(globalThis as { XrkShell?: { postMessage?: unknown } }).XrkShell = {}
+    expect(isPhoneThinShell()).toBe(false)
+    delete (globalThis as { XrkShell?: unknown }).XrkShell
+  })
+
+  it('skips guest openPath on thinShell even when allowNativeOpen is omitted', async () => {
+    ;(globalThis as { XrkShell?: { postMessage: (raw: string) => void } }).XrkShell = {
+      postMessage: () => {},
+    }
+    const open = vi.fn(async () => {})
+    const download = vi.fn()
+    try {
+      await routeWorkspaceOpenFile('/w/deck.pptx', open, () => false, {
+        downloadFile: download,
+      })
+      expect(open).not.toHaveBeenCalled()
+      expect(download).toHaveBeenCalledWith('/w/deck.pptx')
+    } finally {
+      delete (globalThis as { XrkShell?: unknown }).XrkShell
+    }
   })
 
   it('posts downloadBytes to XrkShell for blob URLs instead of a fake HTTP GET', async () => {

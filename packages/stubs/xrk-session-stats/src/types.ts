@@ -20,9 +20,15 @@ export {}
  * back to it wholesale.
  */
 export interface SessionStatsProjection {
-  /** Distinct turns carrying at least one closed step (`step/end`); rejected or empty turns are uncounted. */
+  /**
+   * Distinct turns with a closed step (`step/end`), plus the in-flight turn
+   * while `step/start` is open and that turn is not yet counted.
+   */
   turns: number
-  /** Closed steps (`step/end` events) — completed, failed, and cancelled steps alike. */
+  /**
+   * Closed steps (`step/end`) plus one while a step is open — so the composer
+   * gauge advances as soon as the model starts, not only after `step/end`.
+   */
   steps: number
   /** Summed model wall time (`step/start` → `assistant/message`) over steps that assembled a message. */
   llmMs: number

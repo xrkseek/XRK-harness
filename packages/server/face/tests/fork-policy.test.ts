@@ -593,9 +593,17 @@ describe("Face session.truncate", () => {
     });
     expect(cut.result.ok).toBe(true);
     if (!cut.result.ok) return;
-    const value = cut.result.value as { sessionId: string; eventCount: number };
+    const value = cut.result.value as {
+      sessionId: string;
+      eventCount: number;
+      projections?: { asOfSeq: number; values: Record<string, unknown> };
+    };
     expect(value.sessionId).toBe(sessionId);
     expect(value.eventCount).toBeLessThan(before);
+    // Always ship a projections block so clients can reseal (even wipe-empty).
+    expect(value.projections).toEqual(
+      expect.objectContaining({ asOfSeq: expect.any(Number), values: expect.any(Object) }),
+    );
     expect(store.list()).toEqual([sessionId]);
     expect(
       store.get(sessionId).events.some(
@@ -804,6 +812,107 @@ describe("Face session.truncate", () => {
     });
     expect(hist.result.ok).toBe(true);
     expect(runtime.pathAllowlist.list(sessionId)).toContain(durable);
+  });
+
+  it("clears peer-collab arms on truncate (waiter and as-peer)", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    appendCompletedTurn(store, sessionId, 1, "keep");
+    appendCompletedTurn(store, sessionId, 2, "drop");
+
+    // Us waiting on a peer → later idle must not steer into the cut transcript.
+    runtime.peerCollabWaiters.arm({
+      peerSessionId: "peer-other",
+      waiterSessionId: sessionId,
+      seqAtSend: 1,
+      mode: "async",
+    });
+    // Peer waiting on us → must not hang after edit-resubmit truncate.
+    runtime.peerCollabWaiters.arm({
+      peerSessionId: sessionId,
+      waiterSessionId: "waiter-a",
+      seqAtSend: 2,
+      mode: "sync-promoted",
+    });
+
+    const cut = await dispatchFaceMethod(runtime, "session.truncate", "t-peer", {
+      sessionId,
+      beforeSeq: 1,
+    });
+    expect(cut.result.ok).toBe(true);
+    expect(runtime.peerCollabWaiters.listForPeer("peer-other")).toHaveLength(0);
+    expect(runtime.peerCollabWaiters.listForPeer(sessionId)).toHaveLength(0);
+  });
+
+  it("publishes empty session/queue and idle status when truncating a live turn", async () => {
+    const store = createMemorySessionStore();
+    let active = true;
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: {
+        wake() {},
+        async cancel() {
+          active = false;
+        },
+        isActive() {
+          return active;
+        },
+      },
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    appendCompletedTurn(store, sessionId, 1, "keep");
+    appendCompletedTurn(store, sessionId, 2, "drop");
+
+    const mux: Array<{ type?: string; sessionId?: string; items?: unknown[] }> = [];
+    const host: Array<{ type?: string; sessionId?: string; running?: boolean }> = [];
+    runtime.bus.subscribeMux((_id, frame) => {
+      mux.push(frame as (typeof mux)[number]);
+    });
+    runtime.bus.subscribeHost((_id, frame) => {
+      host.push(frame as (typeof host)[number]);
+    });
+
+    const cut = await dispatchFaceMethod(runtime, "session.truncate", "t-live", {
+      sessionId,
+      beforeSeq: 1,
+    });
+    expect(cut.result.ok).toBe(true);
+    expect(active).toBe(false);
+    expect(
+      host.some(
+        (f) =>
+          f.type === "host/session-status"
+          && f.sessionId === sessionId
+          && f.running === false,
+      ),
+    ).toBe(true);
+    const queue = mux.find(
+      (f) => f.type === "session/queue" && f.sessionId === sessionId,
+    );
+    expect(queue).toBeDefined();
+    expect(queue?.items).toEqual([]);
   });
 });
 

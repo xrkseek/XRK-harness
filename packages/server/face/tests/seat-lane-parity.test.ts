@@ -105,7 +105,7 @@ describe("干员两种座位的上下文工程", () => {
   it("ask 通道随座位推导：常驻→老板，派出→派它的人", async () => {
     const { runtime, homeSessionId, home } = await setup();
     expect(formatSessionCapability(runtime, homeSessionId)).toContain(
-      "ask: ask_user→boss",
+      "ask: ask_user",
     );
 
     const child = await dispatchFaceMethod(runtime, "session.create", "ch", {
@@ -123,8 +123,27 @@ describe("干员两种座位的上下文工程", () => {
     });
     const childText = formatSessionCapability(runtime, childId);
     expect(childText).toContain(`ask: ask→${homeSessionId}`);
-    expect(childText).toContain("answer_ask");
-    expect(childText).not.toContain("ask_user→boss");
+    expect(childText).not.toContain("ask: ask_user");
+  });
+
+  it("被 opener 打开的席：ask→opener，直到老板在 UI 发言", async () => {
+    const { runtime, homeSessionId, home } = await setup();
+    const opened = await dispatchFaceMethod(runtime, "session.create", "op-open", {
+      workspaceId: home.workspaceId,
+      memberId: "mem_coach",
+      inheritFrom: homeSessionId,
+    });
+    if (!opened.result.ok) throw new Error("opened create failed");
+    const openedId = (opened.result.value as { sessionId: string }).sessionId;
+    const text = formatSessionCapability(runtime, openedId);
+    expect(text).toContain(`ask: ask→${homeSessionId}`);
+    expect(text).not.toMatch(/ask: ask_user$/m);
+
+    const { markSessionHumanSpoke } = await import("../src/session-opener.js");
+    markSessionHumanSpoke(runtime, openedId);
+    expect(formatSessionCapability(runtime, openedId)).toContain(
+      "ask: ask_user",
+    );
   });
 
   it("agent-home 席位开出的会话是那位同事的身份席，不是无名通用会话", async () => {

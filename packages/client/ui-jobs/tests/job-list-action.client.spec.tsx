@@ -157,7 +157,7 @@ describe('JobListAction duration', () => {
     ])} />)
     fireEvent.click(screen.getByRole('button'))
     expect(rowCells().map(cells => [cells[1], cells[2], cells[3]])).toEqual([
-      ['exit', '已完成 · exit code: 0', '1.3秒'],
+      ['exit', '已完成 · 退出码 0', '1.3秒'],
       ['fast', '已完成', '0.5秒'],
     ])
   })

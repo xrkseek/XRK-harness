@@ -78,7 +78,7 @@ Host（harness/server）共享一份 root registry；composition 用 `createSess
 
 模型面只用 `job_*` 工具。
 
-Harness 登记 `tool:fs-routing` · `tool:shell-routing` · `tool:jobs` 系统提示；composition `dispose()` 调 `shell.dispose()`。
+Harness 登记 `tool:fs-routing` · `tool:shell-routing`（含 jobs settle）· `tool:jobs`（空段，assembler 跳过）；composition `dispose()` 调 `shell.dispose()`。
 
 ## Completion notice（Face）
 
@@ -204,7 +204,7 @@ Product-shell UI: see **Product shell** below; RPC: `Session.killJob` / `Session
 
 Model-facing surface uses only `job_*` tools.
 
-Harness registers `tool:fs-routing` · `tool:shell-routing` · `tool:jobs` system prompts; composition `dispose()` calls `shell.dispose()`.
+Harness registers `tool:fs-routing` · `tool:shell-routing` (includes jobs settle) · `tool:jobs` (empty; assembler skips); composition `dispose()` calls `shell.dispose()`.
 
 ## Completion notice (Face)
 

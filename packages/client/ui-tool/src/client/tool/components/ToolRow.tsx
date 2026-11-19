@@ -11,12 +11,16 @@
 
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
+import { projectTranscriptChrome } from '@xrkseek/client-runtime/client'
 import {
   CodeBlock, DiffBlock, DisclosureRow, InspectAction, ReadBlock, SearchBlock, StateDot, TerminalBlock, WebBlock,
 } from '@xrkseek/client-ui-primitives'
 import type { WebBlockProps } from '@xrkseek/client-ui-primitives'
 import type { TranslateNS, PropsRenderSlots } from '@xrkseek/client-ui-slots'
 import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+
+/** Voice×Lane for every tool call / result row (call + settled share one stamp). */
+const TOOL_TRANSCRIPT_CHROME = projectTranscriptChrome({ surface: 'tool' })
 import { CHAT_DIFF_MAX_LINES, type DiffCardModel } from '../models/diff-card-model.ts'
 import type { FileCardModel } from '../models/file-card-model.ts'
 import type { ImageCardModel } from '../models/image-card-model.ts'
@@ -229,8 +233,8 @@ export function ToolRow({
       data-variant={variant}
       data-tool={toolName}
       data-state={state}
-      data-voice="seat"
-      data-lane="act"
+      data-voice={TOOL_TRANSCRIPT_CHROME.voice}
+      data-lane={TOOL_TRANSCRIPT_CHROME.lane}
       data-force-expanded={forceExpanded || undefined}
     >
       {status !== null && <span className={css.visuallyHidden}>{status}</span>}

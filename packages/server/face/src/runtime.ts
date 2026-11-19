@@ -28,7 +28,6 @@ import type { ShellService } from "@xrkseek/exec-shell";
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
   contentHasImage,
-  flattenText,
   isHumanUserMessageSource,
   newUserMessageId,
 } from "@xrkseek/protocol";
@@ -40,6 +39,8 @@ import {
   createFaceListProjectionCache,
   createFaceProjectionRegistry,
   FaceTitleController,
+  humanTitleSourceText,
+  softAttachmentTitleSource,
   installDefaultFaceProjections,
   listProjectionIdentityFromHints,
   type FaceListProjectionCache,
@@ -50,6 +51,7 @@ import { FaceInboxWireMaps, FaceToolArgMaps, toMuxSessionEvent, routeFromRequest
 import {
   formatJobCompletionNotice,
   isSettledJobStatus,
+  jobCompletionNoticeSummary,
   jobViews,
   type FaceJobsSource,
   type JobView,
@@ -118,6 +120,10 @@ import {
   bindAnswerAskTool,
   formatParentAskNotice,
 } from "./parent-ask.js";
+import {
+  applyBossVoiceToolMask,
+  readSessionOpener,
+} from "./session-opener.js";
 import { FacePresenceStore } from "./presence-store.js";
 import { bindPresenceTools } from "./presence-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
@@ -287,12 +293,26 @@ export interface CreateFaceRuntimeOptions {
   }>;
   /**
    * Live-reconcile process plugins after inventory soft-disable / remove /
-   * update (Host). Pass `reloadIds` to remount already-live ids. Client boot
-   * still needs a page reload.
+   * update (Host). Pass `reloadIds` to remount already-live ids. Client overlay
+   * soft-remounts on install / enable / update / reload and soft-unloads on
+   * disable / delete via `clientBootOverlay` + boot-changed (product omits
+   * full HMR; hard-refresh only when unload/remount fails).
    */
   readonly syncManagedProcessPlugins?: (options?: {
     readonly reloadIds?: readonly string[];
   }) => Promise<void>;
+  /**
+   * Live user-overlay client boot graph for Settings soft remount.
+   */
+  readonly clientBootOverlay?: () => {
+    readonly rev: string;
+    readonly entries: readonly {
+      readonly id: string;
+      readonly url: string;
+      readonly rev: string;
+      readonly inject: readonly string[];
+    }[];
+  };
   /** Durable image store (default none → image RPCs unavailable). */
   readonly attachments?: AttachmentStore;
   /** Standing tool registry (preset layer) when no live agent is remembered. */
@@ -418,6 +438,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     string,
     { provider: string; model: string; reasoningEffort?: string }
   >();
+  const sessionOpeners = new Map<
+    string,
+    import("./session-opener.js").SessionOpenerRecord
+  >();
+  const sessionHumanSpoke = new Set<string>();
   const costMeterRoutes = new Map<string, { provider: string; model: string }>();
   const sessionAgentPresets = new Map<string, string>();
   const sessionCwds = new Map<string, string>();
@@ -557,6 +582,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       sessionCwds.delete(sessionId);
       sessionHasImage.delete(sessionId);
       sessionImageScanned.delete(sessionId);
+      sessionOpeners.delete(sessionId);
+      sessionHumanSpoke.delete(sessionId);
       presence.forget(sessionId);
       turnUiIdle.delete(sessionId);
       for (const key of [...pendingIdentityWrites.keys()]) {
@@ -730,10 +757,21 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         formatJobCompletionNotice(job, job.outputLimitBytes),
         {
           delivery: "steer",
+          source: {
+            kind: "plugin",
+            plugin: "job-completion",
+            form: "notice",
+            jobId: job.id,
+            summary: jobCompletionNoticeSummary(job),
+          },
         },
       );
       noticeAdmitIds.add(receipt.admitId);
-      options.drain.wake(sessionId);
+      // Steer into a live turn; wake only when idle (else a redundant next 轮次
+      // opens with the same notice as opener after turn/end).
+      if (!options.drain.isActive(sessionId)) {
+        options.drain.wake(sessionId);
+      }
     }
     reportedJobIds.set(sessionId, reported);
   };
@@ -800,13 +838,18 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         // "(QUOTA)" cannot name the model it has to move the child off.
         const childRoute = resolveSessionModelSelection(runtime, childSessionId);
         // Body lives only on this steer (tools must not duplicate answers).
-        // Always wake (idle parent after spawn must still receive the handoff).
         const receipt = parent.admit(
           formatSubagentCompletionNotice(link, owned, answer, childRoute),
           { delivery: "steer", source: subagentNoticeSource(link) },
         );
         noticeAdmitIds.add(receipt.admitId);
         subagentIdleFailCount.delete(childSessionId);
+        // Idle parent (spawned and ended) must wake. A still-running parent
+        // (one-shot wait / mid-turn) already has the steer for this turn —
+        // waking would open a second 轮次 with the same handoff as opener.
+        if (!options.drain.isActive(parentId)) {
+          options.drain.wake(parentId);
+        }
         const schema = agentTeamTasks.outputSchemaForChild(childSessionId);
         let schemaValid: boolean | undefined;
         let schemaErrors: readonly string[] | undefined;
@@ -828,7 +871,6 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             ? { schemaErrors }
             : {}),
         });
-        options.drain.wake(parentId);
       })
       .catch(() => {
         if ((subagentIdleEpoch.get(childSessionId) ?? 0) !== epoch) return;
@@ -888,8 +930,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
           { delivery: "steer", source: subagentNoticeSource(link) },
         );
         noticeAdmitIds.add(receipt.admitId);
-        // Always wake so an idle parent actually receives the courier notice.
-        options.drain.wake(parentId);
+        // Idle parent must wake; a live parent already has the steer in-turn.
+        if (!options.drain.isActive(parentId)) {
+          options.drain.wake(parentId);
+        }
       })
       .catch(() => undefined);
   };
@@ -935,7 +979,15 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       .then((parent) => {
         const receipt = parent.admit(
           formatSubagentUserPromptNotice(noticeLink, preview),
-          { delivery: "steer" },
+          {
+            delivery: "steer",
+            source: {
+              kind: "plugin",
+              plugin: "subagent-mirror",
+              form: "notice",
+              childSessionId,
+            },
+          },
         );
         noticeAdmitIds.add(receipt.admitId);
         // Land the mirror in the parent transcript even when the parent is
@@ -1020,7 +1072,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       void options
         .resolveAgent(sessionId)
         .then((agent) => {
-          agent.admit(text, { delivery: "steer" });
+          agent.admit(text, {
+            delivery: "steer",
+            source: {
+              kind: "plugin",
+              plugin: "ask-user",
+              form: "notice",
+            },
+          });
           options.drain.wake(sessionId);
         })
         .catch(() => undefined);
@@ -1034,7 +1093,15 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       void options
         .resolveAgent(pending.parentSessionId)
         .then((agent) => {
-          agent.admit(formatParentAskNotice(pending), { delivery: "steer" });
+          agent.admit(formatParentAskNotice(pending), {
+            delivery: "steer",
+            source: {
+              kind: "plugin",
+              plugin: "parent-ask",
+              form: "notice",
+              childSessionId: pending.childSessionId,
+            },
+          });
           options.drain.wake(pending.parentSessionId);
         })
         .catch(() => undefined);
@@ -1147,12 +1214,25 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
           const officeOn = codingProfile.tools.office === true;
           // Peer (thread_* / workspace_*) only on shallow|harness (+ IM/奇创 branches above).
           const peerCollab = isPeerCollabBadge(badge);
-          // Same ask schema; seat chooses execute: boss card vs parent-agent wait.
+          const opener = readSessionOpener(runtime, sessionId);
+          const askOpener =
+            !delegatedChild
+            && opener
+            && !runtime.sessionHumanSpoke.has(sessionId);
           if (delegatedChild && childLink) {
             bindAskParentTool(agent.tools, {
               childSessionId: sessionId,
               parentSessionId: childLink.parentSessionId,
               childLabel: childLink.label,
+              broker: parentAsk,
+            });
+          } else if (askOpener && opener) {
+            bindAskParentTool(agent.tools, {
+              childSessionId: sessionId,
+              parentSessionId: opener.sourceSessionId,
+              childLabel:
+                runtime.sessionIdentities.get(sessionId)?.memberId?.trim()
+                || "opened-seat",
               broker: parentAsk,
             });
           } else {
@@ -1190,25 +1270,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               sessionId,
               mode: "coding",
             });
-          } else if (delegatedChild && peerCollab && childLink) {
-            // Own 主线 + sibling mail — cannot pin peer session_ids.
+          } else if (delegatedChild && peerCollab) {
+            // Own 主线 + sibling mail only — no workspace_* (parent opens peers).
             bindSessionThreadTools(agent.tools, {
               runtime,
               sessionId,
               ownLane: true,
             });
-            // A dispatched 干员 keeps its 公文包 and may still open a session
-            // in an agent-home (same collab lane) and leave a peer a first
-            // word — the tool that survives when nested `subagent` does not.
-            // Project workspaces stay out of reach (lane split, enforced in
-            // workspace_session_prompt itself).
-            if (childLink.memberId?.trim()) {
-              bindWorkspaceOrchestrateTools(agent.tools, {
-                runtime,
-                sessionId,
-                mode: "coding",
-              });
-            }
           }
           // Roster surface (self-consistent):
           // - 向阳/IM/coding 经理 (office): full team_* (mint / install / remove)
@@ -1286,6 +1354,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             }
           }
         }
+        // Voice (TTS/ASR): boss-created seats only — creator sticky, not later 委派方.
+        if (agent.tools) {
+          applyBossVoiceToolMask(runtime, sessionId, agent.tools);
+        }
       }
     }
     bindAgentJobs(sessionId, agent);
@@ -1361,12 +1433,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       // Capture under a const so nested callbacks keep the promoted narrow
       // (outer `next` is `let SessionEvent` and loses the discriminant).
       const promoted = next;
+      const admitted = readEvents(id).find(
+        (ev) =>
+          ev.type === "prompt/admitted" && ev.admitId === promoted.admitId,
+      );
       let rpc = admitRpcMap.get(promoted.admitId);
       if (rpc === undefined) {
-        const admitted = readEvents(id).find(
-          (ev) =>
-            ev.type === "prompt/admitted" && ev.admitId === promoted.admitId,
-        );
         rpc = echoRpcForAdmit({
           admitId: promoted.admitId,
           ...(admitted?.type === "prompt/admitted"
@@ -1377,11 +1449,22 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         admitRpcMap.set(promoted.admitId, rpc);
         rpcAdmitMap.set(rpc, promoted.admitId);
       }
-      const steer = admittedWasSteer(store, id, promoted.admitId);
-      const echo: FacePendingUserEcho = { rpc, steer };
-      const queue = pendingUserRpc.get(id);
-      if (queue === undefined) pendingUserRpc.set(id, [echo]);
-      else queue.push(echo);
+      // Client submission echoes are human-UI only. Seat / handoff / plugin
+      // promotes must not enqueue: the stamp gate below is human-only, so a
+      // leftover rpc sits until the next boss send and poisons that row
+      // (wrong rpcId → durable bubble + stuck local echo = double 「?」).
+      const admitSource =
+        admitted?.type === "prompt/admitted" ? admitted.source : undefined;
+      if (isHumanUserMessageSource(admitSource)) {
+        const steer =
+          admitted?.type === "prompt/admitted"
+            ? admitted.delivery === "steer"
+            : admittedWasSteer(store, id, promoted.admitId);
+        const echo: FacePendingUserEcho = { rpc, steer };
+        const queue = pendingUserRpc.get(id);
+        if (queue === undefined) pendingUserRpc.set(id, [echo]);
+        else queue.push(echo);
+      }
     }
 
     if (
@@ -1537,10 +1620,17 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       const childLink = subagents.getByChild(id);
       const delegatedChild = childLink && childLink.mode !== "fork";
       if (!delegatedChild) {
+        // Reader prose first; pure-media openers fall back to the attachment
+        // filename so the sidebar never shows a sha256 handle caption.
+        const prose = humanTitleSourceText(frozen.content);
+        const source =
+          prose.trim() !== ""
+            ? prose
+            : softAttachmentTitleSource(frozen.content);
         titleBox.controller?.maybeFallbackFromUserMessage(
           id,
           eventSeq,
-          flattenText(frozen.content),
+          source,
         );
       }
     }
@@ -1700,6 +1790,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.syncManagedProcessPlugins !== undefined
       ? { syncManagedProcessPlugins: options.syncManagedProcessPlugins }
       : {}),
+    ...(options.clientBootOverlay !== undefined
+      ? { clientBootOverlay: options.clientBootOverlay }
+      : {}),
     bus,
     seq,
     projections,
@@ -1715,6 +1808,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     admitRpcMap,
     pendingUserRpc,
     sessionModels,
+    sessionOpeners,
+    sessionHumanSpoke,
     sessionAgentPresets,
     sessionCwds,
     sessionHasImage,
@@ -1863,11 +1958,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     rebuildAdmitRpcMaps(pending, { admitRpcMap, rpcAdmitMap });
     rebuildAdmitRpcMaps(dangling, { admitRpcMap, rpcAdmitMap });
     if (dangling.length > 0) {
-      const echoes: FacePendingUserEcho[] = dangling.map((row) => ({
-        rpc: echoRpcForAdmit(row),
-        steer: row.delivery === "steer",
-      }));
-      pendingUserRpc.set(sessionId, echoes);
+      // Same human-only gate as live promote → pendingUserRpc.
+      const echoes: FacePendingUserEcho[] = dangling
+        .filter((row) => isHumanUserMessageSource(row.source))
+        .map((row) => ({
+          rpc: echoRpcForAdmit(row),
+          steer: row.delivery === "steer",
+        }));
+      if (echoes.length > 0) pendingUserRpc.set(sessionId, echoes);
     }
     runtime.publishQueue(sessionId);
     const goal = goals.get(sessionId);
