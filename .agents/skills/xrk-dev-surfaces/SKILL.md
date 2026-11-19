@@ -145,7 +145,7 @@ pwsh -File "C:\Users\xrkseek\Desktop\主仓库\XRK-harness\.agents\skills\xrk-mo
 | 开屏仍写 DSH Go | l10n `parts/*.arb` 未换 + BrandMark 仍是鱼尾 | 改 parts → `l10n_merge.py`；标换成 XRK logo |
 | 对话插队 / Settings 模型目录旧 | 改的是 harness `packages/*`，机内仍是 npm 旧 cli | **ENGINE_TGZ** 重编 runtime 再打 APK；只重打壳不够 |
 
-AGT（runtime 构建机）：见手机仓 `docs/HANDOFF.md` §1.3（`103.236.89.174:46184`，工作目录 `/root/xrk-mobile`）。密码文件只在 `xrk-desktop-update-feed/.agt-password`（勿写入 skill 正文）。
+AGT（runtime 构建机）：见手机仓 `docs/HANDOFF.md` §1.3（`103.236.92.5:46184`，工作目录 `/root/xrk-mobile`）。密码文件只在 `xrk-desktop-update-feed/.agt-password`（勿写入 skill 正文）。
 
 ---
 
