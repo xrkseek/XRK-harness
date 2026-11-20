@@ -71,6 +71,7 @@ export default defineConfig({
       pkg("server-http", "packages/server/http/src/index.ts"),
       pkg("server-face", "packages/server/face/src/index.ts"),
       pkg("server-host", "packages/server/host/src/index.ts"),
+      pkg("im-gateway-contract", "packages/im-gateway-contract/src/index.ts"),
       pkg("session-projection", "packages/session/session-projection/src/index.ts"),
       pkg("web-runtime", "packages/web-runtime/src/index.ts"),
       pkg("harness", "packages/sdk/src/index.ts"),

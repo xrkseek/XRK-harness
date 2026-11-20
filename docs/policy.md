@@ -111,7 +111,7 @@ assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 | 侧栏 `/sidebar` | `browser.probe` → `sidebar.embed`；`open.external` → `host.open`；`/sidebar/html` → `sidebar.fs` `html`（`ask`→审批缝 / 无缝→**`policy-ask`**；与 Face 同形 `details`） |
 | Office `/office` | `configure` / `reconnect` / `test` / `remove` → `office.connect`；`connection.status` 不门禁；拒绝走 cordis `rpcErr` |
 
-`mcp.connect` 默认 deny。产品路径：壳内 **设置 → 插件 → MCP**（允许连接并保存）。无头 / CI 可用 `XRK_MCP_SERVERS`（`command` 或 `url`）+ `XRK_MCP_ALLOW=1`。Client 支持 **stdio + streamable-http**。
+`mcp.connect` 默认 deny。产品路径：壳内 **设置 → 插件 → MCP**（打开卡片头总开关并保存；单台启停见插件列表 `mcp:*`）。无头 / CI 可用 `XRK_MCP_SERVERS`（`command` 或 `url`）+ `XRK_MCP_ALLOW=1`。Client 支持 **stdio + streamable-http**。
 
 ## 未交付
 
@@ -233,7 +233,7 @@ assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 | Sidebar `/sidebar` | `browser.probe` → `sidebar.embed`; `open.external` → `host.open`; `/sidebar/html` → `sidebar.fs` `html` (`ask`→approval seam / no seam→**`policy-ask`**; same `details` shape as Face) |
 | Office `/office` | `configure` / `reconnect` / `test` / `remove` → `office.connect`; `connection.status` ungated; deny/ask map to cordis `rpcErr` |
 
-`mcp.connect` defaults to deny. Product path: in-shell **Settings → Plugins → MCP** (allow connect and save). For headless / CI, use `XRK_MCP_SERVERS` (`command` or `url`) with `XRK_MCP_ALLOW=1`. The client supports **stdio + streamable-http**.
+`mcp.connect` defaults to deny. Product path: in-shell **Settings → Plugins → MCP** (turn on the card-header master switch and save; per-server on/off on Plugin list `mcp:*`). For headless / CI, use `XRK_MCP_SERVERS` (`command` or `url`) with `XRK_MCP_ALLOW=1`. The client supports **stdio + streamable-http**.
 
 ## Not shipped
 

@@ -2,7 +2,7 @@
  * One plugin's card: a header naming the plugin and what its settings govern,
  * disclosing that plugin's controls in place, with the save that writes them.
  *
- * Optional `masterSwitch` uses the shared DSH `Switch` atom — aria-label is the
+ * Optional `masterSwitch` uses the shared `Switch` atom — aria-label is the
  * card title unless overridden; callers do not ship per-switch locales.
  */
 
@@ -55,8 +55,8 @@ export interface PluginCardProps {
    */
   badge?: string | undefined
   /**
-   * Optional DSH-style header switch. When set, the header splits into a
-   * disclose button and a separate switch so toggling does not expand the card.
+   * Optional header switch. When set, the header splits into a disclose
+   * button and a separate switch so toggling does not expand the card.
    */
   masterSwitch?: PluginCardMasterSwitch
   /**

@@ -15,6 +15,12 @@ export type PluginInstallLog = {
 /** Which CLI mutate started the current / last success session. */
 export type PluginMutateKind = "install" | "update";
 
+/**
+ * Why Settings is asking for a hard refresh after soft remount / unload.
+ * Distinct copy keeps unload ghosts vs remount miss actionable.
+ */
+export type ClientRefreshHintKind = "generic" | "unload" | "remount";
+
 export type PluginInstallUiState = {
   readonly busy: boolean;
   /** Spec shown while busy / on the TerminalBlock before settle. */
@@ -28,6 +34,8 @@ export type PluginInstallUiState = {
   readonly success: boolean;
   /** Persist until page reload (or explicit clear). */
   readonly clientRefreshHint: boolean;
+  /** Paired with {@link clientRefreshHint}; null when the hint is off. */
+  readonly clientRefreshKind: ClientRefreshHintKind | null;
 };
 
 const EMPTY: PluginInstallUiState = {
@@ -39,6 +47,7 @@ const EMPTY: PluginInstallUiState = {
   error: null,
   success: false,
   clientRefreshHint: false,
+  clientRefreshKind: null,
 };
 
 let state: PluginInstallUiState = EMPTY;
@@ -67,16 +76,30 @@ export function getPluginInstallUiSnapshot(): PluginInstallUiState {
   return state;
 }
 
-/** Mark that the product shell needs a client-half refresh (install / enable / …). */
-export function markPluginClientRefreshHint(): void {
-  if (state.clientRefreshHint) return;
-  patch({ clientRefreshHint: true });
+/**
+ * Mark that the product shell needs a client-half hard refresh.
+ * Prefer a more specific kind when one is already showing (unload / remount
+ * beats generic; remount beats unload if both failed in sequence).
+ */
+export function markPluginClientRefreshHint(
+  kind: ClientRefreshHintKind = "generic",
+): void {
+  const rank = (k: ClientRefreshHintKind | null): number => {
+    if (k === "remount") return 3;
+    if (k === "unload") return 2;
+    if (k === "generic") return 1;
+    return 0;
+  };
+  if (state.clientRefreshHint && rank(state.clientRefreshKind) >= rank(kind)) {
+    return;
+  }
+  patch({ clientRefreshHint: true, clientRefreshKind: kind });
 }
 
 /** Clear the hard-refresh hint after a successful overlay soft remount. */
 export function clearPluginClientRefreshHint(): void {
-  if (!state.clientRefreshHint) return;
-  patch({ clientRefreshHint: false });
+  if (!state.clientRefreshHint && state.clientRefreshKind === null) return;
+  patch({ clientRefreshHint: false, clientRefreshKind: null });
 }
 
 /** Clear settled log / success when the user edits the install field (not mid-run). */
@@ -112,6 +135,7 @@ export function setPluginMutateLog(log: PluginInstallLog): void {
     okSpec: "",
     kind: null,
     clientRefreshHint: true,
+    clientRefreshKind: "generic",
   });
 }
 

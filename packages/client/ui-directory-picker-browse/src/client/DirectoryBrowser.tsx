@@ -1297,6 +1297,7 @@ export function DirectoryBrowser({
         onClose={() => { if (!creatingFolder) setFolderDraft(null) }}
         title={t('browser.newFolder')}
         className={clsx(css.createDialog)}
+        layout="inset"
         headless
       >
         <div className={css.createBody}>

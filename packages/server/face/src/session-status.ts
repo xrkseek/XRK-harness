@@ -7,7 +7,11 @@ import {
   readSessionEvents,
   sessionEventCount,
 } from "@xrkseek/core-session";
-import { foldPlanMode } from "@xrkseek/protocol";
+import {
+  foldPlanMode,
+  isHumanUserMessageSource,
+  type UserMessageSource,
+} from "@xrkseek/protocol";
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { FaceRuntime } from "./context.js";
@@ -1083,19 +1087,42 @@ function withSessionGlance(label: string, sessionId: string): string {
   return `${label} · ${short}`;
 }
 
+/** True when `maybeChildId` is a real tool child of `parentSessionId`. */
+function isDelegatedChildOf(
+  runtime: FaceRuntime,
+  parentSessionId: string,
+  maybeChildId: string,
+): boolean {
+  const link = runtime.subagents.getByChild(maybeChildId);
+  return Boolean(
+    link && link.mode !== "fork" && link.parentSessionId === parentSessionId,
+  );
+}
+
 /**
- * Collab peers for Overview left stack. Skip auto-mesh `sibling` — teammate
- * links, not mutual 委派方. `collab` (and other explicit labels) stay.
+ * Collab peers for Overview left stack (干员 / peer seats — not tool children).
+ * Skip auto-mesh `sibling`. Keep `collab` and other explicit labels.
+ * If this seat is itself a tool child, skip its parent hop — that seat is
+ * painted by the subagent walk, not as a mutual peer.
  */
 function listCollabPeerSessionIds(
   runtime: FaceRuntime,
   sessionId: string,
 ): string[] {
   const hops = runtime.agentTeams.neighbors(sessionId, "peer");
+  const selfChild = runtime.subagents.getByChild(sessionId);
+  const selfParentId =
+    selfChild && selfChild.mode !== "fork"
+      ? selfChild.parentSessionId
+      : "";
   const out: string[] = [];
   for (const hop of hops) {
     if (hop.label === "sibling") continue;
     if (!runtime.store.has(hop.id)) continue;
+    // Only skip true tool-child edges (harness spawn). Agent-home 干员 peers
+    // (测员 / 排障员) stay — 向日葵 has no subagent tools.
+    if (isDelegatedChildOf(runtime, sessionId, hop.id)) continue;
+    if (selfParentId && hop.id === selfParentId) continue;
     out.push(hop.id);
   }
   return out;
@@ -1208,30 +1235,107 @@ function pushUniqueParent(
   parents.push(row);
 }
 
-/** Cap at 4: keep optional `:boss` + lead; drop oldest AI ancestors. */
+/**
+ * Cap at 4. Paint order is peek… → lead (last = full-size 委派方).
+ * Drop from the front — never the last (lead) entry.
+ */
 function capDelegateParents(
   parents: DelegateParentPaint[],
 ): DelegateParentPaint[] {
   const next = [...parents];
   while (next.length > 4) {
-    const drop = next[0]?.sessionId.endsWith(":boss") ? 1 : 0;
-    if (drop === 1 && next.length <= 2) break;
-    next.splice(drop, 1);
+    next.shift();
   }
   return next;
 }
 
+/** Append 老板 when the human has spoken (order may still reshuffle by bubble). */
+function pushBossLead(
+  parents: DelegateParentPaint[],
+  sessionId: string,
+  bossLabel: string,
+): void {
+  const already = parents.some(
+    (p) => p.kind === "boss" || p.sessionId.endsWith(":boss"),
+  );
+  if (already) return;
+  parents.push({
+    sessionId: `${sessionId}:boss`,
+    label: bossLabel,
+    kind: "boss",
+  });
+}
+
+/**
+ * Rank 委派方 keys by durable bubble recency (higher = more recent).
+ * Human UI composer → `${sessionId}:boss`; seat / handoff → `fromSessionId`.
+ * Own tool-child 回传 must not steal the 委派方 lead — those bubbles stay off
+ * the rank map (子代理 list already shows them).
+ * Also hydrates {@link FaceRuntime.sessionHumanSpoke} from the log so a
+ * restarted Host still pins 老板 after the operator has typed.
+ */
+function recentBubbleSpeakerRanks(
+  runtime: FaceRuntime,
+  sessionId: string,
+  events: ReturnType<typeof readSessionEvents>,
+): Map<string, number> {
+  const ranks = new Map<string, number>();
+  let tick = 0;
+  let sawHuman = false;
+  for (const ev of events) {
+    if (!ev || typeof ev !== "object") continue;
+    if ((ev as { type?: unknown }).type !== "user/message") continue;
+    const source = (ev as { source?: UserMessageSource }).source;
+    if (isHumanUserMessageSource(source)) {
+      sawHuman = true;
+      ranks.set(`${sessionId}:boss`, ++tick);
+      continue;
+    }
+    if (!source || typeof source !== "object") continue;
+    if (source.kind !== "seat" && source.kind !== "handoff") continue;
+    const from =
+      typeof source.fromSessionId === "string"
+        ? source.fromSessionId.trim()
+        : "";
+    if (!from || from === sessionId) continue;
+    // Child → parent handoff is 回传, not a new 委派方.
+    if (isDelegatedChildOf(runtime, sessionId, from)) continue;
+    ranks.set(from, ++tick);
+  }
+  if (sawHuman) runtime.sessionHumanSpoke.add(sessionId);
+  return ranks;
+}
+
+/**
+ * Stable reorder: most recent bubble speaker becomes lead (last).
+ * Unranked parents keep relative order ahead of ranked ones with equal ties.
+ */
+function orderParentsByRecentBubble(
+  parents: DelegateParentPaint[],
+  ranks: Map<string, number>,
+): void {
+  if (parents.length < 2 || ranks.size === 0) return;
+  const rankOf = (row: DelegateParentPaint): number => {
+    if (row.kind === "boss" || row.sessionId.endsWith(":boss")) {
+      return ranks.get(row.sessionId) ?? 0;
+    }
+    return ranks.get(row.sessionId) ?? 0;
+  };
+  parents.sort((a, b) => rankOf(a) - rankOf(b));
+}
+
 /**
  * Office / identity Overview pair.
- * - UI composer → 老板 (Settings mood); stacks ahead when human spoke on an
- *   opener- or peer-led seat.
+ * - UI composer → 老板 (Settings mood) is the lead 委派方 when human spoke
+ *   (last bubble attribution); AI opener/peers peek behind.
  * - Opened by 经理·向日葵·干员 (distinct seat) → source session is 委派方
- *   (keyed by real source session id).
+ *   (keyed by real source session id) until the human speaks.
  * - Session collab peers → mutual 委派方 (each paints the other).
  */
 function paintOfficeDelegatePair(args: {
   readonly runtime: FaceRuntime;
   readonly sessionId: string;
+  readonly events: ReturnType<typeof readSessionEvents>;
   readonly identity: { readonly memberId: string } | undefined;
   readonly workspaceId: string | undefined;
   readonly dressingStickers: ReturnType<typeof dressingFromPresence>["stickers"];
@@ -1249,6 +1353,7 @@ function paintOfficeDelegatePair(args: {
   const {
     runtime,
     sessionId,
+    events,
     identity,
     workspaceId,
     dressingStickers,
@@ -1337,32 +1442,38 @@ function paintOfficeDelegatePair(args: {
     );
   }
 
-  if (humanSpoke && parents.length > 0) {
-    parents.unshift({
-      sessionId: `${sessionId}:boss`,
-      label: seatTitles.boss,
-      kind: "boss",
-    });
+  // Bubble ranks hydrate humanSpoke from the durable log (Host restart path).
+  const bubbleRanks = recentBubbleSpeakerRanks(runtime, sessionId, events);
+  const spoke =
+    humanSpoke || runtime.sessionHumanSpoke.has(sessionId);
+  // Human typed here → always keep 老板 on the left stack (even alone).
+  if (spoke) {
+    pushBossLead(parents, sessionId, seatTitles.boss);
   }
+  orderParentsByRecentBubble(parents, bubbleRanks);
 
   const capped = capDelegateParents(parents);
   const lead = capped.length > 0 ? capped[capped.length - 1] : undefined;
 
-  if (lead && lead.kind !== "boss") {
-    const leadLook =
-      lead.look
-      ?? (lead.memberId
-        ? companionBallForMember(
-            runtime,
-            { memberId: lead.memberId },
-            dressingStickers,
-          )
-        : undefined);
+  if (lead) {
+    const leadIsBoss = lead.kind === "boss" || lead.sessionId.endsWith(":boss");
+    const leadLook = leadIsBoss
+      ? bossBall
+      : (lead.look
+        ?? (lead.memberId
+          ? companionBallForMember(
+              runtime,
+              { memberId: lead.memberId },
+              dressingStickers,
+            )
+          : undefined));
     return {
       companionBall,
       parentCompanionBall: leadLook ?? bossBall,
       delegate: {
-        parentSessionId: lead.sessionId,
+        // Synthetic `:boss` is not a real session — keep the office seat id so
+        // Overview `officeBossSeat` and presence mux still resolve.
+        parentSessionId: leadIsBoss ? sessionId : lead.sessionId,
         childLabel,
         childSeat,
         childMemberId,
@@ -1983,23 +2094,33 @@ export function buildSessionStatusSnapshotUncached(
       walkId = asChild?.parentSessionId;
     }
     for (const row of walkRows) pushUniqueParent(parents, row);
-    // Boss typed into this child → stack 老板 ahead of the AI 委派方 chain.
+    // Recent bubble speaker owns the full-size 委派方 seat (老板 or AI).
+    const bubbleRanks = recentBubbleSpeakerRanks(runtime, sessionId, events);
     if (runtime.sessionHumanSpoke.has(sessionId)) {
-      const alreadyBoss = parents[0]?.kind === "boss"
-        || parents[0]?.sessionId.endsWith(":boss");
-      if (!alreadyBoss) {
-        parents.unshift({
-          sessionId: `${sessionId}:boss`,
-          label: seatTitles.boss,
-          kind: "boss",
-        });
-      }
+      pushBossLead(parents, sessionId, seatTitles.boss);
     }
+    orderParentsByRecentBubble(parents, bubbleRanks);
     const cappedParents = capDelegateParents(parents);
     const leadParent =
-      cappedParents.find((p) => p.sessionId === childLink.parentSessionId)
-      ?? cappedParents[cappedParents.length - 1];
+      cappedParents.length > 0
+        ? cappedParents[cappedParents.length - 1]
+        : undefined;
+    const leadIsBoss =
+      leadParent?.kind === "boss"
+      || Boolean(leadParent?.sessionId.endsWith(":boss"));
+    if (leadIsBoss) {
+      parentCompanionBall = bossBall;
+    } else if (leadParent?.look) {
+      parentCompanionBall = leadParent.look;
+    } else if (leadParent?.memberId) {
+      parentCompanionBall = companionBallForMember(
+        runtime,
+        { memberId: leadParent.memberId },
+        dressing.stickers,
+      );
+    }
     delegate = {
+      // Real tool parent for mux / ask-parent; stack lead may still be `:boss`.
       parentSessionId: childLink.parentSessionId,
       childLabel: childPaint.childLabel,
       childSeat: childPaint.childSeat,
@@ -2008,14 +2129,21 @@ export function buildSessionStatusSnapshotUncached(
       ...(childPaint.childMemberId
         ? { childMemberId: childPaint.childMemberId }
         : {}),
-      ...(parentSeat.memberId ? { parentMemberId: parentSeat.memberId } : {}),
+      ...(leadIsBoss
+        ? {}
+        : leadParent?.memberId
+          ? { parentMemberId: leadParent.memberId }
+          : parentSeat.memberId
+            ? { parentMemberId: parentSeat.memberId }
+            : {}),
     };
   } else {
     // Office / identity home: opener (经理·向日葵·干员) may own the left seat;
-    // default left is 老板. When the human later speaks, stack 老板 + opener.
+    // default left is 老板. Recent bubble speaker pins the full-size 委派方.
     const officePaint = paintOfficeDelegatePair({
       runtime,
       sessionId,
+      events,
       identity,
       workspaceId,
       dressingStickers: dressing.stickers,

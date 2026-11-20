@@ -64,7 +64,11 @@ export type {
   ContextMenuSelectionBookmark,
 } from './context-menu.ts'
 export { domContextMenuActions } from './contextMenuGestures.ts'
-export { translateSelectionText } from './selection-translate.ts'
+export {
+  SELECTION_TRANSLATE_AUTO_CHAIN,
+  SELECTION_TRANSLATE_PROVIDERS,
+  translateSelectionText,
+} from './selection-translate.ts'
 export type {
   SelectionTranslateError,
   SelectionTranslateProvider,
@@ -77,6 +81,12 @@ export type { AnchoredPositionOptions } from './useAnchoredPosition.ts'
 export { useDismissOnOutsidePointer } from './useDismissOnOutsidePointer.ts'
 export { HoverCard } from './HoverCard.tsx'
 export { Modal } from './Modal.tsx'
+export {
+  SHELL_KEYBOARD_ATTR,
+  clearOverlayShellFrame,
+  syncOverlayToAppRoot,
+  useShellFrameOverlay,
+} from './shell-frame.ts'
 export { OnboardingSurface } from './OnboardingSurface.tsx'
 export { RiskConfirmation } from './RiskConfirmation.tsx'
 export type { RiskConfirmationProps } from './RiskConfirmation.tsx'

@@ -1,19 +1,21 @@
 /**
  * Live Overview (details column) open state for conversation chrome.
- * Prefers AppFrame `[data-dsh-frame][data-details-collapsed]` (desktop + phone
- * sheet). Falls back to the layout inset stamp when the frame is not mounted.
+ * Prefers AppFrame `[data-xrk-frame][data-details-collapsed]` (desktop + phone
+ * sheet; inbound dual-stamp `[data-dsh-frame]` is fallback only). Falls back to
+ * `data-xrk-layout-details-open` when the frame is not mounted — not the
+ * details *width* stamp (phone Overview keeps details px at 0).
  */
 import { useEffect, useState } from 'react'
 
-const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
-const FRAME_SELECTOR = '[data-dsh-frame]'
+const DETAILS_OPEN_ATTR = 'data-xrk-layout-details-open'
+const FRAME_SELECTOR = '[data-xrk-frame], [data-dsh-frame]'
 
 /** @returns true when the Status / Overview column (or phone sheet) is open. */
 export function readOverviewOpen(): boolean {
   if (typeof document === 'undefined') return false
   const frame = document.querySelector(FRAME_SELECTOR)
   if (frame !== null) return !frame.hasAttribute('data-details-collapsed')
-  return document.documentElement.hasAttribute(DETAILS_INSET_ATTR)
+  return document.documentElement.hasAttribute(DETAILS_OPEN_ATTR)
 }
 
 /** Subscribe to Overview open/close for presence handoff chrome. */
@@ -61,7 +63,7 @@ export function useOverviewOpen(): boolean {
     watchFrame()
     htmlObs.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: [DETAILS_INSET_ATTR],
+      attributeFilter: [DETAILS_OPEN_ATTR],
       childList: true,
     })
     // One level under body is enough to catch AppFrame mount.

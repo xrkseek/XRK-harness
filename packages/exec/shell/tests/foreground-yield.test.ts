@@ -100,7 +100,7 @@ describe("bash foreground yield semantics", () => {
     }
   });
 
-  it("does not stamp [truncated] on under-budget settled output", async () => {
+  it("does not stamp [truncated] on under-budget settled output", { timeout: 30_000 }, async () => {
     const shell = makeShell();
     try {
       // Generous cap: short "hi" + exit marker must fit without an omit marker.

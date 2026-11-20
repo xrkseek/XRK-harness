@@ -23,7 +23,9 @@ export {
 } from "./types.js";
 export {
   assertHttpUrl,
+  assertResolvedAddressesPublic,
   isBlockedHost,
+  isIpLiteralHostname,
   isSameOrigin,
   mergeTimeout,
 } from "./url-policy.js";

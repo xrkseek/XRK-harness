@@ -70,10 +70,13 @@
   overflow: hidden;
 }
 
-/* Rail trigger: the same 36x36 circle box as the other rail controls. */
+/* Rail trigger: the same 36x36 circle box as the other rail controls.
+   Drop the wide-foot max-width: in a 36px row, calc(100% - 4.5rem) goes
+   negative (clamped to 0) and left-aligns the overflowing gear. */
 .trigger.rail {
   flex: none;
   width: 36px;
+  max-width: none;
   height: 36px;
   margin: 0;
   justify-content: center;
@@ -112,7 +115,10 @@
   z-index: 1;
   display: flex;
   width: 800px;
-  height: min(800px, calc(100vh - 48px));
+  /* Prefer % of the overlay: APP shell-frames the overlay to `#root`, so
+     100dvh alone would spill under the IME on wide tablets too. */
+  height: min(800px, calc(100vh - 48px), calc(100% - 48px));
+  max-height: min(800px, calc(100vh - 48px), calc(100% - 48px));
   max-width: calc(100vw - 48px);
   border-radius: 24px;
   overflow: hidden;
@@ -167,7 +173,8 @@
 
 @supports (height: 100dvh) {
   .panel {
-    height: min(800px, calc(100dvh - 48px));
+    height: min(800px, calc(100dvh - 48px), calc(100% - 48px));
+    max-height: min(800px, calc(100dvh - 48px), calc(100% - 48px));
   }
 }
 
@@ -355,20 +362,15 @@
     justify-content: stretch;
   }
 
+  /* Fill the overlay — never 100dvh. On Flutter APP the overlay mirrors the
+     pinned `#root` band; 100dvh would spill under the IME again. */
   .panel {
     flex-direction: column;
     width: 100%;
-    max-width: 100vw;
+    max-width: 100%;
     height: 100%;
     max-height: 100%;
     border-radius: 0;
-  }
-
-  @supports (height: 100dvh) {
-    .panel {
-      height: 100dvh;
-      max-height: 100dvh;
-    }
   }
 
   .nav {

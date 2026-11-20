@@ -1,0 +1,28 @@
+{
+  "name": "@xrkseek/plug",
+  "version": "0.1.0",
+  "description": "XRK Plug — author-facing plugin runtime facade for XRK-Harness",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/plug"
+  },
+  "dependencies": {
+    "@xrkseek/cordis": "workspace:^"
+  },
+  "private": true
+}

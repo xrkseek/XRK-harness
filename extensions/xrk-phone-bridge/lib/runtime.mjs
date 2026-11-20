@@ -12,7 +12,9 @@
  * clients must re-ticket on `invalid-ticket`.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import {
+  mkdirSync, readFileSync, writeFileSync, existsSync, renameSync, unlinkSync,
+} from "node:fs";
 import { join } from "node:path";
 
 const KEY = Symbol.for("xrk.phoneBridge.v1");
@@ -246,8 +248,9 @@ export class PhoneBridgeRuntime {
     if (!p) return;
     ensureDir(join(this.home, "phone-bridge"));
     this.state.pending = this.listPending();
-    writeFileSync(
-      p,
+    // Atomic replace: a crash mid-write must not leave a truncated whitelist.
+    const tmp = `${p}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+    const body =
       JSON.stringify(
         {
           whitelist: this.state.whitelist,
@@ -256,9 +259,21 @@ export class PhoneBridgeRuntime {
         },
         null,
         2,
-      ) + "\n",
-      "utf8",
-    );
+      ) + "\n";
+    writeFileSync(tmp, body, "utf8");
+    try {
+      renameSync(tmp, p);
+    } catch {
+      try {
+        writeFileSync(p, body, "utf8");
+      } finally {
+        try {
+          if (existsSync(tmp)) unlinkSync(tmp);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+    }
   }
 
   /** Immediate persist (whitelist mutations). */

@@ -118,7 +118,7 @@ describe("status snapshot revision cache", () => {
     expect(revSpoke).not.toBe(revOpener);
     const afterSpoke = buildSessionStatusSnapshot(runtime, sessionId);
     expect(afterSpoke).not.toBe(afterOpener);
-    expect(afterSpoke.delegate?.parents?.[0]?.sessionId).toBe(`${sessionId}:boss`);
+    expect(afterSpoke.delegate?.parents?.at(-1)?.sessionId).toBe(`${sessionId}:boss`);
   });
 
   it("busts cache when opener source session presence changes", async () => {

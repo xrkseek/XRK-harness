@@ -73,7 +73,7 @@ export interface PluginInventoryEntry {
   readonly moduleName: string
   readonly enabled: boolean
   readonly fiberPhase: PluginFiberPhase
-  /** User-installed — Settings may offer edit / disable / delete. */
+  /** User-installed or MCP desired row — Settings may offer disable (MCP: switch only). */
   readonly managed: boolean
   /** CLI inventory version when known. */
   readonly version?: string

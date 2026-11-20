@@ -128,6 +128,41 @@ export class SessionQueueMirror {
   }
 
   /**
+   * Apply a Host-accepted text edit before the next `session/queue` frame.
+   * Keeps QueueDock preview aligned with the rewrite that ChatView's local
+   * echo also patches — otherwise save→leaveEdit flashes the pre-edit body.
+   *
+   * @param itemId - queue row identity (admitId).
+   * @param content - edit payload the client just sent (text + kept refs).
+   * @returns whether a mirrored row was updated.
+   */
+  applyEdit(itemId: string, content: readonly ContentBlock[]): boolean {
+    const index = this.current.findIndex(row => row.id === itemId)
+    if (index < 0) return false
+    const prev = this.current[index]!
+    const nextContent = content.map((block) => {
+      if (block.type !== 'image' && block.type !== 'file') return block
+      const attachmentId = block.attachment?.attachmentId
+      if (attachmentId === undefined) return block
+      const carried = prev.content.find((candidate) => (
+        candidate.type === block.type
+        && (candidate as { readonly attachment?: { readonly attachmentId?: string } })
+          .attachment?.attachmentId === attachmentId
+      ))
+      return (carried ?? block) as typeof block
+    })
+    const text = textOf(nextContent)
+    const preview = previewOf(nextContent)
+    if (text === prev.text && preview === prev.preview) return false
+    this.current = [
+      ...this.current.slice(0, index),
+      { ...prev, content: nextContent, preview, text },
+      ...this.current.slice(index + 1),
+    ]
+    return true
+  }
+
+  /**
    * Retire a transient steering row once its durable message enters the log.
    *
    * A steering row's `messageId` is its admitId — the Host promotes the admit
@@ -144,10 +179,17 @@ export class SessionQueueMirror {
     const data = event.data as QueueUserMessageData
     const echoIds = echoRpcIdsFromUserMessage(data)
     const echoSet = new Set(echoIds)
+    // One durable user/message retires one steering occurrence. Without an
+    // rpcId stamp, match by messageId but only once — two steers can share a
+    // fixture/body id, and wiping both left the second 插队 bubble missing.
+    let retiredByMessageId = false
     const next = this.current.filter((item) => {
       if (item.placement !== 'steering') return true
       if (item.rpcId !== undefined && echoSet.has(item.rpcId)) return false
-      if (echoSet.size === 0) return item.messageId !== data.id
+      if (echoSet.size === 0 && !retiredByMessageId && item.messageId === data.id) {
+        retiredByMessageId = true
+        return false
+      }
       return true
     })
     if (next.length === this.current.length) return false

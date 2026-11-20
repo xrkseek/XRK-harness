@@ -9,7 +9,7 @@
  * the snapshots pin the shell chrome itself.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, waitFor } from '@testing-library/react'
+import { act, cleanup } from '@testing-library/react'
 import { SlotTestRuntime, usePinnedBrowserLanguages } from '@xrkseek/client-test-runtime'
 import { LocaleRuntime } from '@xrkseek/client-locale/client'
 import { apply, inject } from '@xrkseek/client-ui-sidebar/client'
@@ -57,16 +57,13 @@ describe('sidebar shell snapshots', () => {
     await runtime.dispose()
   })
 
-  it('renders the collapsed rail after the crossfade settles, in place', async () => {
+  it('renders the collapsed rail on the same frame (no clipped-label settle)', async () => {
     const { runtime } = await bench({ locale: 'en' })
     const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300 })
     const shell = slot.container.firstElementChild
     slot.update({ collapsed: true, width: 56 })
-    // The wide content (wordmark shortcut) unmounts at the 150ms settle;
-    // only the rail's capsule remains a New-session button.
-    await waitFor(() => {
-      expect(slot.view.getAllByRole('button', { name: 'New session' })).toHaveLength(1)
-    })
+    // Wide wordmark unmounts immediately; only the rail capsule remains.
+    expect(slot.view.getAllByRole('button', { name: 'New session' })).toHaveLength(1)
     expect(slot.container).toMatchSnapshot()
     // Same tree position: the owner flip re-rendered the shell in place.
     expect(slot.container.firstElementChild).toBe(shell)

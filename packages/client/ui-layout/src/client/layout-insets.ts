@@ -110,3 +110,15 @@ export function layoutInsetsEqual(a: LayoutInsets, b: LayoutInsets): boolean {
     && a.bottom === b.bottom
     && a.phone === b.phone
 }
+
+/**
+ * Horizontal width already claimed by the in-flow shell (left rail + Overview).
+ * Floating workbenches use this for push floors — do not invent a third sum.
+ */
+export function shellOccupiedWidth(
+  insets: Pick<LayoutInsets, 'sidebar' | 'details'>,
+): number {
+  const sidebar = Number.isFinite(insets.sidebar) ? Math.max(0, insets.sidebar) : 0
+  const details = Number.isFinite(insets.details) ? Math.max(0, insets.details) : 0
+  return sidebar + details
+}

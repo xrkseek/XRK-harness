@@ -168,7 +168,10 @@ describe('PluginInventorySettingsTab', () => {
     // Builtin / composition still show Enabled tags; managed uses a Switch.
     expect(screen.getAllByText(en.enabledTag).length).toBeGreaterThanOrEqual(6)
     expect(screen.getAllByText(en.disabledTag).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByRole('switch', { name: 'better-sidebar' })).toBeTruthy()
+    expect(screen.getByRole('switch', {
+      name: en.switchDisable.replace('{name}', 'better-sidebar'),
+    })).toBeTruthy()
+    expect(screen.getByText(en.groupInstalledHint)).toBeTruthy()
 
     const managed = screen.getByRole('button', { name: 'better-sidebar, Custom, Enabled, 0.18.2' })
     // Managed actions live on the card head — no expand required to open the menu.
@@ -181,7 +184,7 @@ describe('PluginInventorySettingsTab', () => {
     await openManagedMenu()
     expect(screen.getByRole('menuitem', { name: en.edit })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: en.update })).toBeTruthy()
-    expect(screen.queryByRole('menuitem', { name: en.disable })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: en.disable })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: en.remove })).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: en.update }))
     await waitFor(() => {
@@ -197,7 +200,9 @@ describe('PluginInventorySettingsTab', () => {
       expect(screen.getByRole('alert').textContent).toBe(en.toastUpdated.replace('{name}', 'better-sidebar'))
     })
 
-    fireEvent.click(screen.getByRole('switch', { name: 'better-sidebar' }))
+    fireEvent.click(screen.getByRole('switch', {
+      name: en.switchDisable.replace('{name}', 'better-sidebar'),
+    }))
     await waitFor(() => { expect(setEnabled).toHaveBeenCalledWith('xrkh-better-sidebar', false) })
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toBe(en.toastDisabled.replace('{name}', 'better-sidebar'))

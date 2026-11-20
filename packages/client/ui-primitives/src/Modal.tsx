@@ -1,6 +1,7 @@
 // Modal: controlled full-viewport dialog (create-workspace and similar).
 // The overlay portals to this document's body so ancestor stacking contexts
-// cannot leave sticky page controls above the mask. This is still an in-page
+// cannot leave sticky page controls above the mask (and so Settings can mark
+// `#root` inert without inerting the dialog). This is still an in-page
 // WebUI dialog; it never creates or targets another browser/native window.
 
 import { useEffect, useRef, useState } from 'react'
@@ -8,6 +9,7 @@ import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { IconCloseOutlineRegular } from './icons/index.tsx'
+import { useShellFrameOverlay } from './shell-frame.ts'
 import css from './Modal.module.css'
 
 /**
@@ -84,8 +86,16 @@ export function Modal({
   contentClassName?: string
   headless?: boolean
   /**
-   * Phone layout. `default` = full-viewport sheet (Settings-style).
-   * `inset` = bottom card that sizes to content (short confirms).
+   * Phone layout contract (single source of truth — callers must not force
+   * `height: 100%` / bottom sheets on top of this):
+   * - `default`: form / browse / list cards, centered, keyboard-lifted.
+   * - `inset`: short confirms (delete / error / retry / progress).
+   * Settings · Plugins · announcements may still go tall via className; they
+   * stay centered cards, never system `prompt`/`confirm` or bottom-glued sheets.
+   *
+   * Soft keyboard: browser uses root padding-bottom + `--xrk-keyboard-inset`
+   * once (do not also subtract the inset from dialog max-height). Flutter APP
+   * pins `#root` and zeroes the CSS inset — this overlay mirrors `#root`'s box.
    */
   layout?: 'default' | 'inset'
   /**
@@ -97,6 +107,7 @@ export function Modal({
   // Captured in the effect body, not read from the ref in the cleanup: by the
   // time cleanup runs the dialog is already unmounted and the ref is null.
   const dialogRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
   // Callers pass `onClose={() => {}}` inline, so it is a fresh function on every
   // render. Depending on it would tear the focus contract down and rebuild it
   // each time the dialog re-renders — which parks focus on the first field
@@ -124,6 +135,9 @@ export function Modal({
     const timer = setTimeout(() => setPhase('closed'), prefersReducedMotion() ? 0 : EXIT_MS)
     return () => clearTimeout(timer)
   }, [phase])
+
+  // APP shell: keep the body-portaled overlay inside the pinned `#root` band.
+  useShellFrameOverlay(overlayRef, phase !== 'closed')
 
   useEffect(() => {
     if (!open) return
@@ -172,9 +186,23 @@ export function Modal({
       }
     }
 
+    // Phone soft keyboard: keep the focused field inside the scrollable body
+    // once VV / shell insets have settled (composer already owns the seat).
+    const onFocusIn = (e: FocusEvent): void => {
+      const target = e.target
+      if (!(target instanceof HTMLElement) || dialog === null) return
+      if (!TEXT_ENTRY.test(target.tagName)) return
+      if (!dialog.contains(target) || typeof target.scrollIntoView !== 'function') return
+      window.requestAnimationFrame(() => {
+        target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      })
+    }
+
     document.addEventListener('keydown', onKeyDown)
+    dialog?.addEventListener('focusin', onFocusIn)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
+      dialog?.removeEventListener('focusin', onFocusIn)
       // Only restore if the trigger still exists: a dialog can be torn down by
       // the very action that closed it (delete-a-row, submit-and-navigate),
       // and focusing a detached node silently drops focus to <body>.
@@ -186,6 +214,7 @@ export function Modal({
 
   return createPortal((
     <div
+      ref={overlayRef}
       className={css.root}
       role="presentation"
       data-state={phase}

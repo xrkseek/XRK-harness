@@ -1,0 +1,9 @@
+{
+  "id": "example-llm",
+  "kind": "llm",
+  "entry": "./plugin.mjs",
+  "trust": {
+    "note": "Process plugin — loads into the Host Node process (same privileges as the Host).",
+    "capabilities": ["llm"]
+  }
+}

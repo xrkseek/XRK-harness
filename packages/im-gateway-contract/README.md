@@ -11,7 +11,7 @@ This package freezes:
 | Env | `XRK_IM_GATEWAY_URL` · `XRK_IM_GATEWAY_TOKEN` |
 | Sidecar | `GET /health` → `{ ok, status?, contractVersion }` |
 | Host | `POST /api/im/gateway/relay` body `{ channel, botId?, text?, … }` |
-| Auth | Bearer / `x-im-gateway-token`, or loopback when token unset |
+| Auth | Bearer / `x-im-gateway-token` (constant-time), or **TCP loopback** (`remoteAddress`) when token unset — never the spoofable `Host` header |
 | States | `bridge` · `sidecar-configured` · `sidecar-reachable` · `sidecar-unreachable` |
 
 **Not in scope:** Telegram / Discord / Slack / Feishu / … native SDKs. Face still lists nine channel *ids* for discover; they are stubs until a sidecar (or webhook) feeds `channel`.

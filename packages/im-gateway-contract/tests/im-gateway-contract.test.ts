@@ -3,12 +3,14 @@ import {
   IM_GATEWAY_CONTRACT_VERSION,
   IM_GATEWAY_ENV_TOKEN,
   IM_GATEWAY_ENV_URL,
+  assertImPublicIngressAuthorized,
   assertRelayAuthorized,
   imGatewayStateFromProbe,
   interpretSidecarHealthBody,
   parseRelayBody,
   readImGatewaySidecarConfig,
   sidecarHealthResponse,
+  timingSafeTokenEqual,
 } from "../src/index.js";
 
 describe("im-gateway-contract", () => {
@@ -31,7 +33,24 @@ describe("im-gateway-contract", () => {
     expect(parseRelayBody(null).ok).toBe(false);
   });
 
-  it("authorizes loopback without token and bearer with token", () => {
+  it("authorizes loopback TCP without token and bearer with token", () => {
+    expect(
+      assertRelayAuthorized({
+        remoteAddress: "127.0.0.1",
+        authorization: undefined,
+        gatewayTokenHeader: undefined,
+        config: { url: "http://sidecar" },
+      }).ok,
+    ).toBe(true);
+    expect(
+      assertRelayAuthorized({
+        remoteAddress: "::ffff:127.0.0.1",
+        authorization: undefined,
+        gatewayTokenHeader: undefined,
+        config: { url: "http://sidecar" },
+      }).ok,
+    ).toBe(true);
+    // Spoofable Host must not grant access when remote is non-loopback / missing.
     expect(
       assertRelayAuthorized({
         hostHeader: "127.0.0.1:9460",
@@ -39,10 +58,11 @@ describe("im-gateway-contract", () => {
         gatewayTokenHeader: undefined,
         config: { url: "http://sidecar" },
       }).ok,
-    ).toBe(true);
+    ).toBe(false);
     expect(
       assertRelayAuthorized({
-        hostHeader: "evil.example",
+        remoteAddress: "203.0.113.9",
+        hostHeader: "127.0.0.1:9460",
         authorization: undefined,
         gatewayTokenHeader: undefined,
         config: { url: "http://sidecar" },
@@ -50,7 +70,7 @@ describe("im-gateway-contract", () => {
     ).toBe(false);
     expect(
       assertRelayAuthorized({
-        hostHeader: "evil.example",
+        remoteAddress: "203.0.113.9",
         authorization: "Bearer tok",
         gatewayTokenHeader: undefined,
         config: { url: "http://sidecar", token: "tok" },
@@ -58,12 +78,58 @@ describe("im-gateway-contract", () => {
     ).toBe(true);
     expect(
       assertRelayAuthorized({
-        hostHeader: "evil.example",
+        remoteAddress: "203.0.113.9",
         authorization: undefined,
         gatewayTokenHeader: "tok",
         config: { url: "http://sidecar", token: "tok" },
       }).ok,
     ).toBe(true);
+  });
+
+  it("gates public IM ingress on TCP loopback or tokens", () => {
+    expect(
+      assertImPublicIngressAuthorized({
+        remoteAddress: "127.0.0.1",
+        authorization: undefined,
+        gatewayTokenHeader: undefined,
+        apiKeyHeader: undefined,
+        env: {},
+      }).ok,
+    ).toBe(true);
+    expect(
+      assertImPublicIngressAuthorized({
+        remoteAddress: "203.0.113.9",
+        authorization: undefined,
+        gatewayTokenHeader: undefined,
+        apiKeyHeader: undefined,
+        env: {},
+      }).ok,
+    ).toBe(false);
+    expect(
+      assertImPublicIngressAuthorized({
+        remoteAddress: "203.0.113.9",
+        authorization: "Bearer gw",
+        gatewayTokenHeader: undefined,
+        apiKeyHeader: undefined,
+        env: { [IM_GATEWAY_ENV_TOKEN]: "gw" },
+      }).ok,
+    ).toBe(true);
+    expect(
+      assertImPublicIngressAuthorized({
+        remoteAddress: "203.0.113.9",
+        authorization: undefined,
+        gatewayTokenHeader: undefined,
+        apiKeyHeader: "k",
+        env: { XRK_API_KEY: "k" },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("compares tokens in constant time", () => {
+    expect(timingSafeTokenEqual("abc", "abc")).toBe(true);
+    expect(timingSafeTokenEqual("abc", "abd")).toBe(false);
+    expect(timingSafeTokenEqual("abc", "abcd")).toBe(false);
+    expect(timingSafeTokenEqual(undefined, "x")).toBe(false);
   });
 
   it("maps health body + state enum", () => {

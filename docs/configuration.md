@@ -76,10 +76,11 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 
 | 变量 | 含义 | 默认 / 备注 |
 |------|------|-------------|
-| `XRK_HOST` | 绑定地址 | 常用 `127.0.0.1`；允许 `0.0.0.0`（非回环武装访问 PIN）。公网暴露**不保证**安全——PIN / `XRK_API_KEY` 仅为闸，宜反代 + TLS |
+| `XRK_HOST` | 绑定地址 | 常用 `127.0.0.1`；允许 `0.0.0.0`（非回环须 `XRK_API_KEY` + 显式 `XRK_CORS_ORIGIN`，否则拒绝启动；旁路 `XRK_ALLOW_INSECURE_BIND=1`；另武装访问 PIN）。公网暴露**不保证**安全——宜反代 + TLS |
 | `XRK_PORT` | 端口 | 常用 `8787`；测例可用 `0` |
-| `XRK_API_KEY` | Face/HTTP 鉴权 | 空 = **开发免鉴权**；产品壳同源回环可无头 |
-| `XRK_CORS_ORIGIN` | CORS | 默认 `*` |
+| `XRK_API_KEY` | Face/HTTP 鉴权 | 空 = **开发免鉴权**（仅回环）；产品壳同源回环可无头 |
+| `XRK_CORS_ORIGIN` | CORS | 默认 `*`（仅回环）；非回环须显式设置 |
+| `XRK_ALLOW_INSECURE_BIND` | 非回环旁路 | `1`/`true` 跳过 API key / CORS 硬闸（仅故意调试） |
 | `XRK_RATE_LIMIT` | 每 IP 每分钟请求上限 | 见 http 实现 |
 | `XRK_LOG` / `XRK_LOG_LEVEL` | CLI Host 日志级别：`silent` \| `error` \| `warn` \| `info` \| `debug` | 默认 `info`；CLI `--verbose` = debug，`--quiet` = warn |
 
@@ -189,7 +190,7 @@ Preset 选型：[profiles.md](./profiles.md)。
 |------|------|
 | `XRK_POLICY_FILE` | policy ruleset（JSON / YAML / TOML；tool / provider / mcp …） |
 | `XRK_MCP_SERVERS` | 可选；非空则赢过文件（CI）。产品路径用 Settings → Plugins → MCP |
-| `XRK_MCP_ALLOW` | 可选；强制 allow（CI/无头）。产品路径用 MCP「允许连接」 |
+| `XRK_MCP_ALLOW` | 可选；强制 allow（CI/无头）。产品路径用 MCP 卡片头总开关 |
 | `XRK_MCP_OAUTH_URL` · `XRK_MCP_OAUTH_CLIENT_ID` | `xrkh mcp login` 的目标 URL 与 OAuth client id（`--url` / `--client-id` 优先） |
 | `XRK_MCP_OAUTH_DEVICE_AUTHORIZATION_URL` · `XRK_MCP_OAUTH_TOKEN_URL` | 显式设备码端点；**两者齐备**才跳过发现 |
 | `XRK_MCP_OAUTH_SCOPES` · `XRK_MCP_OAUTH_AUDIENCE` | 请求 scope（空格或逗号分隔）· `audience` |
@@ -198,8 +199,8 @@ Preset 选型：[profiles.md](./profiles.md)。
 
 行为要点：
 
-- `mcp.connect` 默认 deny；Web「允许连接」或 `XRK_MCP_ALLOW` 才挂载
-- env/config **空**时读 `~/.xrk/host-settings.json`（`servers` + `allowConnect`），Face mutate 后 **热挂载**
+- `mcp.connect` 默认 deny；产品路径下 MCP 卡片头总开关（`allowConnect`）默认开（可关），或 `XRK_MCP_ALLOW`；`servers[].enabled === false` 跳过该台
+- env/config **空**时读 `~/.xrk/host-settings.json`（`servers` + `allowConnect`），Face mutate 后 **热挂载**；单台开关亦可经插件列表 / `setFaceMcpServerEnabled`
 - HTTP MCP 的 `Authorization` 只来自 `xrkh mcp login` 或 Settings → Plugins → MCP 经 Face `mcp.oauth.*` 写入 `<token-dir>/<server>.json` 的令牌（tmp+rename 原子写 · 尽量 0600 · 到期前 60s 自动 refresh）；未登录则匿名连接，包内不猜端点
 - 端点未知时按 RFC 9728（`/.well-known/oauth-protected-resource`）→ RFC 8414 / OIDC authorization-server metadata 发现；显式 flag / env **永远**赢过发现，`--no-discovery` 可关闭
 - 令牌是明文本机密钥：不进 `mcp.servers.env`、不进 session log、不入库
@@ -276,7 +277,7 @@ Settings → Plugins 里会动到运行时的命名空间：
 
 | Face ns | 字段 | 生效 |
 |---------|------|------|
-| `mcp` | `servers` · `allowConnect` | 热挂载（文件源）；关 allow 则 park |
+| `mcp` | `servers`（含可选 `enabled`）· `allowConnect` | 热挂载（文件源）；关总开关则 park；`enabled: false` 跳过该台 |
 | `web-search` | `provider` · `region`（密钥走 Credentials） | 下次 agent 重建后作用于 `web_search` |
 | `bash` | `timeoutMs` · `maxOutputBytes`（默认 **64_000**） | 下次 agent 重建后作用于 `bash` 捕获上限 |
 | `agent-loop` | `maxParallelToolCalls` | 同一步并行 settle 池上限（默认 **5**；下次 agent 重建后生效） |
@@ -316,7 +317,8 @@ Tavily / Brave / DeepSeek Search 密钥：Plugins → Web search 卡或 Settings
 |------|------|
 | `XRK_IM_GATEWAY_URL` | 外接 IM relay 基址（HTTP health；WS `/ws` 可推导） |
 | `XRK_IM_GATEWAY_WS_URL` | 显式 IM WebSocket 网关（优先于 URL 推导） |
-| `XRK_IM_GATEWAY_TOKEN` | relay / WS Bearer |
+| `XRK_IM_GATEWAY_TOKEN` | relay / local WS / public IM ingress Bearer；非回环必设 |
+| `XRK_IM_WEBHOOK_TOKEN` | 可选；与 gateway token 等价，闸 `/api/im/*/webhook|send|stream` |
 | `XRK_MEMORY_EMBED_URL` | 外接向量库 HTTP（如 Qdrant）；非空即旁路 Settings「高级」；未设且无产品 URL 则用 embedded host |
 | `XRK_MEMORY_EMBED_TOKEN` | 向量库 API key（可选；亦可经 Settings → Plugins → 高级 / Credentials 落盘） |
 | `XRK_MEMORY_EMBED_COLLECTION` | 集合名（可选；亦可 Settings `memory-embed.collection`） |
@@ -425,10 +427,11 @@ Path jail: `exec-fs` `resolveWithinRoot` ([security-checklist.md](./security-che
 
 | Variable | Meaning | Default / Notes |
 |------|------|-------------|
-| `XRK_HOST` | Bind address | Typically `127.0.0.1`; `0.0.0.0` allowed (non-loopback arms access PIN). **No security guarantee** on the public internet — PIN / `XRK_API_KEY` are gates only; prefer reverse proxy + TLS |
+| `XRK_HOST` | Bind address | Typically `127.0.0.1`; `0.0.0.0` allowed (non-loopback requires `XRK_API_KEY` + explicit `XRK_CORS_ORIGIN` or refuse start; escape hatch `XRK_ALLOW_INSECURE_BIND=1`; also arms access PIN). **No security guarantee** on the public internet — prefer reverse proxy + TLS |
 | `XRK_PORT` | Port | Typically `8787`; tests may use `0` |
-| `XRK_API_KEY` | Face/HTTP auth | Empty = **dev unauthenticated**; same-origin product-shell loopback may omit the header |
-| `XRK_CORS_ORIGIN` | CORS | Default `*` |
+| `XRK_API_KEY` | Face/HTTP auth | Empty = **dev unauthenticated** (loopback only); same-origin product-shell loopback may omit the header |
+| `XRK_CORS_ORIGIN` | CORS | Default `*` (loopback); must be set explicitly off-loopback |
+| `XRK_ALLOW_INSECURE_BIND` | Off-loopback escape | `1`/`true` skips the API key / CORS hard gate (intentional debug only) |
 | `XRK_RATE_LIMIT` | Per-IP requests per minute | See HTTP implementation |
 | `XRK_LOG` / `XRK_LOG_LEVEL` | CLI Host log level: `silent` \| `error` \| `warn` \| `info` \| `debug` | Default `info`; CLI `--verbose` = debug, `--quiet` = warn |
 
@@ -538,7 +541,7 @@ Details: [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-f
 |------|------|
 | `XRK_POLICY_FILE` | policy ruleset (JSON / YAML / TOML; tool / provider / mcp …) |
 | `XRK_MCP_SERVERS` | Optional; when non-empty wins over file (CI). Product path: Settings → Plugins → MCP |
-| `XRK_MCP_ALLOW` | Optional; force allow (CI/headless). Product path: MCP “Allow connect” |
+| `XRK_MCP_ALLOW` | Optional; force allow (CI/headless). Product path: MCP card-header master switch |
 | `XRK_MCP_OAUTH_URL` · `XRK_MCP_OAUTH_CLIENT_ID` | Target URL and OAuth client id for `xrkh mcp login` (`--url` / `--client-id` win) |
 | `XRK_MCP_OAUTH_DEVICE_AUTHORIZATION_URL` · `XRK_MCP_OAUTH_TOKEN_URL` | Explicit device-code endpoints; discovery is skipped only when **both** are set |
 | `XRK_MCP_OAUTH_SCOPES` · `XRK_MCP_OAUTH_AUDIENCE` | Requested scopes (space- or comma-separated) · `audience` |
@@ -547,8 +550,8 @@ Details: [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-f
 
 Behavior notes:
 
-- `mcp.connect` defaults to deny; mount only after Web “Allow connect” or `XRK_MCP_ALLOW`
-- When env/config is **empty**, read `~/.xrk/host-settings.json` (`servers` + `allowConnect`) and **hot-mount** after Face mutate
+- `mcp.connect` defaults to deny; product path MCP card-header master switch (`allowConnect`) defaults on (can turn off), or `XRK_MCP_ALLOW`; `servers[].enabled === false` skips that server
+- When env/config is **empty**, read `~/.xrk/host-settings.json` (`servers` + `allowConnect`) and **hot-mount** after Face mutate; per-server toggles also via Plugin list / `setFaceMcpServerEnabled`
 - HTTP MCP `Authorization` comes only from the token `xrkh mcp login` or Settings → Plugins → MCP (`mcp.oauth.*`) writes to `<token-dir>/<server>.json` (atomic tmp+rename · best-effort 0600 · refreshed 60s before expiry); with no token the client connects anonymously and the package never guesses endpoints
 - When endpoints are unknown, discover via RFC 9728 (`/.well-known/oauth-protected-resource`) → RFC 8414 / OIDC authorization-server metadata; explicit flags / env **always** win over discovery, `--no-discovery` disables it
 - Tokens are plaintext local secrets: never in `mcp.servers.env`, never in session logs, never committed
@@ -625,7 +628,7 @@ Settings → Plugins mutates these runtime namespaces:
 
 | Face ns | Fields | Takes effect |
 |---------|------|------|
-| `mcp` | `servers` · `allowConnect` | Hot-mount (file-backed); park when allow is off |
+| `mcp` | `servers` (optional `enabled`) · `allowConnect` | Hot-mount (file-backed); park when master off; `enabled: false` skips that server |
 | `web-search` | `provider` · `region` (keys via Credentials) | Applies to `web_search` after the next agent rebuild |
 | `bash` | `timeoutMs` · `maxOutputBytes` (default **64_000**) | Applies to bash capture cap after the next agent rebuild |
 | `agent-loop` | `maxParallelToolCalls` | Caps the parallel settle pool for one step (default **5**; after next agent rebuild) |
@@ -665,7 +668,8 @@ For [community-plugins.md](./community-plugins.md) clients; the Host core does n
 |------|------|
 | `XRK_IM_GATEWAY_URL` | External IM relay base (HTTP health; WS `/ws` may be inferred) |
 | `XRK_IM_GATEWAY_WS_URL` | Explicit IM WebSocket gateway (overrides URL inference) |
-| `XRK_IM_GATEWAY_TOKEN` | relay / WS Bearer |
+| `XRK_IM_GATEWAY_TOKEN` | Bearer for relay / local WS / public IM ingress; required off-loopback |
+| `XRK_IM_WEBHOOK_TOKEN` | Optional alias of gateway token; gates `/api/im/*/webhook|send|stream` |
 | `XRK_MEMORY_EMBED_URL` | External vector HTTP (e.g. Qdrant); non-empty bypasses Settings Advanced; embedded host when unset and no product URL |
 | `XRK_MEMORY_EMBED_TOKEN` | Vector API key (optional; also via Settings → Plugins → Advanced / Credentials) |
 | `XRK_MEMORY_EMBED_COLLECTION` | Collection name (optional; also Settings `memory-embed.collection`) |

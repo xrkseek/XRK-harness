@@ -34,7 +34,7 @@ export function OnboardingModal({
 
   useEffect(() => {
     if (!focusTitle) return
-    // preventScroll: phone chrome already scrolled the sheet to the top.
+    // preventScroll: avoid jumping the centered phone card when focusing.
     titleRef.current?.focus({ preventScroll: true })
   }, [focusTitle])
 

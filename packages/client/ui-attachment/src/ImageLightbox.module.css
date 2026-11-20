@@ -20,17 +20,12 @@
 .image {
   position: relative;
   max-width: min(100%, 1600px);
-  max-height: calc(100vh - 80px);
+  /* Prefer % of the shell-framed backdrop — 100dvh spills under Flutter IME. */
+  max-height: min(calc(100dvh - 80px), calc(100% - 80px));
   object-fit: contain;
   border-radius: 12px;
   background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-shadow-lv3);
-}
-
-@supports (height: 100dvh) {
-  .image {
-    max-height: calc(100dvh - 80px);
-  }
 }
 
 .actions {
@@ -71,13 +66,7 @@
   }
 
   .image {
-    max-height: calc(100vh - 48px);
+    max-height: min(calc(100dvh - 48px), calc(100% - 48px));
     border-radius: 8px;
-  }
-
-  @supports (height: 100dvh) {
-    .image {
-      max-height: calc(100dvh - 48px);
-    }
   }
 }

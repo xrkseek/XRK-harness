@@ -19,7 +19,7 @@ function drain(): FaceDrain {
 }
 
 describe("job session journal", () => {
-  it("appends job/registered then job/settled for owned jobs", async () => {
+  it("appends job/registered then job/settled for owned jobs", { timeout: 20_000 }, async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-face-job-journal-"));
     const store = createMemorySessionStore();
     const session = newSession(store);

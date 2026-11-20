@@ -46,6 +46,27 @@
   column-gap: 24px;
   max-height: min(50vh, 360px);
   overflow: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 767px) {
+  .content {
+    width: 100%;
+    max-width: none;
+  }
+
+  .search {
+    min-height: 44px;
+    font-size: 16px; /* avoid iOS focus zoom */
+  }
+
+  .list {
+    max-height: 50dvh;
+  }
+
+  .row {
+    min-height: 44px;
+  }
 }
 
 @media (min-width: 800px) {

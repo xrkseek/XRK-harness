@@ -8,6 +8,7 @@
 .root {
   box-sizing: border-box;
   flex: none;
+  min-width: 0;
   /* Tuck into the stack gap like QueueDock — less empty air above the input. */
   margin: 0 auto calc(0px - var(--dsh-composer-stack-gap, 6px));
   width: calc(
@@ -19,12 +20,15 @@
     var(--dsh-composer-dock-inset) -
     var(--dsh-composer-dock-inset)
   );
-  max-width: calc(
-    var(--dsh-composer-card-max-width) -
-    var(--dsh-composer-dock-inset) -
-    var(--dsh-composer-dock-inset) -
-    var(--dsh-composer-dock-inset) -
-    var(--dsh-composer-dock-inset)
+  max-width: min(
+    100%,
+    calc(
+      var(--dsh-composer-card-max-width) -
+      var(--dsh-composer-dock-inset) -
+      var(--dsh-composer-dock-inset) -
+      var(--dsh-composer-dock-inset) -
+      var(--dsh-composer-dock-inset)
+    )
   );
 }
 
@@ -69,8 +73,12 @@
 }
 
 .title {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .summary {

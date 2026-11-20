@@ -1,13 +1,10 @@
 /**
- * Sidebar shell: column geometry only. Collapse is a slide plus crossfade:
- * content freezes at its expanded width (inline style) and fades out in place
- * while the sliding column (AppFrame grid tracks) clips it — nothing reflows
- * mid-slide. At settle the wide-only content unmounts and the four upper
- * controls enter the 56px rail from the same horizontal offset (one icon each,
- * same top-down order) on one fade that ends with the slide. The bottom-pinned
- * settings control only fades. The workspace/session browsing region between
- * the New Session button, optional `sidebar.utility` rows (Plugins, …), then
- * the `sidebar.workspaces` registrant; the foot holds `sidebar.settings` plus
+ * Sidebar shell: column geometry only. Labeled chrome and the icon rail are
+ * discrete — never paint the wide tree inside a sub-labeled track (that clips
+ * 「新会话」to「新」). Collapse flips to the rail on the same frame; upper
+ * controls may still rail-in for a live toggle. The workspace/session browsing
+ * region sits between New Session, optional `sidebar.utility` rows, then
+ * `sidebar.workspaces`; the foot holds `sidebar.settings` plus
  * `sidebar.footer.action`. The shell hands them the wide flag (plus an expand
  * request callback for the browser).
  *
@@ -26,8 +23,11 @@ import {
 import type { SidebarRootComponentProps } from './contract/slots.ts'
 import css from './SidebarRoot.module.css'
 
-/** Wide-content unmount delay; matches the 150ms wide-content fade-out. */
-const COLLAPSE_SETTLE_MS = 150
+/**
+ * Labeled floor — must stay equal to layout `SIDEBAR_MIN`. Below this the
+ * shell paints the icon rail even if `collapsed` lagged a frame behind.
+ */
+const LABELED_SIDEBAR_MIN = 220
 
 /**
  * How long the column's scrollbars stay drawn after the pointer leaves it.
@@ -50,26 +50,15 @@ export function SidebarRoot({
   t,
   renderSlot,
 }: SidebarRootComponentProps) {
-  // Wide content stays mounted while the collapse animates (fading via
-  // .collapsed .wide), unmounts at settle, and remounts right away on expand.
-  const [settled, setSettled] = useState(collapsed)
-  useEffect(() => {
-    if (!collapsed) { setSettled(false); return }
-    const timer = window.setTimeout(() => { setSettled(true) }, COLLAPSE_SETTLE_MS)
-    return () => { window.clearTimeout(timer) }
-  }, [collapsed])
-  const wide = !collapsed || !settled
-
-  // Freeze the content at its expanded width while it fades out (collapsed
-  // && wide): the sliding column then clips it instead of reflowing it. The
-  // rail layout (.collapsed styles) only applies once the fade settles.
-  const lastWideWidth = useRef(width)
-  if (!collapsed) lastWideWidth.current = width
+  // Owner `collapsed` or a sub-labeled track → rail chrome immediately.
+  // A delayed settle used to freeze the wide tree inside the shrinking
+  // column and clip labels for ~150ms (and for the whole concession snap).
+  const wide = !collapsed && width >= LABELED_SIDEBAR_MIN
 
   // Rail-in only crossfades a live collapse: a refresh straight into the
   // collapsed state renders the rail statically (no delay-hidden icons).
-  const everWide = useRef(!collapsed)
-  if (!collapsed) everWide.current = true
+  const everWide = useRef(wide)
+  if (wide) everWide.current = true
 
   // Scrollbars in the column follow the pointer (.quietBars rebinds them
   // away): drawn while it is inside, and for SCROLLBAR_LINGER_MS after it
@@ -119,9 +108,9 @@ export function SidebarRoot({
       ref={column}
       className={clsx(
         css.root, !wide && css.collapsed, !wide && everWide.current && css.railIn,
-        collapsed && wide && css.fading, !pointerInside && css.quietBars,
+        !pointerInside && css.quietBars,
       )}
-      style={wide ? { width: collapsed ? lastWideWidth.current : width } : undefined}
+      style={wide ? { width } : undefined}
       onPointerEnter={() => {
         cancelLinger()
         setPointerInside(true)
@@ -143,11 +132,11 @@ export function SidebarRoot({
         )}
         {/* Rail resting state is the whale mark; hovering swaps in the panel
             icon (the expand affordance, figma sidebar-hover flow). */}
-        <Tooltip label={collapsed ? t('toggle.open') : t('toggle.collapse')}>
+        <Tooltip label={wide ? t('toggle.collapse') : t('toggle.open')}>
           <button
             type="button"
             className={clsx(css.iconButton, css.toggle)}
-            aria-label={collapsed ? t('toggle.open') : t('toggle.collapse')}
+            aria-label={wide ? t('toggle.collapse') : t('toggle.open')}
             onClick={() => { toggleSidebar() }}
           >
             {!wide && <BrandMark className={css.railMark} size={24} />}
@@ -183,7 +172,7 @@ export function SidebarRoot({
       <div className={css.regionArea}>
         {renderSlot('sidebar.workspaces', {
           wide,
-          expandSidebar: () => { if (collapsed) toggleSidebar() },
+          expandSidebar: () => { if (!wide) toggleSidebar() },
         })}
       </div>
 

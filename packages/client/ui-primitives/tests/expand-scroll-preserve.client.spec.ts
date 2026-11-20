@@ -233,6 +233,34 @@ describe('expand-scroll-preserve', () => {
     expect(isExpandFollowSuppressed()).toBe(false)
   })
 
+  it('hook enabled=false never begins or settles', () => {
+    const writes: number[] = []
+    registerExpandScrollWriter((_scrollport, top) => { writes.push(top) })
+    const scene = mountScrollScene({
+      anchorTop: 80,
+      anchorHeight: 36,
+      visibleBottom: 600,
+      scrollTop: 400,
+    })
+
+    const { result, rerender, unmount } = renderHook(
+      ({ open }) => useExpandScrollPreserve(open, false),
+      { initialProps: { open: false } },
+    )
+    Object.defineProperty(result.current.rootRef, 'current', {
+      configurable: true,
+      get: () => scene.anchor,
+      set: () => {},
+    })
+
+    act(() => { result.current.noteExpand() })
+    expect(isExpandFollowSuppressed()).toBe(false)
+    act(() => { rerender({ open: true }) })
+    expect(writes).toEqual([])
+    unmount()
+    expect(isExpandFollowSuppressed()).toBe(false)
+  })
+
   it('hook settles on open and cancels a noteExpand that never opens', () => {
     const writes: number[] = []
     registerExpandScrollWriter((_scrollport, top) => { writes.push(top) })

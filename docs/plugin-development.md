@@ -2,18 +2,37 @@
 
 > **读者**：集成者 · 贡献者
 
-在 XRK-Harness 上扩展能力，优先采用 **进程插件**（`tools` / `prompt` / `commands`），再由 Host discover → preset 接线。客户端壳叠加见文末「Client 叠加」。
+在 XRK-Harness 上扩展能力，认 **XRK Plug**（`@xrkseek/plug`）：优先 **进程插件**（`tools` / `prompt` / `commands`），再由 Host discover → preset 接线。客户端壳叠加见文末「Client 叠加」与 [client-plugin-development.md](./client-plugin-development.md)。表面分级：[plugin-surface-map.md](./plugin-surface-map.md)。
 
 契约 API 细节：[plugin-loader.md](./plugin-loader.md)。选型：[profiles.md](./profiles.md)。
 
 ## 你要做哪一种
 
-| 目标 | kind | 结果 |
-|------|------|------|
-| 给模型新工具 | `tools` | `ToolDefinition[]` → ToolRegistry |
-| 往 system 追加段落 | `prompt` | `promptSections[]` → SystemPromptAssembler |
-| 斜杠 / 命令面 | `commands` | Face `commands/list` + `commands/execute` |
-| 改产品壳 UI | `xrk.client`（client 包） | `~/.xrk/plugins/web/` 叠加，**不是**进程 kind；作者路径见 [client-plugin-development.md](./client-plugin-development.md) |
+| 目标 | kind | 金样 | 结果 |
+|------|------|------|------|
+| 给模型新工具 | `tools` | `example-tools` | `ToolDefinition[]` → ToolRegistry |
+| 往 system 追加段落 | `prompt` | `example-prompt` | `promptSections[]` → SystemPromptAssembler |
+| 斜杠 / 命令面 | `commands` | `example-commands` | Face `commands/list` + `commands/execute` |
+| 策略规则 | `policy` | `example-policy` | `policyRules[]` → Host policy engine |
+| 工具前后钩子 | `hooks` | `example-hooks` | `hooks.onPre` / `onPost` → ToolPipeline |
+| LLM brand | `llm` | `example-llm` | `llmBrands[]` → ProviderRegistry |
+| 通道描述 | `channel` | `example-channel` | `channels[]` → `processChannels/list` |
+| 改产品壳 UI | `xrk.client`（client 包） | `example-composer-action` · `example-theme-tokens` | `~/.xrk/plugins/web/` 叠加，**不是**进程 kind；见 [client-plugin-development.md](./client-plugin-development.md) |
+
+### 信任边界（必读）
+
+进程插件经 `import()` **进入 Host 同进程**，权限等同本机 Host（可读密钥、跑工具、挂 HTTP），**不是**沙箱。只装你信任的来源。可选在 `xrk.plugin.json` 声明：
+
+```json
+{
+  "trust": {
+    "note": "Process plugin — same privileges as the Host.",
+    "capabilities": ["tools"]
+  }
+}
+```
+
+Settings → 插件列表会提示同进程全权。细节见 [security-checklist.md](./security-checklist.md)。
 
 本仓只 discover **`kind: cordis` 进程包**、不自动 `apply`（写它请放 extensions/）。装 **社区 client / `host.mjs` 包**见 [community-plugins.md](./community-plugins.md) · [plugin-loader.md](./plugin-loader.md)。
 
@@ -164,12 +183,31 @@ Contract API details: [plugin-loader.md](./plugin-loader.md). Profile selection:
 
 ## Which kind to choose
 
-| Goal | kind | Outcome |
-|------|------|---------|
-| New model tools | `tools` | `ToolDefinition[]` → ToolRegistry |
-| Extra system sections | `prompt` | `promptSections[]` → SystemPromptAssembler |
-| Slash commands | `commands` | Face `commands/list` + `commands/execute` |
-| Product-shell UI | `xrk.client` (client package) | Overlay under `~/.xrk/plugins/web/`, **not** a process kind; author path: [client-plugin-development.md](./client-plugin-development.md) |
+| Goal | kind | Sample | Outcome |
+|------|------|--------|---------|
+| New model tools | `tools` | `example-tools` | `ToolDefinition[]` → ToolRegistry |
+| Extra system sections | `prompt` | `example-prompt` | `promptSections[]` → SystemPromptAssembler |
+| Slash commands | `commands` | `example-commands` | Face `commands/list` + `commands/execute` |
+| Policy rules | `policy` | `example-policy` | `policyRules[]` → Host policy engine |
+| Tool pre/post hooks | `hooks` | `example-hooks` | `hooks.onPre` / `onPost` → ToolPipeline |
+| LLM brand | `llm` | `example-llm` | `llmBrands[]` → ProviderRegistry |
+| Channel descriptors | `channel` | `example-channel` | `channels[]` → `processChannels/list` |
+| Product-shell UI | `xrk.client` (client package) | `example-composer-action` · `example-theme-tokens` | Overlay under `~/.xrk/plugins/web/`, **not** a process kind; see [client-plugin-development.md](./client-plugin-development.md) |
+
+### Trust boundary (required reading)
+
+Process plugins are **`import()`-ed into the Host process** with the same privileges as the Host (secrets, tools, HTTP) — **not** a sandbox. Install only what you trust. Optional `xrk.plugin.json` disclosure:
+
+```json
+{
+  "trust": {
+    "note": "Process plugin — same privileges as the Host.",
+    "capabilities": ["tools"]
+  }
+}
+```
+
+Settings → Plugin list surfaces the same-process warning. See [security-checklist.md](./security-checklist.md).
 
 Do not author in-tree **`kind: cordis` process packages** (discover only; no automatic `apply`). For **community client / `host.mjs` packages**, see [community-plugins.md](./community-plugins.md) · [plugin-loader.md](./plugin-loader.md).
 

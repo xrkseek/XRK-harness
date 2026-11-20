@@ -212,7 +212,10 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
           setOpen((current) => !current)
         }}
       >
-        <span className={css.count}>{countLabel}</span>
+        <span className={css.count}>
+          <span className={css.countFull}>{countLabel}</span>
+          <span className={css.countShort} aria-hidden>{settledRows.length}</span>
+        </span>
         <IconChevronDownOutlineRegular className={open ? css.triggerOpen : undefined} />
       </button>
       {menu !== null ? createPortal(menu, document.body) : null}

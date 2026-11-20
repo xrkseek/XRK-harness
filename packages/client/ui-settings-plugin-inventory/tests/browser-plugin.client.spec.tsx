@@ -27,6 +27,11 @@ async function bench() {
     constructor(serviceCtx: Context) {
       super(serviceCtx, 'remote')
     }
+
+    /** No-op Host event subscription for soft-remount effect under test. */
+    $on(_event: string, _listener: () => void): () => void {
+      return () => {}
+    }
   }
   new RemoteService(ctx)
   const list = vi.fn<() => Promise<ListResult>>()
@@ -34,7 +39,17 @@ async function bench() {
   const setEnabled = vi.fn(async () => ({ ok: true as const, value: { entryId: 'x', enabled: true } }))
   const remove = vi.fn(async () => ({ ok: true as const, value: { entryId: 'x', removed: true as const } }))
   const open = vi.fn(async () => ({ ok: true as const, value: { entryId: 'x', opened: true as const } }))
-  ctx.provide('remote.pluginInventory', { list, setEnabled, remove, open })
+  const clientBoot = vi.fn(async () => ({
+    ok: true as const,
+    value: { overlayUrls: [] as string[], overlayRev: 0 },
+  }))
+  ctx.provide('remote.pluginInventory', {
+    list,
+    setEnabled,
+    remove,
+    open,
+    clientBoot,
+  })
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list }
 }
 

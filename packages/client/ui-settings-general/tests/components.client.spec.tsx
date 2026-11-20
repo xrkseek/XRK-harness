@@ -245,7 +245,8 @@ describe('GeneralSection', () => {
 
   it('renders the intro and the item slot as the section body', () => {
     const { renderSlot } = mount()
-    expect(screen.getByRole('heading', { name: 'General' })).toBeTruthy()
+    // Shell nav already titles the page — no second General heading.
+    expect(screen.queryByRole('heading', { name: 'General' })).toBeNull()
     expect(screen.getByText(/Session defaults and appearance/)).toBeTruthy()
     expect(renderSlot).toHaveBeenCalledWith('settings.general.item', {})
     expect(screen.getByTestId('slot-settings.general.item')).toBeTruthy()

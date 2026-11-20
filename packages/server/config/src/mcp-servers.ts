@@ -12,6 +12,11 @@ export type McpServerRow = {
   readonly cwd?: string;
   /** Acknowledge workspace litter when `cwd` is under the Host workspace. */
   readonly cwdAllowWorkspace?: boolean;
+  /**
+   * Per-server soft switch (default on). Master `allowConnect` still gates
+   * the whole fleet; `enabled: false` parks this name while keeping the row.
+   */
+  readonly enabled?: boolean;
 };
 
 /** Cursor/Claude object map, or a bare `{ name: { command } }` map. */
@@ -66,6 +71,7 @@ function rowFromNamed(
       : {}),
     ...(typeof o.cwd === "string" && o.cwd.trim() ? { cwd: o.cwd.trim() } : {}),
     ...(o.cwdAllowWorkspace === true ? { cwdAllowWorkspace: true } : {}),
+    ...(o.enabled === false ? { enabled: false } : {}),
   };
 }
 

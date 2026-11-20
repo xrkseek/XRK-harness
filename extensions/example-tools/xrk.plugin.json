@@ -1,5 +1,9 @@
 {
   "id": "example-tools",
   "kind": "tools",
-  "entry": "./plugin.mjs"
+  "entry": "./plugin.mjs",
+  "trust": {
+    "note": "Process plugin — loads into the Host Node process (same privileges as the Host).",
+    "capabilities": ["tools"]
+  }
 }

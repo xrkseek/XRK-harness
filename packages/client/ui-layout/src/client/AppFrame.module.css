@@ -20,8 +20,8 @@
 }
 
 /* Frameless Desktop: thin titlebar above the whole shell (all columns).
-   Mirror DSH `--dsh-windows-titlebar-height` / frame clearance names so
-   community layout.css that still reads those vars resolves on the frame. */
+   Host mirrors inbound community frame clearance names so third-party
+   layout.css that still reads those vars resolves on the frame. */
 .frame[data-desktop-chrome] {
   --xrk-desktop-chrome-height: 36px;
   --dsh-windows-titlebar-height: var(--xrk-desktop-chrome-height);
@@ -44,7 +44,7 @@
   }
 }
 
-/* DSH shell.leading seat geometry (maid selects [data-shell-leading]). */
+/* shell.leading seat geometry (community skins may select [data-shell-leading]). */
 .leadingSeat {
   position: absolute;
   top: 11px;
@@ -393,6 +393,7 @@
    (margin-right on #root): details inset alone leaves the strip under the
    side panel and can read as a blank bottom band until a width drag
    remeasures --xrkh-center-*. */
+:global([data-xrkh-bottom-panel]),
 :global([data-dsh-bottom-panel]) {
   left: var(--xrkh-center-left, var(--xrk-layout-inset-sidebar, 0px));
   right: var(
@@ -406,6 +407,7 @@
 }
 
 /* Phone: keep the portaled strip inside the short viewport + home indicator. */
+:global(html[data-xrk-layout-phone] [data-xrkh-bottom-panel]),
 :global(html[data-xrk-layout-phone] [data-dsh-bottom-panel]) {
   max-height: min(40dvh, 280px);
   padding-bottom: env(safe-area-inset-bottom, 0px);

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { WebError } from "../src/types.js";
 import {
   assertHttpUrl,
+  assertResolvedAddressesPublic,
   isBlockedHost,
+  isIpLiteralHostname,
   isSameOrigin,
 } from "../src/url-policy.js";
 
@@ -42,5 +44,52 @@ describe("url policy", () => {
     const b = new URL("https://example.com/b");
     expect(isSameOrigin(a, b)).toBe(true);
     expect(isSameOrigin(a, new URL("https://other.example/"))).toBe(false);
+  });
+
+  it("detects IP literal hostnames", () => {
+    expect(isIpLiteralHostname("203.0.113.1")).toBe(true);
+    expect(isIpLiteralHostname("[2001:db8::1]")).toBe(true);
+    expect(isIpLiteralHostname("example.com")).toBe(false);
+  });
+
+  it("DNS rebinding: denies names that resolve to private addresses", async () => {
+    const url = new URL("https://evil.example/");
+    await expect(
+      assertResolvedAddressesPublic(url, {
+        lookup: async () => [{ address: "127.0.0.1", family: 4 }],
+      }),
+    ).rejects.toThrow(/private-network|127\.0\.0\.1/);
+    await expect(
+      assertResolvedAddressesPublic(url, {
+        lookup: async () => [{ address: "10.1.2.3", family: 4 }],
+      }),
+    ).rejects.toThrow(/10\.1\.2\.3/);
+  });
+
+  it("DNS rebinding: allows public resolved addresses", async () => {
+    const url = new URL("https://example.com/");
+    await expect(
+      assertResolvedAddressesPublic(url, {
+        lookup: async () => [{ address: "93.184.216.34", family: 4 }],
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("DNS rebinding: skips IP literals and checkPrivate=false", async () => {
+    await expect(
+      assertResolvedAddressesPublic(new URL("https://203.0.113.9/"), {
+        lookup: async () => {
+          throw new Error("should not lookup literals");
+        },
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertResolvedAddressesPublic(new URL("https://evil.example/"), {
+        checkPrivate: false,
+        lookup: async () => {
+          throw new Error("should not lookup when disabled");
+        },
+      }),
+    ).resolves.toBeUndefined();
   });
 });

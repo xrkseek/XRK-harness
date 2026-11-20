@@ -88,6 +88,60 @@ describe("plugin discover", () => {
     expect((await loader.loadAll(root)).ids).toEqual([]);
   });
 
+  it("disk-load keeps policyRules / hooks / channels / trust", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-load-fields-"));
+    const dir = path.join(root, "rich");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, "xrk.plugin.json"),
+      JSON.stringify({
+        id: "rich",
+        kind: "policy",
+        entry: "./plugin.mjs",
+        trust: {
+          note: "sample trust",
+          capabilities: ["policy"],
+        },
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(dir, "plugin.mjs"),
+      `export function createPlugin() {
+  return {
+    id: "rich",
+    kind: "policy",
+    policyRules: [{
+      id: "deny-x",
+      match(subject) {
+        if (subject.kind !== "tool.call") return undefined;
+        if (subject.name !== "x") return undefined;
+        return { verdict: "deny", reason: "x", ruleId: "deny-x" };
+      },
+    }],
+    hooks: {
+      onPre: [async (ctx) => ({ action: "continue", args: ctx.args })],
+    },
+    channels: [{ channelId: "rich-ch", displayName: "Rich" }],
+  };
+}
+`,
+      "utf8",
+    );
+    const loader = createPluginLoader();
+    await loader.loadAll(root);
+    const plugin = loader.list().find((p) => p.id === "rich");
+    expect(plugin?.policyRules?.map((r) => r.id)).toEqual(["deny-x"]);
+    expect(plugin?.hooks?.onPre?.length).toBe(1);
+    expect(plugin?.channels).toEqual([
+      { channelId: "rich-ch", displayName: "Rich" },
+    ]);
+    expect(plugin?.trust).toEqual({
+      note: "sample trust",
+      capabilities: ["policy"],
+    });
+  });
+
   it("loadAll isolates optional failures; required throws", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-load-opt-"));
     await writePlugin(root, "ok", { id: "ok", kind: "tools" });

@@ -24,6 +24,9 @@ interface ClipboardContent {
   readonly files: readonly File[];
 }
 
+/** Newest translate wins; older in-flight work is aborted. */
+let translateAbort: AbortController | null = null;
+
 /** Text controls take `insertText`; editors own their own paste pipeline. */
 function isNativeTextControl(el: HTMLElement): boolean {
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
@@ -313,11 +316,12 @@ export const domContextMenuActions: ContextMenuActions = {
   translate(hit) {
     const source = hit.selectionText.trim();
     if (!source) return;
-    void translateSelectionText(source).then((out) => {
-      if (!out.ok) {
-        writeClipboardText(`[translate failed] ${out.error}`);
-        return;
-      }
+    translateAbort?.abort();
+    const ctrl = new AbortController();
+    translateAbort = ctrl;
+    // Silent on miss: never pollute the clipboard with error text.
+    void translateSelectionText(source, { signal: ctrl.signal }).then((out) => {
+      if (ctrl.signal.aborted || !out.ok) return;
       writeClipboardText(out.text);
     });
   },

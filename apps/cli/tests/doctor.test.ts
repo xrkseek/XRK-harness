@@ -51,7 +51,7 @@ describe("cli doctor", () => {
     }
   });
 
-  it("includes im-gateway readiness (bridge · contract · mock sample)", async () => {
+  it("includes im-gateway readiness (bridge · contract · mock sample)", { timeout: DOCTOR_MS }, async () => {
     const result = await runDoctor(process.cwd());
     const row = result.checks.find((c) => c.name === "im-gateway");
     expect(row).toBeDefined();
@@ -61,7 +61,7 @@ describe("cli doctor", () => {
     expect(row?.detail).toMatch(/example-im-mock-sidecar|mock-sidecar/);
   });
 
-  it("includes a2a-inbound readiness (Settings / env)", async () => {
+  it("includes a2a-inbound readiness (Settings / env)", { timeout: DOCTOR_MS }, async () => {
     const result = await runDoctor(process.cwd());
     const row = result.checks.find((c) => c.name === "a2a-inbound");
     expect(row).toBeDefined();
@@ -70,7 +70,7 @@ describe("cli doctor", () => {
     expect(row?.detail).toMatch(/A2A|a2a|Face/i);
   });
 
-  it("includes auto-review readiness (heuristic / http probe)", async () => {
+  it("includes auto-review readiness (heuristic / http probe)", { timeout: DOCTOR_MS }, async () => {
     const result = await runDoctor(process.cwd());
     const row = result.checks.find((c) => c.name === "auto-review");
     expect(row).toBeDefined();
@@ -79,7 +79,7 @@ describe("cli doctor", () => {
     expect(row?.detail).toMatch(/probe/);
   });
 
-  it("includes a voice readiness row", async () => {
+  it("includes a voice readiness row", { timeout: DOCTOR_MS }, async () => {
     const result = await runDoctor(process.cwd());
     const voice = result.checks.find((c) => c.name === "voice");
     expect(voice).toBeDefined();

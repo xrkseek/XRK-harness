@@ -681,8 +681,10 @@ describe('McpCardController', () => {
         args: '-y, demo-mcp',
         cwd: '',
         cwdAllowWorkspace: false,
+        enabled: true,
         status: 'idle',
         toolCount: 0,
+        oauth: undefined,
       },
       {
         serverName: 'other',
@@ -692,8 +694,10 @@ describe('McpCardController', () => {
         args: 'other-mcp',
         cwd: '',
         cwdAllowWorkspace: false,
+        enabled: true,
         status: 'idle',
         toolCount: 0,
+        oauth: undefined,
       },
     ])
   })
@@ -797,6 +801,46 @@ describe('McpCardController', () => {
     const snap = face.hooks.mcpCard.getSnapshot()
     expect(snap.dirty).toBe(true)
     expect(snap.rows.map(r => r.serverName)).toEqual(['local'])
+  })
+
+  it('preserves per-server enabled:false across card Save', async () => {
+    const host = stubSettingsScope<McpSettings>()
+    const controller = new McpCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: {
+        servers: [{
+          serverName: 'parked-one',
+          command: 'npx',
+          enabled: false,
+        }],
+        allowConnect: true,
+        connected: [],
+      },
+      base: {},
+      user: {
+        servers: [{
+          serverName: 'parked-one',
+          command: 'npx',
+          enabled: false,
+        }],
+        allowConnect: true,
+      },
+    })
+    const face = controller.inject()
+    expect(face.hooks.mcpCard.getSnapshot().rows).toMatchObject([
+      { serverName: 'parked-one', enabled: false, status: 'idle' },
+    ])
+    face.editRow(0, { args: '-y, keep-enabled' })
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalled() })
+    expect(host.set).toHaveBeenCalledWith('servers', [{
+      serverName: 'parked-one',
+      command: 'npx',
+      args: ['-y', 'keep-enabled'],
+      enabled: false,
+    }])
   })
 
   it('shows connecting overlay on rows while Host reconcile runs', () => {

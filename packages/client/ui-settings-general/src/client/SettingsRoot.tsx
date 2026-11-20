@@ -22,6 +22,7 @@ import {
   ConnectionIndicator,
   IconAgentPresetOutlineRegular, IconCloseOutlineRegular, IconDataOutlineRegular,
   IconSettingsOutlineRegular,
+  useShellFrameOverlay,
 } from '@xrkseek/client-ui-primitives'
 import type { ConnectionIndicatorState } from '@xrkseek/client-ui-primitives'
 import {
@@ -111,6 +112,10 @@ function SettingsPanel({
   const closeButton = useRef<HTMLButtonElement | null>(null)
   const navListRef = useRef<HTMLDivElement | null>(null)
   const optionsRef = useRef<HTMLDivElement | null>(null)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  // APP: Settings portals to body; mirror Flutter's `#root` keyboard pin so
+  // search fields stay above the IME (same contract as Modal).
+  useShellFrameOverlay(overlayRef, true)
 
   useEffect(() => {
     const appRoot = document.getElementById('root')
@@ -119,8 +124,15 @@ function SettingsPanel({
     closeButton.current?.focus()
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return
-      // Nested confirm Modals (delete provider, …) own Escape first.
-      if (document.querySelectorAll('[role="dialog"]').length > 1) return
+      // Nested confirm Modals (delete provider, …) own Escape first via
+      // stopImmediatePropagation. Count only *modal* dialogs: popovers and
+      // sheets use role="dialog" without aria-modal (StatsLine, ContextMeter,
+      // BossStatusSheet, …). Counting those blocked Escape, so phone back
+      // (xrk_web_back → Escape, then dismiss) needed two presses to leave
+      // Settings / Plugins.
+      if (document.querySelectorAll('[role="dialog"][aria-modal="true"]').length > 1) {
+        return
+      }
       onClose()
     }
     document.addEventListener('keydown', onKeyDown)
@@ -164,7 +176,7 @@ function SettingsPanel({
   // the containing block for `position: fixed` and crush the panel to the
   // drawer width (~280px). Same escape hatch as Modal / ImageLightbox.
   return createPortal((
-    <div className={css.overlay} role="presentation">
+    <div ref={overlayRef} className={css.overlay} role="presentation">
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
       <div
         className={clsx(css.panel, homeMode && css.homePanel)}

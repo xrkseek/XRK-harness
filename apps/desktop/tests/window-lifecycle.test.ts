@@ -23,7 +23,7 @@ function fakeWindow(overrides: Partial<DesktopShellWindow> = {}): DesktopShellWi
 
 describe("desktop window lifecycle", () => {
   it("uses splash-floor backgroundColor", () => {
-    expect(DESKTOP_WINDOW_DEFAULTS.backgroundColor).toBe("#f4f4f5");
+    expect(DESKTOP_WINDOW_DEFAULTS.backgroundColor).toBe("#151517");
   });
 
   it("focuses an existing primary window", () => {

@@ -297,6 +297,7 @@ export function WorkspacePickFlow({
         onClose={closeModal}
         closeLabel={t('close')}
         title={t('folderError.title')}
+        layout="inset"
         footer={(
           <>
             <Button variant="outline" className={css.modalAction} onClick={closeModal}>{t('cancel')}</Button>

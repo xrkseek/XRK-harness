@@ -11,6 +11,7 @@
     "perf:gate": "node --expose-gc ./scripts/perf-gate.mjs",
     "verify:client-ui-i18n": "node --experimental-strip-types ./scripts/verify-client-ui-i18n.ts",
     "verify:client-ui-i18n:desktop": "node --experimental-strip-types ./scripts/verify-client-ui-i18n.ts --desktop-only",
+    "verify:first-party-plug": "node --experimental-strip-types ./scripts/verify-first-party-plug.ts",
     "build": "node ./scripts/build.mjs",
     "test": "vitest run",
     "test:evals": "vitest run evals/golden",

@@ -16,9 +16,13 @@
  * subtrees already, so no anchor identity is lost.
  */
 
-import { memo } from 'react'
-import type { ComponentProps } from 'react'
-import { DisclosureRow, IconChecklistOutlineRegular } from '@xrkseek/client-ui-primitives'
+import { memo, useCallback } from 'react'
+import type { ComponentProps, MutableRefObject } from 'react'
+import {
+  DisclosureRow,
+  IconChecklistOutlineRegular,
+  useExpandScrollPreserve,
+} from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { FlowEntry, ProcessGroupSummary } from '../conversation-nodes/process-groups.ts'
 import {
@@ -207,7 +211,7 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   // Deferred collapse is "not settled yet" as far as the latch is concerned:
   // the run keeps its height until the next input arrives, then folds through
   // the ordinary path (above-reader compensation included).
-  const { rootRef, folded, toggle } = useFoldDriver({
+  const { rootRef: foldRootRef, folded, toggle } = useFoldDriver({
     closed: settled && !deferCollapse,
     foldAllowed: foldWhen !== 'never',
     // Mode split (the reader's own words: 本来就该折叠，新的工具卡片出现不要
@@ -224,6 +228,19 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
     writeScroll,
     onSettled: onFoldSettled,
   })
+  // Height growth is the sibling body (often remounting many tool rows), not
+  // the DisclosureRow header. Preserve on the group root so settle + atBottom
+  // clear see the real column growth; the header path alone left floor-follow
+  // free to lift the run the reader just opened.
+  const { rootRef: preserveRootRef, noteExpand } = useExpandScrollPreserve(!folded)
+  const setRootRef = useCallback((node: HTMLDivElement | null) => {
+    ;(foldRootRef as MutableRefObject<HTMLDivElement | null>).current = node
+    ;(preserveRootRef as MutableRefObject<HTMLDivElement | null>).current = node
+  }, [foldRootRef, preserveRootRef])
+  const onToggle = useCallback(() => {
+    if (folded) noteExpand()
+    toggle()
+  }, [folded, noteExpand, toggle])
   // Shimmer tracks work still in flight — independent of fold latch (manual
   // fold or `foldWhen: immediate` can hide the body while a tool still runs).
   //
@@ -281,7 +298,7 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
 
   return (
     <div
-      ref={rootRef}
+      ref={setRootRef}
       className={css.flowItem}
       data-process-group={entry.key}
       data-process-turn={entry.turn}
@@ -304,7 +321,8 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
         expandable
         expandOnRowClick
         keepContentWhenOpen
-        onToggle={toggle}
+        preserveScrollOnExpand={false}
+        onToggle={onToggle}
         titleClassName={titleClassName}
         collapsedContent={openSummary === undefined && liveActivity === undefined
           ? undefined

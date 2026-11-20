@@ -169,32 +169,41 @@
 }
 
 @media (max-width: 767px) {
-  /* True phone sheet: fill the viewport — max-height alone left half-empty
-     cards that still looked like "fullscreen" chrome. */
+  /* Phone: centered card (not a full-bleed / bottom sheet).
+     Keyboard is applied ONCE via padding-bottom (browser) or by Modal.tsx
+     mirroring the Flutter `#root` pin (APP). Dialog max-height must use the
+     already-shrunk flex area (`100%`) — never subtract --xrk-keyboard-inset
+     again or the card collapses under a double lift. */
   .root {
-    align-items: stretch;
-    justify-content: stretch;
-    padding: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    padding-bottom: max(
+      16px,
+      env(safe-area-inset-bottom, 0px),
+      var(--ds-safe-bottom, 0px),
+      var(--xrk-keyboard-inset, 0px)
+    );
+    box-sizing: border-box;
   }
 
   .dialog {
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    max-height: none;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    /* Android WebView often reports env(safe-area)=0; Flutter stamps --ds-safe-*. */
-    padding-top: max(env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px));
-    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px), var(--ds-safe-bottom, 0px));
+    width: min(420px, 100%);
+    height: auto;
+    max-height: min(85dvh, 100%);
+    border-radius: 20px;
+    border: 1px solid var(--dsw-alias-border-inverted);
+    padding-top: 0;
+    padding-bottom: 16px;
     box-sizing: border-box;
   }
 
   .content {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .body {
@@ -203,6 +212,7 @@
     margin-top: 12px;
     overflow-y: auto;
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .footer {
@@ -212,8 +222,7 @@
 
   .header {
     flex: none;
-    padding: 14px max(14px, env(safe-area-inset-right, 0px), var(--ds-safe-right, 0px)) 10px
-      max(20px, env(safe-area-inset-left, 0px), var(--ds-safe-left, 0px));
+    padding: 18px 14px 8px 20px;
   }
 
   .close {
@@ -229,17 +238,19 @@
     padding-right: max(20px, env(safe-area-inset-right, 0px), var(--ds-safe-right, 0px));
   }
 
-  /* Short confirms (regenerate / delete): bottom card, not a thunderous
-     full-screen sheet with a lonely paragraph and three squeezed buttons. */
+  /* Compact confirms (delete / regenerate): same centered card, tighter body. */
   .root[data-layout='inset'] {
-    align-items: flex-end;
-    justify-content: center;
-    padding: 12px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px), var(--ds-safe-bottom, 0px));
+    padding: 16px;
+    padding-bottom: max(
+      16px,
+      env(safe-area-inset-bottom, 0px),
+      var(--ds-safe-bottom, 0px),
+      var(--xrk-keyboard-inset, 0px)
+    );
   }
 
   .root[data-layout='inset'] .dialog {
-    width: 100%;
+    width: min(420px, 100%);
     height: auto;
     max-height: min(85dvh, 100%);
     border-radius: 20px;
@@ -276,7 +287,8 @@
 
   /* Direct footer actions (delete / rename): full-width touch targets.
      Nested rows (ResubmitConfirm `.actions`) keep their own stack rules. */
-  .root[data-layout='inset'] .footer > :global(button) {
+  .root[data-layout='inset'] .footer > :global(button),
+  .footer > :global(button) {
     flex: 1 1 calc(50% - 4px);
     min-width: min(100%, 140px);
     min-height: 44px;

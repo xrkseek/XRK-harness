@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.2',
+    date: '2026-11-20',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'XRK Plug + 表面地图；MCP 总/单台热启停；Git worktree 卡；DNS 私网与非回环绑定闸。',
+        en: 'XRK Plug + surface map; MCP master/per-server hot; Git worktree card; DNS-private and off-loopback bind gates.',
+      },
+      {
+        zh: '概况委派方 FLIP；排队改稿先落盘；选区翻译多源；手机键盘浮层 / 系统返回 / 打开方式进输入框。',
+        en: 'Overview delegate FLIP; queue edit flushes before steer; multi-provider selection translate; mobile IME overlays / system back / open-with into composer.',
+      },
+      {
+        zh: 'Desktop / 手机 APK 对齐 0.8.2。完整清单见 docs/releases/v0.8.2.md。',
+        en: 'Desktop / Android APK align to 0.8.2. Full list: docs/releases/v0.8.2.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.1',
     date: '2026-11-20',
     title: {

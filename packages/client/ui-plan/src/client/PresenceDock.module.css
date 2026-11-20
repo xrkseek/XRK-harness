@@ -37,6 +37,10 @@
   height: 48px;
   overflow: hidden;
   transform: translateY(-50%);
+  /* Seat width already eases; dock must follow or the chip snaps while the
+     reservation animates (reads as a jump on Overview open/close). */
+  transition: width var(--xrkh-sidebar-motion-duration, var(--ds-transition-duration-slow, 380ms))
+    var(--xrkh-sidebar-motion-ease, var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1)));
 }
 
 .dock :global([data-overview-presence]) {
@@ -82,35 +86,52 @@
   }
 }
 
-/* Phone chrome: icon-only circle between menu and 概况. */
+/* Icon-only circle: phone chrome seat, or mid-width desktop title-row. */
+.seat[data-icon-only] {
+  width: 36px;
+  height: 36px;
+}
+
 .seat[data-phone-dock] {
   position: relative;
   top: auto;
   left: auto;
   z-index: 1;
-  width: 36px;
-  height: 36px;
   transition: none;
 }
 
-.seat[data-phone-dock][data-phase='exit'],
-.seat[data-phone-dock][data-phase='gone'] {
+.seat[data-icon-only][data-phase='exit'],
+.seat[data-icon-only][data-phase='gone'] {
   width: 0;
   overflow: hidden;
   pointer-events: none;
+}
+
+.seat[data-icon-only] .dock {
+  width: 36px;
+  height: 36px;
+  overflow: visible;
 }
 
 .seat[data-phone-dock] .dock {
   position: static;
   top: auto;
   right: auto;
-  width: 36px;
-  height: 36px;
   transform: none;
-  overflow: visible;
 }
 
-.seat[data-phone-dock] .dock :global([data-overview-presence]) {
+.seat[data-icon-only]:not([data-phone-dock]) {
+  height: 0;
+}
+
+.seat[data-icon-only]:not([data-phone-dock]) .dock {
+  /* Keep absolute vertical centering from the title-row chip seat. */
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.seat[data-icon-only] .dock :global([data-overview-presence]) {
   width: 36px;
   height: 36px;
   padding: 0;
@@ -121,17 +142,30 @@
   box-shadow: 0 1px 2px color-mix(in srgb, var(--dsw-alias-text-primary) 8%, transparent);
 }
 
-.seat[data-phone-dock] .dock :global([data-presence-meta]) {
-  display: none;
+.dock :global([data-presence-meta]) {
+  max-width: 160px;
+  overflow: hidden;
+  transition:
+    opacity 160ms var(--ds-ease-out, ease),
+    max-width 220ms var(--xrkh-sidebar-motion-ease, var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1)));
 }
 
-.seat[data-phone-dock] .dock :global([data-overview-presence] button) {
+.seat[data-icon-only] .dock :global([data-presence-meta]) {
+  /* Fade + collapse instead of display:none so icon-only does not hard-cut. */
+  opacity: 0;
+  max-width: 0;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+.seat[data-icon-only] .dock :global([data-overview-presence] button) {
   width: 34px;
   height: 34px;
 }
 
-.seat[data-phone-dock][data-phase='enter'] .dock,
-.seat[data-phone-dock][data-phase='exit'] .dock {
+.seat[data-icon-only][data-phase='enter'] .dock,
+.seat[data-icon-only][data-phase='exit'] .dock {
   animation: none;
 }
 
@@ -152,7 +186,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .seat {
+  .seat,
+  .dock,
+  .dock :global([data-presence-meta]) {
     transition: none;
   }
 

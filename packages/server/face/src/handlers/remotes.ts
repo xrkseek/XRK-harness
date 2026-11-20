@@ -254,6 +254,18 @@ export const pluginInventorySetEnabled: FaceHandler = async (runtime, _rpcId, pa
   if (!entryId) {
     return { ok: false, error: { code: "invalid-payload", message: "entryId required" } };
   }
+  if (entryId.startsWith("mcp:")) {
+    const { setFaceMcpServerEnabled } = await import("../settings-credentials.js");
+    const result = await setFaceMcpServerEnabled(
+      runtime,
+      entryId.slice("mcp:".length),
+      enabled,
+    );
+    if (!result.ok) {
+      return { ok: false, error: { code: "refused", message: result.error } };
+    }
+    return { ok: true, value: { entryId, enabled } };
+  }
   const before = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   const result = setFacePluginInventoryEnabled(runtime, entryId, enabled);
   if (!result.ok) {

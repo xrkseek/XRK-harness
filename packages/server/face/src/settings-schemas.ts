@@ -1091,7 +1091,10 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "mcp",
       schema: FACE_MCP_SCHEMA,
-      base: { servers: [], allowConnect: false },
+      // Product default: master switch on so pasted servers hot-mount without
+      // an extra click. Policy `mcp.connect` is still deny until Host elevates
+      // from this flag (or XRK_MCP_ALLOW).
+      base: { servers: [], allowConnect: true },
       applies: "live",
     },
   ];

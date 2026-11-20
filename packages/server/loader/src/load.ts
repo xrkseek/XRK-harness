@@ -6,10 +6,14 @@ import type {
   BrandModelReasoning,
   ProtocolId,
 } from "@xrkseek/llm-registry";
+import type { PolicyRule } from "@xrkseek/policy";
+import type { PostHandler, PreHandler } from "@xrkseek/core-tools";
 import type {
   RegisteredPlugin,
   PluginPromptSection,
   PluginCommand,
+  PluginChannelDescriptor,
+  PluginTrustDisclosure,
   HostPublicHandlerFn,
   HostWireContext,
 } from "./types.js";
@@ -275,6 +279,125 @@ function asPromptSection(value: unknown, label: string): PluginPromptSection {
 
 const COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u;
 
+function asPolicyRule(value: unknown, label: string): PolicyRule {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label}: policy rule must be an object`);
+  }
+  const o = value as Record<string, unknown>;
+  if (typeof o.id !== "string" || !o.id.trim()) {
+    throw new Error(`${label}: policy rule id must be a non-empty string`);
+  }
+  if (typeof o.match !== "function") {
+    throw new Error(`${label}: policy rule match must be a function`);
+  }
+  return {
+    id: o.id.trim(),
+    match: o.match as PolicyRule["match"],
+  };
+}
+
+function asHooks(
+  value: unknown,
+  label: string,
+): NonNullable<RegisteredPlugin["hooks"]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label}: must be an object`);
+  }
+  const o = value as Record<string, unknown>;
+  let onPre: PreHandler[] | undefined;
+  let onPost: PostHandler[] | undefined;
+  if (o.onPre !== undefined) {
+    if (!Array.isArray(o.onPre)) {
+      throw new Error(`${label}.onPre must be an array`);
+    }
+    for (let i = 0; i < o.onPre.length; i += 1) {
+      if (typeof o.onPre[i] !== "function") {
+        throw new Error(`${label}.onPre[${i}] must be a function`);
+      }
+    }
+    onPre = o.onPre as PreHandler[];
+  }
+  if (o.onPost !== undefined) {
+    if (!Array.isArray(o.onPost)) {
+      throw new Error(`${label}.onPost must be an array`);
+    }
+    for (let i = 0; i < o.onPost.length; i += 1) {
+      if (typeof o.onPost[i] !== "function") {
+        throw new Error(`${label}.onPost[${i}] must be a function`);
+      }
+    }
+    onPost = o.onPost as PostHandler[];
+  }
+  if (!onPre && !onPost) {
+    throw new Error(`${label}: expected onPre and/or onPost`);
+  }
+  return {
+    ...(onPre ? { onPre } : {}),
+    ...(onPost ? { onPost } : {}),
+  };
+}
+
+function asChannelDescriptor(
+  value: unknown,
+  label: string,
+): PluginChannelDescriptor {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label}: channel must be an object`);
+  }
+  const o = value as Record<string, unknown>;
+  if (typeof o.channelId !== "string" || !o.channelId.trim()) {
+    throw new Error(`${label}: channelId must be a non-empty string`);
+  }
+  if (o.displayName !== undefined && typeof o.displayName !== "string") {
+    throw new Error(`${label}: displayName must be a string`);
+  }
+  return {
+    channelId: o.channelId.trim(),
+    ...(typeof o.displayName === "string" && o.displayName.trim()
+      ? { displayName: o.displayName.trim() }
+      : {}),
+  };
+}
+
+function asTrustDisclosure(
+  value: unknown,
+  label: string,
+): PluginTrustDisclosure {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label}: must be an object`);
+  }
+  const o = value as Record<string, unknown>;
+  let note: string | undefined;
+  if (o.note !== undefined) {
+    if (typeof o.note !== "string") {
+      throw new Error(`${label}.note must be a string`);
+    }
+    const trimmed = o.note.trim();
+    if (trimmed) note = trimmed;
+  }
+  let capabilities: string[] | undefined;
+  if (o.capabilities !== undefined) {
+    if (!Array.isArray(o.capabilities)) {
+      throw new Error(`${label}.capabilities must be an array`);
+    }
+    capabilities = [];
+    for (let i = 0; i < o.capabilities.length; i += 1) {
+      const cap = o.capabilities[i];
+      if (typeof cap !== "string" || !cap.trim()) {
+        throw new Error(`${label}.capabilities[${i}] must be a non-empty string`);
+      }
+      capabilities.push(cap.trim());
+    }
+  }
+  if (!note && (!capabilities || capabilities.length === 0)) {
+    throw new Error(`${label}: expected note and/or capabilities`);
+  }
+  return {
+    ...(note ? { note } : {}),
+    ...(capabilities && capabilities.length > 0 ? { capabilities } : {}),
+  };
+}
+
 function asCommand(value: unknown, label: string): PluginCommand {
   if (!value || typeof value !== "object") {
     throw new Error(`${label}: command must be an object`);
@@ -370,6 +493,38 @@ function asPlugin(value: unknown, label: string): RegisteredPlugin {
     ) => HostPublicHandlerFn;
   }
 
+  // Disk-loaded plugins previously dropped these fields in asPlugin — keep
+  // policy / hooks / channels so gold samples and real plugins wire correctly.
+  let policyRules: PolicyRule[] | undefined;
+  if (o.policyRules !== undefined) {
+    if (!Array.isArray(o.policyRules)) {
+      throw new Error(`${label}: policyRules must be an array`);
+    }
+    policyRules = o.policyRules.map((r, i) =>
+      asPolicyRule(r, `${label}: policyRules[${i}]`),
+    );
+  }
+
+  let hooks: RegisteredPlugin["hooks"] | undefined;
+  if (o.hooks !== undefined) {
+    hooks = asHooks(o.hooks, `${label}: hooks`);
+  }
+
+  let channels: PluginChannelDescriptor[] | undefined;
+  if (o.channels !== undefined) {
+    if (!Array.isArray(o.channels)) {
+      throw new Error(`${label}: channels must be an array`);
+    }
+    channels = o.channels.map((c, i) =>
+      asChannelDescriptor(c, `${label}: channels[${i}]`),
+    );
+  }
+
+  let trust: PluginTrustDisclosure | undefined;
+  if (o.trust !== undefined) {
+    trust = asTrustDisclosure(o.trust, `${label}: trust`);
+  }
+
   const base: RegisteredPlugin = {
     id: o.id,
     kind: o.kind,
@@ -377,6 +532,10 @@ function asPlugin(value: unknown, label: string): RegisteredPlugin {
     ...(promptSections ? { promptSections } : {}),
     ...(commands ? { commands } : {}),
     ...(llmBrands ? { llmBrands } : {}),
+    ...(policyRules ? { policyRules } : {}),
+    ...(hooks ? { hooks } : {}),
+    ...(channels ? { channels } : {}),
+    ...(trust ? { trust } : {}),
     ...(createPublicHandler ? { createPublicHandler } : {}),
   };
   if (typeof dispose === "function") {
@@ -466,13 +625,29 @@ export async function loadPluginModule(
 }
 
 export function stubFromManifest(
-  manifest: Pick<PluginManifest, "id" | "kind" | "required">,
+  manifest: Pick<PluginManifest, "id" | "kind" | "required" | "trust">,
 ): RegisteredPlugin {
   return {
     id: manifest.id,
     kind: manifest.kind,
     ...(manifest.required === true ? { required: true as const } : {}),
+    ...(manifest.trust ? { trust: manifest.trust } : {}),
   };
+}
+
+function withManifestTrust(
+  plugin: RegisteredPlugin,
+  manifest: PluginManifest,
+): RegisteredPlugin {
+  let next = plugin;
+  if (manifest.required === true && plugin.required !== true) {
+    next = { ...next, required: true };
+  }
+  // Manifest trust wins when the module omit it (author disclosure lives on disk).
+  if (manifest.trust && !plugin.trust) {
+    next = { ...next, trust: manifest.trust };
+  }
+  return next;
 }
 
 export async function loadDiscoveryHit(
@@ -499,8 +674,5 @@ export async function loadDiscoveryHit(
       `plugin kind mismatch: manifest=${hit.manifest.kind} module=${plugin.kind}`,
     );
   }
-  if (hit.manifest.required === true && plugin.required !== true) {
-    return { ...plugin, required: true };
-  }
-  return plugin;
+  return withManifestTrust(plugin, hit.manifest);
 }

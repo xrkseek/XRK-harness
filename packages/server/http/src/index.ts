@@ -4,6 +4,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
+import { timingSafeTokenEqual } from "@xrkseek/im-gateway-contract";
 import { dispatchHttpServerFetch } from "./fetch-dispatch.js";
 import type { SessionEvent, PromptDelivery } from "@xrkseek/protocol";
 import { parsePromptDelivery } from "@xrkseek/protocol";
@@ -321,7 +322,7 @@ export function createHttpServer(
         : undefined;
     const key =
       bearer ?? (typeof headerKey === "string" ? headerKey : undefined);
-    return key === options.apiKey;
+    return timingSafeTokenEqual(key, options.apiKey);
   };
 
   const checkRate = (req: IncomingMessage): boolean => {

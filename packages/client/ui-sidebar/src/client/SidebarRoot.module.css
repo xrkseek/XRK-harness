@@ -1,10 +1,7 @@
 /* Sidebar column (figma 133:7629): vertical stack, padding 12/6, sidebar
-   fill + 1px right border painted by the layout column. Collapse is a
-   slide + crossfade, not a morph: the content holds its frozen expanded
-   layout (inline width set by the component) and fades in place (.fading)
-   while the sliding column (AppFrame grid tracks) clips it; the rail layout
-   (.collapsed) only applies after the fade settles, so nothing reflows
-   mid-slide. */
+   fill + 1px right border painted by the layout column. Labeled vs rail is
+   discrete (.collapsed flips with the owner width) — never freeze the wide
+   tree inside a sub-labeled track (clipped「新/设」). */
 
 .root {
   --dsh-sidebar-inline-padding: 12px;
@@ -42,14 +39,7 @@
   --dsh-scrollbar-thumb-hover: transparent;
 }
 
-/* Collapse phase 1: the whole frozen-width content fades out in place over
-   150ms; at settle the children unmount/snap to the rail layout. */
-.fading > * {
-  opacity: 0;
-  transition: opacity 150ms var(--ds-ease-in-out);
-}
-
-/* Wide-only content fades back in on expand remount. */
+/* Wide-only content fades in on expand remount. */
 .wide {
   animation: wide-in 200ms var(--ds-ease-in-out);
 }
@@ -58,11 +48,8 @@
   from { opacity: 0; }
 }
 
-/* At the 150ms rail settle, the four upper controls enter from the former
-   rail right edge over the remaining 150ms of the AppFrame track transition.
-   The bottom-pinned settings seat shares their opacity timeline but stays
-   horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
-   render stays static. */
+/* Live collapse: upper controls enter from the former rail right edge.
+   Settings / foot only fade. Cold collapsed render stays static (no .railIn). */
 .railIn .iconButton,
 .railIn .newSession,
 .railIn .utilityList,
@@ -357,7 +344,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .wide,
-  .fading > *,
   .railIn .iconButton,
   .railIn .newSession,
   .railIn .footArea,

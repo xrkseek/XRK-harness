@@ -142,6 +142,17 @@ runNode(path.join(ROOT, "node_modules/eslint/bin/eslint.js"), [
   );
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
+{
+  const r = spawnSync(
+    NODE,
+    [
+      "--experimental-strip-types",
+      path.join(ROOT, "scripts/verify-first-party-plug.ts"),
+    ],
+    { stdio: "inherit", cwd: ROOT, env: childEnv() },
+  );
+  if (r.status !== 0) process.exit(r.status ?? 1);
+}
 runNode(path.join(ROOT, "node_modules/vitest/vitest.mjs"), ["run"]);
 runNode(path.join(ROOT, "node_modules/vitest/vitest.mjs"), [
   "run",

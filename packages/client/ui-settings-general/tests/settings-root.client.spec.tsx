@@ -172,10 +172,11 @@ function openPanel() {
 }
 
 describe('SettingsRoot trigger', () => {
-  it('renders the trigger seat content as the accessible name (no aria-label of its own)', () => {
+  it('names the Settings trigger (aria-label) even when the seat paints visible text', () => {
     const { renderSlot } = mount()
     const trigger = screen.getByRole('button', { name: 'Settings' })
-    expect(trigger.hasAttribute('aria-label')).toBe(false)
+    // Always label: English collapse / icon-only seats must stay named.
+    expect(trigger.getAttribute('aria-label')).toBe('Settings')
     expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: true })
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(trigger)
@@ -192,6 +193,14 @@ describe('SettingsRoot trigger', () => {
     mount({ wide: false })
     const trigger = screen.getByRole('button', { name: 'Settings' })
     expect(trigger.getAttribute('aria-label')).toBe('Settings')
+  })
+
+  it('stamps the rail class on the trigger (keeps max-width from crushing the 36px box)', () => {
+    mount({ wide: false })
+    const trigger = screen.getByRole('button', { name: 'Settings' })
+    // Wide foot uses max-width: calc(100% - 4.5rem); without .rail that clamps
+    // to 0 in the 36px column and left-aligns the overflowing gear.
+    expect(trigger.className.split(/\s+/).some((c) => /rail/i.test(c))).toBe(true)
   })
 
   it('inerts #root while the settings dialog is open', () => {
@@ -373,6 +382,43 @@ describe('SettingsPanel close paths', () => {
     openPanel()
     fireEvent.keyDown(document, { key: 'Enter' })
     expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('Escape still closes when a non-modal role=dialog popover is also mounted', () => {
+    // Phone Face keeps StatsLine / ContextMeter / BossStatusSheet as
+    // role=dialog without aria-modal. The old guard counted every dialog and
+    // swallowed Escape — Android back then needed a second press to dismiss.
+    const popover = document.createElement('div')
+    popover.setAttribute('role', 'dialog')
+    popover.setAttribute('aria-modal', 'false')
+    popover.setAttribute('aria-label', 'stats')
+    document.body.append(popover)
+    try {
+      mount()
+      openPanel()
+      expect(document.querySelectorAll('[role="dialog"]').length).toBeGreaterThan(1)
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(document.querySelector('[data-shortcut-modal="settings"]')).toBeNull()
+      expect(popover.isConnected).toBe(true)
+    } finally {
+      popover.remove()
+    }
+  })
+
+  it('Escape defers while another aria-modal dialog is open', () => {
+    mount()
+    openPanel()
+    const nested = document.createElement('div')
+    nested.setAttribute('role', 'dialog')
+    nested.setAttribute('aria-modal', 'true')
+    nested.setAttribute('aria-label', 'Confirm delete')
+    document.body.append(nested)
+    try {
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(document.querySelector('[data-shortcut-modal="settings"]')).not.toBeNull()
+    } finally {
+      nested.remove()
+    }
   })
 
   it('lands focus on the close button when the dialog opens', () => {

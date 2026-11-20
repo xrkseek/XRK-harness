@@ -74,6 +74,63 @@ describe('Modal focus management', () => {
     expect(document.activeElement?.getAttribute('role')).toBe('dialog')
   })
 
+  it('marks short confirms with data-layout=inset (phone contract)', () => {
+    // Callers of delete / error / retry dialogs must pass layout="inset".
+    // Phone CSS then centers the card and keyboard-lifts it — never a
+    // full-bleed sheet or a bottom-glued system confirm.
+    render(
+      <Modal open onClose={() => {}} title="Delete" closeLabel="Close" layout="inset">
+        <p>Remove this workspace?</p>
+      </Modal>,
+    )
+    const root = document.querySelector('[role="dialog"]')?.parentElement
+    expect(root?.getAttribute('data-layout')).toBe('inset')
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+  })
+
+  it('leaves form dialogs on the default layout (no data-layout stamp)', () => {
+    render(
+      <Modal open onClose={() => {}} title="Create" closeLabel="Close">
+        <input aria-label="name" />
+      </Modal>,
+    )
+    const root = document.querySelector('[role="dialog"]')?.parentElement
+    expect(root?.getAttribute('data-layout')).toBeNull()
+  })
+
+  it('mirrors the Flutter #root pin onto body-portaled overlays', () => {
+    // APP shell shortens #root and zeroes --xrk-keyboard-inset. Without this
+    // sync, rename / create dialogs sit under the IME.
+    const appRoot = document.createElement('div')
+    appRoot.id = 'root'
+    Object.defineProperty(appRoot, 'getBoundingClientRect', {
+      value: () => ({
+        top: 0, left: 0, right: 390, bottom: 500,
+        width: 390, height: 500, x: 0, y: 0, toJSON: () => ({}),
+      }),
+    })
+    document.body.appendChild(appRoot)
+    document.documentElement.setAttribute('data-xrk-shell-keyboard', '')
+    const prevInner = window.innerHeight
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+
+    try {
+      render(
+        <Modal open onClose={() => {}} title="Rename" closeLabel="Close" layout="inset">
+          <input aria-label="name" />
+        </Modal>,
+      )
+      const overlay = document.querySelector('[role="dialog"]')?.parentElement as HTMLElement
+      expect(overlay.style.bottom).toBe('300px')
+      expect(overlay.style.top).toBe('0px')
+    } finally {
+      document.documentElement.removeAttribute('data-xrk-shell-keyboard')
+      appRoot.remove()
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: prevInner })
+    }
+  })
+
   it('restores focus to the trigger on close', () => {
     const trigger = opener()
     trigger.focus()

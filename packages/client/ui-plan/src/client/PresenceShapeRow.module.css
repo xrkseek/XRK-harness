@@ -27,6 +27,8 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
+  /* Master Switch tab target: scroll clear of Settings header (same as PluginCard). */
+  scroll-margin-block: 24px;
 }
 
 .headerMain {
@@ -43,6 +45,16 @@
   align-items: center;
   gap: 14px;
   padding: 0;
+}
+
+.chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 0.16s;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
 }
 
 .headerMain:focus-visible {
@@ -96,18 +108,6 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.liveBanner {
-  margin: 0 0 4px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, var(--dsw-alias-border-l2));
-  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, var(--dsw-alias-bg-layer-1));
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 550;
-  color: var(--dsw-alias-label-primary);
 }
 
 .hint {

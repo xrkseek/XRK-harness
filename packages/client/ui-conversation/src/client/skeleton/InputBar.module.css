@@ -12,6 +12,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   /* Side pads ride the shared clearance (figma Input_Bottom drew L32/R32/B8;
      the sides narrow with the shared width axis); the bottom gradient mask
      is owned by the chat scroller. No top pad: the composer stack's gap owns
@@ -39,7 +43,7 @@
 
 .notice {
   width: 100%;
-  max-width: var(--dsh-composer-card-max-width);
+  max-width: min(var(--dsh-composer-card-max-width), 100%);
   margin-bottom: 6px;
   padding: 4px 8px;
   border-radius: 8px;
@@ -76,14 +80,18 @@
   position: relative; /* overlay anchor positioning context */
   display: flex;
   flex-direction: column;
-  /* figma Input 75:8208: 12px between the text area and the button row; 10px
-     top pad on the card before .InputText. */
-  gap: 12px;
+  /* Resting gap sits a step under the figma 12: empty drafts looked puffy
+     once the send-safe row inset grew. Narrow cards tighten further below. */
+  gap: 10px;
   width: 100%;
-  max-width: var(--dsh-composer-card-max-width);
+  min-width: 0;
+  max-width: min(var(--dsh-composer-card-max-width), 100%);
   padding-top: 10px;
+  /* Do NOT overflow:hidden here — command/model menus anchor above the card
+     (bottom: 100%) and would clip. Row padding keeps the send disc inside
+     the 22px radius instead. */
   /* Input stroke: black/0.10 light, white/0.06 dark (figma darkmode note says
-     the input border is one notch weaker than buttons) 閿?exactly the
+     the input border is one notch weaker than buttons) — exactly the
      l2-darkmode-thin pair. Fill: the input surface token (elevated in dark). */
   border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
   border-radius: 22px;
@@ -290,11 +298,10 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  /* 2px moved from the bottom pad to the top: the whole control row sits 2px
-     lower in the card (it read too high against the textarea) while the card
-     height and the controls' own centering stay untouched. */
-  padding: 2px 8px 6px;
+  gap: 10px;
+  /* Optical inset: 10px keeps the 34px send disc inside R22 (√(12²+12²)≈17
+     < 22) without the dead air a flat 12px pad left under the stroke. */
+  padding: 0 10px 10px;
   min-width: 0;
   /* Size container so the chips inside can collapse to icon-only when the
      card runs out of row width (PermissionSelect @container rule). Anonymous
@@ -323,7 +330,8 @@
 }
 
 .trailing {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   /* Wrap keeps the left mode chips and the right controls apart when the card
      runs out of row width: the trailing group (model + send) moves to its own
      line instead of the left group shrinking until its chip overlaps the
@@ -331,6 +339,22 @@
      wrapped line; on a single line space-between already pins it right. */
   margin-left: auto;
   gap: 12px;
+}
+
+/* Squeezed row: tighten descendant chrome only — a size container cannot
+   restyle its own gap/padding via @container against itself. */
+@container (max-width: 420px) {
+  .tools {
+    gap: 8px;
+  }
+
+  .modes {
+    gap: 6px;
+  }
+
+  .trailing {
+    gap: 6px;
+  }
 }
 
 /* Attach circle (figma + control): 28px, selector fill, primary glyph. */
@@ -394,7 +418,7 @@
 }
 
 /* Primary send (figma IconButton 34:10465): 34px circle, #3964FE light /
-   #679EFE dark 閿?the info-fill pair (500閿?00), NOT button-primary (ink);
+   #679EFE dark — the info-fill pair (500–600), NOT button-primary (ink);
    white glyph; empty text = 0.4 opacity. */
 .primary {
   display: grid;
@@ -410,10 +434,8 @@
   color: #fff;
   cursor: pointer;
   transition: background-color 100ms ease;
-  /* Opts out of the row's 2px downward shift (.row top pad): the send circle
-     keeps its original seat while the smaller chips sit lower. Transform, not
-     margin, so flex centering math is untouched. */
-  transform: translateY(-2px);
+  /* No translateY: a -2px lift with tight bottom pad shoved the disc past the
+     card's 22px radius under squeeze (clipped send). Row padding owns the seat. */
 }
 
 .primary:hover:not(:disabled) {
@@ -427,7 +449,7 @@
 
 /* A take in flight: the mic seat swaps to a stop square and its fill turns
    red, so "recording now" reads at a glance beside the blue send circle.
-   Animates box-shadow, never transform — `.primary` spends that on its seat. */
+   Pulse via box-shadow only — keep transform free for seat tweaks. */
 .primary.recording {
   background: var(--dsw-alias-button-danger-fill, #d93f3f);
   color: #fff;
@@ -503,7 +525,8 @@
     flex-wrap: nowrap;
     align-items: center;
     gap: 8px;
-    padding: 4px 6px 8px;
+    /* 40px send + R22: 10px inset keeps the disc inside without puffing the card. */
+    padding: 2px 10px 10px;
   }
 
   .tools {

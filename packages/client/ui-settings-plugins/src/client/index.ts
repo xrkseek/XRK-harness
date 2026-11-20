@@ -44,6 +44,7 @@ import { MemoryEmbedCard } from './MemoryEmbedCard.tsx'
 import { ProcessChannelsCard } from './ProcessChannelsCard.tsx'
 import { SandboxCard } from './SandboxCard.tsx'
 import { GitAttributionCard } from './GitAttributionCard.tsx'
+import { GitWorktreesCard } from './GitWorktreesCard.tsx'
 import { TelemetryCard } from './TelemetryCard.tsx'
 import { VideoGenCard } from './VideoGenCard.tsx'
 import { VideoAnalyzeCard } from './VideoAnalyzeCard.tsx'
@@ -86,6 +87,7 @@ import {
   GIT_ATTRIBUTION_NS,
   GitAttributionCardController,
 } from './git-attribution-card-controller.ts'
+import { GitWorktreesCardController } from './git-worktrees-card-controller.ts'
 import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
 import { VIDEO_ANALYZE_NS, VideoAnalyzeCardController, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
@@ -514,7 +516,30 @@ export function apply(ctx: ClientContext): void {
     }, component as never))
   }
   // Stable Plugins order (ui-presence registers at 10 from ui-plan).
-  pluginCard(MCP_NS, 20, () => mcp.inject(), McpCard)
+  // Common / daily: MCP + worktree next to presence; rarer tools further down.
+  pluginCard(MCP_NS, 12, () => mcp.inject(), McpCard)
+  const gitWorktrees = new GitWorktreesCardController({
+    list: async () => {
+      const result = await ctx.remote.pluginInventory.list()
+      return result
+    },
+    setEnabled: async (entryId, enabled) => {
+      const result = await ctx.remote.pluginInventory.setEnabled(entryId, enabled)
+      return result
+    },
+  })
+  ctx.effect(() => () => { gitWorktrees.dispose() }, 'ui-settings-plugins: git-worktrees')
+  ctx.effect(
+    () => ctx.remote.$on('settings/document-updated', () => { gitWorktrees.face.refresh() }),
+    'ui-settings-plugins: git-worktrees refresh',
+  )
+  ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
+    name: 'settings.plugin.item',
+    key: 'git-worktrees',
+    order: 14,
+    locale: NS,
+    inject: () => gitWorktrees.face,
+  }, GitWorktreesCard))
   pluginCard(WEB_SEARCH_NS, 30, () => webSearch.inject(), WebSearchCard)
   pluginCard(BROWSER_NS, 40, () => browser.inject(), BrowserCard)
   pluginCard(COMPUTER_USE_NS, 50, () => computerUse.inject(), ComputerUseCard)

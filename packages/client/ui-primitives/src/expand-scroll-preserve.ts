@@ -109,8 +109,15 @@ export function cancelExpandPreserve(id?: number | null): void {
   suppressUntil = Math.min(suppressUntil, performance.now())
 }
 
-/** Bind begin/settle to a controlled `open` flag — one path for every disclosure. */
-export function useExpandScrollPreserve(open: boolean): {
+/**
+ * Bind begin/settle to a controlled `open` flag — one path for every disclosure.
+ * Pass `enabled: false` when a parent owns preserve on a shared root (process
+ * group) so this hook neither begins nor cancels the module token.
+ */
+export function useExpandScrollPreserve(
+  open: boolean,
+  enabled = true,
+): {
   readonly rootRef: RefObject<HTMLDivElement | null>
   /** Call immediately before flipping closed → open. */
   readonly noteExpand: () => void
@@ -119,12 +126,14 @@ export function useExpandScrollPreserve(open: boolean): {
   const preserveIdRef = useRef<number | null>(null)
 
   const noteExpand = (): void => {
+    if (!enabled) return
     const root = rootRef.current
     if (root === null) return
     preserveIdRef.current = beginExpandPreserve(root)
   }
 
   useLayoutEffect(() => {
+    if (!enabled) return
     if (!open) {
       const id = preserveIdRef.current
       preserveIdRef.current = null
@@ -140,15 +149,18 @@ export function useExpandScrollPreserve(open: boolean): {
     // ChatView floor-follow for the rest of the session.
     settleExpandPreserve(id)
     preserveIdRef.current = null
-  }, [open])
+  }, [open, enabled])
 
   // noteExpand without a following open=true (unmount mid-gesture) must not
   // leave module `pending` latched for the rest of the session.
-  useLayoutEffect(() => () => {
-    const id = preserveIdRef.current
-    preserveIdRef.current = null
-    if (id !== null) cancelExpandPreserve(id)
-  }, [])
+  useLayoutEffect(() => {
+    if (!enabled) return
+    return () => {
+      const id = preserveIdRef.current
+      preserveIdRef.current = null
+      if (id !== null) cancelExpandPreserve(id)
+    }
+  }, [enabled])
 
   return { rootRef, noteExpand }
 }

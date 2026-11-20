@@ -5,12 +5,14 @@
 .root {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  max-width: var(--dsh-chat-content-width);
+  gap: 10px;
+  /* Match the input card cap (content + 32) so the pills sit under the
+     capsule, not a narrower measure that floated mid-air beside it. */
+  max-width: min(var(--dsh-composer-card-max-width), 100%);
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
-  padding: 4px calc(var(--dsh-composer-side-clearance) + 16px) 0px;
+  padding: 2px var(--dsh-composer-side-clearance, 16px) 2px;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
 }
@@ -70,7 +72,7 @@ button.pill[aria-expanded='true'] {
 @media (max-width: 767px) {
   .root {
     gap: 6px;
-    padding: 0 calc(var(--dsh-composer-side-clearance) + 8px);
+    padding: 0 var(--dsh-composer-side-clearance, 10px) 2px;
     font-size: 12px;
     line-height: 18px;
   }

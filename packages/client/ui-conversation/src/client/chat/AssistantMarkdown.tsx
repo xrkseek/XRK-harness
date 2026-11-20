@@ -43,6 +43,13 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   // per render would rebuild MarkdownText's component table every chunk.
   const codeLabels = useMemo(() => ({ copyLabel: t('copy'), copiedLabel: t('copied') }), [t])
   const last = blocks.length - 1
+  // Compacted streams are often [reasoning, text, …]. The Think row must keep
+  // live chrome while the step streams even after a text tail lands — `i ===
+  // last` froze the collapsed peek on the first line mid-turn.
+  let lastReasoningIndex = -1
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i]?.kind === 'reasoning') lastReasoningIndex = i
+  }
   // Tool-call heads render as tool rows in the chat view's grouping pass, so
   // a node that is only those heads (or empty) would paint an empty root
   // between tool groups — skip the shell unless something visible remains.
@@ -60,7 +67,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
           <MarkdownText
             key={i}
             text={block.text}
-            streaming={streaming}
+            streaming={streaming && i === last}
             codeLabels={codeLabels}
             fileMentions={mentions}
           />,
@@ -71,7 +78,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
           <ReasoningRow
             key={i}
             text={block.text}
-            running={streaming && i === last}
+            running={streaming && i === lastReasoningIndex}
             persistKey={thinkPersistKey === undefined ? undefined : `${thinkPersistKey}:${i}`}
             t={t}
           />,

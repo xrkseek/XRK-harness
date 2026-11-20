@@ -1,0 +1,20 @@
+{
+  "name": "example-shell-pet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "XRK Plug gold sample: header utilities pet chip",
+  "type": "module",
+  "exports": {
+    "./client": "./lib/client.js"
+  },
+  "xrk": {
+    "client": {
+      "inject": [
+        "@xrkseek/client-runtime",
+        "@xrkseek/client-ui-slots",
+        "@xrkseek/client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  }
+}

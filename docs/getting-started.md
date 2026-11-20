@@ -157,7 +157,7 @@ Desktop Host **只听回环**（ADR-0008）。需要手机同 Wi‑Fi 访问，�
 
 ## MCP（可选）
 
-默认 **deny**。启用：壳内 **设置 → 插件 → MCP**（勾选允许连接并保存）。无头/CI 才用 `XRK_MCP_ALLOW=1`。见 [modules/mcp.md](./modules/mcp.md)。
+默认 **deny**。启用：壳内 **设置 → 插件 → MCP**（打开卡片头总开关并保存；粘贴服务器 JSON）。单台启停在 **设置 → 插件 → 插件列表** 的 `mcp:*` 行。无头/CI 才用 `XRK_MCP_ALLOW=1`。见 [modules/mcp.md](./modules/mcp.md)。
 
 ## 社区 client 插件（可选）
 
@@ -355,7 +355,7 @@ Desktop Host **listens on loopback only** (ADR-0008). To reach it from a phone o
 
 ## MCP (optional)
 
-Default is **deny**. Enable in-shell: **Settings → Plugins → MCP** (allow connect and save). Use `XRK_MCP_ALLOW=1` only for headless/CI. See [modules/mcp.md](./modules/mcp.md).
+Default is **deny**. Enable in-shell: **Settings → Plugins → MCP** (turn on the card-header master switch and save; paste server JSON). Per-server on/off is on **Settings → Plugins → Plugin list** `mcp:*` rows. Use `XRK_MCP_ALLOW=1` only for headless/CI. See [modules/mcp.md](./modules/mcp.md).
 
 ## Community client plugins (optional)
 

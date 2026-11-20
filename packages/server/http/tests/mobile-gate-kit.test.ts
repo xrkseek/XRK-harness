@@ -65,6 +65,16 @@ describe("mobile-gate-kit", () => {
     } as import("node:http").IncomingMessage;
     expect(effectiveRequestHost(proxyLan, true)).toBe("10.205.40.186");
     expect(effectiveRequestHost(proxyLan, false)).toBe("127.0.0.1");
+
+    // Remote TCP peer + spoofed Host:127 must not unlock the loopback free pass.
+    const remoteSpoofedLoopback = {
+      headers: { host: "127.0.0.1:8787" },
+      socket: { remoteAddress: "203.0.113.9" },
+    } as import("node:http").IncomingMessage;
+    expect(effectiveRequestHost(remoteSpoofedLoopback)).toBe("0.0.0.0");
+    expect(classifyRequestHost(effectiveRequestHost(remoteSpoofedLoopback))).toBe(
+      "wan",
+    );
   });
 
   it("exempts health and mobile-access surfaces", () => {

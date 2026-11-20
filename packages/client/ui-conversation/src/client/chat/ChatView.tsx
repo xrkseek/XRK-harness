@@ -32,6 +32,7 @@ import {
   isExpandFollowSuppressed,
   Modal,
   registerExpandScrollWriter,
+  SHELL_KEYBOARD_ATTR,
 } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble, previewAttachmentsOf } from './MessageItem.tsx'
@@ -452,10 +453,11 @@ function pendingWithdrawId(input: PendingChatInput): QueuedMessage['id'] | undef
 }
 
 function pendingInputContent(input: PendingChatInput): readonly unknown[] {
-  if (input.kind === 'echo') {
-    return input.submission.text === '' ? [] : [{ type: 'text', text: input.submission.text }]
-  }
-  return input.item.content
+  // Host steer rows are authoritative for body text. Echo-only rows (pre-admit
+  // / FIFO transcript) still paint from the local submission — Session patches
+  // that text on accepted queue edit so it cannot lag the rewrite.
+  if (input.kind === 'steer') return input.item.content
+  return input.submission.text === '' ? [] : [{ type: 'text', text: input.submission.text }]
 }
 
 /** Shared empty tail so an idle flow keeps one stable `pendingInputs` identity. */
@@ -832,7 +834,12 @@ export function ChatView({
       const submission = local.get(rpcId)
       if (submission !== undefined) {
         consumed.add(rpcId)
-        pending.push({ kind: 'echo', submission, itemId: item.id })
+        // Prefer Host queue text when the mirror already advanced (edit rewrite /
+        // steer republish) but the local echo patch has not landed yet.
+        const aligned = submission.text === item.text
+          ? submission
+          : { ...submission, text: item.text }
+        pending.push({ kind: 'echo', submission: aligned, itemId: item.id })
         continue
       }
       if (localIds.has(rpcId)) continue
@@ -1107,7 +1114,10 @@ export function ChatView({
       const landedEarlier = jumpLandedRef.current
       jumpLandedRef.current = false
       anchorRef.current = null
-      if (!landedEarlier || held?.key === item.anchor.key) {
+      // Re-land unless a mid-land already parked on a *different* row (reader
+      // moved the paging anchor). held=null after a busy-flip must still land:
+      // that clear is not a reader move.
+      if (!landedEarlier || held === null || held.key === item.anchor.key) {
         landOnRowRef.current(local, el, row, pending.turn)
       }
       return true
@@ -1326,7 +1336,8 @@ export function ChatView({
   // above — do not also chase CSS inset / MutationObserver (jank + double lift).
   useEffect(() => {
     const root = document.documentElement
-    if (root.hasAttribute('data-xrk-shell-keyboard')) return
+    // APP: Flutter owns `#root` pin — don't chase visualViewport (double lift).
+    if (root.hasAttribute(SHELL_KEYBOARD_ATTR)) return
     const readInset = (): number => {
       const vv = window.visualViewport
       return vv ? keyboardInsetPx(window.innerHeight, vv.height, vv.offsetTop) : 0
@@ -1335,7 +1346,7 @@ export function ChatView({
     let raf = 0
     const sync = (): void => {
       raf = 0
-      if (root.hasAttribute('data-xrk-shell-keyboard')) return
+      if (root.hasAttribute(SHELL_KEYBOARD_ATTR)) return
       const inset = readInset()
       const delta = inset - prevInset
       prevInset = inset
@@ -1375,9 +1386,10 @@ export function ChatView({
 
   // A failed/empty page leaves the head unchanged. Once the request leaves
   // its busy state there is no future prepend for the saved anchor to own.
-  // (A pending jump re-arms its own anchor in the settle/retry path below.)
+  // Keep the anchor while a turn-jump is armed: clearing it here made settle
+  // see landedEarlier + held=null and skip the final landOnRow.
   useEffect(() => {
-    if (!loadingOlder) anchorRef.current = null
+    if (!loadingOlder && pendingJumpRef.current === null) anchorRef.current = null
   }, [loadingOlder])
 
   // Jump settlement: every loadThrough completion bumps the tick after its
@@ -1815,6 +1827,7 @@ function FileOpenErrorDialog({
       closeLabel={t('close')}
       title={t(isFolderOpenPath(path) ? 'fileOpen.folderTitle' : 'fileOpen.title')}
       description={`${message}\n\n${path}`}
+      layout="inset"
       footer={(
         <>
           <Button variant="outline" className={css.modalAction} onClick={onClose}>

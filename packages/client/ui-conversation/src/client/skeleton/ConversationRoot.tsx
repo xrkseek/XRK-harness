@@ -93,13 +93,25 @@ export function clearWidthPreferenceCache(): void {
 }
 
 /** Resolves the content width the CSS axis would show for a column width.
+ * Exported for unit coverage of the squeeze clamp (four-pane / phone).
  * @param columnWidth - the conversation column's rendered width in px.
  * @param preference - the dragged preference, or null for the adaptive clamp.
  * @returns the resolved content width in px (mirrors the CSS clamp). */
-function resolveContentWidth(columnWidth: number, preference: number | null): number {
-  const max = Math.max(CONTENT_MIN, columnWidth - CONTENT_EDGE_BUDGET)
-  if (preference !== null) return Math.min(Math.max(preference, CONTENT_MIN), max)
-  return Math.max(680, Math.min(columnWidth * 0.64, 920))
+export function resolveContentWidth(columnWidth: number, preference: number | null): number {
+  // Width-handle budget only when the column can still host the strips;
+  // squeezed columns (Overview + workbench) keep a 64px card+clearance budget
+  // so the composer never claims more than the column can paint.
+  const budget = columnWidth >= CONTENT_MIN + CONTENT_EDGE_BUDGET
+    ? CONTENT_EDGE_BUDGET
+    : 64
+  const usable = Math.max(0, columnWidth - budget)
+  if (preference !== null) {
+    const floor = Math.min(CONTENT_MIN, usable)
+    return Math.min(Math.max(preference, floor), usable)
+  }
+  const ideal = Math.min(920, columnWidth * 0.64)
+  const floor = Math.min(680, usable)
+  return Math.min(usable, Math.max(floor, ideal))
 }
 
 /** One transcript width handle: pointer capture + rAF-throttled symmetric

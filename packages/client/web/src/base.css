@@ -35,6 +35,9 @@ html {
   overscroll-behavior: none;
   /* Phone checklist: no accidental horizontal scroll from padding/safe-area. */
   overflow-x: clip;
+  /* Frameless Desktop: paint the OS window floor before body tokens resolve
+     so thickFrame resize edges do not flash the Chromium light default. */
+  background: var(--dsw-alias-bg-base, #151517);
 }
 
 body {
@@ -53,6 +56,14 @@ body {
 /* Match body so an empty #root between splash lift and AppFrame paint is not
    a transparent hole onto the Electron window's light default. */
 #root {
+  background: var(--dsw-alias-bg-base);
+}
+
+/* Desktop frameless: keep the full window painted (no hairline white edge
+   where community radius / layout-push exposes the BrowserWindow floor). */
+html[data-windows-titlebar],
+html[data-windows-titlebar] body,
+html[data-windows-titlebar] #root {
   background: var(--dsw-alias-bg-base);
 }
 

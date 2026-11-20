@@ -439,6 +439,7 @@
 @media (max-width: 720px) {
   .card {
     --question-inset: 14px;
+    /* Seat already lifts with the keyboard; keep the card inside the seat. */
     max-height: min(70dvh, 560px);
     border-radius: 16px;
   }
@@ -447,6 +448,14 @@
     .card {
       max-height: min(70vh, 560px);
     }
+  }
+
+  .customTextarea {
+    font-size: 16px; /* avoid iOS / WebView focus zoom */
+  }
+
+  :global(html[data-xrk-keyboard]) .card {
+    max-height: min(52dvh, 420px);
   }
 
   .header {

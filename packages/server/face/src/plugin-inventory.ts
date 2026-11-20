@@ -20,10 +20,64 @@ import { isSafePluginPackageName } from "@xrkseek/server-http";
 import { resolveCordisFiberState, hasStagedCordisClient } from "./cordis-bridge.js";
 import type { FaceRuntime } from "./context.js";
 import { reconcileClientBootAt } from "./plugin-boot.js";
+import { mcpAllowFromLayers } from "./mcp-allow.js";
 import { resolveHarnessHome } from "./settings-document.js";
 
 /** Re-export install-name hygiene (single source: server-http plugin-package-id). */
 export { isSafePluginPackageName };
+
+/** Lightweight MCP desired rows for inventory (avoids settings-credentials cycle). */
+function mcpDesiredRowsOf(
+  runtime: { readonly settingsNamespaces?: FaceRuntime["settingsNamespaces"] },
+): readonly { readonly serverName: string; readonly enabled?: boolean }[] {
+  try {
+    const namespaces = runtime.settingsNamespaces;
+    if (!namespaces) return [];
+    const user = namespaces.ensure("mcp").user as {
+      servers?: unknown;
+    };
+    const raw = user.servers;
+    if (!Array.isArray(raw)) return [];
+    const out: { serverName: string; enabled?: boolean }[] = [];
+    for (const row of raw) {
+      if (!row || typeof row !== "object") continue;
+      const name = String(
+        (row as { serverName?: unknown }).serverName ?? "",
+      ).trim();
+      if (!name) continue;
+      const enabled = (row as { enabled?: unknown }).enabled;
+      out.push(
+        enabled === false
+          ? { serverName: name, enabled: false }
+          : { serverName: name },
+      );
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function mcpMasterOnOf(
+  runtime: { readonly settingsNamespaces?: FaceRuntime["settingsNamespaces"] },
+): boolean {
+  try {
+    const namespaces = runtime.settingsNamespaces;
+    if (!namespaces) return false;
+    return mcpAllowFromLayers(namespaces.ensure("mcp"));
+  } catch {
+    return false;
+  }
+}
+
+/** Map Host MCP supervisor health onto inventory fiber phases. */
+function mcpFiberFromHealth(
+  health: FaceProcessPlugin["mcpHealth"],
+): FacePluginFiberPhase {
+  if (health === "gave-up") return "failed";
+  if (health === "reconnecting") return "loading";
+  return "active";
+}
 
 export {
   DISABLED_PLUGINS_FILE,
@@ -53,8 +107,9 @@ export interface FacePluginInventoryEntry {
   readonly enabled: boolean;
   readonly fiberPhase: FacePluginFiberPhase;
   /**
-   * User-installed (CLI inventory / community cordis) — Settings may offer
-   * edit / disable / delete. Built-in product-shell and MCP rows stay false.
+   * User-installed (CLI inventory / community cordis / MCP desired rows) —
+   * Settings may offer disable. Built-in product-shell rows stay false.
+   * MCP rows are managed for the enable switch only (no folder remove).
    */
   readonly managed: boolean;
   /** CLI inventory version when known (Codex-style plugin summary). */
@@ -66,6 +121,7 @@ export interface FacePluginInventoryEntry {
   /**
    * Soft-disable / re-enable / install changed disk state but this Host
    * process still has the opposite live set — restart to apply.
+   * Never set for MCP rows (file-sourced remount is live).
    */
   readonly needsRestart?: boolean;
 }
@@ -350,7 +406,9 @@ export function listFacePluginInventory(
   runtime: Pick<
     FaceRuntime,
     "plugins" | "webPlugins" | "hostPublic" | "productDir"
-  >,
+  > & {
+    readonly settingsNamespaces?: FaceRuntime["settingsNamespaces"];
+  },
 ): FacePluginInventoryEntry[] {
   const seen = new Set<string>();
   const liveIds = new Set<string>();
@@ -374,27 +432,50 @@ export function listFacePluginInventory(
     entries.push(entry);
   };
 
+  const mcpDesired = mcpDesiredRowsOf(runtime);
+  const mcpDesiredById = new Map<
+    string,
+    { readonly serverName: string; readonly enabled?: boolean }
+  >(mcpDesired.map((row) => [`mcp:${row.serverName}`, row]));
+  const mcpMasterOn = mcpMasterOnOf(runtime);
+
   for (const plugin of runtime.plugins ?? []) {
     const cordis = plugin.kind === "cordis";
+    const isMcp = plugin.id.startsWith("mcp:");
     const fiber = cordis
       ? resolveCordisFiberState(runtime, plugin.id)
       : { enabled: true, fiberPhase: "active" as const };
-    const managed = isManagedProcessPlugin(plugin, userNames, runtime, packages);
-    const softDisabled = managed && softDisabledOf(plugin.id);
+    const managed =
+      isMcp || isManagedProcessPlugin(plugin, userNames, runtime, packages);
+    const softDisabled = !isMcp && managed && softDisabledOf(plugin.id);
+    const mcpRow = isMcp ? mcpDesiredById.get(plugin.id) : undefined;
+    // Inventory switch = desired per-server on; master off still keeps desired.
+    const mcpDesiredOn = isMcp
+      ? mcpRow === undefined || mcpRow.enabled !== false
+      : true;
+    const mcpLive =
+      isMcp && mcpMasterOn && mcpDesiredOn && fiber.enabled;
     const meta = metaOf(plugin.id);
     const kind =
       meta.kind ??
-      (plugin.id.startsWith("mcp:")
-        ? "mcp"
-        : cordis
-          ? "cordis"
-          : "process");
+      (isMcp ? "mcp" : cordis ? "cordis" : "process");
+    const mcpPhase: FacePluginFiberPhase = isMcp
+      ? mcpLive
+        ? mcpFiberFromHealth(plugin.mcpHealth)
+        : mcpMasterOn && mcpDesiredOn
+          ? "loading"
+          : null
+      : fiber.fiberPhase;
     push(
       {
         entryId: plugin.id,
         moduleName: plugin.id,
-        enabled: softDisabled ? false : fiber.enabled,
-        fiberPhase: softDisabled ? null : fiber.fiberPhase,
+        enabled: softDisabled
+          ? false
+          : isMcp
+            ? mcpDesiredOn
+            : fiber.enabled,
+        fiberPhase: softDisabled ? null : isMcp ? mcpPhase : fiber.fiberPhase,
         managed,
         ...(meta.version ? { version: meta.version } : {}),
         kind,
@@ -457,9 +538,32 @@ export function listFacePluginInventory(
     });
   }
 
+  // Desired MCP rows that are soft-off or master-off still need a list row
+  // so Settings can re-enable without re-pasting the card.
+  for (const row of mcpDesired) {
+    const id = `mcp:${row.serverName}`;
+    if (seen.has(id)) continue;
+    const desiredOn = row.enabled !== false;
+    // Master on + desired on but not yet in Host plugins → connecting (not restart).
+    const fiberPhase: FacePluginFiberPhase =
+      desiredOn && mcpMasterOn ? "loading" : null;
+    push({
+      entryId: id,
+      moduleName: id,
+      enabled: desiredOn,
+      fiberPhase,
+      managed: true,
+      kind: "mcp",
+    });
+  }
+
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
     if (!entry.managed) continue;
+    // MCP connect/disconnect is pure hot remount (ensureMcpLiveIfIdle /
+    // reconcile). "Not live yet" means connecting / parked / failed — never
+    // "restart Host". Skip sticky needsRestart for mcp:* entirely.
+    if (entry.kind === "mcp" || entry.entryId.startsWith("mcp:")) continue;
     const live = liveIds.has(entry.entryId);
     // Host-gated product optionals (e.g. git-worktrees): durable soft-disable is
     // the live switch. Without a loaded process/client half, restart cannot
@@ -499,12 +603,23 @@ export function collectFacePluginCommands(
   return out;
 }
 
-/** Soft-disable / re-enable a managed inventory entry. */
+/** Soft-disable / re-enable a managed inventory entry (not MCP — use async helper). */
 export function setFacePluginInventoryEnabled(
-  runtime: Pick<FaceRuntime, "plugins" | "webPlugins" | "hostPublic" | "productDir">,
+  runtime: Pick<
+    FaceRuntime,
+    "plugins" | "webPlugins" | "hostPublic" | "productDir"
+  > & {
+    readonly settingsNamespaces?: FaceRuntime["settingsNamespaces"];
+  },
   entryId: string,
   enabled: boolean,
 ): { ok: true } | { ok: false; error: string } {
+  if (entryId.startsWith("mcp:")) {
+    return {
+      ok: false,
+      error: "mcp toggles use setFaceMcpServerEnabled",
+    };
+  }
   const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   if (!entry) return { ok: false, error: "plugin not found" };
   if (!entry.managed) return { ok: false, error: "builtin plugins cannot be toggled here" };

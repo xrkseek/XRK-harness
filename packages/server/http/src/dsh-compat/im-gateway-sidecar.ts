@@ -116,8 +116,7 @@ export async function handleImGatewaySidecarHttp(
 
   if (pathname === IM_GATEWAY_HOST_RELAY_PATH && method === "POST") {
     const auth = assertRelayAuthorized({
-      hostHeader:
-        typeof req.headers.host === "string" ? req.headers.host : undefined,
+      remoteAddress: req.socket.remoteAddress,
       authorization:
         typeof req.headers.authorization === "string"
           ? req.headers.authorization

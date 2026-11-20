@@ -10,13 +10,13 @@ export const zh = {
   'general.nav': '通用设置',
   'general.title': '通用设置',
   'general.intro':
-    '会话默认与外观。侧栏 agent 推送开关写 ~/.xrk/sidebar/prefs.json（需已启用 better-sidebar）。「Git 共同作者」一个开关：开则挂 Co-authored-by: xrkseek。「命令行 xrkh」默认关。远程工作区请挂 MCP。模型与密钥在「模型」；MCP / Shell 等在「插件」。对话可用 /theme · /model · /permission。',
+    '会话默认与外观。模型与密钥在「模型」；MCP / Shell 在「插件」。',
   'sidebarPush.opens.title': '侧栏 agent 打开推送',
   'sidebarPush.opens.description':
-    '需已启用 better-sidebar。开启后模型可用 sidebar_open，经 /sidebar/ws/agent-opens 推到侧栏（prefs.agentOpenTools）。',
+    '需 better-sidebar。开则模型可 sidebar_open 推到侧栏。',
   'sidebarPush.terminals.title': '侧栏 agent 终端推送',
   'sidebarPush.terminals.description':
-    '需已启用 better-sidebar。开启后模型可用 terminal_*，经 /sidebar/ws/agent-terminals 推到侧栏（prefs.agentTerminalTools）。',
+    '需 better-sidebar。开则模型可 terminal_* 推到侧栏。',
   'sidebarPush.saveFailed': '未能写入侧栏 prefs.json',
   'connection.error': '连接异常',
   'connection.retry': '立即重连',
@@ -44,7 +44,7 @@ export const zh = {
   'release.failed': '检查或安装更新失败',
   'cliCommand.title': '命令行 xrkh',
   'cliCommand.description':
-    '默认关闭。打开后把本应用自带的 xrkh 放到用户 PATH 最前（~/.xrk/bin），并热更新；每次启动会改写 shim，使外部终端 / ACP 用到当前安装版。关掉只撤掉本应用写的条目。向阳空间删插件可用 xrkh plugin remove。内置 browser / agent-desktop 不依赖此项。',
+    '默认关。开则把本应用 xrkh 放到 PATH 最前（~/.xrk/bin）并热更新；关掉只撤本应用写入的条目。',
   'cliCommand.saveFailed': '未能更新命令行 xrkh',
   'desktopShare.title': '临时分享',
   'desktopShare.description':
@@ -75,13 +75,13 @@ export const en = {
   'general.nav': 'General',
   'general.title': 'General',
   'general.intro':
-    'Session defaults and appearance. Sidebar agent-push → ~/.xrk/sidebar/prefs.json (requires better-sidebar). Git co-author is one switch (on → Co-authored-by: xrkseek). Command-line xrkh is off by default. Remote workspaces → attach MCP. Models under Models; MCP / Shell under Plugins. Chat: /theme · /model · /permission.',
+    'Session defaults and appearance. Models under Models; MCP / Shell under Plugins.',
   'sidebarPush.opens.title': 'Sidebar agent open push',
   'sidebarPush.opens.description':
-    'Requires better-sidebar enabled. When on, the model may call sidebar_open and push via /sidebar/ws/agent-opens (prefs.agentOpenTools).',
+    'Needs better-sidebar. On → model may call sidebar_open into the sidebar.',
   'sidebarPush.terminals.title': 'Sidebar agent terminal push',
   'sidebarPush.terminals.description':
-    'Requires better-sidebar enabled. When on, the model may call terminal_* and push via /sidebar/ws/agent-terminals (prefs.agentTerminalTools).',
+    'Needs better-sidebar. On → model may call terminal_* into the sidebar.',
   'sidebarPush.saveFailed': 'Could not write sidebar prefs.json',
   'connection.error': 'Disconnected',
   'connection.retry': 'Reconnect now',
@@ -109,7 +109,7 @@ export const en = {
   'release.failed': 'Could not check or install the update',
   'cliCommand.title': 'Command-line xrkh',
   'cliCommand.description':
-    'Off by default. When on, puts this app’s xrkh first on your user PATH (~/.xrk/bin) and applies live; each launch rewrites the shim so external terminals / ACP use the current install. Turning off removes only what this app wrote. Use xrkh plugin remove from Xiangyang to uninstall plugins. Bundled browser / agent-desktop do not need this.',
+    'Off by default. On → put this app’s xrkh first on PATH (~/.xrk/bin) and refresh live; off removes only what this app wrote.',
   'cliCommand.saveFailed': 'Could not update command-line xrkh',
   'desktopShare.title': 'Temporary share',
   'desktopShare.description':
@@ -136,11 +136,11 @@ export const ja = {
   'openDocument.error': '設定ファイルを開けませんでした',
   'general.nav': '一般',
   'general.title': '一般',
-  'general.intro': 'セッションの既定値と外観。サイドバーのエージェントプッシュ切替は ~/.xrk/sidebar/prefs.json に書き込みます（better-sidebar が必要）。Git 共同作者は一つのスイッチ。コマンドライン xrkh は既定オフ。リモート作業は MCP を接続します。モデルと認証情報は「モデル」、MCP・Shell は「プラグイン」。チャットでは /theme · /model · /permission も使えます。',
+  'general.intro': 'セッションの既定値と外観。モデルは「モデル」、MCP・Shell は「プラグイン」。',
   'sidebarPush.opens.title': 'サイドバー：エージェント起動のプッシュ',
-  'sidebarPush.opens.description': 'better-sidebar を有効にする必要があります。オンのとき、モデルは sidebar_open を呼び、/sidebar/ws/agent-opens 経由でプッシュできます（prefs.agentOpenTools）。',
+  'sidebarPush.opens.description': 'better-sidebar が必要。オンで sidebar_open を側欄へ。',
   'sidebarPush.terminals.title': 'サイドバー：エージェント終了のプッシュ',
-  'sidebarPush.terminals.description': 'better-sidebar を有効にする必要があります。オンのとき、モデルは terminal_* を呼び、/sidebar/ws/agent-terminals 経由でプッシュできます（prefs.agentTerminalTools）。',
+  'sidebarPush.terminals.description': 'better-sidebar が必要。オンで terminal_* を側欄へ。',
   'sidebarPush.saveFailed': 'サイドバーの prefs.json を書き込めませんでした',
   'connection.error': '切断済み',
   'connection.retry': '今すぐ再接続',
@@ -168,7 +168,7 @@ export const ja = {
   'release.failed': '更新の確認またはインストールができませんでした',
   'cliCommand.title': 'コマンドライン xrkh',
   'cliCommand.description':
-    '既定はオフ。オンにするとこのアプリの xrkh をユーザー PATH（~/.xrk/bin）の先頭に置き、即時反映します。起動のたびに shim を書き換え、外部ターミナル / ACP が現在のインストールを使います。オフにするとこのアプリが書いた項目だけ削除。プラグイン削除は xrkh plugin remove。同梱 browser / agent-desktop はこの設定に依存しません。',
+    '既定オフ。オンでこのアプリの xrkh を PATH（~/.xrk/bin）先頭に置き即時反映。オフはこのアプリが書いた項目だけ削除。',
   'cliCommand.saveFailed': 'コマンドライン xrkh を更新できませんでした',
   'desktopShare.title': '一時共有',
   'desktopShare.description':

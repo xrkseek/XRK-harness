@@ -45,8 +45,11 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
           footerActionOwner = owner
           return <div data-testid="footer-action-seat" data-wide={owner.wide} />
         }
-        regionOwner = owner as SidebarSectionOwnerProps
-        return <div data-testid="region" data-wide={owner.wide} />
+        if (key === 'sidebar.workspaces') {
+          regionOwner = owner as SidebarSectionOwnerProps
+          return <div data-testid="region" data-wide={owner.wide} />
+        }
+        return <div data-testid={`slot-${key}`} data-wide={owner.wide} />
       }) as SidebarRootComponentProps['renderSlot']}
     />
   )
@@ -97,13 +100,9 @@ describe('SidebarRoot shell', () => {
   })
 
   it('keeps the region mounted through collapse and expands on its request', () => {
-    vi.useFakeTimers()
     const b = mountShell()
-    b.rerender({ collapsed: true })
-    // Wide content survives the crossfade window, then settles into the rail.
-    expect(b.regionOwner().wide).toBe(true)
-    vi.advanceTimersByTime(200)
-    b.rerender({})
+    b.rerender({ collapsed: true, width: 56 })
+    // Rail chrome on the same frame — no clipped-label settle window.
     expect(b.regionOwner().wide).toBe(false)
     expect(b.footerActionOwner().wide).toBe(false)
     expect(screen.getByTestId('region')).toBeTruthy()
@@ -111,8 +110,15 @@ describe('SidebarRoot shell', () => {
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
 
+  it('forces rail chrome when width drops below the labeled floor', () => {
+    const b = mountShell({ collapsed: false, width: 80 })
+    expect(b.regionOwner().wide).toBe(false)
+    expect(b.settingsOwner().wide).toBe(false)
+    expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
+  })
+
   it('renders statically collapsed on a cold start (no crossfade classes)', () => {
-    const b = mountShell({ collapsed: true })
+    const b = mountShell({ collapsed: true, width: 56 })
     expect(b.regionOwner().wide).toBe(false)
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
   })

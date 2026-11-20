@@ -202,6 +202,7 @@ export type PluginsSettingsLocaleKey =
   | 'a2aInboundTimeout' | 'a2aInboundTimeoutHint'
   | 'a2aInboundLiveHint'
   | 'gitAttributionTitle' | 'gitAttributionDescription'
+  | 'gitWorktreesTitle' | 'gitWorktreesDescription' | 'gitWorktreesLiveHint'
   | 'autoReviewTitle' | 'autoReviewDescription'
   | 'autoReviewEnabled' | 'autoReviewEnabledHint'
   | 'autoReviewEnabledOn' | 'autoReviewEnabledOff'
@@ -231,7 +232,7 @@ export type PluginsSettingsLocaleKey =
 export const en: Record<PluginsSettingsLocaleKey, string> = {
   nav: 'Plugins',
   title: 'Plugins',
-  intro: 'Configure Host plugins: MCP, Shell, agent loop, web search, browser, voice, image/video gen, video analyze, curated memory, external agents, sandbox, computer use, cron, telemetry, workspace inject, auto-review, memory-embed, and Host / channel mirrors.',
+  intro: 'Host plugins: MCP, Shell, agent loop, browser, voice, and related tools.',
   tabs: 'Plugin views',
   configurableTab: 'Plugin configuration',
   toolsTab: 'Runtime',
@@ -400,7 +401,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   workspaceDiscoveryMaxDepth: 'Max discovery depth',
   workspaceDiscoveryMaxDepthHint: '1 = direct peers / siblings only. Max 3.',
   mcpTitle: 'MCP servers',
-  mcpDescription: 'Configure on Xiangyang (奇创). Each seat mounts global + its session `.xrk/mcp.json` + seated member home when distinct (session wins). Paste Cursor/Trae JSON; omit cwd → ~/.xrk/mcp-cwd/<name>.',
+  mcpDescription: 'Header switch mounts or unmounts every listed server live. Configure on Xiangyang (奇创); each seat mounts global + session `.xrk/mcp.json` + member home when distinct. Paste Cursor/Trae JSON; omit cwd → ~/.xrk/mcp-cwd/<name>. Per-server toggles also live under Plugins → Plugin list.',
   mcpConnectedHeading: 'Connected now',
   mcpServersHeading: 'Global servers',
   mcpServersEmpty: 'No servers yet. Paste a JSON block below and add.',
@@ -439,7 +440,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpRowInvalid: 'Each server needs a name and a command or URL.',
   mcpToolsLabel: 'tools',
   mcpAllowConnect: 'Allow connect',
-  mcpAllowConnectHint: 'Save with this on mounts servers one-by-one (rows show Connecting). Allow already on remounts live when Settings opens or Host boots. Turn off and save to keep the list without tools.',
+  mcpAllowConnectHint: 'Header switch on → hot-mount listed servers (rows show Connecting). Off → hot-unload every MCP tool while keeping the list. Per-server switches are under Plugins → Plugin list.',
   mcpAllowWorkspaceCwd: 'Allow workspace cwd',
   mcpAllowWorkspaceCwdHint: 'Confirm that stdio MCP may write into the workspace (e.g. .playwright-mcp). Prefer leaving cwd empty.',
   mcpStatusConnected: 'Connected',
@@ -776,6 +777,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   a2aInboundTimeout: 'Reply timeout (ms)',
   a2aInboundTimeoutHint: 'Wait for assistant body after message/send. 0 = default 120000. Cap 600000. Or XRK_A2A_INBOUND_TIMEOUT_MS.',
   a2aInboundLiveHint: 'Applies on the next inbound request (live; no Host restart). Sessions are labeled a2a:<peer>.',
+  gitWorktreesTitle: 'Main-session Git worktree',
+  gitWorktreesDescription: 'Independent linked checkouts under .xrk/worktrees for the main session and XRKH sub-agents. Off by default; on → create_worktree is available.',
+  gitWorktreesLiveHint: 'Toggle remounts the Host process half live (no Desktop restart).',
   gitAttributionTitle: 'Git co-author',
   gitAttributionDescription:
     'On (default): agent commits append Co-authored-by: xrkseek. Off: no trailer guidance. Never changes git config or Author.',
@@ -783,7 +787,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   autoReviewDescription:
     'Tool pre-review on the pipeline (not a chat context-fragment). Session permission Auto = no sandbox + per-call review. Classifier tiers: heuristic (default) · http (URL below / XRK_AUTO_REVIEW_CLASSIFIER_URL) · session-llm (Host current model when URL empty). Each call → allow / deny / ask→approval.',
   autoReviewEnabled: 'Enable auto-review',
-  autoReviewEnabledHint: 'Host classifies every tool call automatically when the session permission is Auto review. This card only configures the classifier URL/token.',
+  autoReviewEnabledHint: 'Header switch turns auto-review on/off. When on and the session permission is Auto review, Host classifies every tool call. Expand to set classifier URL/token.',
   autoReviewEnabledOn: 'On',
   autoReviewEnabledOff: 'Off',
   autoReviewClassifierUrl: 'Classifier URL',
@@ -843,7 +847,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
 export const ja = {
   nav: 'プラグイン',
   title: 'プラグイン',
-  intro: 'Host プラグインを設定: MCP、Shell、エージェントループ、Web 検索、ブラウザ、音声、画像／動画生成、動画解析、キュレーションメモリ、外部エージェント、サンドボックス、コンピュータ操作、cron、テレメトリ、ワークスペース inject、自動レビュー、memory-embed、Host／チャネルミラー。',
+  intro: 'Host プラグイン：MCP、Shell、エージェントループ、ブラウザ、音声など。',
   tabs: 'プラグインビュー',
   configurableTab: 'プラグイン設定',
   toolsTab: 'ランタイム',
@@ -1012,7 +1016,7 @@ export const ja = {
   workspaceDiscoveryMaxDepth: '発見の最大深度',
   workspaceDiscoveryMaxDepthHint: '1 = 直接のピア／兄弟のみ。最大 3。',
   mcpTitle: 'MCP サーバー',
-  mcpDescription: '設定は向阳（奇創）。各席はグローバル + セッション `.xrk/mcp.json` + 在席メンバー家（パスが異なる時；同名はセッション優先）。Cursor／Trae JSON；cwd 省略 → ~/.xrk/mcp-cwd/<name>。',
+  mcpDescription: 'ヘッダーのスイッチで一覧のサーバーをライブ接続／切断します。設定は向阳（奇創）。各席はグローバル + セッション `.xrk/mcp.json` + 在席メンバー家。Cursor／Trae JSON；cwd 省略 → ~/.xrk/mcp-cwd/<name>。サーバー単位のスイッチは「プラグイン → プラグイン一覧」。',
   mcpConnectedHeading: '接続中',
   mcpServersHeading: 'グローバルサーバー',
   mcpServersEmpty: 'サーバーはまだありません。下に JSON ブロックを貼り付けて追加してください。',
@@ -1051,7 +1055,7 @@ export const ja = {
   mcpRowInvalid: '各サーバーには名前と、コマンドまたは URL が必要です。',
   mcpToolsLabel: 'ツール',
   mcpAllowConnect: '接続を許可',
-  mcpAllowConnectHint: 'オンで保存するとサーバーを1台ずつマウントします（行は「接続中」と表示）。既に許可済みのものは設定を開いたときや Host 起動時にライブ再マウントされます。オフにして保存すると一覧は残しツールは付けません。',
+  mcpAllowConnectHint: 'ヘッダースイッチ ON → 一覧をホットマウント（行は「接続中」）。OFF → すべての MCP ツールをホットアンロード（一覧は残る）。サーバー単位は「プラグイン → プラグイン一覧」。',
   mcpAllowWorkspaceCwd: 'ワークスペース cwd を許可',
   mcpAllowWorkspaceCwdHint: 'stdio MCP がワークスペースへ書き込んでよいことを確認してください（例: .playwright-mcp）。cwd は空のままが推奨です。',
   mcpStatusConnected: '接続済み',
@@ -1387,13 +1391,16 @@ export const ja = {
   a2aInboundTimeout: '返信タイムアウト（ms）',
   a2aInboundTimeoutHint: 'message／send のあとアシスタント本文を待ちます。0 = デフォルト 120000。上限 600000。または XRK_A2A_INBOUND_TIMEOUT_MS。',
   a2aInboundLiveHint: '次の受信リクエストに反映（ライブ、Host 再起動不要）。セッションは a2a:<peer> とラベルされます。',
+  gitWorktreesTitle: 'メインセッションの Git worktree',
+  gitWorktreesDescription: 'メインセッション／XRKH サブエージェント用の独立 linked checkout（.xrk/worktrees）。既定オフ。有効で create_worktree が使えます。',
+  gitWorktreesLiveHint: 'スイッチで Host プロセス半部をライブ再マウント（Desktop 再起動不要）。',
   gitAttributionTitle: 'Git 共著者',
   gitAttributionDescription:
     'オン（既定）: エージェントのコミットに Co-authored-by: xrkseek。オフ: 何もしない。git config / Author は変更しません。',
   autoReviewTitle: '自動レビュー分類器',
   autoReviewDescription: 'パイプライン上のツール事前レビュー（チャットのコンテキスト断片ではありません）。セッション権限 Auto = サンドボックスなし＋呼び出しごとレビュー。分類器の段階: heuristic（デフォルト）· http（下の URL / XRK_AUTO_REVIEW_CLASSIFIER_URL）· session-llm（URL が空のとき Host の現在モデル）。各呼び出し → allow / deny / ask→承認。',
   autoReviewEnabled: '自動レビューを有効化',
-  autoReviewEnabledHint: 'セッション権限が自動レビューのとき、Host はツール呼び出しを自動分類します。このカードは分類器の URL/Token のみ設定します。',
+  autoReviewEnabledHint: 'ヘッダーのスイッチで自動レビューのオン/オフ。オンかつセッション権限が自動レビューのとき、Host がツール呼び出しを分類します。展開して分類器 URL/Token を設定。',
   autoReviewEnabledOn: 'オン',
   autoReviewEnabledOff: 'オフ',
   autoReviewClassifierUrl: '分類器 URL',
@@ -1453,7 +1460,7 @@ export const ja = {
 export const zh: Record<PluginsSettingsLocaleKey, string> = {
   nav: '插件',
   title: '插件',
-  intro: '配置 Host 插件：MCP、终端、Agent 循环、联网搜索、Browser、Voice、图像/视频生成、视频理解、策展记忆、外部 Agent、沙箱、Computer use、Cron、会话遥测、工作区 inject、自动审查、向量记忆，以及 Host / 通道只读镜像。',
+  intro: '配置 Host 插件：MCP、终端、Agent 循环、Browser、Voice 等。',
   tabs: '插件视图',
   configurableTab: '插件配置',
   toolsTab: '运行时',
@@ -1622,7 +1629,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   workspaceDiscoveryMaxDepth: '发现深度上限',
   workspaceDiscoveryMaxDepthHint: '1 = 仅直接同伴 / 兄弟。最大 3。',
   mcpTitle: 'MCP 服务器',
-  mcpDescription: '在向阳（奇创）配置。各席挂载：全局 + 会话 `.xrk/mcp.json` + 在席干员家（路径不同时；同名会话赢）。粘贴 Trae/Cursor JSON；不写 cwd → ~/.xrk/mcp-cwd/<name>。',
+  mcpDescription: '右侧开关热挂载 / 热卸载列表中的全部 MCP。在向阳（奇创）配置；各席挂载全局 + 会话 `.xrk/mcp.json` + 干员家。粘贴 Trae/Cursor JSON；不写 cwd → ~/.xrk/mcp-cwd/<name>。单台开关在「插件 → 插件列表」。',
   mcpConnectedHeading: '当前已连接',
   mcpServersHeading: '全局服务器',
   mcpServersEmpty: '还没有服务器。在下方粘贴 JSON 块后点添加。',
@@ -1661,7 +1668,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpRowInvalid: '每条服务器需要名称，以及命令或 URL。',
   mcpToolsLabel: '个工具',
   mcpAllowConnect: '允许连接',
-  mcpAllowConnectHint: '打开并保存后会逐个挂载（行上显示「连接中」）。允许连接已开启时，打开设置或 Host 就绪即会热重挂，无需重启桌面。关掉再保存可只保留列表、不挂载工具。',
+  mcpAllowConnectHint: '卡片头开关打开 → 热挂载列表（行上显示「连接中」）；关掉 → 热卸载全部 MCP 工具（列表保留）。单台启停见「插件 → 插件列表」。',
   mcpAllowWorkspaceCwd: '允许工作区 cwd',
   mcpAllowWorkspaceCwdHint: '确认 stdio MCP 可能在工作区落盘（例如 .playwright-mcp）。更推荐留空 cwd。',
   mcpStatusConnected: '已连接',
@@ -1998,6 +2005,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   a2aInboundTimeout: '等待回复（毫秒）',
   a2aInboundTimeoutHint: 'message/send 后等待助手正文。0 = 默认 120000，顶 600000。或 XRK_A2A_INBOUND_TIMEOUT_MS。',
   a2aInboundLiveHint: '下次入站请求即生效（热切换，无需重启 Host）。会话标签为 a2a:<peer>。',
+  gitWorktreesTitle: '主会话 Git worktree',
+  gitWorktreesDescription: '给主会话 / XRKH 子代理各开独立 linked checkout（.xrk/worktrees），便于协作；默认关闭。开启后模型可用 create_worktree。',
+  gitWorktreesLiveHint: '开关会热重挂 Host 进程半部（无需重启桌面）。',
   gitAttributionTitle: 'Git 共同作者',
   gitAttributionDescription:
     '开（默认）：Agent 写的 commit 挂 Co-authored-by: xrkseek。关：当没这回事。不改 git config / Author。',
@@ -2005,7 +2015,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   autoReviewDescription:
     '工具管线预审（不是聊天 context-fragment）。会话权限 Auto = 无沙箱 + 每次调用评审。分类器三档：启发式（默认）· http（下方 URL / XRK_AUTO_REVIEW_CLASSIFIER_URL）· 会话 LLM（URL 空且 Host 有当前模型）。每次调用 → 放行 / 拒绝 / 询问→审批。',
   autoReviewEnabled: '启用自动审查',
-  autoReviewEnabledHint: 'Host 在会话权限为「自动审查」时自动分类每次工具调用；此处仅配置分类器 URL/Token。',
+  autoReviewEnabledHint: '标题栏开关控制自动审查开/关。开启且会话权限为「自动审查」时，Host 会分类每次工具调用。展开后配置分类器 URL/Token。',
   autoReviewEnabledOn: '开',
   autoReviewEnabledOff: '关',
   autoReviewClassifierUrl: 'Classifier URL',

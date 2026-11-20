@@ -46,6 +46,7 @@ import {
   keepLastGoodMessage,
   refuseOverwriteDetail,
 } from "./last-good-config.js";
+import { mcpAllowFromLayers } from "./mcp-allow.js";
 import {
   FACE_PRODUCT_SETTINGS_NAMESPACES,
   normalizeTtsViewValue,
@@ -895,8 +896,11 @@ export class FaceSettingsNamespaces {
       slot = {
         user: {},
         revision: 0,
-        base: {},
-        schema: FACE_EMPTY_OBJECT_SCHEMA,
+        // MCP product default: Allow connect on (same as FACE_PRODUCT mcp base).
+        // Seed before first describe so mcpAllowFromLayers / idle ensure do not
+        // circular-read an empty slot as deny.
+        base: ns === "mcp" ? { servers: [], allowConnect: true } : {},
+        schema: ns === "mcp" ? FACE_MCP_SCHEMA : FACE_EMPTY_OBJECT_SCHEMA,
         applies: "live",
       };
       this.map.set(ns, slot);
@@ -1039,6 +1043,8 @@ export interface FaceMcpServerDraft {
   readonly cwdAllowWorkspace?: boolean;
   /** Proxy-only env (HTTP_PROXY / …); secrets stay in Credentials. */
   readonly env?: Readonly<Record<string, string>>;
+  /** Per-server soft switch; false keeps the row listed but not connected. */
+  readonly enabled?: boolean;
 }
 
 /** Parse Face/host-settings MCP drafts. Proxy env kept; other env keys rejected. */
@@ -1055,6 +1061,7 @@ export function parseFaceMcpServers(raw: unknown): FaceMcpServerDraft[] {
         ...(row.args && row.args.length > 0 ? { args: [...row.args] } : {}),
         ...(row.cwd ? { cwd: row.cwd } : {}),
         ...(row.cwdAllowWorkspace === true ? { cwdAllowWorkspace: true } : {}),
+        ...(row.enabled === false ? { enabled: false } : {}),
         ...(env ? { env } : {}),
       };
     },
@@ -1145,8 +1152,7 @@ function mcpConnected(runtime: FaceRuntime): readonly {
 }
 
 function mcpAllowFromRuntime(runtime: FaceRuntime): boolean {
-  const raw = runtime.settingsNamespaces.ensure("mcp").user.allowConnect;
-  return raw === true;
+  return mcpAllowFromLayers(runtime.settingsNamespaces.ensure("mcp"));
 }
 
 /** In-flight idle remount per Face runtime (boot + describe share one pass). */
@@ -1647,6 +1653,80 @@ function mcpServersFromRuntime(runtime: FaceRuntime): FaceMcpServerDraft[] {
   return parseFaceMcpServers(
     runtime.settingsNamespaces.ensure("mcp").user.servers,
   );
+}
+
+/** Desired MCP drafts currently in the Face namespace (for inventory / toggles). */
+export function listFaceMcpDesiredServers(
+  runtime: FaceRuntime,
+): readonly FaceMcpServerDraft[] {
+  try {
+    return mcpServersFromRuntime(runtime);
+  } catch {
+    return [];
+  }
+}
+
+export function faceMcpAllowConnect(runtime: FaceRuntime): boolean {
+  return mcpAllowFromRuntime(runtime);
+}
+
+/**
+ * Per-server soft switch from Plugins → Plugin list.
+ * Persists `enabled` on the draft, then hot-reconciles when Host wires sync.
+ */
+export async function setFaceMcpServerEnabled(
+  runtime: FaceRuntime,
+  serverName: string,
+  enabled: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const name = serverName.trim();
+  if (!name) return { ok: false, error: "server name required" };
+  let servers: FaceMcpServerDraft[];
+  try {
+    servers = mcpServersFromRuntime(runtime);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+  const index = servers.findIndex((row) => row.serverName === name);
+  if (index < 0) return { ok: false, error: "mcp server not found" };
+  const next = servers.map((row, i) => {
+    if (i !== index) return row;
+    if (enabled) {
+      const { enabled: _drop, ...rest } = row as FaceMcpServerDraft & {
+        enabled?: boolean;
+      };
+      return rest;
+    }
+    return { ...row, enabled: false };
+  });
+  const allowConnect = mcpAllowFromRuntime(runtime);
+  const slot = runtime.settingsNamespaces.ensure("mcp");
+  slot.user = { servers: next, allowConnect };
+  slot.applies = mcpApplies(runtime);
+  try {
+    await persistHostSettings(runtime);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+  if (runtime.syncMcpServers) {
+    const synced = await runtime.syncMcpServers(next, { allowConnect });
+    runtime.mcpSyncOverlay = {
+      connectFailures: synced.failures,
+      parked: synced.parked ?? [],
+      connecting: [],
+    };
+  }
+  publishRemoteEvent(runtime.bus, "settings/document-updated", [
+    "mcp",
+    slot.revision,
+  ]);
+  return { ok: true };
 }
 
 /** Slash `/mcp` inventory text (desired servers + live mount status). */

@@ -1,51 +1,55 @@
 # xrk-sunflower-free
 
-产品自带的**免费 LLM** 插件（`kind: "llm"`）。对齐 OFM 双车道：
+> **读者**：终端用户 · 集成者
 
-| Brand | 来源 | Bun | 目录 |
-| --- | --- | --- | --- |
-| `sunflower-free` | OpenCode 匿名池 | **需要**（sidecar） | 至少一个 `available` → 挂满候选；全不可用则省略 |
-| `sunflower-kilo`（仅 Kilo 时并入 `sunflower-free`） | Kilo `isFree` listing | **不需要** | Host → `api.kilo.ai` 直连 |
+产品自带的**免费 LLM** 插件（`kind: llm`）。目录里可出现：
 
-无 Bun：OpenCode 静默省略；Kilo 仍进目录（OFM：`egressFetch` 仅对 `opencode.ai/inference/*` 走 Bun）。
+| Brand | 说明 | Bun |
+|-------|------|-----|
+| `sunflower-free` | OpenCode 匿名池候选 | 需要（本机自装 Bun sidecar） |
+| （并入上项） | Kilo 免费 listing | 不需要 |
 
-## Bun（用户自装，仅 OpenCode）
+无 Bun 时 OpenCode 线静默省略；Kilo 仍可进目录。
 
-产品包**不**随带 Bun。查找顺序（`resolveBunBinary`）：
+## Bun
 
-1. env **`XRK_SUNFLOWER_BUN`**
-2. 可选插件旁 **`vendor/bun*`**（本机 `pnpm vendor:bun`）
-3. **`~/.bun/bin/bun`**
-4. **`PATH`**
+产品包**不**随带 Bun。查找顺序：`XRK_SUNFLOWER_BUN` → 插件旁 `vendor/bun*` → `~/.bun/bin/bun` → `PATH`。
 
-## OpenCode 线缆（OFM `upstream.js` / `oc-free-transport.md`）
+## 安装
 
-- 路径：`/inference/v1/chat/completions`
-- UA：`opencode/latest/2.0.26/cli`（整串）
-- 头：`Bearer public` + 双 session + `x-session-*` + `x-opencode-project: global`；**无** `x-opencode-request`
-- 工具：官方 `read`/`shell`（Linux bash 文案）；`tool_choice: none` 清除
-- system：**不**粘贴 OC persona；补 `<env>` + placeholder note
-- Host 名别名：`working_directory` → `workspace_directory`（OFM 429 修复）
+随 CLI / Desktop 分发；或：
 
-OpenCode **出口级联**（不挡听口）：
+```bash
+xrkh plugin add ./extensions/xrk-sunflower-free
+```
 
-1. 先直连；有可用 → 粘住直连
-2. 直连 0 可用且 Settings `openCodeProxy` 允许 → 候选代理
-3. `openCodeProxy=off` → 只直连
+Settings → 模型 中选用 `sunflower-free` 候选。
 
-## 结构
+---
 
-| 文件 | 作用 |
-| --- | --- |
-| `plugin.mjs` | OpenCode sidecar brand + Kilo 直连 brand |
-| `free-models.mjs` | OpenCode 候选 |
-| `kilo.mjs` | Kilo listing |
-| `probe.mjs` / `probe-cascade.mjs` | OFM 形 ping + 出口级联 |
-| `sidecar.ts` | Bun：仅 OpenCode |
-| `fingerprint.ts` | OFM v2.0.26 指纹素材 |
+# xrk-sunflower-free
 
-## 密钥
+> **Audience**: End users · Integrators
 
-- sidecar ↔ Host：进程内 `XRK_SUNFLOWER_SIDECAR_KEY`
-- OpenCode：恒 `public`
-- Kilo：无密钥
+Built-in **free LLM** plugin (`kind: llm`). Catalog may include:
+
+| Brand | Notes | Bun |
+|-------|-------|-----|
+| `sunflower-free` | OpenCode anonymous pool | Required (user-installed Bun sidecar) |
+| (merged into above) | Kilo free listing | Not required |
+
+Without Bun, the OpenCode path is omitted; Kilo can still appear.
+
+## Bun
+
+The product does **not** ship Bun. Lookup: `XRK_SUNFLOWER_BUN` → plugin-local `vendor/bun*` → `~/.bun/bin/bun` → `PATH`.
+
+## Install
+
+Shipped with CLI / Desktop; or:
+
+```bash
+xrkh plugin add ./extensions/xrk-sunflower-free
+```
+
+Pick `sunflower-free` candidates under Settings → Models.

@@ -10,15 +10,17 @@ export type GeneralSectionComponentProps =
 
 /**
  * Render the General section content column.
+ * Shell nav already titles the page — skip a second heading (same as Plugins home).
  * @param props - composed slot props (contract/slots.ts).
  * @returns the section element tree.
  */
 export function GeneralSection({ t, renderSlot }: GeneralSectionComponentProps) {
   return (
     <div className={css.section}>
-      <h2 className={css.heading}>{t('general.title')}</h2>
       <p className={css.intro}>{t('general.intro')}</p>
-      {renderSlot('settings.general.item', {})}
+      <div className={css.stack}>
+        {renderSlot('settings.general.item', {})}
+      </div>
     </div>
   )
 }

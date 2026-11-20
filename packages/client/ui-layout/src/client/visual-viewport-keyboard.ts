@@ -11,15 +11,17 @@
  * `--xrk-keyboard-inset: 0`. While that attr is present this binder is a
  * no-op — do not reintroduce optimistic VV guesses or dense focus timers;
  * they fight the shell and stutter.
+ *
+ * Attr name lives in ui-primitives (`shell-frame`) so overlays and this
+ * binder cannot drift onto different strings.
  */
+
+import { SHELL_KEYBOARD_ATTR } from '@xrkseek/client-ui-primitives'
+
+export { SHELL_KEYBOARD_ATTR }
 
 export const KEYBOARD_INSET_CSS = '--xrk-keyboard-inset' as const
 export const KEYBOARD_OPEN_ATTR = 'data-xrk-keyboard' as const
-/**
- * Set by the Flutter shell while it owns layout via `#root` bottom.
- * While present, visualViewport must not overwrite.
- */
-export const SHELL_KEYBOARD_ATTR = 'data-xrk-shell-keyboard' as const
 
 /** Minimum inset (px) before we stamp "keyboard open" for CSS selectors. */
 export const KEYBOARD_OPEN_THRESHOLD_PX = 48

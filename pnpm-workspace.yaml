@@ -17,6 +17,8 @@ packages:
   - "extensions/example-channel"
   - "extensions/example-composer-action"
   - "extensions/example-theme-tokens"
+  - "extensions/example-shell-wallpaper"
+  - "extensions/example-shell-pet"
   - "extensions/example-im-mock-sidecar"
   - "extensions/dsh-compat"
   - "extensions/a2a"
@@ -37,4 +39,8 @@ allowBuilds:
   protobufjs: false
   sharp: true
 minimumReleaseAgeExclude:
-  - agent-desktop@1.2.0
+  - agent-desktop@1.3.1
+  - agent-browser@0.43.0
+  - "@earendil-works/pi-ai@1.6.0"
+  - '@earendil-works/pi-schema@1.6.0'
+  - '@earendil-works/pi-telemetry@1.6.0'

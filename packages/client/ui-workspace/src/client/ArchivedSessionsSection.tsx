@@ -347,6 +347,7 @@ export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): Re
         onClose={closeDelete}
         closeLabel={t('close')}
         title={deleteModalTitle}
+        layout="inset"
         {...deleteModalDescription === undefined
           ? {}
           : { description: deleteModalDescription }}

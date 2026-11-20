@@ -131,18 +131,22 @@ function CollapsedThumb({
   loadImage: ToolImageLoader
 }) {
   const [url, setUrl] = useState<string | null>(() => loadImage.peek?.(attachment) ?? null)
-  // The chat node rebuilds `loadImage` every paint; the attachment is the only
-  // real identity, so a re-render must not reset the peek back to a placeholder.
+  // loadImage is rebuilt every chat paint; attachment objects are too. Identity
+  // for reload is the durable id — otherwise a running thumb flickers
+  // placeholder→url on every args/result projection.
   const loadRef = useRef(loadImage)
+  const attachmentRef = useRef(attachment)
   useEffect(() => { loadRef.current = loadImage }, [loadImage])
+  useEffect(() => { attachmentRef.current = attachment }, [attachment])
+  const attachmentId = attachment.attachmentId
   useEffect(() => {
     let alive = true
-    void loadRef.current(attachment).then(
+    void loadRef.current(attachmentRef.current).then(
       (next) => { if (alive) setUrl(next) },
       () => { /* peek is best-effort */ },
     )
     return () => { alive = false }
-  }, [attachment])
+  }, [attachmentId])
   if (url === null) {
     return <span className={css.thumbPlaceholder} aria-hidden data-tool-thumb="" />
   }

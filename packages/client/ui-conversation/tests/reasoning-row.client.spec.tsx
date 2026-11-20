@@ -40,6 +40,22 @@ const t = makeTranslate(zh, commonZh)
 const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 
 describe('ReasoningRow', () => {
+  it('keeps Think live chrome when a text block follows mid-stream', () => {
+    const view = render(
+      <AssistantMarkdown
+        t={t}
+        blocks={[
+          { kind: 'reasoning', text: 'Inspect the session\nNewest reasoning tokens' },
+          { kind: 'text', text: 'Partial answer' },
+        ]}
+        streaming
+        renderMessageImages={renderMessageImages}
+      />,
+    )
+    expect(view.getByText('运行中')).toBeTruthy()
+    expect(view.getByText(/Newest reasoning tokens/)).toBeTruthy()
+  })
+
   it('streams Think collapsed with a live latest-line summary, then settles to the first line', () => {
     const view = render(
       <AssistantMarkdown

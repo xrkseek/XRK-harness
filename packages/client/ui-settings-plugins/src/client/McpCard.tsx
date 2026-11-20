@@ -1,4 +1,4 @@
-/** MCP desired-server card: allow toggle, per-row status, JSON paste. */
+/** MCP desired-server card: header master switch, per-row status, JSON paste. */
 
 import { useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
@@ -7,6 +7,7 @@ import {
   IconTrashOutlineRegular,
 } from '@xrkseek/client-ui-primitives'
 import { PluginCard } from './PluginCard.tsx'
+import { booleanMasterSwitch } from './plugin-master-switch.ts'
 import type { McpCardFace, McpRowStatus, McpServerRow } from './mcp-card-controller.ts'
 import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
@@ -48,6 +49,9 @@ export function McpCard(props: McpCardProps) {
       titleKey="mcpTitle"
       descriptionKey="mcpDescription"
       state={state}
+      masterSwitch={booleanMasterSwitch(state.allowConnect, (value) => {
+        props.setAllowConnect(value === 'true')
+      })}
       onSave={props.save}
       onDiscard={props.discard}
     >
@@ -56,18 +60,7 @@ export function McpCard(props: McpCardProps) {
           <p className={css.note} role="note">{state.note}</p>
         )
         : null}
-      <label className={css.allowRow}>
-        <input
-          type="checkbox"
-          checked={state.allowConnect}
-          disabled={disabled}
-          onChange={(event) => { props.setAllowConnect(event.target.checked) }}
-        />
-        <span>
-          <span className={css.allowTitle}>{t('mcpAllowConnect')}</span>
-          <span className={css.allowHint}>{t('mcpAllowConnectHint')}</span>
-        </span>
-      </label>
+      <p className={css.masterHint} role="note">{t('mcpAllowConnectHint')}</p>
       {state.rows.some(row => row.transport === 'stdio' && row.cwd.trim())
         ? (
           <label className={css.allowRow}>

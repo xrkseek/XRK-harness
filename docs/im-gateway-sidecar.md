@@ -27,7 +27,7 @@ Face `processChannels/list` 里的厂商 id 是 **discover stub**（`wired=disco
 | Sidecar | `GET {url}/health` → `{ ok, status?, contractVersion }` |
 | Host relay | `POST /api/im/gateway/relay` · body 必含 `channel`；可选 `text` / `attachments[]`（image\|video\|file\|audio） |
 | Host 本地 WS | `/api/im/gateway/ws`（无 sidecar env 也能推） |
-| 鉴权 | `Authorization: Bearer …` 或 `x-im-gateway-token`；无 token 时仅 loopback |
+| 鉴权 | `Authorization: Bearer …` 或 `x-im-gateway-token`（常量时间）；无 token 时仅 **TCP loopback**（`remoteAddress`，不信 `Host`） |
 | Doctor | `xrkh doctor` 行 `im-gateway`：bridge 诚实说明 / sidecar 时探活 |
 
 ## 单平台样板
@@ -69,7 +69,7 @@ Face `processChannels/list` vendor ids are **discover stubs** (`wired=discover`)
 | Sidecar | `GET {url}/health` → `{ ok, status?, contractVersion }` |
 | Host relay | `POST /api/im/gateway/relay` · body must include `channel`; optional `text` / `attachments[]` (image\|video\|file\|audio) |
 | Host local WS | `/api/im/gateway/ws` (works without sidecar env) |
-| Auth | `Authorization: Bearer …` or `x-im-gateway-token`; loopback only when token unset |
+| Auth | `Authorization: Bearer …` or `x-im-gateway-token` (constant-time); when token unset, **TCP loopback** only (`remoteAddress` — never the spoofable `Host` header) |
 | Doctor | `xrkh doctor` row `im-gateway`: honest bridge note / live probe when sidecar URL set |
 
 ## One-platform sample

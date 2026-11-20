@@ -370,6 +370,7 @@
   margin: 0;
   padding: 12px;
   max-height: min(52vh, 480px);
+  overscroll-behavior: contain;
   overflow: auto;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 10px;
@@ -401,6 +402,22 @@
 
 .deleteConfirm:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+@media (max-width: 767px) {
+  .dialog,
+  .deleteDialog {
+    width: 100%;
+  }
+
+  .input {
+    min-height: 44px;
+    font-size: 16px; /* avoid iOS focus zoom */
+  }
+
+  .viewerCode {
+    max-height: 48dvh;
+  }
 }
 
 /* The conversational authoring entry, after the card grid in the spot the

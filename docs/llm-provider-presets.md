@@ -33,9 +33,10 @@
 | `zhipuai` | Zhipu AI | `https://open.bigmodel.cn/api/paas/v4` | `ZHIPU_API_KEY` |
 | `ant-ling` | Ant Ling | `https://api.ant-ling.com/v1` | `ANT_LING_API_KEY` |
 | `kimi-coding` | Kimi For Coding | `https://api.kimi.com/coding/v1` | `KIMI_API_KEY` |
-| `qwen-token-plan` | Qwen Token Plan | `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_API_KEY` |
-| `qwen-token-plan-cn` | Qwen Token Plan CN | `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_CN_API_KEY` |
-| `qwen-token-plan-individual` | Qwen Token Plan Individual | `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_API_KEY` |
+| `qwen-token-plan` | Qwen Token Plan | `https://token-plan.maas.qwencloudapi.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_TEAM_API_KEY` |
+| `qwen-token-plan-cn` | Qwen Token Plan CN | `https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_TEAM_CN_API_KEY` |
+| `qwen-token-plan-individual` | Qwen Token Plan Individual | `https://token-plan.maas.qwencloudapi.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_INDIVIDUAL_API_KEY` |
+| `qwen-token-plan-individual-cn` | Qwen Token Plan Individual CN | `https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_INDIVIDUAL_CN_API_KEY` |
 | `xiaomi` | Xiaomi | `https://api.xiaomimimo.com/v1` | `XIAOMI_API_KEY` |
 | `xiaomi-token-plan-cn` | Xiaomi Token Plan CN | `https://token-plan-cn.xiaomimimo.com/v1` | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
 | `xiaomi-token-plan-ams` | Xiaomi Token Plan AMS | `https://token-plan-ams.xiaomimimo.com/v1` | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
@@ -55,7 +56,7 @@
 
 URL 以厂商文档为准；测例锁字符串。Settings 添加目录来自 Registry（经 `llm.providers`）；`llm-pi-ai` settings base 仅含零配置 `ollama`。
 
-**与 `@earendil-works/pi-ai` 的关系**：添加供应商清单是本仓 `OPENAI_CHAT_BRANDS` / `R1_PROTOCOL_BRANDS` **硬编码**（对照 pi-ai 1.5.0 的 openai-completions 面手工同步），**不是**运行时 import pi 的 `models.generated`。升 pi stub 版本不会自动改这张表；发现新品牌时改 `packages/llm/registry/src/brands-openai-chat.ts` + 测例 + 本文。models.dev 只在发现模型时填空字段。
+**与 `@earendil-works/pi-ai` 的关系**：添加供应商清单是本仓 `OPENAI_CHAT_BRANDS` / `R1_PROTOCOL_BRANDS` **硬编码**（对照 pi-ai 1.6.0 的 openai-completions 面手工同步），**不是**运行时 import pi 的 `models.generated`。升 pi stub 版本不会自动改这张表；发现新品牌时改 `packages/llm/registry/src/brands-openai-chat.ts` + 测例 + 本文。models.dev 只在发现模型时填空字段。
 
 `opencode`（Zen）密钥：`OPENCODE_API_KEY`（https://opencode.ai/zen）。`opencode-go` 密钥：`OPENCODE_GO_API_KEY`（环境变量可回退 `OPENCODE_API_KEY`）。Zen / Go 出站都会带 `x-opencode-session`（会话 id）；部分免费模型有地区或「仅 OpenCode 客户端」限制，403 会标成 `REGION` / `PROVIDER_DENIED`，UI 展示真因而非 invalid key。
 
@@ -112,9 +113,10 @@ Subordinate to [llm-provider-registry.md](./llm-provider-registry.md). Entry dat
 | `zhipuai` | Zhipu AI | `https://open.bigmodel.cn/api/paas/v4` | `ZHIPU_API_KEY` |
 | `ant-ling` | Ant Ling | `https://api.ant-ling.com/v1` | `ANT_LING_API_KEY` |
 | `kimi-coding` | Kimi For Coding | `https://api.kimi.com/coding/v1` | `KIMI_API_KEY` |
-| `qwen-token-plan` | Qwen Token Plan | `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_API_KEY` |
-| `qwen-token-plan-cn` | Qwen Token Plan CN | `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_CN_API_KEY` |
-| `qwen-token-plan-individual` | Qwen Token Plan Individual | `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_API_KEY` |
+| `qwen-token-plan` | Qwen Token Plan | `https://token-plan.maas.qwencloudapi.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_TEAM_API_KEY` |
+| `qwen-token-plan-cn` | Qwen Token Plan CN | `https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_TEAM_CN_API_KEY` |
+| `qwen-token-plan-individual` | Qwen Token Plan Individual | `https://token-plan.maas.qwencloudapi.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_INDIVIDUAL_API_KEY` |
+| `qwen-token-plan-individual-cn` | Qwen Token Plan Individual CN | `https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1` | `QWEN_TOKEN_PLAN_INDIVIDUAL_CN_API_KEY` |
 | `xiaomi` | Xiaomi | `https://api.xiaomimimo.com/v1` | `XIAOMI_API_KEY` |
 | `xiaomi-token-plan-cn` | Xiaomi Token Plan CN | `https://token-plan-cn.xiaomimimo.com/v1` | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
 | `xiaomi-token-plan-ams` | Xiaomi Token Plan AMS | `https://token-plan-ams.xiaomimimo.com/v1` | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
@@ -134,7 +136,7 @@ Subordinate to [llm-provider-registry.md](./llm-provider-registry.md). Entry dat
 
 URLs follow vendor docs; tests lock the strings. The Settings add directory comes from the Registry via `llm.providers`; the `llm-pi-ai` settings base ships only zero-config `ollama`.
 
-**Relation to `@earendil-works/pi-ai`**: the add-provider directory is this repo's hardcoded `OPENAI_CHAT_BRANDS` / `R1_PROTOCOL_BRANDS` (manually synced against pi-ai 1.5.0 openai-completions providers). Bumping the pi stub does **not** auto-update this table — edit `packages/llm/registry/src/brands-openai-chat.ts` + tests + this doc. models.dev only fills blank capacity fields at discovery time.
+**Relation to `@earendil-works/pi-ai`**: the add-provider directory is this repo's hardcoded `OPENAI_CHAT_BRANDS` / `R1_PROTOCOL_BRANDS` (manually synced against pi-ai 1.6.0 openai-completions providers). Bumping the pi stub does **not** auto-update this table — edit `packages/llm/registry/src/brands-openai-chat.ts` + tests + this doc. models.dev only fills blank capacity fields at discovery time.
 
 `opencode` (Zen) key: `OPENCODE_API_KEY` (https://opencode.ai/zen). `opencode-go` key: `OPENCODE_GO_API_KEY` (env may fall back to `OPENCODE_API_KEY`). Zen and Go outbound both send `x-opencode-session` (session id); some free models are geo- or client-restricted — those 403s map to `REGION` / `PROVIDER_DENIED`, and the UI shows the real cause instead of a fake invalid-key AUTH.
 

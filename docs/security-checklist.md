@@ -8,7 +8,7 @@
 
 | 控制 | 位置 | 说明 |
 |------|------|------|
-| API Key | `server-http` | `Authorization: Bearer` 或 `x-api-key`；`XRK_API_KEY` 空 = 开发关闭鉴权 |
+| API Key | `server-http` | `Authorization: Bearer` 或 `x-api-key`；**常量时间**比较；`XRK_API_KEY` 空 = 开发关闭鉴权 |
 | CORS | `server-http` | `XRK_CORS_ORIGIN`（默认 `*`） |
 | Rate limit | `server-http` | 每 IP 每分钟（`XRK_RATE_LIMIT`） |
 | Session busy | TurnLatch / drain join | 同 session 单 in-flight；忙可 409 或 join |
@@ -17,7 +17,9 @@
 | Sandbox argv | `exec-sandbox` + guard | Workspace / Docker / bwrap / windows via `createSandboxStack`；`xrkh doctor` 探测 helper |
 | Hardline argv / 写路径提示 | `createHardlineArgvPre` + `createWritePathSecurityPre/Post` | harness 在 **policy 前** fail-closed deny（根擦除 / 敏感路径）；内容 pattern 默认结果后提示 |
 | Path jail | `exec-fs` `resolveWithinRoot` · `resolveUnderHostRoots` | 相对路径与 workspace 内绝对路径均可；`hostReadableRoots` 默认 `{XRK_HOME}`；`extraWritableRoots` 默认含产品家目录；realpath 拒符号链接逃出所列根 |
-| Web URL 卫生 | `exec-web` `assertHttpUrl` + allowlist | 仅 http(s)、拒凭据；字面量私网；可选 `XRK_WEB_FETCH_ALLOWLIST` + 审计环；**无** DNS 再绑定 |
+| Web URL 卫生 | `exec-web` `assertHttpUrl` + `assertResolvedAddressesPublic` + allowlist | 仅 http(s)、拒凭据；字面量私网；**DNS 解析后再拦私网/回环**（redirect 每跳；有 allowlist 时跳过再解析以便显式放行私网）；可选 `XRK_WEB_FETCH_ALLOWLIST` + 审计环 |
+| 非回环绑定 | `server-config` `assertSecureHostBind` | 非 loopback 且 `listen≠false`：须非空 `XRK_API_KEY`，且拒绝默认 CORS `*`（须显式 `XRK_CORS_ORIGIN`）；旁路 `XRK_ALLOW_INSECURE_BIND=1` |
+| 进程插件信任 | loader manifest `trust` + Settings 提示 | 进程插件同进程 `import()`；`trust.note` / `capabilities` 为声明式披露，**不是**沙箱 |
 | LSP 路径 | `exec-lsp` `resolveWithinRoot` | 查询文件必须落在 `workspaceRoot` 内 |
 | PTY cwd | `exec-pty` `resolvePtyCwd` | cwd 必须落在 `workspaceRoot` 内；拒绝对 shell `SIGKILL` |
 | PTY native | `node-pty@1.2.0-beta.15` | NAPI prebuild；Win inspector 为 no-op |
@@ -25,8 +27,12 @@
 | Code worker | `code-runtime` | `run_code`：无 bridge 进 worker；有 bridge 则 AsyncFunction + 嵌套工具走 pipeline；超时 / 输出硬顶 |
 | Safety loop/mistake | `core-session` safety | soft/hard notice；可 abort turn |
 | 密钥不入库 | `.gitignore` + 示例模板 | 仓内仅 `*.example` |
-| IM webhook  ingress | `dsh-compat` `im-messaging-bridge` | `/api/im/{channel}/webhook` 无 vendor secret 校验（开发联调）；生产应置于反向代理后并限流 |
-| IM gateway relay | `im-gateway-sidecar` | `/api/im/gateway/relay`：本机 localhost 或 `XRK_IM_GATEWAY_TOKEN`；生产必须设 token |
+| IM webhook / send / stream | `im-gateway-contract` + `im-messaging-bridge` | `tryHandlePublic` 前：TCP **loopback** 或 `XRK_IM_GATEWAY_TOKEN` / `XRK_IM_WEBHOOK_TOKEN` / `XRK_API_KEY`（常量时间）；**不**信 `Host`；无厂商 webhook 签名校验 |
+| IM gateway relay / local WS | `im-gateway-sidecar` · `im-gateway-local-ws` | 同：`remoteAddress` loopback 或 token；生产非回环必须设 token |
+| Harness connector | `harness-connector` | `/api/harness/connector/*` 同 public ingress 闸门（可触发 `onJobAccepted` 开 session） |
+| Sidebar browser.probe | `sidebar-browser` | 仅探 embed 头；拒凭据 URL；字面量 + DNS 再解析拦私网/回环（防 SSRF） |
+| Sidebar 路径 / 打开 | `sidebar-adapter` | `fs.write` / `/sidebar/upload` 绝对路径须落在 session cwd；仓外绝对读仅 TCP loopback；`open.external` url 仅 http(s) |
+| Mobile gate Host | `mobile-gate-kit` | 非回环 TCP 时不信伪造 `Host: 127.0.0.1`（升为需 PIN / 关闭） |
 | IM vendor WS | `im-vendor-ws-client` | `XRK_IM_GATEWAY_WS_URL` / 自 `XRK_IM_GATEWAY_URL` 推导；`XRK_IM_GATEWAY_TOKEN` 鉴权；勿暴露到浏览器 |
 | Memory embed sidecar | `memory-embeddings` | `XRK_MEMORY_EMBED_URL` / Settings → Plugins → 高级 `memory-embed`；token 勿入库（Credentials）；未接时走 embedded `~/.xrk/memory-embeddings` |
 | GenUI npm allowlist | `genui-npm-bridge` | `XRK_GENUI_NPM_ALLOWLIST` 仅允许列出的包名；resolve 在 Host 侧，勿把 token 放进 schema |
@@ -42,28 +48,29 @@
 | 密钥轮换 API / age vault | **未做**（Face set/clear；轮换=覆盖写入；revoke 在提供方） |
 | Ask / 审批 UI | `ask` → pipeline `onApproval`；无完整人工审批 UI 流 |
 | TLS 终止 | 由反向代理负责 |
-| Web DNS 再绑定 | 只拦字面量私网 host |
+| Web DNS 再绑定 | **已做**（`assertResolvedAddressesPublic`；有 allowlist 时跳过再解析） |
 | 多租户鉴权 / RBAC | 单 key |
 | 供应链 SBOM / 签名发布 | 见 publishing 路线 |
 
 ## 公网绑定（免责）
 
-CLI **允许** `--host 0.0.0.0` / 非回环地址。非回环启动会武装 **访问 PIN**（日志打印），并可配 `XRK_API_KEY`。二者只是闸门，**不是**完整安全产品：
+CLI **允许** `--host 0.0.0.0` / 非回环地址，但 Host spawn 会经 `assertSecureHostBind`：**无** `XRK_API_KEY` 或仍用默认 CORS `*` 时直接拒绝启动（旁路 `XRK_ALLOW_INSECURE_BIND=1`）。非回环另武装 **访问 PIN**（日志打印）。这些只是闸门，**不是**完整安全产品：
 
 - **不保证**面对公网扫描、撞库、中间人、工具逃逸等威胁的安全。
-- 生产暴露宜：**反代 + TLS**、自管防火墙 / 安全组、非空 `XRK_API_KEY`、收紧 `XRK_CORS_ORIGIN`；勿把访问 PIN 当唯一防护。
+- 生产暴露宜：**反代 + TLS**、自管防火墙 / 安全组、非空 `XRK_API_KEY`、显式 `XRK_CORS_ORIGIN`；勿把访问 PIN 当唯一防护。
 - Desktop 壳仍仅回环（见 [ADR-0008](./adr/0008-desktop-shell-private-host.md)）；本条针对 `xrkh serve` / `web` Host。
 
 细节：[getting-started.md](./getting-started.md) · [configuration.md](./configuration.md)。
 
 ## 开发建议
 
-1. 生产环境 **必须** 设置非空 `XRK_API_KEY`，并收紧 CORS。  
+1. 生产环境 **必须** 设置非空 `XRK_API_KEY`，并显式设置 `XRK_CORS_ORIGIN`（非回环默认拒 `*`）。  
 2. **勿**把 `{workspace}/.xrk/.credentials.yaml` 提交进 git。  
 3. harness preset 默认挂 sandbox；minimal 无 shell——按威胁模型选型。  
 4. 新增危险工具：先 guard / sandbox，再注册。  
 5. 变更安全相关行为 → 更新本页 + 加锁测。  
-6. 公网听：见上文「公网绑定（免责）」——PIN / API key **不**等于已加固。
+6. 公网听：见上文「公网绑定（免责）」——PIN / API key **不**等于已加固；非回环无 key 会直接拒绝启动（`XRK_ALLOW_INSECURE_BIND=1` 旁路）。  
+7. 进程插件 = 同进程信任边界；只装可信来源，见 `trust` 字段与 Settings 提示。
 
 相关：[http-api.md](./http-api.md) · [tool-pipeline.md](./tool-pipeline.md) · [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) · [status.md](./status.md)
 
@@ -79,7 +86,7 @@ Lists only controls **already implemented in this repository**; unfinished items
 
 | Control | Location | Notes |
 |------|------|------|
-| API Key | `server-http` | `Authorization: Bearer` or `x-api-key`; empty `XRK_API_KEY` = auth off for development |
+| API Key | `server-http` | `Authorization: Bearer` or `x-api-key`; **constant-time** compare; empty `XRK_API_KEY` = auth off for development |
 | CORS | `server-http` | `XRK_CORS_ORIGIN` (default `*`) |
 | Rate limit | `server-http` | Per IP per minute (`XRK_RATE_LIMIT`) |
 | Session busy | TurnLatch / drain join | One in-flight per session; busy may 409 or join |
@@ -88,7 +95,9 @@ Lists only controls **already implemented in this repository**; unfinished items
 | Sandbox argv | `exec-sandbox` + guard | Workspace / Docker / bwrap / windows via `createSandboxStack`; `xrkh doctor` probes helpers |
 | Hardline argv / write-path guidance | `createHardlineArgvPre` + `createWritePathSecurityPre/Post` | harness registers **before** policy — fail-closed deny (root wipe / sensitive paths); content patterns append advisory by default |
 | Path jail | `exec-fs` `resolveWithinRoot` · `resolveUnderHostRoots` | Relative and workspace-absolute paths OK; `hostReadableRoots` defaults to `{XRK_HOME}`; `extraWritableRoots` defaults include product home; realpath denies symlink escape out of listed roots |
-| Web URL hygiene | `exec-web` `assertHttpUrl` + allowlist | http(s) only, no credentials; literal private hosts; optional `XRK_WEB_FETCH_ALLOWLIST` + audit ring; **no** DNS rebinding check |
+| Web URL hygiene | `exec-web` `assertHttpUrl` + `assertResolvedAddressesPublic` + allowlist | http(s) only, no credentials; literal private hosts; **DNS resolve then deny private/loopback** (each redirect hop; skipped when an allowlist owns the host gate); optional `XRK_WEB_FETCH_ALLOWLIST` + audit ring |
+| Non-loopback bind | `server-config` `assertSecureHostBind` | Off-loopback with `listen≠false`: require non-empty `XRK_API_KEY` and reject default CORS `*` (set explicit `XRK_CORS_ORIGIN`); escape hatch `XRK_ALLOW_INSECURE_BIND=1` |
+| Process-plugin trust | loader manifest `trust` + Settings hint | Process plugins `import()` into Host; `trust.note` / `capabilities` are declarative disclosure, **not** a sandbox |
 | LSP paths | `exec-lsp` `resolveWithinRoot` | Query files must stay under `workspaceRoot` |
 | PTY cwd | `exec-pty` `resolvePtyCwd` | cwd must stay under `workspaceRoot`; rejects `SIGKILL` on the shell itself |
 | PTY native | `node-pty@1.2.0-beta.15` | NAPI prebuild; Win inspector is a no-op |
@@ -96,8 +105,12 @@ Lists only controls **already implemented in this repository**; unfinished items
 | Code worker | `code-runtime` | `run_code`: worker when unbridged; with bridge, AsyncFunction + nested tools via pipeline; timeout / output caps |
 | Safety loop/mistake | `core-session` safety | soft/hard notice; may abort turn |
 | Secrets not in repo | `.gitignore` + example templates | Only `*.example` in-tree |
-| IM webhook ingress | `dsh-compat` `im-messaging-bridge` | `/api/im/{channel}/webhook` has no vendor secret check (dev integration); production should sit behind a reverse proxy with rate limits |
-| IM gateway relay | `im-gateway-sidecar` | `/api/im/gateway/relay`: localhost only or `XRK_IM_GATEWAY_TOKEN`; set token in production |
+| IM webhook / send / stream | `im-gateway-contract` + `im-messaging-bridge` | Before `tryHandlePublic`: TCP **loopback** or `XRK_IM_GATEWAY_TOKEN` / `XRK_IM_WEBHOOK_TOKEN` / `XRK_API_KEY` (constant-time); **never** trusts `Host`; no vendor webhook signature check |
+| IM gateway relay / local WS | `im-gateway-sidecar` · `im-gateway-local-ws` | Same: `remoteAddress` loopback or token; production off-loopback must set token |
+| Harness connector | `harness-connector` | `/api/harness/connector/*` same public-ingress gate (can trigger `onJobAccepted` sessions) |
+| Sidebar browser.probe | `sidebar-browser` | Embed headers only; rejects credentialed URLs; literal + DNS re-resolve blocks private/loopback (SSRF) |
+| Sidebar paths / open | `sidebar-adapter` | Absolute `fs.write` / `/sidebar/upload` must stay under session cwd; off-workspace absolute reads only for TCP loopback; `open.external` url is http(s) only |
+| Mobile gate Host | `mobile-gate-kit` | Non-loopback TCP peers do not get a free pass from spoofed `Host: 127.0.0.1` |
 | IM vendor WS | `im-vendor-ws-client` | `XRK_IM_GATEWAY_WS_URL` / inferred from `XRK_IM_GATEWAY_URL`; `XRK_IM_GATEWAY_TOKEN` auth; do not expose to browser |
 | Memory embed sidecar | `memory-embeddings` | `XRK_MEMORY_EMBED_URL` / Settings → Plugins → Advanced `memory-embed`; do not commit tokens (Credentials); falls back to embedded `~/.xrk/memory-embeddings` |
 | GenUI npm allowlist | `genui-npm-bridge` | `XRK_GENUI_NPM_ALLOWLIST` limits package names; resolve runs on Host; do not put tokens in schema |
@@ -113,27 +126,28 @@ Lists only controls **already implemented in this repository**; unfinished items
 | Secret rotation API / age vault | **Not done** (Face set/clear; rotate = overwrite; revoke at provider) |
 | Ask / approval UI | `ask` → pipeline `onApproval`; no full human-approval UI flow |
 | TLS termination | Reverse proxy responsibility |
-| Web DNS rebinding | Only literal private hosts blocked |
+| Web DNS rebinding | **Done** (`assertResolvedAddressesPublic`; skipped when allowlist owns the gate) |
 | Multi-tenant auth / RBAC | Single key |
 | Supply-chain SBOM / signed release | See publishing roadmap |
 
 ## Public bind (disclaimer)
 
-CLI **allows** `--host 0.0.0.0` / non-loopback addresses. Non-loopback listen arms the **access PIN** (printed in logs) and may use `XRK_API_KEY`. Those are gates only — **not** a full security product:
+CLI **allows** `--host 0.0.0.0` / non-loopback addresses, but Host spawn runs `assertSecureHostBind`: missing `XRK_API_KEY` or default CORS `*` **refuses to start** (escape hatch `XRK_ALLOW_INSECURE_BIND=1`). Non-loopback also arms the **access PIN** (printed in logs). Those are gates only — **not** a full security product:
 
 - **No guarantee** against open-internet scanning, credential stuffing, MITM, tool escape, and similar threats.
-- Prefer for production exposure: **reverse proxy + TLS**, your own firewall / security group, a non-empty `XRK_API_KEY`, and a tight `XRK_CORS_ORIGIN`; do not treat the access PIN as the only control.
+- Prefer for production exposure: **reverse proxy + TLS**, your own firewall / security group, a non-empty `XRK_API_KEY`, and an explicit `XRK_CORS_ORIGIN`; do not treat the access PIN as the only control.
 - The Desktop shell remains loopback-only (see [ADR-0008](./adr/0008-desktop-shell-private-host.md)); this section applies to `xrkh serve` / `web` Host.
 
 Details: [getting-started.md](./getting-started.md) · [configuration.md](./configuration.md).
 
 ## Guidance
 
-1. Production **must** set a non-empty `XRK_API_KEY` and tighten CORS.  
+1. Production **must** set a non-empty `XRK_API_KEY` and an explicit `XRK_CORS_ORIGIN` (non-loopback rejects default `*`).  
 2. **Do not** commit `{workspace}/.xrk/.credentials.yaml`.  
 3. harness preset mounts sandbox by default; minimal has no shell — choose by threat model.  
 4. New dangerous tools: add guard / sandbox first, then register.  
 5. Security behavior changes → update this page and add lock tests.  
-6. Public listen: see “Public bind (disclaimer)” above — PIN / API key ≠ hardened deployment.
+6. Public listen: see “Public bind (disclaimer)” above — PIN / API key ≠ hardened deployment; off-loopback without a key refuses to start (`XRK_ALLOW_INSECURE_BIND=1` escape hatch).  
+7. Process plugins share the Host process trust boundary; install only trusted sources — see `trust` and the Settings hint.
 
 Related: [http-api.md](./http-api.md) · [tool-pipeline.md](./tool-pipeline.md) · [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) · [status.md](./status.md)

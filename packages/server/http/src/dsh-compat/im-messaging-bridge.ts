@@ -4,11 +4,41 @@
  */
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { assertImPublicIngressAuthorized } from "@xrkseek/im-gateway-contract";
 import { handleImGatewaySidecarHttp } from "./im-gateway-sidecar.js";
 import { sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
+
+function imIngressAuthOrReject(
+  req: IncomingMessage,
+  res: ServerResponse,
+): boolean {
+  const auth = assertImPublicIngressAuthorized({
+    remoteAddress: req.socket.remoteAddress,
+    authorization:
+      typeof req.headers.authorization === "string"
+        ? req.headers.authorization
+        : undefined,
+    gatewayTokenHeader:
+      typeof req.headers["x-im-gateway-token"] === "string"
+        ? req.headers["x-im-gateway-token"]
+        : undefined,
+    apiKeyHeader:
+      typeof req.headers["x-api-key"] === "string"
+        ? req.headers["x-api-key"]
+        : undefined,
+  });
+  if (auth.ok) return true;
+  sendJson(res, 401, {
+    ok: false,
+    code: auth.code,
+    message: auth.message,
+    adapter: DSH_COMPAT_ADAPTER,
+  });
+  return false;
+}
 
 /** Bridge-normalized media kinds (video/audio ride here; Face maps to image/file). */
 export type ImAttachmentKind = "image" | "video" | "file" | "audio";
@@ -377,6 +407,7 @@ export async function handleImMessagingHttp(
   const method = (req.method ?? "GET").toUpperCase();
   const webhookMatch = /^\/api\/im\/([^/]+)\/webhook$/.exec(pathname);
   if (webhookMatch && method === "POST") {
+    if (!imIngressAuthOrReject(req, res)) return true;
     const channel = decodeURIComponent(webhookMatch[1]!);
     const body = await parseJsonBody(req);
     const botId =
@@ -394,6 +425,7 @@ export async function handleImMessagingHttp(
   }
   const listMatch = /^\/api\/im\/([^/]+)\/messages$/.exec(pathname);
   if (listMatch && (method === "GET" || method === "HEAD")) {
+    if (!imIngressAuthOrReject(req, res)) return true;
     const channel = decodeURIComponent(listMatch[1]!);
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const botId = url.searchParams.get("botId") ?? undefined;
@@ -407,6 +439,7 @@ export async function handleImMessagingHttp(
   }
   const sendMatch = /^\/api\/im\/([^/]+)\/send$/.exec(pathname);
   if (sendMatch && method === "POST") {
+    if (!imIngressAuthOrReject(req, res)) return true;
     const channel = decodeURIComponent(sendMatch[1]!);
     const body = await parseJsonBody(req);
     sendJson(res, 200, sendImMessage(xrkHome, channel, body));
@@ -429,6 +462,7 @@ export async function handleImMessagingStream(
     sendJson(res, 405, { error: "method not allowed" });
     return true;
   }
+  if (!imIngressAuthOrReject(req, res)) return true;
   const channel = decodeURIComponent(streamMatch[1]!);
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   const since = url.searchParams.get("since") ?? "";

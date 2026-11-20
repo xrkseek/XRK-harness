@@ -33,6 +33,7 @@ import {
 import { runSkillCurator } from "@xrkseek/workspace";
 import { resolveSecretStore } from "@xrkseek/secrets";
 import {
+  assertSecureHostBind,
   hostSettingsPath,
   defaultSpillDir,
   expandHomePath,
@@ -805,6 +806,8 @@ export function createHostManager(): HostManager {
   return {
     async spawn(config, factory, options) {
       const log = options?.logger;
+      // Non-loopback bind: require API key + explicit CORS (see security-checklist).
+      assertSecureHostBind({ config });
       if (installOutboundHttpProxy()) {
         log?.info("outbound HTTP proxy installed (HTTP(S)_PROXY / ALL_PROXY / NO_PROXY)");
       }
@@ -4317,10 +4320,13 @@ export function createHostManager(): HostManager {
         if (mcpFileSourced) {
           const mcpUser = faceRuntime.settingsNamespaces.ensure("mcp").user;
           const n = Array.isArray(mcpUser.servers) ? mcpUser.servers.length : 0;
-          mcpAllowConnect = resolveMcpAllowConnect(
-            config,
-            mcpUser.allowConnect === true,
-          );
+          // Pass through unset so resolve falls to host-settings / product default
+          // (schema allowConnect: true). Do not coerce missing → false.
+          const faceAllow =
+            typeof mcpUser.allowConnect === "boolean"
+              ? mcpUser.allowConnect
+              : undefined;
+          mcpAllowConnect = resolveMcpAllowConnect(config, faceAllow);
           if (n > 0 && !mcpAllowConnect) {
             log?.info(
               `mcp file-sourced ${n} deferred until Settings save (allow=off)`,

@@ -153,9 +153,22 @@ export interface RegisteredPlugin {
     ctx: HostWireContext,
   ) => HostPublicHandlerFn;
   /**
+   * Optional trust disclosure from `xrk.plugin.json` `trust` (author note +
+   * capability tags). Declarative only — process plugins still run in-Host.
+   */
+  readonly trust?: PluginTrustDisclosure;
+  /**
    * From manifest `required`. Load failure for required plugins aborts
    * Host spawn / reconcile; optional failures are isolated.
    */
   readonly required?: boolean;
   dispose?: () => void | Promise<void>;
+}
+
+/** Author-declared trust note for Settings / docs (not a sandbox). */
+export interface PluginTrustDisclosure {
+  /** Short human note shown near install / inventory. */
+  readonly note?: string;
+  /** Free-form capability tags (e.g. `fs`, `network`, `shell`). */
+  readonly capabilities?: readonly string[];
 }

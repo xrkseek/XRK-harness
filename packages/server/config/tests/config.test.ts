@@ -2,9 +2,11 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  assertSecureHostBind,
   defaultMcpStdioCwd,
   defaultSessionsDir,
   defaultSpillDir,
+  isLoopbackBindHost,
   loadHostConfig,
   parseJsonText,
   parseMcpServersJson,
@@ -13,6 +15,82 @@ import {
   resolveXrkHome,
   stripUtf8Bom,
 } from "../src/index.js";
+
+describe("assertSecureHostBind", () => {
+  it("allows loopback without API key", () => {
+    expect(isLoopbackBindHost("127.0.0.1")).toBe(true);
+    expect(isLoopbackBindHost("0.0.0.0")).toBe(false);
+    const cfg = loadHostConfig({
+      env: { XRK_HOST: "127.0.0.1", XRK_API_KEY: "" },
+    });
+    expect(() => assertSecureHostBind({ config: cfg, env: {} })).not.toThrow();
+  });
+
+  it("rejects non-loopback without API key", () => {
+    const cfg = loadHostConfig({
+      env: { XRK_HOST: "0.0.0.0", XRK_API_KEY: "" },
+    });
+    expect(() =>
+      assertSecureHostBind({ config: cfg, env: { XRK_HOST: "0.0.0.0" } }),
+    ).toThrow(/XRK_API_KEY/);
+  });
+
+  it("rejects non-loopback with API key but default CORS *", () => {
+    const cfg = loadHostConfig({
+      env: { XRK_HOST: "0.0.0.0", XRK_API_KEY: "secret" },
+    });
+    expect(() =>
+      assertSecureHostBind({
+        config: cfg,
+        env: { XRK_HOST: "0.0.0.0", XRK_API_KEY: "secret" },
+      }),
+    ).toThrow(/CORS/);
+  });
+
+  it("allows non-loopback with API key + explicit CORS", () => {
+    const cfg = loadHostConfig({
+      env: {
+        XRK_HOST: "0.0.0.0",
+        XRK_API_KEY: "secret",
+        XRK_CORS_ORIGIN: "https://app.example",
+      },
+    });
+    expect(() =>
+      assertSecureHostBind({
+        config: cfg,
+        env: {
+          XRK_HOST: "0.0.0.0",
+          XRK_API_KEY: "secret",
+          XRK_CORS_ORIGIN: "https://app.example",
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it("XRK_ALLOW_INSECURE_BIND bypasses gates", () => {
+    const cfg = loadHostConfig({
+      env: { XRK_HOST: "0.0.0.0", XRK_API_KEY: "" },
+    });
+    expect(() =>
+      assertSecureHostBind({
+        config: cfg,
+        env: { XRK_HOST: "0.0.0.0", XRK_ALLOW_INSECURE_BIND: "1" },
+      }),
+    ).not.toThrow();
+  });
+
+  it("skips when listen is false", () => {
+    const cfg = loadHostConfig({
+      env: { XRK_HOST: "0.0.0.0", XRK_API_KEY: "", XRK_LISTEN: "0" },
+    });
+    expect(() =>
+      assertSecureHostBind({
+        config: cfg,
+        env: { XRK_HOST: "0.0.0.0", XRK_LISTEN: "0" },
+      }),
+    ).not.toThrow();
+  });
+});
 
 describe("loadHostConfig", () => {
   it("reads XRK_PLUGINS_DIR", () => {

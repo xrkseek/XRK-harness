@@ -25,6 +25,7 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* Match Settings phone nav pills; desktop keeps a quiet underline strip. */
 .tabs {
   display: flex;
   align-items: flex-end;
@@ -67,6 +68,43 @@
   outline-offset: 2px;
   border-radius: 2px;
   color: var(--dsw-alias-label-primary);
+}
+
+@media (max-width: 767px) {
+  .tabs {
+    gap: 4px;
+    margin-top: 0;
+    padding-bottom: 2px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    border-bottom: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    flex: none;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 22px;
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .tab[data-active='true'] {
+    background: var(--dsw-specific-sidebar-nav-item-active);
+    font-weight: 500;
+  }
+
+  .tab[data-active='true']::after,
+  .tab:focus-visible::after {
+    content: none;
+  }
 }
 
 .panel {

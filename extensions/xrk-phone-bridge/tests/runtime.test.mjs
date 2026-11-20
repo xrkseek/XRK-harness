@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -379,6 +380,24 @@ describe("phone bridge runtime", () => {
       expect(out.content).toContain("screen text");
       expect(out.imageBase64).toBe(pngB64);
       expect(out.imageMime).toBe("image/png");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("persists whitelist atomically (tmp then rename)", () => {
+    const home = mkdtempSync(join(tmpdir(), "xrk-pb-atomic-"));
+    try {
+      const rt = getPhoneBridge(home);
+      const key = shaDeviceKey("device-atomic");
+      rt.addWhitelist(key, "atomic-phone");
+      const dir = join(home, "phone-bridge");
+      const p = join(dir, "state.json");
+      expect(existsSync(p)).toBe(true);
+      const raw = JSON.parse(readFileSync(p, "utf8"));
+      expect(raw.whitelist.some((w) => w.deviceKey === key)).toBe(true);
+      // Successful save must not leave crash-temp siblings beside state.json.
+      expect(readdirSync(dir).every((n) => !n.endsWith(".tmp"))).toBe(true);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

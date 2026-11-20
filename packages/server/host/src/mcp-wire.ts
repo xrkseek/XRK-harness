@@ -91,6 +91,8 @@ export type McpServerDraft = {
   readonly cwd?: string;
   readonly cwdAllowWorkspace?: boolean;
   readonly env?: Readonly<Record<string, string>>;
+  /** false = listed but not connected while master allow is on. */
+  readonly enabled?: boolean;
 };
 
 /** Plugin carrying supervisor health + desired-spec fingerprint for reconcile. */
@@ -233,7 +235,9 @@ export function readMcpServersFromHostSettings(
 
 /**
  * Face dump `mcp.allowConnect` (Web Settings).
- * Parse/read failure keeps last good for that file (aligned with servers).
+ * Product default when the file is absent: allowConnect on (matches Face
+ * schema `base.allowConnect: true`). Explicit `false` in the file still
+ * wins; parse/read failure keeps last good for that file.
  */
 export function readMcpAllowFromHostSettings(file: string): boolean {
   const key = path.resolve(file);
@@ -247,14 +251,14 @@ export function readMcpAllowFromHostSettings(file: string): boolean {
       typeof err === "object" &&
       (err as NodeJS.ErrnoException).code === "ENOENT"
     ) {
-      return lastGood ?? false;
+      return lastGood ?? true;
     }
     console.warn(
       `[host] ${file}: read failed; keeping last good mcp.allowConnect (${
         err instanceof Error ? err.message : String(err)
       })`,
     );
-    return lastGood ?? false;
+    return lastGood ?? true;
   }
   let parsed: unknown;
   try {
@@ -288,11 +292,12 @@ export function readMcpAllowFromHostSettings(file: string): boolean {
   return allow;
 }
 
-/** Convert Face desired drafts into Host connect specs (skips incomplete rows). */
+/** Convert Face desired drafts into Host connect specs (skips incomplete / disabled rows). */
 export function mcpDraftsToSpecs(
   drafts: readonly McpServerDraft[],
 ): McpServerSpec[] {
   return drafts
+    .filter((row) => row.enabled !== false)
     .map(rowToSpec)
     .filter((s): s is McpServerSpec => s !== undefined);
 }

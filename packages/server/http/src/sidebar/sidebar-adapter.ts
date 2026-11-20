@@ -38,6 +38,7 @@ import {
 } from "./office-to-pdf.js";
 import { attachmentContentDisposition } from "../content-disposition.js";
 
+import { isLoopbackRemoteAddress } from "@xrkseek/im-gateway-contract";
 import type { SidebarFaceBridge } from "./sidebar-face-bridge.js";
 import type {
   PolicyEngine,
@@ -241,22 +242,31 @@ type ReadablePathResult =
 /**
  * Resolve a path for read-only preview (`fs.read` / `fs.stat` / editor stats).
  *
- * Absolute paths are allowed — same trust as `GET /sidebar/file` and the
- * pre-0.7.19 Host sidebar. Chat file links often open agent-touched absolute
- * paths outside the session cwd (path=open / Full access / spill / home);
- * fencing those reads as "file missing" broke the better-sidebar editor.
- * Relative paths stay under the session cwd fence.
+ * Absolute paths outside the session cwd are allowed only for **TCP loopback**
+ * peers (local desktop / same-machine chat wake). Non-loopback callers stay
+ * inside the workspace fence — `/sidebar/*` rides `tryHandlePublic` before
+ * API-key auth.
+ * Relative paths always stay under the session cwd fence.
  */
 function resolveReadablePath(
   cwd: string,
   raw: string,
+  allowAbsoluteOutside: boolean,
 ): ReadablePathResult {
   const trimmed = raw.trim();
   if (!trimmed) {
     return { ok: false, code: "empty", message: "path required" };
   }
   if (path.isAbsolute(trimmed)) {
-    return { ok: true, abs: path.resolve(trimmed) };
+    const abs = path.resolve(trimmed);
+    if (isPathInside(cwd, abs) || allowAbsoluteOutside) {
+      return { ok: true, abs };
+    }
+    return {
+      ok: false,
+      code: "outside-fence",
+      message: "path escapes workspace",
+    };
   }
   const inside = resolveWorkspacePath(cwd, trimmed);
   if (!inside) {
@@ -267,6 +277,16 @@ function resolveReadablePath(
     };
   }
   return { ok: true, abs: inside };
+}
+
+/** http(s) only for `open.external` URL action — blocks file:/custom schemes. */
+function isSafeExternalOpenUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw.trim());
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -377,6 +397,7 @@ async function dispatchMethod(
   method: string,
   payload: Record<string, unknown>,
   options: SidebarHostOptions,
+  allowAbsoluteOutsideRead: boolean,
 ): Promise<unknown> {
   const sessionId =
     typeof payload.sessionId === "string" ? payload.sessionId : undefined;
@@ -412,7 +433,7 @@ async function dispatchMethod(
     }
     case "fs.read": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const resolved = resolveReadablePath(cwd, rel);
+      const resolved = resolveReadablePath(cwd, rel, allowAbsoluteOutsideRead);
       if (!resolved.ok) {
         return fail(
           resolved.code === "outside-fence" ? "path" : resolved.code,
@@ -476,7 +497,7 @@ async function dispatchMethod(
     }
     case "fs.stat": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const resolved = resolveReadablePath(cwd, rel);
+      const resolved = resolveReadablePath(cwd, rel, allowAbsoluteOutsideRead);
       if (!resolved.ok) {
         return fail(
           resolved.code === "outside-fence" ? "path" : resolved.code,
@@ -559,7 +580,11 @@ async function dispatchMethod(
       const stats: Array<{ path: string; mtimeMs: number; size: number }> = [];
       for (const raw of statPaths) {
         // Open editor tabs may point outside the session cwd (chat wake).
-        const resolved = resolveReadablePath(cwd, raw);
+        const resolved = resolveReadablePath(
+          cwd,
+          raw,
+          allowAbsoluteOutsideRead,
+        );
         if (!resolved.ok || !existsSync(resolved.abs)) continue;
         try {
           const info = await stat(resolved.abs);
@@ -876,10 +901,6 @@ async function dispatchMethod(
       return ok({ closed: true });
     }
     case "open.external": {
-      const bridge = options.sidebarFace;
-      if (!bridge) {
-        return fail("unavailable", "open.external requires XRK Host Face bridge");
-      }
       const rawAction = payload.action;
       const action =
         rawAction === "url"
@@ -890,6 +911,18 @@ async function dispatchMethod(
       const pathValue =
         typeof payload.path === "string" ? payload.path : undefined;
       const urlValue = typeof payload.url === "string" ? payload.url : undefined;
+      if (action === "url") {
+        if (!urlValue?.trim() || !isSafeExternalOpenUrl(urlValue)) {
+          return fail(
+            "bad-url",
+            "open.external url action requires an http(s) URL",
+          );
+        }
+      }
+      const bridge = options.sidebarFace;
+      if (!bridge) {
+        return fail("unavailable", "open.external requires XRK Host Face bridge");
+      }
       const openAction = action === "url" ? "url" : "path";
       const denied = await enforceSidebarPolicy(
         options.policy,
@@ -968,7 +1001,13 @@ export async function handleSidebarHost(
       return true;
     }
     try {
-      const result = await dispatchMethod(method, payload, options);
+      const allowOutside = isLoopbackRemoteAddress(req.socket.remoteAddress);
+      const result = await dispatchMethod(
+        method,
+        payload,
+        options,
+        allowOutside,
+      );
       sendJson(res, 200, result);
     } catch (err) {
       sendJson(
@@ -986,10 +1025,21 @@ export async function handleSidebarHost(
     const filePath = url.searchParams.get("path") ?? "";
     const cwdOverride = url.searchParams.get("cwd") ?? undefined;
     const cwd = resolveCwd(options, sessionId, cwdOverride ?? undefined);
-    const abs = path.isAbsolute(filePath)
-      ? path.resolve(filePath)
-      : safeJoin(cwd, filePath);
-    if (!abs || !existsSync(abs)) {
+    const allowOutside = isLoopbackRemoteAddress(req.socket.remoteAddress);
+    const resolved = resolveReadablePath(cwd, filePath, allowOutside);
+    if (!resolved.ok) {
+      sendJson(
+        res,
+        resolved.code === "outside-fence" ? 403 : 404,
+        fail(
+          resolved.code === "outside-fence" ? "path" : resolved.code,
+          resolved.message,
+        ),
+      );
+      return true;
+    }
+    const abs = resolved.abs;
+    if (!existsSync(abs)) {
       sendJson(res, 404, fail("not-found", "file missing"));
       return true;
     }
@@ -1049,14 +1099,21 @@ export async function handleSidebarHost(
       const dir = url.searchParams.get("dir") ?? "";
       const relativePath = url.searchParams.get("relativePath") ?? "";
       const cwd = resolveCwd(options, sessionId, cwdOverride ?? undefined);
-      const baseDir = path.isAbsolute(dir) ? path.resolve(dir) : safeJoin(cwd, dir);
-      if (!baseDir) {
+      const sessionBase = resolveSessionBaseCwd(options, sessionId);
+      // Absolute dir must still sit under the session workspace fence.
+      const baseDir = dir.trim()
+        ? resolveWorkspacePath(cwd, dir) ??
+          (path.isAbsolute(dir) && isPathInside(sessionBase, path.resolve(dir))
+            ? path.resolve(dir)
+            : undefined)
+        : cwd;
+      if (!baseDir || !isPathInside(sessionBase, baseDir)) {
         sendJson(res, 200, fail("path", "dir escapes workspace"));
         return true;
       }
       const rel = relativePath.replace(/^[/\\]+/, "");
       const abs = safeJoin(baseDir, rel);
-      if (!abs) {
+      if (!abs || !isPathInside(sessionBase, abs)) {
         sendJson(res, 200, fail("path", "relativePath escapes workspace"));
         return true;
       }
@@ -1085,7 +1142,11 @@ export async function handleSidebarHost(
       typeof payload.cwd === "string" ? payload.cwd : undefined;
     const cwd = resolveCwd(options, sessionId, cwdOverride);
     const rel = typeof payload.path === "string" ? payload.path : "";
-    const abs = path.isAbsolute(rel) ? path.resolve(rel) : safeJoin(cwd, rel);
+    const abs = resolveWritablePath(
+      resolveSessionBaseCwd(options, sessionId),
+      cwd,
+      rel,
+    );
     if (!abs) {
       sendJson(res, 200, fail("path", "path escapes workspace"));
       return true;

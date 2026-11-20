@@ -714,13 +714,14 @@ describe("session status snapshot", () => {
 
     runtime.sessionHumanSpoke.add(codingId);
     const afterBoss = buildSessionStatusSnapshot(runtime, codingId);
-    expect(afterBoss.delegate?.parents?.[0]).toMatchObject({
+    // Boss is lead (last) — recent human bubble owns the full-size 委派方 seat.
+    expect(afterBoss.delegate?.parents?.at(-1)).toMatchObject({
       sessionId: `${codingId}:boss`,
       label: "老板",
       kind: "boss",
     });
-    expect(afterBoss.delegate?.parents?.[1]?.sessionId).toBe(xyId);
-    expect(afterBoss.delegate?.parents?.[1]?.memberId).toBe("mem_seed_xrkseek");
+    expect(afterBoss.delegate?.parents?.[0]?.sessionId).toBe(xyId);
+    expect(afterBoss.delegate?.parents?.[0]?.memberId).toBe("mem_seed_xrkseek");
   });
 
   it("manager A → manager B (same roster member) still paints A as B's opener 委派方", async () => {
@@ -748,15 +749,15 @@ describe("session status snapshot", () => {
       true,
     );
 
-    // Boss speaks in B → second 委派方 ahead of A.
+    // Boss speaks in B → 老板 becomes lead; A peeks behind.
     runtime.sessionHumanSpoke.add(b);
     const snapBBoss = buildSessionStatusSnapshot(runtime, b);
     expect(snapBBoss.delegate?.parents?.map((p) => p.kind)).toEqual([
-      "boss",
       "opener",
+      "boss",
     ]);
-    expect(snapBBoss.delegate?.parents?.[0]?.sessionId).toBe(`${b}:boss`);
-    expect(snapBBoss.delegate?.parents?.at(-1)?.sessionId).toBe(a);
+    expect(snapBBoss.delegate?.parents?.[0]?.sessionId).toBe(a);
+    expect(snapBBoss.delegate?.parents?.at(-1)?.sessionId).toBe(`${b}:boss`);
   });
 
   it("collab peers paint mutual 委派方; boss stacks when human spoke", async () => {
@@ -779,11 +780,70 @@ describe("session status snapshot", () => {
     runtime.sessionHumanSpoke.add(a);
     const afterBoss = buildSessionStatusSnapshot(runtime, a);
     expect(afterBoss.delegate?.parents?.map((p) => p.kind)).toEqual([
-      "boss",
       "peer",
+      "boss",
     ]);
-    expect(afterBoss.delegate?.parents?.[0]?.sessionId).toBe(`${a}:boss`);
-    expect(afterBoss.delegate?.parentSessionId).toBe(b);
+    expect(afterBoss.delegate?.parents?.at(-1)?.sessionId).toBe(`${a}:boss`);
+    // Lead is synthetic `:boss` → office seat id (not the peer) for Overview mux.
+    expect(afterBoss.delegate?.parentSessionId).toBe(a);
+  });
+
+  it("pins 委派方 lead to the most recent bubble speaker", async () => {
+    const runtime = bareRuntime();
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    const home = await createCodingSession(runtime, {}, "bubble-home");
+    const peer = await createCodingSession(runtime, {}, "bubble-peer");
+    runtime.agentTeams.linkPeers(home, peer, "collab");
+    const store = runtime.store;
+
+    // Durable bubbles (promote path): peer → boss → peer. Lead follows the
+    // latest speaker so Overview feels like「最近和谁聊就置顶谁」.
+    store.append(home, {
+      type: "user/message",
+      ts: 1,
+      turnId: "bp1",
+      content: "peer first",
+      source: {
+        kind: "seat",
+        form: "speech",
+        channel: "peer",
+        fromSessionId: peer,
+      },
+    });
+    const afterPeer = buildSessionStatusSnapshot(runtime, home);
+    expect(afterPeer.delegate?.parents?.at(-1)?.sessionId).toBe(peer);
+
+    store.append(home, {
+      type: "user/message",
+      ts: 2,
+      turnId: "bp2",
+      content: "boss next",
+      source: { kind: "user" },
+    });
+    const afterBoss = buildSessionStatusSnapshot(runtime, home);
+    expect(afterBoss.delegate?.parents?.map((p) => p.sessionId)).toEqual([
+      peer,
+      `${home}:boss`,
+    ]);
+    expect(afterBoss.delegate?.parentSessionId).toBe(home);
+
+    store.append(home, {
+      type: "user/message",
+      ts: 3,
+      turnId: "bp3",
+      content: "peer again",
+      source: {
+        kind: "seat",
+        form: "speech",
+        channel: "peer",
+        fromSessionId: peer,
+      },
+    });
+    const afterPeerAgain = buildSessionStatusSnapshot(runtime, home);
+    expect(afterPeerAgain.delegate?.parents?.at(-1)?.sessionId).toBe(peer);
+    expect(afterPeerAgain.delegate?.parents?.[0]?.sessionId).toBe(`${home}:boss`);
   });
 
   it("session.prompt seatChannel peer arms collab edge for Overview", async () => {
@@ -917,15 +977,15 @@ describe("session status snapshot", () => {
 
     runtime.sessionHumanSpoke.add(leaf);
     const withBoss = buildSessionStatusSnapshot(runtime, leaf);
-    // :boss + 3 AI = 4; walk already capped AI at 3 before boss.
+    // 3 AI + :boss lead = 4; boss is last (full-size 委派方).
     expect(withBoss.delegate?.parents?.length).toBe(4);
-    expect(withBoss.delegate?.parents?.[0]?.sessionId).toBe(`${leaf}:boss`);
-    expect(withBoss.delegate?.parents?.at(-1)?.sessionId).toBe(midB);
+    expect(withBoss.delegate?.parents?.at(-1)?.sessionId).toBe(`${leaf}:boss`);
+    expect(withBoss.delegate?.parents?.[0]?.sessionId).toBe(root);
     expect(withBoss.delegate?.parents?.map((p) => p.sessionId)).toEqual([
-      `${leaf}:boss`,
       root,
       midA,
       midB,
+      `${leaf}:boss`,
     ]);
   });
 });

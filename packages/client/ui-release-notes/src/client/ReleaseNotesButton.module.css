@@ -234,18 +234,22 @@
   color: var(--dsw-alias-danger-text, #e5484d);
 }
 
+/* Announcements stay tall on phone (product OK) — centered card, body scrolls.
+   Modal root owns the keyboard band; do not subtract --xrk-keyboard-inset here. */
 @media (max-width: 767px) {
   .dialogWide {
     width: 100%;
     max-width: none;
+    max-height: min(92dvh, 100%);
   }
 
   .dialogBody {
     flex: 1 1 auto;
     min-height: 0;
-    max-height: none;
+    max-height: min(78dvh, 100%);
     overflow-y: auto;
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     padding: 0 max(20px, env(safe-area-inset-left, 0px)) 0
       max(20px, env(safe-area-inset-right, 0px));
   }

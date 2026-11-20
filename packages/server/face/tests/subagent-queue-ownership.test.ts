@@ -196,6 +196,45 @@ describe("session.updateQueue · subagent ownership + FIFO", () => {
     ]);
   });
 
+  it("edit then steer keeps the rewritten content", async () => {
+    const store = createMemorySessionStore();
+    const active = new Set<string>();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(active),
+      resolveAgent: async () => stubAgent(),
+    });
+
+    const created = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    active.add(sessionId);
+
+    const receipt = admitPrompt(store, sessionId, "原始");
+    const edited = await dispatchFaceMethod(runtime, "session.updateQueue", "e", {
+      sessionId,
+      itemId: receipt.admitId,
+      action: {
+        kind: "edit",
+        content: [{ type: "text", text: "已改" }],
+      },
+    });
+    expect(edited.result.ok).toBe(true);
+
+    const steered = await dispatchFaceMethod(runtime, "session.updateQueue", "s", {
+      sessionId,
+      itemId: receipt.admitId,
+      action: { kind: "steer" },
+    });
+    expect(steered.result.ok).toBe(true);
+
+    const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.delivery).toBe("steer");
+    expect(pending[0]?.content).toBe("已改");
+  });
+
   it("steer requires a running drain and then wakes", async () => {
     const store = createMemorySessionStore();
     const active = new Set<string>();

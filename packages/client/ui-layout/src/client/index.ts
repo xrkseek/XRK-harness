@@ -31,7 +31,22 @@ export {
   applyLayoutInsetsDom,
   clearLayoutInsetsDom,
   layoutInsetsEqual,
+  shellOccupiedWidth,
 } from './layout-insets.ts'
+/** Column concession floors / helpers — shell solve + workbench push contract. */
+export {
+  CHAT_FLOOR,
+  DESKTOP_COEXIST_FLOOR,
+  PHONE_EXPAND,
+  PHONE_MAX,
+  SIDEBAR_AUTO_COLLAPSE,
+  SIDEBAR_AUTO_EXPAND,
+  SIDEBAR_COLLAPSED,
+  SIDEBAR_MIN,
+  computeColumns,
+  fitLabeledOrRail,
+  latchWidthBreakpoint,
+} from './columns.ts'
 export {
   DESKTOP_CHROME_HEIGHT_PX,
   DSH_DOM_ATTR_ALIASES,
@@ -46,6 +61,15 @@ export {
   clearDesktopChromeDomAliases,
   clearDshThemeSourceAttr,
 } from './dsh-style-aliases.ts'
+/** Soft-keyboard inset binder — APP shell attr is re-exported from ui-primitives. */
+export {
+  KEYBOARD_INSET_CSS,
+  KEYBOARD_OPEN_ATTR,
+  KEYBOARD_OPEN_THRESHOLD_PX,
+  SHELL_KEYBOARD_ATTR,
+  bindVisualViewportKeyboard,
+  computeKeyboardInsetPx,
+} from './visual-viewport-keyboard.ts'
 
 declare module '@xrkseek/cordis' {
   interface Context {

@@ -15,7 +15,7 @@
 | 浏览器自动化 | `browser` | `mode`（agent-browser / http / cdp）· `cdpUrl` |
 | 桌面 GUI | `computer-use` | `mode`（off / agent-desktop / uia / background） |
 | 沙箱 / 权限 | `sandbox` · `permission` | `backend` · `defaultPreset` · `extraWritableRoots` |
-| 外部 MCP | `mcp` | `servers[]` · `allowConnect` |
+| 外部 MCP | `mcp` | `servers[]`（含 `enabled?`）· `allowConnect`（卡片头总开关） |
 | 定时任务 | `cron` | `enabled` |
 | 生图 / 生视频 / 看视频 | `image-gen` · `video-gen` · `video-analyze` | `mode` · `baseUrl` · `model` |
 | 联网搜索 | `web-search` | `provider` + 各家的 key |
@@ -379,12 +379,12 @@ Settings 通用「远程」卡与 Face ns 已下线。日常远程请挂 MCP；C
 
 ## `mcp`
 
-默认值：`{ servers: [], allowConnect: false }`
+默认值：`{ servers: [], allowConnect: true }`
 
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `servers` | array | `[]` | MCP server 列表：`{ serverName, command?, url?, args?, cwd?, cwdAllowWorkspace?, env? }`（与 `host-settings.json` 同形） |
-| `allowConnect` | boolean | `false` | 允许 Host 主动连接新声明的 server |
+| `servers` | array | `[]` | MCP server 列表：`{ serverName, command?, url?, args?, cwd?, cwdAllowWorkspace?, enabled?, env? }`（与 `host-settings.json` 同形）。`enabled: false` 保留行但不连接 |
+| `allowConnect` | boolean | `true` | MCP 卡片头总开关：开 → 热挂载 `enabled !== false` 的 server；关 → 热卸载全部（列表保留） |
 
 ## 不在 settings.yaml 里的配置
 

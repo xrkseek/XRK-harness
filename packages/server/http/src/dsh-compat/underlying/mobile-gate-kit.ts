@@ -79,12 +79,28 @@ function hostClassRank(hostClass: RequestHostClass): number {
  * (loopback Host behind LAN share or public reverse proxy → need PIN).
  * It must never *lower* a public/LAN `Host` to loopback — forged
  * `X-Forwarded-Host: 127.0.0.1` would otherwise skip the PIN plane.
+ *
+ * When the TCP peer is **not** loopback but `Host` claims loopback, treat the
+ * authority as WAN so PIN / share gates still apply (Host is spoofable).
  */
 export function effectiveRequestHost(
   req: IncomingMessage,
   trustProxy = false,
 ): string {
   const host = hostOnly(req.headers.host);
+  const remote = req.socket?.remoteAddress;
+  const remoteIsLoopback =
+    remote === "127.0.0.1" ||
+    remote === "::1" ||
+    remote === "::ffff:127.0.0.1";
+  // Spoofed Host:127 from a remote peer must not unlock the loopback free pass.
+  if (
+    !remoteIsLoopback &&
+    remote !== undefined &&
+    classifyRequestHost(host) === "loopback"
+  ) {
+    return "0.0.0.0";
+  }
   if (!trustProxy) return host;
   const forwarded = req.headers["x-forwarded-host"];
   if (typeof forwarded !== "string" || !forwarded.trim()) return host;

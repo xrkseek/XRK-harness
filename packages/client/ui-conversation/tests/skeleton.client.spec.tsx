@@ -13,7 +13,11 @@ import type {
   ConversationSnapshot, SessionId, SessionListState, WorkspaceId, WorkspaceListState, WorkspaceView,
 } from '@xrkseek/client-runtime/client'
 import type { ConversationRootProps } from '../src/client/skeleton/ConversationRoot.tsx'
-import { clearWidthPreferenceCache, ConversationRoot } from '../src/client/skeleton/ConversationRoot.tsx'
+import {
+  clearWidthPreferenceCache,
+  ConversationRoot,
+  resolveContentWidth,
+} from '../src/client/skeleton/ConversationRoot.tsx'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { en as commonEn } from '@xrkseek/client-locale/src/locales/en.ts'
@@ -607,11 +611,20 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
 
+  it('resolveContentWidth never claims past a squeezed column', () => {
+    expect(resolveContentWidth(0, null)).toBe(0)
+    expect(resolveContentWidth(500, null)).toBe(436)
+    expect(resolveContentWidth(1200, null)).toBe(768)
+    expect(resolveContentWidth(500, 970)).toBe(436)
+    expect(resolveContentWidth(1600, 970)).toBe(970)
+  })
+
   it('publishes the column width as a px variable for the shared width axis', () => {
     const b = mount(conversationSnapshot())
     const root = b.view.container.querySelector('[data-phase]') as HTMLElement
     // jsdom offsetWidth is 0 until faked: the observer publishes whatever the
-    // layout reports, and the CSS clamp() floors the axis at 680px either way.
+    // layout reports; the CSS axis floors at min(680, usable) so a 0-wide
+    // column claims 0 rather than a phantom 680px card.
     Object.defineProperty(root, 'offsetWidth', { value: 1200, configurable: true })
     act(() => { fireResize(root) })
     expect(root.style.getPropertyValue('--dsh-conversation-column-width')).toBe('1200px')
@@ -640,6 +653,12 @@ describe('ConversationRoot resident composer', () => {
     Object.defineProperty(root, 'offsetWidth', { value: 900, configurable: true })
     act(() => { fireResize(root) })
     expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
+    expect(localStorage.getItem('xrk.conversation.contentWidth.v1')).toBe('970')
+    // Four-pane squeeze: drop the handle budget and never claim past usable
+    // (500 − 64 = 436) so the send circle stays inside the column.
+    Object.defineProperty(root, 'offsetWidth', { value: 500, configurable: true })
+    act(() => { fireResize(root) })
+    expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('436px')
     expect(localStorage.getItem('xrk.conversation.contentWidth.v1')).toBe('970')
   })
 

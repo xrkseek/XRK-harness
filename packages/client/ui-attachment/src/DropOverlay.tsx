@@ -1,4 +1,6 @@
+import { useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useShellFrameOverlay } from '@xrkseek/client-ui-primitives'
 import css from './DropOverlay.module.css'
 
 /** Drop-overlay strings the owner resolves from its own locale namespace. */
@@ -25,8 +27,12 @@ export function DropOverlay({ disabled, labels }: {
   disabled: boolean
   labels: DropOverlayLabels
 }) {
+  const maskRef = useRef<HTMLDivElement | null>(null)
+  // APP: full-viewport mask portals to body — stay inside Flutter's `#root` pin.
+  useShellFrameOverlay(maskRef, true)
+
   return createPortal(
-    <div className={css.mask} role="status">
+    <div ref={maskRef} className={css.mask} role="status">
       <div className={css.wrap}>
         <div className={css.illustration} aria-hidden="true">
           {disabled ? <UploadDisabledIllustration /> : <UploadIllustration />}

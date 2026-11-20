@@ -87,6 +87,7 @@ function kitFor(snapshot: ConversationSnapshot, injected: Partial<QueueDockInjec
     input: INPUT_STATE,
     updateQueue: vi.fn(() => Promise.resolve('ok' as const)),
     notify: vi.fn(),
+    focusComposer: vi.fn(),
     loadImage: vi.fn(() => Promise.resolve('blob:queue-thumb')),
     ...injected,
   }
@@ -347,9 +348,10 @@ describe('QueueDock', () => {
   it('edits text inline with save and cancel controls, then saves with the same item identity', async () => {
     const snap = snapshotWith([row('i-edit', 'before')])
     const source = liveSession(snap)
-    const updateQueue = vi.fn(() => Promise.resolve())
+    const updateQueue = vi.fn(() => Promise.resolve('ok' as const))
+    const focusComposer = vi.fn()
     const { getByLabelText, queryByLabelText } = render(
-      <QueueDock {...kitFor(snap, { updateQueue })} useSession={source.useSession} />,
+      <QueueDock {...kitFor(snap, { updateQueue, focusComposer })} useSession={source.useSession} />,
     )
 
     fireEvent.click(getByLabelText('编辑排队消息'))
@@ -366,25 +368,31 @@ describe('QueueDock', () => {
         content: [{ type: 'text', text: 'after' }],
       })
     })
+    await waitFor(() => {
+      expect(focusComposer).toHaveBeenCalled()
+    })
   })
 
   it('cancels an edit by button or Escape without mutating the queue', () => {
     const snap = snapshotWith([row('i-edit', 'before')])
     const source = liveSession(snap)
-    const updateQueue = vi.fn(() => Promise.resolve())
+    const updateQueue = vi.fn(() => Promise.resolve('ok' as const))
+    const focusComposer = vi.fn()
     const { getByLabelText, getByText } = render(
-      <QueueDock {...kitFor(snap, { updateQueue })} useSession={source.useSession} />,
+      <QueueDock {...kitFor(snap, { updateQueue, focusComposer })} useSession={source.useSession} />,
     )
 
     fireEvent.click(getByLabelText('编辑排队消息'))
     fireEvent.change(getByLabelText('编辑排队消息'), { target: { value: 'abandoned' } })
     fireEvent.click(getByLabelText('取消编辑'))
     expect(getByText('before')).toBeTruthy()
+    expect(focusComposer).toHaveBeenCalledTimes(1)
 
     fireEvent.click(getByLabelText('编辑排队消息'))
     fireEvent.keyDown(getByLabelText('编辑排队消息'), { key: 'Escape' })
     expect(getByText('before')).toBeTruthy()
     expect(updateQueue).not.toHaveBeenCalled()
+    expect(focusComposer).toHaveBeenCalledTimes(2)
   })
 
   it('keeps editing during IME composition and disables a blank save', () => {

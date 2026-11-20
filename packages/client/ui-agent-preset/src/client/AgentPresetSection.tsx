@@ -415,6 +415,7 @@ export function AgentPresetSection(props: AgentPresetSectionProps): ReactNode {
         title={t('deleteTitle')}
         closeLabel={t('close')}
         description={t('deleteDescription')}
+        layout="inset"
         className={css.deleteDialog as string}
         footer={(
           <>

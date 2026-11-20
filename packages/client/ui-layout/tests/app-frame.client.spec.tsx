@@ -15,7 +15,9 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@xrkseek/client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@xrkseek/client-ui-layout/src/client/AppFrame.tsx'
-import { SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, PHONE_MAX } from '@xrkseek/client-ui-layout/src/client/columns.ts'
+import {
+  CENTER_MIN, DETAILS_MIN, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MIN, PHONE_MAX,
+} from '@xrkseek/client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@xrkseek/client-ui-layout/src/client/stores.ts'
 import { resetDetailsOpenMemoryForTests } from '@xrkseek/client-ui-layout/src/client/details-open-memory.ts'
 import {
@@ -162,6 +164,26 @@ function drag(handle: Element, fromX: number, toX: number): void {
   act(() => { handle.dispatchEvent(down) })
   act(() => { handle.dispatchEvent(move); vi.advanceTimersByTime(20) })
   act(() => { handle.dispatchEvent(up) })
+}
+
+/** Simulate a real window resize (chrome + frame move together). */
+function resizeWindow(width: number): void {
+  frameWidth = width
+  window.innerWidth = width
+  act(() => {
+    fireResize?.()
+    window.dispatchEvent(new Event('resize'))
+    vi.advanceTimersByTime(20)
+  })
+}
+
+/** Simulate workbench layout-push: frame shrinks, window chrome stays wide. */
+function squeezeFrame(width: number): void {
+  frameWidth = width
+  act(() => {
+    fireResize?.()
+    vi.advanceTimersByTime(20)
+  })
 }
 
 beforeEach(() => {
@@ -466,8 +488,7 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
     frameWidth = 1920
     const { frame, instance } = mountFrame()
     act(() => { instance.actions.toggleSidebar() }) // close while wide: preference 0
-    frameWidth = 980
-    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    resizeWindow(980)
     act(() => { instance.actions.toggleSidebar() })
     expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 0])
     expect(instance.getSnapshot().sidebar).toBe(0) // preference untouched
@@ -476,12 +497,39 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
   it('shrinking across the breakpoint auto-collapses; re-widening restores the drag width', () => {
     const { frame, instance } = mountFrame()
     act(() => { instance.actions.setSidebar(400) })
-    frameWidth = 980
-    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    resizeWindow(980)
     expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
-    frameWidth = 1920
-    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    resizeWindow(1920)
     expect(tracks(frame)).toEqual([400, 0])
+  })
+
+  it('workbench frame squeeze below PHONE_MAX does not flip phone chrome', () => {
+    const { frame } = mountFrame()
+    expect(frame.hasAttribute('data-phone')).toBe(false)
+    squeezeFrame(PHONE_MAX - 1)
+    expect(frame.hasAttribute('data-phone')).toBe(false)
+    expect(document.documentElement.hasAttribute('data-xrk-layout-phone')).toBe(false)
+    // Center still concedes to the squeezed frame (desktop tracks, not phone full-bleed).
+    expect(frame.style.gridTemplateColumns).not.toBe('minmax(0, 1fr)')
+    // Closed-details yield protects CENTER_MIN by snapping to the icon rail
+    // when labels cannot fit — not a phone flip, and not a clipped-label width.
+    expect(tracks(frame)[0]).toBe(SIDEBAR_COLLAPSED)
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+  })
+
+  it('concession-snapped rail paints icon chrome while preference stays open', () => {
+    const { frame, instance, slotCalls } = mountFrame()
+    act(() => { instance.actions.openDetails() })
+    // Prefer open sidebar + Overview; squeeze so labels cannot fit.
+    squeezeFrame((SIDEBAR_MIN - 1) + DETAILS_MIN + CENTER_MIN)
+    expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, DETAILS_MIN])
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({
+      collapsed: true,
+      width: SIDEBAR_COLLAPSED,
+    })
+    expect(instance.getSnapshot().sidebar).toBe(SIDEBAR_DEFAULT)
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1) // details only
   })
 })
 

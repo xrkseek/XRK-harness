@@ -32,6 +32,7 @@ import {
   delegateParentDepthFromLead,
   resolveDelegateParentLook,
 } from './delegate-parent-look.ts'
+import { useDelegateStackFlip } from './use-delegate-stack-flip.ts'
 import { mergeTeamRosterLiveLook } from './team-live-look.ts'
 import {
   readTeamRosterLive,
@@ -2222,19 +2223,17 @@ export function PreviewTabs({
       : snapshotParentLook),
     [snapshotParentLook, liveParentLook, leftSeatLiveBossLook],
   )
-  // Settings boss mood — used for office home AND stacked `:boss` when the
-  // human later speaks into an opener-led seat (officeBossSeat is then false).
-  const settingsBossPresence = {
+  // Settings boss mood for stacked `:boss` layers. Never stamp `Date.now()`
+  // here: moodAt defaults to 0 until the operator sets a mood, and a fresh
+  // clock each Overview paint made PresenceBall believe activity advanced on
+  // every parent re-render (idleMs thrash / emotion churn).
+  const settingsBossPresence = useMemo(() => ({
     emotionId: bossMood.moodId,
     source: 'tool' as const,
     pinned: true as const,
-    updatedAt: bossMood.moodAt || Date.now(),
+    updatedAt: bossMood.moodAt,
     ...(bossMood.statusLine ? { tips: bossMood.statusLine } : {}),
-  }
-  // Lead AI 委派方 falls back to Face parentPresence when not the boss layer.
-  const bossPresence = officeBossSeat
-    ? settingsBossPresence
-    : status?.parentPresence
+  }), [bossMood.moodId, bossMood.moodAt, bossMood.statusLine])
   // Cold empty only — keep prior Status on screen while soft-refreshing.
   const paintPending = !ready && status === null
   // Live catalog / jobs / running bits — re-pull Face session.status so Overview
@@ -2324,6 +2323,14 @@ export function PreviewTabs({
   const delegateParentPaintChain = presenceRailCompact
     ? delegateParentFullChain.slice(-1)
     : delegateParentFullChain
+  // Recent-bubble reorder key — FLIP when Face pins a new lead 委派方.
+  const delegateFlipKey = delegateParentPaintChain
+    .map((p) => p.sessionId)
+    .join('>')
+  const delegateStackFlipRef = useDelegateStackFlip(
+    delegateFlipKey,
+    Boolean(delegatedOverview && !presenceRailCompact && delegateParentPaintChain.length > 1),
+  )
   // Fingerprint the whole stack so ancestor/peer drain wakes soft-poll.
   const homeCatalogRev = useSessions((s) => {
     if (parentMuxIds.length === 0) return ''
@@ -2766,7 +2773,9 @@ export function PreviewTabs({
               <span className={css.presenceRailHint}>
                 {officeBossSeat
                   ? t('preview.status.bossEditHint', { boss: bossSeatLabel })
-                  : t('preview.status.presenceClick')}
+                  : delegateParentPaintChain.length > 1
+                    ? t('preview.status.presenceStackHint')
+                    : t('preview.status.presenceClick')}
               </span>
             )
             : null}
@@ -2799,6 +2808,7 @@ export function PreviewTabs({
               className={css.delegatePair}
               data-collapsed={presenceRailCompact ? '' : undefined}
               data-pending={!status?.companionBall ? '' : undefined}
+              data-stack-count={String(delegateParentPaintChain.length)}
               role="group"
               aria-label={`${
                 (status?.delegate?.parents?.length
@@ -2807,6 +2817,7 @@ export function PreviewTabs({
               } ${t('preview.status.presenceDelegate')} ${childSeatLabel}`}
             >
               <div
+                ref={delegateStackFlipRef}
                 className={css.delegateFromStack}
                 data-count={String(delegateParentPaintChain.length)}
               >
@@ -2856,10 +2867,12 @@ export function PreviewTabs({
                     <div
                       key={parent.sessionId}
                       className={css.delegateFromLayer}
+                      data-delegate-flip-id={parent.sessionId}
                       data-depth={String(depthFromLead)}
                       data-lead={isLead ? '' : undefined}
+                      data-boss={useBossLook ? '' : undefined}
                       style={{ zIndex: index + 1 }}
-                      {...(!isLead ? { 'aria-hidden': true } : {})}
+                      {...(!isLead && !useBossLook ? { 'aria-hidden': true } : {})}
                     >
                       <PresenceBall
                         sessionId={parent.sessionId}

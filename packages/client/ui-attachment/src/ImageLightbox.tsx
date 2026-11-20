@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { IconCloseOutlineRegular, IconDownloadOutlineRegular } from '@xrkseek/client-ui-primitives'
+import {
+  IconCloseOutlineRegular, IconDownloadOutlineRegular, useShellFrameOverlay,
+} from '@xrkseek/client-ui-primitives'
 import css from './ImageLightbox.module.css'
 
 /** Lightbox strings the owner resolves from its own locale namespace. */
@@ -97,6 +99,8 @@ export function ImageLightbox({ src, alt, labels, onClose }: {
   const closeRef = useRef<HTMLButtonElement | null>(null)
   const restoreRef = useRef<HTMLElement | null>(null)
   const [saving, setSaving] = useState(false)
+  // APP: lightbox portals to body — stay inside Flutter's `#root` keyboard pin.
+  useShellFrameOverlay(rootRef, true)
 
   useEffect(() => {
     restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null

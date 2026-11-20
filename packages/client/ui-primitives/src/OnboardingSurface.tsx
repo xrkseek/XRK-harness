@@ -6,9 +6,10 @@
 // nothing, so "should onboarding show right now" stays a plain render
 // decision inside the step component.
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useShellFrameOverlay } from './shell-frame.ts'
 import css from './OnboardingSurface.module.css'
 
 /**
@@ -18,6 +19,9 @@ import css from './OnboardingSurface.module.css'
  * @returns the body-portaled overlay tree.
  */
 export function OnboardingSurface({ children }: { children: ReactNode }) {
+  const overlayRef = useRef<HTMLDivElement>(null)
+  useShellFrameOverlay(overlayRef, true)
+
   useEffect(() => {
     const appRoot = document.getElementById('root')
     if (appRoot === null) return
@@ -26,7 +30,7 @@ export function OnboardingSurface({ children }: { children: ReactNode }) {
   }, [])
 
   return createPortal((
-    <div className={css.onboardingOverlay} role="presentation">
+    <div ref={overlayRef} className={css.onboardingOverlay} role="presentation">
       <div className={css.onboardingMask} aria-hidden="true" />
       <div className={css.onboardingStage}>{children}</div>
     </div>

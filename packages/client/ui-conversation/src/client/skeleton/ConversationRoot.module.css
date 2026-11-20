@@ -24,14 +24,25 @@
      column without resizing the window): the component publishes the column's
      live width as --dsh-conversation-column-width (px, via ResizeObserver —
      container-type would re-anchor the subtree's portal-free position:fixed
-     descendants) and the clamp keeps a 680px floor (a step under the figma
-     748px — the full-width reading felt wide on every screen), takes 64% of
-     wider columns, and caps at 920px for line-length
-     readability. A dragged user preference (--dsh-chat-user-width, published
-     by the width handles) replaces the adaptive term wholesale. */
+     descendants). Ideal reading width is max(min(680, usable), 64% of column)
+     capped at 920, but W never exceeds usable = column − 64 (card chrome +
+     side clearances). A hard 680 floor with a squeezed / still-0 column was
+     painting a 712px card past the send circle. A dragged user preference
+     (--dsh-chat-user-width, published by the width handles) replaces the
+     adaptive term wholesale (JS re-clamps it to usable). */
+  --dsh-chat-content-usable: max(
+    0px,
+    calc(var(--dsh-conversation-column-width, 0px) - 64px)
+  );
   --dsh-chat-content-width: var(
     --dsh-chat-user-width,
-    clamp(680px, calc(var(--dsh-conversation-column-width, 0px) * 0.64), 920px)
+    min(
+      var(--dsh-chat-content-usable),
+      max(
+        min(680px, var(--dsh-chat-content-usable)),
+        min(920px, calc(var(--dsh-conversation-column-width, 0px) * 0.64))
+      )
+    )
   );
   --dsh-composer-card-max-width: calc(var(--dsh-chat-content-width) + 32px);
   --dsh-composer-side-clearance: 16px;
@@ -54,6 +65,10 @@
   flex: none;
   padding: 12px 28px 0 20px;
   border-bottom: 1px solid transparent;
+  /* Anonymous container: JobListAction / presence chips query this width so
+     a squeezed conversation column (Overview + workbench open) collapses
+     long labels even when the window itself is still wide. */
+  container-type: inline-size;
 }
 
 .header::after {
@@ -161,18 +176,27 @@
 
 .headerActions {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  max-width: min(280px, 48%);
+  /* Clip rather than paint over tabs when jobs + lineage refuse to shrink. */
+  overflow: hidden;
+  z-index: 1;
 }
 
 .headerUtilities {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  margin-left: 20px;
+  margin-left: 12px;
+  min-width: 0;
+  /* Icon-only presence is 36px; full chip caps at 220. Keep the seat from
+     stealing the crumbs/jobs half of a squeezed title row. */
+  max-width: min(220px, 36%);
 }
 
 .headerUtilities:empty {
@@ -247,6 +271,28 @@
   transform: scaleX(1);
 }
 
+/* Header is a size container: squeezed columns drop the figma 28px tab pitch
+   so four labels stay on one row without a lonely scroll gutter. After .tab
+   so font-size / padding overrides win. */
+@container (max-width: 560px) {
+  .tabs {
+    gap: 14px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .tab {
+    font-size: 12px;
+    padding-bottom: 10px;
+  }
+}
+
+@container (max-width: 400px) {
+  .tabs {
+    gap: 10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tab,
   .tab::after {
@@ -278,6 +324,12 @@
   display: flex;
   flex: none;
   flex-direction: column;
+  /* Flex min-width:auto would let a long model chip expand the seat past the
+     column and clip the send circle on the sticky footer. */
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   /* One cap for every scrolling text region a composer seat can hold: the
      InputBar draft (figma Input 75:8208 max 14 lines × 24px line) and the
      takeover panels' bodies top out at the same height, so electing a
@@ -456,16 +508,14 @@
   /* Above markdown CodeBlock sticky banners (z-index 6) so the footer never
      paints under a sticking code header while scrolling. */
   z-index: 7;
-  /* Input mask (figma 1205:27463): transcript fades out under a FIXED 36px
-     band at the seat's top (the figma 24% of the resting ~150px composer),
-     solid below — px stops, not %, so a growing draft only widens the solid
-     region and the fade band never stretches. The 0px stop is bg-base at
-     zero alpha (not white, which the figma export hardcodes) so both themes
-     fade from their own base. */
+  /* Input mask: transcript fades under a FIXED band at the seat top. 28px
+     (was 36) keeps the soft handoff without a blank slab above a squeezed
+     composer. Px stops, not % — a growing draft only widens the solid region.
+     0px stop is bg-base at zero alpha so both themes fade from their own base. */
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--dsw-alias-bg-base) 0%, transparent) 0px,
-    var(--dsw-alias-bg-base) 36px
+    var(--dsw-alias-bg-base) 28px
   );
 }
 

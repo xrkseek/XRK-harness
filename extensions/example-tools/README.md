@@ -1,16 +1,30 @@
 # example-tools
 
-Sample extension for `@xrkseek/server-loader` discover + **tools auto-wire**.
+> **读者**：插件作者（XRK Plug · 进程金样）
 
-## Layout
+`kind: tools` 金样：`example_ping` → `pong`。Host 经 `XRK_PLUGINS_DIR` discover，preset 走 `wireCompositionTools`。
 
 ```text
-xrk.plugin.json   # id / kind / entry
-plugin.mjs        # export createPlugin() with tools[]
-src/index.ts      # typed mirror (optional)
+xrk.plugin.json
+plugin.mjs
 ```
 
-Contributes `example_ping` → returns `pong`. Host spawn with `XRK_PLUGINS_DIR`
-passes plugins into the agent factory; presets call `wireCompositionTools`.
+```bash
+xrkh plugin add ./extensions/example-tools
+```
 
-See [docs/plugin-development.md](../../docs/plugin-development.md) · [docs/plugin-loader.md](../../docs/plugin-loader.md).
+教科书：[docs/plugin-development.md](../../docs/plugin-development.md) · [docs/plugin-loader.md](../../docs/plugin-loader.md)。
+
+---
+
+# example-tools
+
+> **Audience**: Plugin authors (XRK Plug · process gold sample)
+
+`kind: tools` sample: `example_ping` → `pong`. Host discovers via `XRK_PLUGINS_DIR`; presets use `wireCompositionTools`.
+
+```bash
+xrkh plugin add ./extensions/example-tools
+```
+
+Textbooks: [docs/plugin-development.md](../../docs/plugin-development.md) · [docs/plugin-loader.md](../../docs/plugin-loader.md).

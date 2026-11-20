@@ -209,6 +209,7 @@ export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterPro
         onClose={closeSheet}
         title={t('release.title')}
         closeLabel={t('close')}
+        layout="inset"
         className={css.dialog}
         contentClassName={css.body}
         footer={(

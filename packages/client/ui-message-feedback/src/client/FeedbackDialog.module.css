@@ -103,6 +103,31 @@
   color: var(--dsw-alias-state-success-primary);
 }
 
+@media (max-width: 767px) {
+  .dialog.dialog {
+    width: 100%;
+    gap: 24px;
+  }
+
+  .chip {
+    min-height: 36px;
+    height: auto;
+    padding: 8px 14px;
+    touch-action: manipulation;
+  }
+
+  .detail {
+    min-height: 96px;
+    max-height: min(200px, 40dvh);
+    font-size: 16px; /* avoid iOS focus zoom */
+    line-height: 24px;
+  }
+
+  .submit {
+    min-height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chip,
   .detail {

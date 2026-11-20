@@ -7,7 +7,11 @@ import type {
   WebFetchResult,
 } from "./types.js";
 import { WebError } from "./types.js";
-import { assertHttpUrl, isSameOrigin } from "./url-policy.js";
+import {
+  assertHttpUrl,
+  assertResolvedAddressesPublic,
+  isSameOrigin,
+} from "./url-policy.js";
 import type { OutboundAllowlist } from "./outbound-allowlist.js";
 import { outboundAllowlistFromEnv } from "./outbound-allowlist.js";
 
@@ -249,6 +253,13 @@ export function createHttpFetchProvider(
       let current = assertHttpUrl(request.url, limits.maxUrlLength, {
         allowlist,
       });
+      // DNS rebinding fence: hostname-literal private check is not enough when
+      // a public name resolves to RFC1918 / loopback. Skip when allowlist already
+      // owns the host gate (operator may intentionally allow private targets).
+      await assertResolvedAddressesPublic(
+        current,
+        allowlist ? { checkPrivate: false } : {},
+      );
       const timed = AbortSignal.timeout(limits.timeoutMs);
       const combined = signal ? AbortSignal.any([signal, timed]) : timed;
       const resolved = await resolveFetchFn(fetchFn, request.proxy);
@@ -308,6 +319,10 @@ export function createHttpFetchProvider(
             const validated = assertHttpUrl(next.href, limits.maxUrlLength, {
               allowlist,
             });
+            await assertResolvedAddressesPublic(
+              validated,
+              allowlist ? { checkPrivate: false } : {},
+            );
             if (!isSameOrigin(current, validated)) {
               throw new WebError(
                 `cross-origin redirect is not followed; call web_fetch on Location: ${validated.href}`,

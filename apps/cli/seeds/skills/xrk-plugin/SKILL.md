@@ -20,9 +20,10 @@ description: >-
 | 用户要什么 | 选 | 去哪 |
 |---|---|---|
 | 接已有 / 可起的 MCP 服务器 | **MCP Settings** | `xrk-capability-attach` |
-| 本机简单自有函数给模型调 | `kind: tools` | 本文 §二 |
-| 追加 system 段 | `kind: prompt` | 本文 §二 |
-| 斜杠命令 | `kind: commands` 或用户 recipes | 本文 §二 / 自建 recipe |
+| 本机简单自有函数给模型调 | `kind: tools` | 本文 §二 · 金样 `example-tools` |
+| 追加 system 段 | `kind: prompt` | 本文 §二 · 金样 `example-prompt` |
+| 斜杠命令 | `kind: commands` 或用户 recipes | 本文 §二 · 金样 `example-commands` |
+| 策略 / 钩子 / LLM brand / 通道 | `policy` · `hooks` · `llm` · `channel` | 金样 `example-policy` 等；教科书插件开发表 |
 | **改壳 UI / 输入框 / 主题** | **原生 `xrk.client`**（**不是** tools） | 教科书 **Client 插件开发** · 金样 `example-composer-action` / `example-theme-tokens` |
 | 装第一方原生（侧栏 / 手机桥 / 向日葵） | **设置 → 插件** 或 `xrkh plugin add` | Client 插件开发「第一方原生产品插件」 |
 | 装别人写好的社区壳包 | `xrkh plugin add <npm>` | 社区插件文档（可选兼容器；非写插件前置） |
@@ -38,9 +39,10 @@ description: >-
 进程插件 = 本机目录里的 `xrk.plugin.json` + 入口模块，经 Host **restart** 后进工具面。
 
 ```
-- [ ] 1. 确认 kind：tools | prompt | commands
+- [ ] 1. 确认 kind：tools | prompt | commands | policy | hooks | llm | channel（对照 `extensions/example-<kind>/`）
 - [ ] 2. 定目录：用户指定路径，常见 `extensions/<plugin-id>/`
-- [ ] 3. 写 `xrk.plugin.json`（id / kind / 入口）与 `createPlugin` 导出，**id 必须一致**
+- [ ] 3. 写 `xrk.plugin.json`（id / kind / 入口；建议 `trust.note`）与 `createPlugin` 导出，**id 必须一致**
+- [ ] 3b. 明白：进程插件与 Host **同进程**，不是沙箱 — 只装可信来源
 - [ ] 4. 装载：`xrkh plugin add <dir>`，或 `XRK_PLUGINS_DIR=<父目录> xrkh web`
 - [ ] 5. 重启 Host → §三 验证
 ```

@@ -22,10 +22,15 @@ export type {
   PluginCommandContext,
   PluginCommandResult,
   PluginChannelDescriptor,
+  PluginTrustDisclosure,
   HostWireContext,
   HostPublicHandlerFn,
 } from "./types.js";
-export type { DiscoveryHit, PluginManifest } from "./manifest.js";
+export type {
+  DiscoveryHit,
+  PluginManifest,
+  PluginManifestTrust,
+} from "./manifest.js";
 export { scanPluginDir } from "./manifest.js";
 export { loadPluginModule, loadDiscoveryHit, stubFromManifest } from "./load.js";
 export {

@@ -287,10 +287,22 @@ function phaseLabel(
   return phase === null ? t('unobserved') : t(PHASE_KEYS[phase])
 }
 
+/** MCP rows reuse fiberPhase slots with connection-oriented copy. */
+function mcpPhaseLabel(
+  phase: PluginFiberPhase,
+  t: PluginInventorySettingsTabProps['t'],
+): string {
+  if (phase === 'loading') return t('mcpConnecting')
+  if (phase === 'active') return t('mcpConnected')
+  if (phase === 'failed') return t('mcpGaveUp')
+  return t('mcpParked')
+}
+
 /** Compact a module specifier without guessing whether its Loader id was generated. */
 function moduleShortName(moduleName: string): string {
   const unscoped = moduleName.startsWith('@') ? moduleName.slice(moduleName.indexOf('/') + 1) : moduleName
   return unscoped
+    .replace(/^mcp:/, '')
     .replace(/^cordis:/, '')
     .replace(/^cordis-plugin-/, '')
     .replace(/^dsh-(?:host-|client-)?/, '')
@@ -412,6 +424,7 @@ export function PluginInventorySettingsTab({
     error: installError,
     success: installSuccess,
     clientRefreshHint,
+    clientRefreshKind,
     log: installLog,
     activeSpec,
     okSpec,
@@ -764,9 +777,24 @@ export function PluginInventorySettingsTab({
         : null}
       {installSuccess || clientRefreshHint
         ? (
-          <div className={css.installSuccessRow} role="status" data-client-refresh-hint>
+          <div
+            className={css.installSuccessRow}
+            role="status"
+            data-client-refresh-hint
+            data-client-refresh-kind={
+              installSuccess
+                ? 'install-success'
+                : (clientRefreshKind ?? 'generic')
+            }
+          >
             <p className={css.installSuccess}>
-              {installSuccess ? t('installSuccessHint') : t('clientRefreshHint')}
+              {installSuccess
+                ? t('installSuccessHint')
+                : clientRefreshKind === 'unload'
+                  ? t('clientUnloadFailedHint')
+                  : clientRefreshKind === 'remount'
+                    ? t('clientRemountFailedHint')
+                    : t('clientRefreshHint')}
             </p>
             <button type="button" className={css.refreshPage} onClick={refreshClientHalf}>
               {t('refreshPage')}
@@ -818,6 +846,742 @@ export function PluginInventorySettingsTab({
       ) : null}
       {state.status === 'ready' ? (
         <div className={css.catalog}>
+          <label className={css.search}>
+            <IconSearchOutlineRegular aria-hidden="true" />
+            <span className={css.visuallyHidden}>{t('search')}</span>
+            <input
+              type="search"
+              value={query}
+              placeholder={t('search')}
+              aria-label={t('search')}
+              onChange={(event) => { setQuery(event.currentTarget.value) }}
+            />
+          </label>
+          <div className={css.filterRow} role="toolbar" aria-label={t('catalog')}>
+            {filters.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={css.filterChip}
+                data-active={filter === item.id ? 'true' : undefined}
+                aria-pressed={filter === item.id}
+                onClick={() => { setFilter(item.id) }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {(() => {
+            const failedNames = state.snapshot.entries
+              .filter((entry) => entry.enabled && entry.fiberPhase === 'failed')
+              .map((entry) => moduleShortName(entry.moduleName))
+            return failedNames.length > 0
+              ? (
+                <div className={css.clientSync} role="status" data-client-sync="failed">
+                  <div className={css.clientSyncRow}>
+                    <StateDot state="error" />
+                    <span>{t('clientSyncFailed', { names: failedNames.join(', ') })}</span>
+                  </div>
+                  <div className={css.clientSyncActions}>
+                    <button type="button" className={css.clientSyncRetry} onClick={retry}>
+                      {t('clientSyncRetry')}
+                    </button>
+                    <button type="button" className={css.clientSyncRetry} onClick={refreshClientHalf}>
+                      {t('refreshPage')}
+                    </button>
+                  </div>
+                </div>
+              )
+              : null
+          })()}
+          {actionError !== null ? <p className={css.actionError} role="alert">{actionError}</p> : null}
+
+          <section className={css.scopeGroup} data-plugin-scope="global">
+            <div className={css.scopeTitleRow}>
+              <button
+                type="button"
+                className={css.scopeToggle}
+                aria-expanded={globalOpen}
+                aria-controls={`${catalogId}-global`}
+                onClick={() => { setGlobalOpen(value => !value) }}
+              >
+                <IconChevronDownOutlineRegular className={css.scopeChevron} aria-hidden="true" />
+                <span className={css.scopeTitle}>{t('globalTitle')}</span>
+              </button>
+              <span className={css.scopeCount} data-plugin-count={filteredEntries.length}>
+                {filteredEntries.length}
+              </span>
+            </div>
+            <p className={css.scopeSub}>{t('globalSubtitle')}</p>
+            <p className={css.scopeSub} data-plugin-trust-hint="process">
+              {t('processTrustHint')}
+            </p>
+            {globalOpen ? (
+              <div id={`${catalogId}-global`} className={css.scopeBody}>
+          {state.snapshot.entries.length === 0 ? <p className={css.status}>{t('empty')}</p> : null}
+          {state.snapshot.entries.length > 0 && filteredEntries.length === 0
+            ? <p className={css.status}>{t('emptySearch')}</p>
+            : null}
+          {(() => {
+            const listEntries = filteredEntries
+            if (listEntries.length === 0) return null
+            const engineRows = listEntries.filter((entry) => isPhoneGuestEngineEntry(entry))
+            const managedRows = listEntries.filter(
+              (entry) => entry.managed === true && !isPhoneGuestEngineEntry(entry),
+            )
+            const builtinRows = listEntries.filter(
+              (entry) => entry.managed !== true && !isPhoneGuestEngineEntry(entry),
+            )
+            const showGroups = filter === 'all'
+              && managedRows.length > 0
+              && (builtinRows.length > 0 || engineRows.length > 0)
+
+            type RenderRow =
+              | { readonly kind: 'entry'; readonly entry: PluginInventoryEntry }
+              | { readonly kind: 'phone-runtime'; readonly parts: typeof engineRows }
+
+            const toRows = (entries: typeof listEntries): RenderRow[] =>
+              entries.map((entry) => ({ kind: 'entry' as const, entry }))
+
+            const sections: {
+              readonly label: string | null
+              readonly hint: string | null
+              readonly rows: RenderRow[]
+            }[] = showGroups
+              ? [
+                {
+                  label: t('groupInstalled'),
+                  hint: t('groupInstalledHint'),
+                  rows: toRows(managedRows),
+                },
+                {
+                  label: t('groupBuiltin'),
+                  hint: null,
+                  rows: [
+                    ...(engineRows.length > 0
+                      ? [{ kind: 'phone-runtime' as const, parts: engineRows }]
+                      : []),
+                    ...toRows(builtinRows),
+                  ],
+                },
+              ]
+              : [{
+                label: null,
+                hint: managedRows.length > 0 ? t('groupInstalledHint') : null,
+                rows: [
+                  ...toRows(managedRows),
+                  ...(engineRows.length > 0
+                    ? [{ kind: 'phone-runtime' as const, parts: engineRows }]
+                    : []),
+                  ...toRows(builtinRows),
+                ],
+              }]
+
+            const renderEntryCard = (entry: PluginInventoryEntry) => {
+                const isMcp = entry.kind === 'mcp' || entry.entryId.startsWith('mcp:')
+                const status = isMcp
+                  ? mcpPhaseLabel(entry.fiberPhase, t)
+                  : phaseLabel(entry.fiberPhase, t)
+                const title = moduleShortName(entry.moduleName)
+                const configuration = t(entry.enabled ? 'enabledTag' : 'disabledTag')
+                const managed = entry.managed === true
+                const needsRestart = entry.needsRestart === true
+                const sourceClass: PluginSourceClass = classifyPluginSource(entry)
+                const probe = updateById.get(entry.entryId)
+                const open = expanded === entry.entryId
+                const detailId = `${catalogId}-details-${encodeURIComponent(entry.entryId)}`
+                const busy = busyId === entry.entryId
+                const art = kindArtwork(entry.kind)
+                const ArtworkIcon = art.Icon
+                const showLocal = !isMcp && sourceClass === 'local'
+                // Re-compare against live inventory version so a stale Host probe
+                // cannot keep →0.1.2 when the card already shows 0.1.2.
+                const showUpdateAvail = !isMcp && shouldShowPluginUpdateBadge({
+                  updateAvailable: probe?.updateAvailable,
+                  latest: probe?.latest,
+                  installed: entry.version ?? probe?.installed,
+                })
+                const showCheckFailed = !isMcp && probe?.checkFailed === true
+                const showChecking = managed
+                  && !isMcp
+                  && (sourceClass === 'registry' || sourceClass === 'local')
+                  && !showUpdateAvail
+                  && !showCheckFailed
+                  && (probeChecking || updateCheckBusy)
+                // Local file installs still get 「更新」once the Host advisory
+                // probe finds a newer registry version (installs id@latest).
+                const offerUpdate = managed && !isMcp && (
+                  canOfferPluginUpdate(sourceClass)
+                  || (sourceClass === 'local' && showUpdateAvail)
+                )
+                const ariaBits = [
+                  title,
+                  isMcp ? t('mcpTag') : managed ? t('managedTag') : null,
+                  showLocal ? t('localTag') : null,
+                  showUpdateAvail && probe?.latest
+                    ? t('updateAvailableTag', { version: probe.latest })
+                    : null,
+                  configuration,
+                  needsRestart ? t('needsRestartTag') : null,
+                  entry.version ?? null,
+                ].filter(Boolean).join(', ')
+                // MCP rows: enable/disable only (edit lives on Plugins → MCP card).
+                const menuItems = isMcp
+                  ? [
+                    {
+                      id: entry.enabled ? 'disable' : 'enable',
+                      label: entry.enabled ? t('disable') : t('enable'),
+                      disabled: busy || installBusy,
+                    },
+                  ]
+                  : [
+                    { id: 'edit', label: t('edit'), disabled: busy || installBusy },
+                    { id: 'reload', label: t('reload'), disabled: busy || installBusy },
+                    ...(checkUpdates
+                      ? [{
+                        id: 'check-updates',
+                        label: updateCheckBusy ? t('checkUpdatesBusy') : t('checkUpdates'),
+                        disabled: busy || installBusy || updateCheckBusy,
+                      }]
+                      : []),
+                    ...(offerUpdate
+                      ? [{ id: 'update', label: t('update'), disabled: busy || installBusy }]
+                      : []),
+                    {
+                      id: entry.enabled ? 'disable' : 'enable',
+                      label: entry.enabled ? t('disable') : t('enable'),
+                      disabled: busy || installBusy,
+                    },
+                    { type: 'separator' as const, id: 'remove-sep' },
+                    { id: 'remove', label: t('remove'), danger: true, disabled: busy || installBusy },
+                  ]
+                return (
+                  <li
+                    className={css.card}
+                    key={entry.entryId}
+                    data-plugin-entry={entry.entryId}
+                    data-managed={managed ? 'true' : undefined}
+                    data-source-class={sourceClass}
+                    data-needs-restart={needsRestart ? 'true' : undefined}
+                    data-update={
+                      showUpdateAvail
+                        ? 'available'
+                        : showCheckFailed
+                          ? 'failed'
+                          : showChecking
+                            ? 'checking'
+                            : undefined
+                    }
+                    data-open={open ? 'true' : undefined}
+                    data-busy={busy ? 'true' : undefined}
+                    aria-busy={busy || undefined}
+                    data-kind={entry.kind ?? 'unknown'}
+                  >
+                    <div className={css.cardHead}>
+                      <button
+                        className={css.cardContent}
+                        type="button"
+                        aria-expanded={open}
+                        aria-controls={detailId}
+                        aria-label={ariaBits}
+                        onClick={() => {
+                          setRemoveTarget(null)
+                          setMenuEntryId(null)
+                          setExpanded(current => current === entry.entryId ? null : entry.entryId)
+                        }}
+                      >
+                        <span
+                          className={css.artwork}
+                          data-kind={entry.kind ?? 'unknown'}
+                          aria-hidden
+                          title={t(art.labelKey)}
+                        >
+                          <ArtworkIcon size={18} />
+                        </span>
+                        <span className={css.cardTitleBlock}>
+                          <span className={css.cardTitleRow}>
+                            <strong className={css.cardTitle} title={entry.moduleName}>{title}</strong>
+                            {entry.version ? (
+                              <span className={css.versionTag} title={t('version')}>{entry.version}</span>
+                            ) : null}
+                          </span>
+                          {managed || isMcp || needsRestart || showLocal || showUpdateAvail || showCheckFailed || showChecking ? (
+                            <span className={css.cardMetaRow}>
+                              {/* Probe badges first — scannable on phone before origin tags. */}
+                              {showUpdateAvail && probe.latest ? (
+                                <span
+                                  className={css.updateAvailableTag}
+                                  title={t('updateAvailableHint', { version: probe.latest })}
+                                >
+                                  {t('updateAvailableTag', { version: probe.latest })}
+                                </span>
+                              ) : null}
+                              {showCheckFailed ? (
+                                <span className={css.updateCheckFailedTag}>{t('updateCheckFailedTag')}</span>
+                              ) : null}
+                              {showChecking ? (
+                                <span className={css.updateCheckingTag} role="status">
+                                  <StateDot state="ongoing" size={10} />
+                                  {t('updateCheckingTag')}
+                                </span>
+                              ) : null}
+                              {isMcp ? (
+                                <span className={css.managedTag}>{t('mcpTag')}</span>
+                              ) : managed ? (
+                                <span className={css.managedTag}>{t('managedTag')}</span>
+                              ) : null}
+                              {showLocal ? (
+                                <span className={css.localTag}>{t('localTag')}</span>
+                              ) : null}
+                              {needsRestart ? (
+                                <span className={css.restartTag}>{t('needsRestartTag')}</span>
+                              ) : null}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className={css.cardTrailing}>
+                          {busy
+                            ? (
+                              <span
+                                className={css.busyIndicator}
+                                role="status"
+                                aria-label={t('actionBusy')}
+                                title={t('actionBusy')}
+                              >
+                                <StateDot state="ongoing" size={12} />
+                              </span>
+                            )
+                            : entry.enabled
+                              ? (
+                                <span
+                                  className={css.statusDot}
+                                  data-phase={entry.fiberPhase ?? 'unobserved'}
+                                  role="img"
+                                  aria-label={status}
+                                  title={status}
+                                />
+                              )
+                              : null}
+                          {!managed
+                            ? (
+                              <span className={css.configTag} data-enabled={entry.enabled ? 'true' : 'false'}>
+                                {configuration}
+                              </span>
+                            )
+                            : null}
+                          <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
+                        </span>
+                      </button>
+                      {managed ? (
+                        <div className={css.switchSlot}>
+                          <Switch
+                            checked={entry.enabled}
+                            aria-label={t(entry.enabled ? 'switchDisable' : 'switchEnable', { name: title })}
+                            disabled={busy || installBusy}
+                            onCheckedChange={(next) => {
+                              void runManaged(
+                                entry.entryId,
+                                () => setEnabled(entry.entryId, next),
+                                {
+                                  notice: t(next ? 'toastEnabled' : 'toastDisabled', { name: title }),
+                                },
+                              )
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                      {managed ? (
+                        <div className={css.moreSlot}>
+                          <Menu
+                            open={menuEntryId === entry.entryId}
+                            portal
+                            dense
+                            compact
+                            align="end"
+                            onClose={() => { setMenuEntryId(null) }}
+                            anchor={(
+                              <button
+                                type="button"
+                                className={css.moreTrigger}
+                                aria-haspopup="menu"
+                                aria-expanded={menuEntryId === entry.entryId}
+                                aria-label={t('moreActions', { name: title })}
+                                disabled={busy || installBusy}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  setRemoveTarget(null)
+                                  setMenuEntryId(current => (
+                                    current === entry.entryId ? null : entry.entryId
+                                  ))
+                                }}
+                              >
+                                <IconEllipsisOutlineRegular size={14} />
+                              </button>
+                            )}
+                            items={menuItems}
+                            onSelect={(id) => {
+                              setMenuEntryId(null)
+                              const name = title
+                              if (id === 'edit') {
+                                void runManaged(entry.entryId, () => openFolder(entry.entryId), { refresh: false })
+                                return
+                              }
+                              if (id === 'reload') {
+                                void runManaged(
+                                  entry.entryId,
+                                  () => reload(entry.entryId),
+                                  // Soft remount via boot-changed; hint only on failure.
+                                  { notice: t('toastReloaded', { name }) },
+                                )
+                                return
+                              }
+                              if (id === 'enable' || id === 'disable') {
+                                const next = id === 'enable'
+                                void runManaged(
+                                  entry.entryId,
+                                  () => setEnabled(entry.entryId, next),
+                                  {
+                                    notice: t(next ? 'toastEnabled' : 'toastDisabled', { name }),
+                                  },
+                                )
+                                return
+                              }
+                              if (id === 'check-updates') {
+                                void runCheckUpdates(entry.entryId)
+                                return
+                              }
+                              if (id === 'update') {
+                                void (async () => {
+                                  if (installBusy || busyId !== null) return
+                                  setMenuEntryId(null)
+                                  setBusyId(entry.entryId)
+                                  setActionError(null)
+                                  try {
+                                    persistRegistry(registryChoice, registryCustom)
+                                    persistProxy(installProxy)
+                                    const commandParts = ['xrkh plugin add']
+                                    if (installNet.registry) {
+                                      commandParts.push('--registry', installNet.registry)
+                                    }
+                                    if (installNet.proxy) {
+                                      commandParts.push('--proxy', installNet.proxy)
+                                    }
+                                    commandParts.push(`${entry.entryId}@latest`)
+                                    await runPluginCliMutateUi({
+                                      kind: 'update',
+                                      spec: title,
+                                      command: commandParts.join(' '),
+                                      run: async (requestId) => {
+                                        const log = await update(
+                                          entry.entryId,
+                                          requestId,
+                                          installNet.registry,
+                                          installNet.proxy,
+                                        )
+                                        if (log === undefined) {
+                                          throw new Error(t('actionFailed'))
+                                        }
+                                        return log
+                                      },
+                                      ...(subscribeInstallLog !== undefined
+                                        ? { subscribeInstallLog }
+                                        : {}),
+                                      fallbackError: t('actionFailed'),
+                                    })
+                                  } catch (error) {
+                                    setActionError(error instanceof Error ? error.message : t('actionFailed'))
+                                  } finally {
+                                    setBusyId(null)
+                                  }
+                                })()
+                                return
+                              }
+                              if (id === 'remove') setRemoveTarget(entry)
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                    {open ? (
+                      <div className={css.cardDetails} id={detailId}>
+                        <code className={css.entryValue} data-loader-entry>{entry.entryId}</code>
+                        <dl className={css.details}>
+                          <div>
+                            <dt>{t('configuration')}</dt>
+                            <dd>{configuration}</dd>
+                          </div>
+                          {entry.kind ? (
+                            <div>
+                              <dt>{t('kind')}</dt>
+                              <dd>{entry.kind}</dd>
+                            </div>
+                          ) : null}
+                          {entry.version ? (
+                            <div>
+                              <dt>{t('version')}</dt>
+                              <dd>{entry.version}</dd>
+                            </div>
+                          ) : null}
+                          {entry.source ? (
+                            <div>
+                              <dt>{t('source')}</dt>
+                              <dd className={css.sourceValue}>{entry.source}</dd>
+                            </div>
+                          ) : null}
+                          {showUpdateAvail && probe.latest ? (
+                            <div>
+                              <dt>{t('update')}</dt>
+                              <dd>{t('updateAvailableHint', { version: probe.latest })}</dd>
+                            </div>
+                          ) : null}
+                          {entry.enabled ? (
+                            <div>
+                              <dt>{isMcp ? t('mcpStatus') : t('cordis')}</dt>
+                              <dd>{status}</dd>
+                            </div>
+                          ) : null}
+                          {needsRestart ? (
+                            <div>
+                              <dt>{t('needsRestartTag')}</dt>
+                              <dd>
+                                <span>{t('restartHint')}</span>
+                                {' '}
+                                <button
+                                  type="button"
+                                  className={css.refreshPage}
+                                  onClick={refreshClientHalf}
+                                >
+                                  {t('refreshPage')}
+                                </button>
+                              </dd>
+                            </div>
+                          ) : null}
+                        </dl>
+                        {isMcp
+                          ? <p className={css.builtinHint}>{t('mcpRowHint')}</p>
+                          : managed
+                            ? null
+                            : <p className={css.builtinHint}>{t('builtinHint')}</p>}
+                      </div>
+                    ) : null}
+                  </li>
+                )
+            }
+
+            const renderPhoneRuntime = (parts: typeof engineRows) => {
+              const open = expanded === PHONE_RUNTIME_CARD_ID
+              const detailId = `${catalogId}-details-phone-runtime`
+              const anyOn = parts.some((p) => p.enabled)
+              return (
+                <li
+                  className={css.card}
+                  key={PHONE_RUNTIME_CARD_ID}
+                  data-plugin-entry="phone-runtime"
+                  data-source-class="engine"
+                  data-open={open ? 'true' : undefined}
+                  data-kind="runtime"
+                >
+                  <div className={css.cardHead}>
+                    <button
+                      className={css.cardContent}
+                      type="button"
+                      aria-expanded={open}
+                      aria-controls={detailId}
+                      aria-label={t('phoneRuntimeTitle')}
+                      onClick={() => {
+                        setRemoveTarget(null)
+                        setMenuEntryId(null)
+                        setExpanded((current) => (
+                          current === PHONE_RUNTIME_CARD_ID ? null : PHONE_RUNTIME_CARD_ID
+                        ))
+                      }}
+                    >
+                      <span className={css.artwork} data-kind="both" aria-hidden>
+                        <IconEnhanceOutlineRegular size={18} />
+                      </span>
+                      <span className={css.cardTitleBlock}>
+                        <span className={css.cardTitleRow}>
+                          <strong className={css.cardTitle}>{t('phoneRuntimeTitle')}</strong>
+                          <span className={css.versionTag}>
+                            {t('phoneRuntimeParts', { count: String(parts.length) })}
+                          </span>
+                        </span>
+                        <span className={css.cardMetaRow}>
+                          <span className={css.localTag}>phone-guest</span>
+                        </span>
+                      </span>
+                      <span className={css.cardTrailing}>
+                        <span
+                          className={css.configTag}
+                          data-enabled={anyOn ? 'true' : 'false'}
+                        >
+                          {t(anyOn ? 'enabledTag' : 'disabledTag')}
+                        </span>
+                        <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
+                      </span>
+                    </button>
+                  </div>
+                  {open ? (
+                    <div className={css.cardDetails} id={detailId}>
+                      <p className={css.builtinHint}>{t('phoneRuntimeHint')}</p>
+                      <ul className={css.phoneRuntimeParts}>
+                        {parts.map((part) => (
+                          <li key={part.entryId} className={css.phoneRuntimePart}>
+                            <code>{part.entryId}</code>
+                            <span>{part.kind ?? '—'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </li>
+              )
+            }
+
+            return (
+            <ul className={css.cards}>
+              {sections.flatMap((section) => [
+                  ...(section.label !== null
+                    ? [(
+                      <li key={`section:${section.label}`} className={css.groupHeading} role="presentation">
+                        <span className={css.groupHeadingLabel}>{section.label}</span>
+                        {section.hint !== null
+                          ? <p className={css.groupHeadingHint}>{section.hint}</p>
+                          : null}
+                      </li>
+                    )]
+                    : section.hint !== null
+                      ? [(
+                        <li key="section:managed-hint" className={css.groupHeading} role="presentation">
+                          <p className={css.groupHeadingHint}>{section.hint}</p>
+                        </li>
+                      )]
+                      : []),
+                  ...section.rows.map((row) => (
+                    row.kind === 'phone-runtime'
+                      ? renderPhoneRuntime(row.parts)
+                      : renderEntryCard(row.entry)
+                  )),
+                ])}
+            </ul>
+            )
+          })()}
+              </div>
+            ) : null}
+          </section>
+
+          {selectedPreset !== undefined ? (
+            <section className={css.scopeGroup} data-plugin-scope="preset" data-preset-id={selectedPreset.id}>
+              <div className={css.scopeTitleRow}>
+                <button
+                  type="button"
+                  className={css.scopeToggle}
+                  aria-expanded={presetOpen}
+                  aria-controls={`${catalogId}-preset`}
+                  onClick={() => { setPresetOpen(value => !value) }}
+                >
+                  <IconChevronDownOutlineRegular className={css.scopeChevron} aria-hidden="true" />
+                  <span className={css.scopeTitle}>{t('presetTitle')}</span>
+                </button>
+                <Menu
+                  open={switcherOpen}
+                  onClose={() => { setSwitcherOpen(false) }}
+                  items={presets.map(preset => ({
+                    id: preset.id,
+                    label: presetLabel(preset, t),
+                  }))}
+                  selectedId={selectedPreset.id}
+                  onSelect={(id) => {
+                    setSwitcherOpen(false)
+                    setChosenPreset(id)
+                  }}
+                  align="end"
+                  portal
+                  anchor={(
+                    <button
+                      type="button"
+                      className={css.presetSwitcher}
+                      aria-haspopup="menu"
+                      aria-expanded={switcherOpen}
+                      aria-label={t('switcherLabel')}
+                      onClick={() => { setSwitcherOpen(value => !value) }}
+                    >
+                      <span>{presetLabel(selectedPreset, t)}</span>
+                      <IconChevronDownOutlineRegular aria-hidden="true" />
+                    </button>
+                  )}
+                />
+              </div>
+              <p className={css.scopeSub}>
+                {t('presetSubtitle')}
+                <span data-preset-plugin-count={selectedPresetRows.length}>
+                  {` · ${String(selectedPresetRows.length)} ${t('countUnit')}`}
+                </span>
+              </p>
+              {presetOpen ? (
+                <div id={`${catalogId}-preset`} className={css.scopeBody}>
+                  {selectedPreset.broken !== undefined
+                    ? <p className={css.brokenNote} role="alert">{selectedPreset.broken}</p>
+                    : null}
+                  {selectedPresetRows.length > 0 ? (
+                    <ul className={css.cards} data-preset-rows>
+                      {selectedPresetRows.map((row) => {
+                        const title = compositionTitle(row.moduleName)
+                        const configuration = presetEnabledLabel(row.enabled, t)
+                        return (
+                          <li
+                            className={css.card}
+                            key={`${selectedPreset.id}:${row.moduleName}`}
+                            data-composition={row.moduleName}
+                            data-enabled={String(row.enabled)}
+                          >
+                            <div className={css.cardContent} data-static="true">
+                              <span className={css.artwork} data-kind="composition" aria-hidden="true">
+                                <IconEnhanceOutlineRegular size={16} />
+                              </span>
+                              <span className={css.cardTitleBlock}>
+                                <span className={css.cardTitleRow}>
+                                  <strong className={css.cardTitle}>{title}</strong>
+                                  {row.condition !== undefined
+                                    ? <span className={css.versionTag}>{row.condition}</span>
+                                    : null}
+                                </span>
+                              </span>
+                              <span className={css.cardTrailing}>
+                                <StateDot
+                                  state={row.enabled === false ? 'error' : row.enabled === 'conditional' ? 'warning' : 'done'}
+                                />
+                                <span className={css.configTag} data-enabled={row.enabled === false ? 'false' : 'true'}>
+                                  {configuration}
+                                </span>
+                              </span>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : null}
+                  {normalizedQuery.length > 0 && otherPresetMatches.length > 0 ? (
+                    <p className={css.hint}>
+                      {t('matchesInOtherPresets', { count: String(otherPresetMatches.length) })}
+                      {otherPresetMatches.map(preset => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          className={css.jumpLink}
+                          onClick={() => { setChosenPreset(preset.id) }}
+                        >
+                          {preset.name ?? preset.id}
+                        </button>
+                      ))}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          <div className={css.installPanel} data-plugin-install>
           <form
             className={css.installRow}
             onSubmit={(event) => {
@@ -978,720 +1742,7 @@ export function PluginInventorySettingsTab({
             )
             : null}
           {!sidebarMissing ? installFeedback : null}
-          <label className={css.search}>
-            <IconSearchOutlineRegular aria-hidden="true" />
-            <span className={css.visuallyHidden}>{t('search')}</span>
-            <input
-              type="search"
-              value={query}
-              placeholder={t('search')}
-              aria-label={t('search')}
-              onChange={(event) => { setQuery(event.currentTarget.value) }}
-            />
-          </label>
-          <div className={css.filterRow} role="toolbar" aria-label={t('catalog')}>
-            {filters.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={css.filterChip}
-                data-active={filter === item.id ? 'true' : undefined}
-                aria-pressed={filter === item.id}
-                onClick={() => { setFilter(item.id) }}
-              >
-                {item.label}
-              </button>
-            ))}
           </div>
-          {(() => {
-            const failedNames = state.snapshot.entries
-              .filter((entry) => entry.enabled && entry.fiberPhase === 'failed')
-              .map((entry) => moduleShortName(entry.moduleName))
-            return failedNames.length > 0
-              ? (
-                <div className={css.clientSync} role="status" data-client-sync="failed">
-                  <div className={css.clientSyncRow}>
-                    <StateDot state="error" />
-                    <span>{t('clientSyncFailed', { names: failedNames.join(', ') })}</span>
-                  </div>
-                  <div className={css.clientSyncActions}>
-                    <button type="button" className={css.clientSyncRetry} onClick={retry}>
-                      {t('clientSyncRetry')}
-                    </button>
-                    <button type="button" className={css.clientSyncRetry} onClick={refreshClientHalf}>
-                      {t('refreshPage')}
-                    </button>
-                  </div>
-                </div>
-              )
-              : null
-          })()}
-          {actionError !== null ? <p className={css.actionError} role="alert">{actionError}</p> : null}
-
-          <section className={css.scopeGroup} data-plugin-scope="global">
-            <div className={css.scopeTitleRow}>
-              <button
-                type="button"
-                className={css.scopeToggle}
-                aria-expanded={globalOpen}
-                aria-controls={`${catalogId}-global`}
-                onClick={() => { setGlobalOpen(value => !value) }}
-              >
-                <IconChevronDownOutlineRegular className={css.scopeChevron} aria-hidden="true" />
-                <span className={css.scopeTitle}>{t('globalTitle')}</span>
-              </button>
-              <span className={css.scopeCount} data-plugin-count={filteredEntries.length}>
-                {filteredEntries.length}
-              </span>
-            </div>
-            <p className={css.scopeSub}>{t('globalSubtitle')}</p>
-            {state.status === 'ready' ? (() => {
-              const gitWt = state.snapshot.entries.find(
-                (entry) => entry.entryId === 'git-worktrees',
-              )
-              if (!gitWt) return null
-              const busy = busyId === gitWt.entryId
-              return (
-                <div className={css.optionalBundleRow} data-optional-bundle="git-worktrees">
-                  <div className={css.optionalBundleText}>
-                    <div className={css.optionalBundleTitle}>{t('gitWorktreesTitle')}</div>
-                    <div className={css.optionalBundleHint}>{t('gitWorktreesHint')}</div>
-                  </div>
-                  <Switch
-                    checked={gitWt.enabled}
-                    aria-label={t('gitWorktreesSwitch')}
-                    disabled={busy}
-                    onCheckedChange={(next) => {
-                      void runManaged(
-                        gitWt.entryId,
-                        () => setEnabled(gitWt.entryId, next),
-                        {
-                          notice: t(next ? 'toastEnabled' : 'toastDisabled', {
-                            name: t('gitWorktreesTitle'),
-                          }),
-                        },
-                      )
-                    }}
-                  />
-                </div>
-              )
-            })() : null}
-            {globalOpen ? (
-              <div id={`${catalogId}-global`} className={css.scopeBody}>
-          {state.snapshot.entries.length === 0 ? <p className={css.status}>{t('empty')}</p> : null}
-          {state.snapshot.entries.length > 0 && filteredEntries.length === 0
-            ? <p className={css.status}>{t('emptySearch')}</p>
-            : null}
-          {(() => {
-            // git-worktrees already has the optional-bundle Switch row above.
-            const listEntries = filteredEntries.filter((entry) => entry.entryId !== 'git-worktrees')
-            if (listEntries.length === 0) return null
-            const engineRows = listEntries.filter((entry) => isPhoneGuestEngineEntry(entry))
-            const managedRows = listEntries.filter(
-              (entry) => entry.managed === true && !isPhoneGuestEngineEntry(entry),
-            )
-            const builtinRows = listEntries.filter(
-              (entry) => entry.managed !== true && !isPhoneGuestEngineEntry(entry),
-            )
-            const showGroups = filter === 'all'
-              && managedRows.length > 0
-              && (builtinRows.length > 0 || engineRows.length > 0)
-
-            type RenderRow =
-              | { readonly kind: 'entry'; readonly entry: PluginInventoryEntry }
-              | { readonly kind: 'phone-runtime'; readonly parts: typeof engineRows }
-
-            const toRows = (entries: typeof listEntries): RenderRow[] =>
-              entries.map((entry) => ({ kind: 'entry' as const, entry }))
-
-            const sections: {
-              readonly label: string | null
-              readonly rows: RenderRow[]
-            }[] = showGroups
-              ? [
-                { label: t('groupInstalled'), rows: toRows(managedRows) },
-                {
-                  label: t('groupBuiltin'),
-                  rows: [
-                    ...(engineRows.length > 0
-                      ? [{ kind: 'phone-runtime' as const, parts: engineRows }]
-                      : []),
-                    ...toRows(builtinRows),
-                  ],
-                },
-              ]
-              : [{
-                label: null,
-                rows: [
-                  ...toRows(managedRows),
-                  ...(engineRows.length > 0
-                    ? [{ kind: 'phone-runtime' as const, parts: engineRows }]
-                    : []),
-                  ...toRows(builtinRows),
-                ],
-              }]
-
-            const renderEntryCard = (entry: PluginInventoryEntry) => {
-                const status = phaseLabel(entry.fiberPhase, t)
-                const title = moduleShortName(entry.moduleName)
-                const configuration = t(entry.enabled ? 'enabledTag' : 'disabledTag')
-                const managed = entry.managed === true
-                const needsRestart = entry.needsRestart === true
-                const sourceClass: PluginSourceClass = classifyPluginSource(entry)
-                const probe = updateById.get(entry.entryId)
-                const open = expanded === entry.entryId
-                const detailId = `${catalogId}-details-${encodeURIComponent(entry.entryId)}`
-                const busy = busyId === entry.entryId
-                const art = kindArtwork(entry.kind)
-                const ArtworkIcon = art.Icon
-                const showLocal = sourceClass === 'local'
-                // Re-compare against live inventory version so a stale Host probe
-                // cannot keep →0.1.2 when the card already shows 0.1.2.
-                const showUpdateAvail = shouldShowPluginUpdateBadge({
-                  updateAvailable: probe?.updateAvailable,
-                  latest: probe?.latest,
-                  installed: entry.version ?? probe?.installed,
-                })
-                const showCheckFailed = probe?.checkFailed === true
-                const showChecking = managed
-                  && (sourceClass === 'registry' || sourceClass === 'local')
-                  && !showUpdateAvail
-                  && !showCheckFailed
-                  && (probeChecking || updateCheckBusy)
-                // Local file installs still get 「更新」once the Host advisory
-                // probe finds a newer registry version (installs id@latest).
-                const offerUpdate = managed && (
-                  canOfferPluginUpdate(sourceClass)
-                  || (sourceClass === 'local' && showUpdateAvail)
-                )
-                const ariaBits = [
-                  title,
-                  managed ? t('managedTag') : null,
-                  showLocal ? t('localTag') : null,
-                  showUpdateAvail && probe.latest
-                    ? t('updateAvailableTag', { version: probe.latest })
-                    : null,
-                  configuration,
-                  needsRestart ? t('needsRestartTag') : null,
-                  entry.version ?? null,
-                ].filter(Boolean).join(', ')
-                const menuItems = [
-                  { id: 'edit', label: t('edit'), disabled: busy || installBusy },
-                  { id: 'reload', label: t('reload'), disabled: busy || installBusy },
-                  ...(checkUpdates
-                    ? [{
-                      id: 'check-updates',
-                      label: updateCheckBusy ? t('checkUpdatesBusy') : t('checkUpdates'),
-                      disabled: busy || installBusy || updateCheckBusy,
-                    }]
-                    : []),
-                  ...(offerUpdate
-                    ? [{ id: 'update', label: t('update'), disabled: busy || installBusy }]
-                    : []),
-                  { type: 'separator' as const, id: 'remove-sep' },
-                  { id: 'remove', label: t('remove'), danger: true, disabled: busy || installBusy },
-                ]
-                return (
-                  <li
-                    className={css.card}
-                    key={entry.entryId}
-                    data-plugin-entry={entry.entryId}
-                    data-managed={managed ? 'true' : undefined}
-                    data-source-class={sourceClass}
-                    data-needs-restart={needsRestart ? 'true' : undefined}
-                    data-update={
-                      showUpdateAvail
-                        ? 'available'
-                        : showCheckFailed
-                          ? 'failed'
-                          : showChecking
-                            ? 'checking'
-                            : undefined
-                    }
-                    data-open={open ? 'true' : undefined}
-                    data-busy={busy ? 'true' : undefined}
-                    aria-busy={busy || undefined}
-                    data-kind={entry.kind ?? 'unknown'}
-                  >
-                    <div className={css.cardHead}>
-                      <button
-                        className={css.cardContent}
-                        type="button"
-                        aria-expanded={open}
-                        aria-controls={detailId}
-                        aria-label={ariaBits}
-                        onClick={() => {
-                          setRemoveTarget(null)
-                          setMenuEntryId(null)
-                          setExpanded(current => current === entry.entryId ? null : entry.entryId)
-                        }}
-                      >
-                        <span
-                          className={css.artwork}
-                          data-kind={entry.kind ?? 'unknown'}
-                          aria-hidden
-                          title={t(art.labelKey)}
-                        >
-                          <ArtworkIcon size={18} />
-                        </span>
-                        <span className={css.cardTitleBlock}>
-                          <span className={css.cardTitleRow}>
-                            <strong className={css.cardTitle} title={entry.moduleName}>{title}</strong>
-                            {entry.version ? (
-                              <span className={css.versionTag} title={t('version')}>{entry.version}</span>
-                            ) : null}
-                          </span>
-                          {managed || needsRestart || showLocal || showUpdateAvail || showCheckFailed || showChecking ? (
-                            <span className={css.cardMetaRow}>
-                              {/* Probe badges first — scannable on phone before origin tags. */}
-                              {showUpdateAvail && probe.latest ? (
-                                <span
-                                  className={css.updateAvailableTag}
-                                  title={t('updateAvailableHint', { version: probe.latest })}
-                                >
-                                  {t('updateAvailableTag', { version: probe.latest })}
-                                </span>
-                              ) : null}
-                              {showCheckFailed ? (
-                                <span className={css.updateCheckFailedTag}>{t('updateCheckFailedTag')}</span>
-                              ) : null}
-                              {showChecking ? (
-                                <span className={css.updateCheckingTag} role="status">
-                                  <StateDot state="ongoing" size={10} />
-                                  {t('updateCheckingTag')}
-                                </span>
-                              ) : null}
-                              {managed ? (
-                                <span className={css.managedTag}>{t('managedTag')}</span>
-                              ) : null}
-                              {showLocal ? (
-                                <span className={css.localTag}>{t('localTag')}</span>
-                              ) : null}
-                              {needsRestart ? (
-                                <span className={css.restartTag}>{t('needsRestartTag')}</span>
-                              ) : null}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className={css.cardTrailing}>
-                          {busy
-                            ? (
-                              <span
-                                className={css.busyIndicator}
-                                role="status"
-                                aria-label={t('actionBusy')}
-                                title={t('actionBusy')}
-                              >
-                                <StateDot state="ongoing" size={12} />
-                              </span>
-                            )
-                            : entry.enabled
-                              ? (
-                                <span
-                                  className={css.statusDot}
-                                  data-phase={entry.fiberPhase ?? 'unobserved'}
-                                  role="img"
-                                  aria-label={status}
-                                  title={status}
-                                />
-                              )
-                              : null}
-                          {!managed
-                            ? (
-                              <span className={css.configTag} data-enabled={entry.enabled ? 'true' : 'false'}>
-                                {configuration}
-                              </span>
-                            )
-                            : null}
-                          <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
-                        </span>
-                      </button>
-                      {managed ? (
-                        <div className={css.switchSlot}>
-                          <Switch
-                            checked={entry.enabled}
-                            aria-label={title}
-                            disabled={busy || installBusy}
-                            onCheckedChange={(next) => {
-                              void runManaged(
-                                entry.entryId,
-                                () => setEnabled(entry.entryId, next),
-                                {
-                                  notice: t(next ? 'toastEnabled' : 'toastDisabled', { name: title }),
-                                },
-                              )
-                            }}
-                          />
-                        </div>
-                      ) : null}
-                      {managed ? (
-                        <div className={css.moreSlot}>
-                          <Menu
-                            open={menuEntryId === entry.entryId}
-                            portal
-                            dense
-                            compact
-                            align="end"
-                            onClose={() => { setMenuEntryId(null) }}
-                            anchor={(
-                              <button
-                                type="button"
-                                className={css.moreTrigger}
-                                aria-haspopup="menu"
-                                aria-expanded={menuEntryId === entry.entryId}
-                                aria-label={t('moreActions', { name: title })}
-                                disabled={busy || installBusy}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  setRemoveTarget(null)
-                                  setMenuEntryId(current => (
-                                    current === entry.entryId ? null : entry.entryId
-                                  ))
-                                }}
-                              >
-                                <IconEllipsisOutlineRegular size={14} />
-                              </button>
-                            )}
-                            items={menuItems}
-                            onSelect={(id) => {
-                              setMenuEntryId(null)
-                              const name = title
-                              if (id === 'edit') {
-                                void runManaged(entry.entryId, () => openFolder(entry.entryId), { refresh: false })
-                                return
-                              }
-                              if (id === 'reload') {
-                                void runManaged(
-                                  entry.entryId,
-                                  () => reload(entry.entryId),
-                                  // Soft remount via boot-changed; hint only on failure.
-                                  { notice: t('toastReloaded', { name }) },
-                                )
-                                return
-                              }
-                              if (id === 'check-updates') {
-                                void runCheckUpdates(entry.entryId)
-                                return
-                              }
-                              if (id === 'update') {
-                                void (async () => {
-                                  if (installBusy || busyId !== null) return
-                                  setMenuEntryId(null)
-                                  setBusyId(entry.entryId)
-                                  setActionError(null)
-                                  try {
-                                    persistRegistry(registryChoice, registryCustom)
-                                    persistProxy(installProxy)
-                                    const commandParts = ['xrkh plugin add']
-                                    if (installNet.registry) {
-                                      commandParts.push('--registry', installNet.registry)
-                                    }
-                                    if (installNet.proxy) {
-                                      commandParts.push('--proxy', installNet.proxy)
-                                    }
-                                    commandParts.push(`${entry.entryId}@latest`)
-                                    await runPluginCliMutateUi({
-                                      kind: 'update',
-                                      spec: title,
-                                      command: commandParts.join(' '),
-                                      run: async (requestId) => {
-                                        const log = await update(
-                                          entry.entryId,
-                                          requestId,
-                                          installNet.registry,
-                                          installNet.proxy,
-                                        )
-                                        if (log === undefined) {
-                                          throw new Error(t('actionFailed'))
-                                        }
-                                        return log
-                                      },
-                                      ...(subscribeInstallLog !== undefined
-                                        ? { subscribeInstallLog }
-                                        : {}),
-                                      fallbackError: t('actionFailed'),
-                                    })
-                                  } catch (error) {
-                                    setActionError(error instanceof Error ? error.message : t('actionFailed'))
-                                  } finally {
-                                    setBusyId(null)
-                                  }
-                                })()
-                                return
-                              }
-                              if (id === 'remove') setRemoveTarget(entry)
-                            }}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                    {open ? (
-                      <div className={css.cardDetails} id={detailId}>
-                        <code className={css.entryValue} data-loader-entry>{entry.entryId}</code>
-                        <dl className={css.details}>
-                          <div>
-                            <dt>{t('configuration')}</dt>
-                            <dd>{configuration}</dd>
-                          </div>
-                          {entry.kind ? (
-                            <div>
-                              <dt>{t('kind')}</dt>
-                              <dd>{entry.kind}</dd>
-                            </div>
-                          ) : null}
-                          {entry.version ? (
-                            <div>
-                              <dt>{t('version')}</dt>
-                              <dd>{entry.version}</dd>
-                            </div>
-                          ) : null}
-                          {entry.source ? (
-                            <div>
-                              <dt>{t('source')}</dt>
-                              <dd className={css.sourceValue}>{entry.source}</dd>
-                            </div>
-                          ) : null}
-                          {showUpdateAvail && probe.latest ? (
-                            <div>
-                              <dt>{t('update')}</dt>
-                              <dd>{t('updateAvailableHint', { version: probe.latest })}</dd>
-                            </div>
-                          ) : null}
-                          {entry.enabled ? (
-                            <div>
-                              <dt>{t('cordis')}</dt>
-                              <dd>{status}</dd>
-                            </div>
-                          ) : null}
-                          {needsRestart ? (
-                            <div>
-                              <dt>{t('needsRestartTag')}</dt>
-                              <dd>
-                                <span>{t('restartHint')}</span>
-                                {' '}
-                                <button
-                                  type="button"
-                                  className={css.refreshPage}
-                                  onClick={refreshClientHalf}
-                                >
-                                  {t('refreshPage')}
-                                </button>
-                              </dd>
-                            </div>
-                          ) : null}
-                        </dl>
-                        {managed ? null : (
-                          <p className={css.builtinHint}>{t('builtinHint')}</p>
-                        )}
-                      </div>
-                    ) : null}
-                  </li>
-                )
-            }
-
-            const renderPhoneRuntime = (parts: typeof engineRows) => {
-              const open = expanded === PHONE_RUNTIME_CARD_ID
-              const detailId = `${catalogId}-details-phone-runtime`
-              const anyOn = parts.some((p) => p.enabled)
-              return (
-                <li
-                  className={css.card}
-                  key={PHONE_RUNTIME_CARD_ID}
-                  data-plugin-entry="phone-runtime"
-                  data-source-class="engine"
-                  data-open={open ? 'true' : undefined}
-                  data-kind="runtime"
-                >
-                  <div className={css.cardHead}>
-                    <button
-                      className={css.cardContent}
-                      type="button"
-                      aria-expanded={open}
-                      aria-controls={detailId}
-                      aria-label={t('phoneRuntimeTitle')}
-                      onClick={() => {
-                        setRemoveTarget(null)
-                        setMenuEntryId(null)
-                        setExpanded((current) => (
-                          current === PHONE_RUNTIME_CARD_ID ? null : PHONE_RUNTIME_CARD_ID
-                        ))
-                      }}
-                    >
-                      <span className={css.artwork} data-kind="both" aria-hidden>
-                        <IconEnhanceOutlineRegular size={18} />
-                      </span>
-                      <span className={css.cardTitleBlock}>
-                        <span className={css.cardTitleRow}>
-                          <strong className={css.cardTitle}>{t('phoneRuntimeTitle')}</strong>
-                          <span className={css.versionTag}>
-                            {t('phoneRuntimeParts', { count: String(parts.length) })}
-                          </span>
-                        </span>
-                        <span className={css.cardMetaRow}>
-                          <span className={css.localTag}>phone-guest</span>
-                        </span>
-                      </span>
-                      <span className={css.cardTrailing}>
-                        <span
-                          className={css.configTag}
-                          data-enabled={anyOn ? 'true' : 'false'}
-                        >
-                          {t(anyOn ? 'enabledTag' : 'disabledTag')}
-                        </span>
-                        <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
-                      </span>
-                    </button>
-                  </div>
-                  {open ? (
-                    <div className={css.cardDetails} id={detailId}>
-                      <p className={css.builtinHint}>{t('phoneRuntimeHint')}</p>
-                      <ul className={css.phoneRuntimeParts}>
-                        {parts.map((part) => (
-                          <li key={part.entryId} className={css.phoneRuntimePart}>
-                            <code>{part.entryId}</code>
-                            <span>{part.kind ?? '—'}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </li>
-              )
-            }
-
-            return (
-            <ul className={css.cards}>
-              {sections.flatMap((section) => [
-                  ...(section.label !== null
-                    ? [(
-                      <li key={`section:${section.label}`} className={css.groupHeading} role="presentation">
-                        {section.label}
-                      </li>
-                    )]
-                    : []),
-                  ...section.rows.map((row) => (
-                    row.kind === 'phone-runtime'
-                      ? renderPhoneRuntime(row.parts)
-                      : renderEntryCard(row.entry)
-                  )),
-                ])}
-            </ul>
-            )
-          })()}
-              </div>
-            ) : null}
-          </section>
-
-          {selectedPreset !== undefined ? (
-            <section className={css.scopeGroup} data-plugin-scope="preset" data-preset-id={selectedPreset.id}>
-              <div className={css.scopeTitleRow}>
-                <button
-                  type="button"
-                  className={css.scopeToggle}
-                  aria-expanded={presetOpen}
-                  aria-controls={`${catalogId}-preset`}
-                  onClick={() => { setPresetOpen(value => !value) }}
-                >
-                  <IconChevronDownOutlineRegular className={css.scopeChevron} aria-hidden="true" />
-                  <span className={css.scopeTitle}>{t('presetTitle')}</span>
-                </button>
-                <Menu
-                  open={switcherOpen}
-                  onClose={() => { setSwitcherOpen(false) }}
-                  items={presets.map(preset => ({
-                    id: preset.id,
-                    label: presetLabel(preset, t),
-                  }))}
-                  selectedId={selectedPreset.id}
-                  onSelect={(id) => {
-                    setSwitcherOpen(false)
-                    setChosenPreset(id)
-                  }}
-                  align="end"
-                  portal
-                  anchor={(
-                    <button
-                      type="button"
-                      className={css.presetSwitcher}
-                      aria-haspopup="menu"
-                      aria-expanded={switcherOpen}
-                      aria-label={t('switcherLabel')}
-                      onClick={() => { setSwitcherOpen(value => !value) }}
-                    >
-                      <span>{presetLabel(selectedPreset, t)}</span>
-                      <IconChevronDownOutlineRegular aria-hidden="true" />
-                    </button>
-                  )}
-                />
-              </div>
-              <p className={css.scopeSub}>
-                {t('presetSubtitle')}
-                <span data-preset-plugin-count={selectedPresetRows.length}>
-                  {` · ${String(selectedPresetRows.length)} ${t('countUnit')}`}
-                </span>
-              </p>
-              {presetOpen ? (
-                <div id={`${catalogId}-preset`} className={css.scopeBody}>
-                  {selectedPreset.broken !== undefined
-                    ? <p className={css.brokenNote} role="alert">{selectedPreset.broken}</p>
-                    : null}
-                  {selectedPresetRows.length > 0 ? (
-                    <ul className={css.cards} data-preset-rows>
-                      {selectedPresetRows.map((row) => {
-                        const title = compositionTitle(row.moduleName)
-                        const configuration = presetEnabledLabel(row.enabled, t)
-                        return (
-                          <li
-                            className={css.card}
-                            key={`${selectedPreset.id}:${row.moduleName}`}
-                            data-composition={row.moduleName}
-                            data-enabled={String(row.enabled)}
-                          >
-                            <div className={css.cardContent} data-static="true">
-                              <span className={css.artwork} data-kind="composition" aria-hidden="true">
-                                <IconEnhanceOutlineRegular size={16} />
-                              </span>
-                              <span className={css.cardTitleBlock}>
-                                <span className={css.cardTitleRow}>
-                                  <strong className={css.cardTitle}>{title}</strong>
-                                  {row.condition !== undefined
-                                    ? <span className={css.versionTag}>{row.condition}</span>
-                                    : null}
-                                </span>
-                              </span>
-                              <span className={css.cardTrailing}>
-                                <StateDot
-                                  state={row.enabled === false ? 'error' : row.enabled === 'conditional' ? 'warning' : 'done'}
-                                />
-                                <span className={css.configTag} data-enabled={row.enabled === false ? 'false' : 'true'}>
-                                  {configuration}
-                                </span>
-                              </span>
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  ) : null}
-                  {normalizedQuery.length > 0 && otherPresetMatches.length > 0 ? (
-                    <p className={css.hint}>
-                      {t('matchesInOtherPresets', { count: String(otherPresetMatches.length) })}
-                      {otherPresetMatches.map(preset => (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          className={css.jumpLink}
-                          onClick={() => { setChosenPreset(preset.id) }}
-                        >
-                          {preset.name ?? preset.id}
-                        </button>
-                      ))}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
 
         </div>
       ) : null}
@@ -1703,6 +1754,7 @@ export function PluginInventorySettingsTab({
           : t('removeTitle', { name: moduleShortName(removeTarget.moduleName) })}
         closeLabel={t('close')}
         description={removeTarget === null ? '' : t('removeDescription')}
+        layout="inset"
         className={css.removeDialog}
         footer={(
           <>

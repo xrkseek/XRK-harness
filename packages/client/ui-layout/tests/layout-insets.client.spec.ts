@@ -8,6 +8,7 @@ import {
   LAYOUT_INSET_ATTR,
   LAYOUT_INSET_CSS,
   layoutInsetsEqual,
+  shellOccupiedWidth,
 } from '../src/client/layout-insets.ts'
 
 afterEach(() => {
@@ -75,5 +76,11 @@ describe('layout insets contract', () => {
     expect(layoutInsetsEqual(EMPTY_LAYOUT_INSETS, {
       details: 0, detailsOpen: false, sidebar: 0, bottom: 1, phone: false,
     })).toBe(false)
+  })
+
+  it('shellOccupiedWidth sums rail + Overview only', () => {
+    expect(shellOccupiedWidth({ sidebar: 240, details: 360 })).toBe(600)
+    expect(shellOccupiedWidth({ sidebar: 56, details: 0 })).toBe(56)
+    expect(shellOccupiedWidth({ sidebar: -1, details: Number.NaN })).toBe(0)
   })
 })

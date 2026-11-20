@@ -1,7 +1,13 @@
 /**
  * better-sidebar embedded browser probe — HEAD/GET remote URL headers.
+ * Not a proxy: only returns embeddability headers. Blocks private /
+ * loopback targets (literal + DNS rebind) so probe cannot be used as SSRF.
  */
 import type { BrowserEmbedProbe } from "@xrkseek/protocol";
+import {
+  assertResolvedAddressesPublic,
+  isBlockedHost,
+} from "@xrkseek/exec-web";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 
@@ -70,6 +76,17 @@ export async function probeBrowserUrl(
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     return { reachable: false, supported: false, reason: "unsupported-scheme" };
+  }
+  if (url.username !== "" || url.password !== "") {
+    return { reachable: false, supported: false, reason: "credentials-in-url" };
+  }
+  if (isBlockedHost(url.hostname)) {
+    return { reachable: false, supported: false, reason: "blocked-host" };
+  }
+  try {
+    await assertResolvedAddressesPublic(url);
+  } catch {
+    return { reachable: false, supported: false, reason: "blocked-host" };
   }
   const head = await probeOnce(url);
   if (!head.reachable && url.protocol === "https:") {

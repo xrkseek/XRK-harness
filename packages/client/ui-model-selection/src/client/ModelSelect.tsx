@@ -20,7 +20,7 @@ import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@xrkseek/xrk-api-remotes/client'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular,
-  IconWarningOutlineRegular, Toast,
+  IconWarningOutlineRegular, SHELL_KEYBOARD_ATTR, Toast,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
@@ -398,7 +398,8 @@ export function ModelSelect(
         active.blur()
       }
       const root = document.documentElement
-      if (!root.hasAttribute('data-xrk-shell-keyboard')) {
+      // APP shell owns inset — never zero it from the model menu.
+      if (!root.hasAttribute(SHELL_KEYBOARD_ATTR)) {
         root.style.setProperty('--xrk-keyboard-inset', '0px')
         root.removeAttribute('data-xrk-keyboard')
         window.dispatchEvent(new CustomEvent('xrk-keyboard-inset', { detail: { inset: 0 } }))

@@ -135,6 +135,60 @@ function num(v: string | undefined, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** Loopback / local-only bind hosts that do not require API key / CORS harden. */
+export function isLoopbackBindHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  return (
+    h === "" ||
+    h === "127.0.0.1" ||
+    h === "::1" ||
+    h === "localhost" ||
+    h === "[::1]"
+  );
+}
+
+export interface AssertSecureHostBindInput {
+  readonly config: HostConfig;
+  readonly env?: NodeJS.ProcessEnv;
+}
+
+/**
+ * Fail-closed when binding off-loopback without an API key / explicit CORS.
+ * Desktop `listen:false` (pipe) skips. Escape hatch: `XRK_ALLOW_INSECURE_BIND=1`.
+ */
+export function assertSecureHostBind(
+  input: AssertSecureHostBindInput,
+): void {
+  const env = input.env ?? process.env;
+  const { config } = input;
+  if (config.runtime.listen === false) return;
+  const host = String(config.runtime.host ?? "127.0.0.1");
+  if (isLoopbackBindHost(host)) return;
+
+  const allowInsecure =
+    env.XRK_ALLOW_INSECURE_BIND === "1" ||
+    env.XRK_ALLOW_INSECURE_BIND === "true";
+  if (allowInsecure) return;
+
+  const apiKey = config.credentials.apiKey.trim();
+  if (!apiKey) {
+    throw new Error(
+      `Non-loopback bind (${host}) requires a non-empty XRK_API_KEY ` +
+        `(or set XRK_ALLOW_INSECURE_BIND=1 for intentional insecure bind). ` +
+        `See docs/security-checklist.md.`,
+    );
+  }
+
+  const corsExplicit = Boolean(String(env.XRK_CORS_ORIGIN ?? "").trim());
+  if (config.runtime.corsOrigin === "*" && !corsExplicit) {
+    throw new Error(
+      `Non-loopback bind (${host}) refuses the default CORS origin "*". ` +
+        `Set XRK_CORS_ORIGIN to an explicit origin (or XRK_ALLOW_INSECURE_BIND=1). ` +
+        `See docs/security-checklist.md.`,
+    );
+  }
+}
+
 /** Layered config: defaults < env < patch. Secrets only from env. */
 export function loadHostConfig(input: LoadConfigInput = {}): HostConfig {
   const env = input.env ?? process.env;

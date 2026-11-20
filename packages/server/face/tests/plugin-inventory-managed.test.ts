@@ -559,6 +559,48 @@ describe("managed plugin inventory paths", () => {
     expect(enabled?.needsRestart).toBeUndefined();
   });
 
+  it("does not mark needsRestart for desired MCP rows that are not live yet", () => {
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-mcp-nr-"));
+    temps.push(productDir);
+    const plugins = path.join(productDir, "plugins");
+    mkdirSync(plugins, { recursive: true });
+    const namespaces = {
+      ensure: (_ns: string) => ({
+        base: { servers: [], allowConnect: true },
+        user: {
+          allowConnect: true,
+          servers: [
+            { serverName: "everything", command: "npx" },
+            { serverName: "memory", command: "npx", enabled: false },
+          ],
+        },
+      }),
+    };
+    const listed = listFacePluginInventory({
+      productDir,
+      plugins: [],
+      webPlugins: [],
+      hostPublic: { pluginsDir: plugins },
+      settingsNamespaces: namespaces,
+    } as never);
+    const everything = listed.find((e) => e.entryId === "mcp:everything");
+    const memory = listed.find((e) => e.entryId === "mcp:memory");
+    expect(everything).toMatchObject({
+      kind: "mcp",
+      managed: true,
+      enabled: true,
+      fiberPhase: "loading",
+    });
+    expect(everything?.needsRestart).toBeUndefined();
+    expect(memory).toMatchObject({
+      kind: "mcp",
+      managed: true,
+      enabled: false,
+      fiberPhase: null,
+    });
+    expect(memory?.needsRestart).toBeUndefined();
+  });
+
   it("marks needsRestart when soft-disabled optional is still live in Host", () => {
     const productDir = mkdtempSync(path.join(tmpdir(), "xrk-git-wt-live-"));
     temps.push(productDir);

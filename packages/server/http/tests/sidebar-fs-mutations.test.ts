@@ -180,6 +180,37 @@ describe("sidebar fs mutations", () => {
     });
   });
 
+  it("refuses JSON upload to absolute paths outside the workspace", async () => {
+    await withWorkspace(async (base) => {
+      const outside = mkdtempSync(path.join(tmpdir(), "xrk-sidebar-up-"));
+      const target = path.join(outside, "pwned.txt");
+      writeFileSync(target, "safe");
+      const res = await fetch(`${base}/sidebar/upload`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: target, content: "pwned" }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        error?: { message?: string };
+      };
+      expect(body.ok).toBe(false);
+      expect(body.error?.message).toMatch(/escapes workspace/i);
+      expect(readFileSync(target, "utf8")).toBe("safe");
+    });
+  });
+
+  it("refuses open.external url with non-http(s) schemes", async () => {
+    await withWorkspace(async (base) => {
+      const body = await callApi(base, "open.external", {
+        action: "url",
+        url: "file:///etc/passwd",
+      });
+      expect(body.ok).toBe(false);
+      expect(body.error?.message).toMatch(/http\(s\)/i);
+    });
+  });
+
   it("fs.watch.sync marks levels unwatched for degraded polling", async () => {
     await withWorkspace(async (base, cwd) => {
       mkdirSync(path.join(cwd, "src"));

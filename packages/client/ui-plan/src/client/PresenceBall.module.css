@@ -378,13 +378,20 @@
 }
 
 .root[data-pair]:not([data-compact]) .stage {
-  width: min(100%, 124px);
-  min-height: 155px;
-  border-radius: 16px;
+  /* Shared with PreviewTabs .delegatePair --xrk-delegate-stage so left peeks
+     and the right 被委派方 stay isometric when the stack count grows. */
+  width: min(100%, var(--xrk-delegate-stage, 118px));
+  max-width: 100%;
+  min-height: 0;
+  aspect-ratio: 4 / 5;
+  border-radius: 14px;
 }
 
 .root[data-pair]:not([data-compact]) .meta {
-  max-width: 16ch;
+  /* Stay inside the stage column so pair captions never cover「委派」. */
+  max-width: 100%;
+  box-sizing: border-box;
+  padding-inline: 2px;
 }
 
 .root[data-pair]:not([data-compact]) .emotion {
@@ -429,11 +436,11 @@
   }
 
   .root[data-pair]:not([data-compact]) .stage {
-    /* Absolute width (not min(100%, N)) so a flex-shrink-wrapped left seat
-     * still gets a real stage on Android WebView; max-width keeps narrow cols. */
-    width: 132px;
+    /* Keep the shared --xrk-delegate-stage (set on .delegatePair). A hard
+     * 132px here broke isometric L/R and buried peeks on phone. */
+    width: min(100%, var(--xrk-delegate-stage, 108px));
     max-width: 100%;
-    min-height: 165px;
+    min-height: 0;
     aspect-ratio: 4 / 5;
   }
 
@@ -487,8 +494,8 @@
 }
 
 :global(html[data-xrk-layout-phone]) .root[data-pair]:not([data-compact]) .stage {
-  width: 132px;
+  width: min(100%, var(--xrk-delegate-stage, 108px));
   max-width: 100%;
-  min-height: 165px;
+  min-height: 0;
   aspect-ratio: 4 / 5;
 }

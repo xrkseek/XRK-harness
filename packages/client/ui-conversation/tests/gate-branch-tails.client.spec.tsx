@@ -59,17 +59,31 @@ function snapshotBase(): ConversationSnapshot {
 }
 
 describe('render branch tails', () => {
-  it('AssistantMarkdown reasoning row is ok-state when not the streaming tail', () => {
+  it('AssistantMarkdown keeps Think running while a text tail streams after it', () => {
     const view = render(
       <AssistantMarkdown
         t={t}
-        blocks={[{ kind: 'reasoning', text: 'done thinking' }, { kind: 'text', text: 'answer' }]}
+        blocks={[{ kind: 'reasoning', text: 'still thinking' }, { kind: 'text', text: 'answer…' }]}
         streaming
         renderMessageImages={renderMessageImages}
       />,
     )
-    // reasoning at index 0 with a later block: running is false → ok state.
+    // Compacted streams are often [reasoning, text]. Live chrome keys off the
+    // last reasoning block, not `i === last`, so a text tail does not freeze Think.
+    expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()
+  })
+
+  it('AssistantMarkdown settles Think to ok once the stream ends', () => {
+    const view = render(
+      <AssistantMarkdown
+        t={t}
+        blocks={[{ kind: 'reasoning', text: 'done thinking' }, { kind: 'text', text: 'answer' }]}
+        streaming={false}
+        renderMessageImages={renderMessageImages}
+      />,
+    )
     expect(view.container.querySelector('[data-state="ok"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-state="running"]')).toBeNull()
   })
 
   it('StatsLine falls back to window-node counts and drops every token group without projections', () => {

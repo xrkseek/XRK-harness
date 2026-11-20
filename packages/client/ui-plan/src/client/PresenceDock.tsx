@@ -5,9 +5,17 @@
  *
  * Phone: portal an icon-only ball into AppFrame `[data-phone-presence-slot]`
  * (menu | ball | 概况). Tap bounces like desktop — Overview opens only from
- * the gauge. Title-row chip stays for desktop.
+ * the gauge. Mid-width desktop (&lt; {@link PRESENCE_ICON_ONLY_ENTER}) collapses
+ * the title-row chip to the same icon-only frame so 概况 / jobs stay visible.
  */
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from 'react'
 import { createPortal } from 'react-dom'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type {} from '@xrkseek/client-ui-conversation/client'
@@ -35,6 +43,30 @@ import css from './PresenceDock.module.css'
 const NOOP_SUBSCRIBE = (_listener: () => void): (() => void) => () => {}
 const PHONE_ATTR = 'data-xrk-layout-phone'
 const PHONE_SLOT = '[data-phone-presence-slot]'
+
+/** Viewport / header width below which the header ball is icon-only (enter). */
+export const PRESENCE_ICON_ONLY_ENTER = 960
+/** Hysteresis exit for icon-only header ball. */
+export const PRESENCE_ICON_ONLY_EXPAND = 1008
+/**
+ * Conversation header width below which the ball collapses even on a wide
+ * window (four-pane squeeze: sidebar + chat + Overview + workbench).
+ */
+export const PRESENCE_HEADER_ICON_ONLY_ENTER = 720
+/** Hysteresis exit for header-width icon-only. */
+export const PRESENCE_HEADER_ICON_ONLY_EXPAND = 780
+
+/** Local hysteresis — client plugins must not value-import sibling packages. */
+function latchWidthBreakpoint(
+  wasActive: boolean,
+  width: number,
+  enterBelow: number,
+  exitBelow: number,
+): boolean {
+  return wasActive ? width < exitBelow : width < enterBelow
+}
+
+const CONVERSATION_HEADER = '[data-conversation-header]'
 
 export { PRESENCE_DOCK_ENTER_MS, PRESENCE_DOCK_EXIT_MS } from './presence-handoff.ts'
 
@@ -89,7 +121,7 @@ function usePhonePresenceSlot(overviewOpen: boolean): HTMLElement | null {
       attributes: true,
       attributeFilter: [PHONE_ATTR],
     })
-    const frameEl = document.querySelector('[data-dsh-frame]')
+    const frameEl = document.querySelector('[data-xrk-frame], [data-dsh-frame]')
     if (frameEl !== null) {
       obs.observe(frameEl, { childList: true, subtree: true })
     }
@@ -104,6 +136,86 @@ function usePhonePresenceSlot(overviewOpen: boolean): HTMLElement | null {
 }
 
 /**
+ * Collapse the chip to the ball frame when the *window* is mid-width OR the
+ * conversation header itself is squeezed (Overview open on a wide desktop).
+ */
+function useIconOnlyChrome(seatRef: RefObject<HTMLDivElement | null>): boolean {
+  const [iconOnly, setIconOnly] = useState(() => (
+    typeof window !== 'undefined' && window.innerWidth < PRESENCE_ICON_ONLY_ENTER
+  ))
+  useEffect(() => {
+    let headerRo: ResizeObserver | null = null
+    let headerEl: Element | null = null
+    let headerWidth = Number.POSITIVE_INFINITY
+    // Independent latches — sharing React `prev` across window + header made
+    // one axis "exit" while the other still needed icon-only, then flicker.
+    let windowActive = typeof window !== 'undefined'
+      && window.innerWidth < PRESENCE_ICON_ONLY_ENTER
+    let headerActive = false
+
+    const publish = (): void => {
+      windowActive = latchWidthBreakpoint(
+        windowActive,
+        window.innerWidth,
+        PRESENCE_ICON_ONLY_ENTER,
+        PRESENCE_ICON_ONLY_EXPAND,
+      )
+      headerActive = latchWidthBreakpoint(
+        headerActive,
+        headerWidth,
+        PRESENCE_HEADER_ICON_ONLY_ENTER,
+        PRESENCE_HEADER_ICON_ONLY_EXPAND,
+      )
+      const next = windowActive || headerActive
+      setIconOnly((prev) => (prev === next ? prev : next))
+    }
+
+    const syncHeaderTarget = (): void => {
+      const next = seatRef.current?.closest(CONVERSATION_HEADER)
+        ?? document.querySelector(CONVERSATION_HEADER)
+      if (next === headerEl) return
+      headerRo?.disconnect()
+      headerEl = next
+      if (next === null) {
+        headerWidth = Number.POSITIVE_INFINITY
+        publish()
+        return
+      }
+      headerWidth = (next as HTMLElement).clientWidth
+      publish()
+      // jsdom / older WebViews may lack ResizeObserver — window resize still
+      // re-reads clientWidth via onResize, so the first sync is enough there.
+      if (typeof ResizeObserver === 'undefined') return
+      headerRo = new ResizeObserver((entries) => {
+        const w = entries[0]?.contentRect.width
+        if (typeof w !== 'number') return
+        headerWidth = w
+        publish()
+      })
+      headerRo.observe(next)
+    }
+
+    const onResize = (): void => {
+      if (headerEl !== null) {
+        headerWidth = (headerEl as HTMLElement).clientWidth
+      }
+      publish()
+    }
+
+    syncHeaderTarget()
+    // Seat may mount one frame after the header; re-bind once.
+    const raf = window.requestAnimationFrame(syncHeaderTarget)
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.cancelAnimationFrame(raf)
+      window.removeEventListener('resize', onResize)
+      headerRo?.disconnect()
+    }
+  }, [seatRef])
+  return iconOnly
+}
+
+/**
  * Header utilities seat: glanceable emotion ball when Status column is closed.
  */
 export function PresenceDock({
@@ -115,6 +227,9 @@ export function PresenceDock({
   const presenceEnabled = usePresenceEnabled()
   const overviewOpen = useOverviewOpen()
   const phoneSlot = usePhonePresenceSlot(overviewOpen)
+  const seatRef = useRef<HTMLDivElement | null>(null)
+  const iconOnlyChrome = useIconOnlyChrome(seatRef)
+  const iconOnly = phoneSlot !== null || iconOnlyChrome
   const [phase, setPhase] = useState<DockPhase>(() => (overviewOpen ? 'gone' : 'idle'))
   const phaseRef = useRef(phase)
   phaseRef.current = phase
@@ -283,9 +398,11 @@ export function PresenceDock({
 
   const seat = (
     <div
+      ref={seatRef}
       className={css.seat}
       data-presence-dock=""
       data-phone-dock={phoneSlot ? '' : undefined}
+      data-icon-only={iconOnly ? '' : undefined}
       data-phase={phase === 'idle' ? undefined : phase}
       aria-label={phase === 'gone' ? undefined : t('preview.status.presence')}
       aria-hidden={phase === 'exit' || phase === 'gone' || undefined}

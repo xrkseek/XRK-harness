@@ -2,8 +2,7 @@
  * Native client gold sample — theme token overlay.
  *
  * Stacks a few `--dsw-alias-*` overrides through ThemeRuntime (first-party).
- * No dsh-compat, no skin HTTP, no community skin.json.
- */
+ * */
 window.__ModuleLoader__.load({
   id: "example-theme-tokens",
   factory: () => ({

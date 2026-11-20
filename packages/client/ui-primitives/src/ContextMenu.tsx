@@ -120,6 +120,8 @@ export function ContextMenuHost({
   const restoreRef = useRef<HTMLElement | null>(null);
   /** Monotonic ticket so a slow clipboard probe cannot open a stale menu. */
   const probeRef = useRef(0);
+  /** Abort the previous translate when a newer one starts (or the host unmounts). */
+  const translateAbortRef = useRef<AbortController | null>(null);
 
   const showToast = useCallback((text: string): void => {
     toastSeq.current += 1;
@@ -130,10 +132,17 @@ export function ContextMenuHost({
     setToast(null);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      translateAbortRef.current?.abort();
+      translateAbortRef.current = null;
+    };
+  }, []);
+
   /**
-   * Default translate only copied to the clipboard after an async fetch, so
-   * the gesture window was already gone and the user saw nothing. Keep test
-   * doubles intact; for the product path, toast the result (and still copy).
+   * Default translate is async: toast + clipboard only on success.
+   * Provider / network / language misses stay silent (no error toast).
+   * Keep injected test doubles intact.
    */
   const wiredActions = useMemo((): ContextMenuActions => {
     if (actions.translate !== domContextMenuActions.translate) return actions;
@@ -142,16 +151,11 @@ export function ContextMenuHost({
       translate(hit) {
         const source = hit.selectionText.trim();
         if (!source) return;
-        void translateSelectionText(source).then((out) => {
-          if (!out.ok) {
-            const prefix = t?.("translateFailed");
-            const label =
-              typeof prefix === "string" && prefix !== "" && prefix !== "translateFailed"
-                ? prefix
-                : "Translate failed";
-            showToast(`${label}: ${out.error}`);
-            return;
-          }
+        translateAbortRef.current?.abort();
+        const ctrl = new AbortController();
+        translateAbortRef.current = ctrl;
+        void translateSelectionText(source, { signal: ctrl.signal }).then((out) => {
+          if (ctrl.signal.aborted || !out.ok) return;
           // Reuse the clipboard path (with execCommand fallback) from gestures.
           actions.copyText(out.text);
           const preview =
@@ -160,7 +164,7 @@ export function ContextMenuHost({
         });
       },
     };
-  }, [actions, showToast, t]);
+  }, [actions, showToast]);
 
   useEffect(() => {
     const onContextMenu = (event: MouseEvent): void => {

@@ -17,6 +17,12 @@ export interface DisclosureRowProps {
   previewChevron?: boolean | undefined
   /** Keeps `collapsedContent` inline while open. */
   keepContentWhenOpen?: boolean | undefined
+  /**
+   * When false, skip mid-column scroll preserve on this header. Use when the
+   * expanding height lives on a sibling (process-group body) and the parent
+   * owns preserve on the shared root.
+   */
+  preserveScrollOnExpand?: boolean | undefined
   collapsedContent?: ReactNode
   children?: ReactNode
   className?: string | undefined
@@ -40,6 +46,7 @@ export function DisclosureRow({
   expandOnRowClick = false,
   previewChevron = expandable,
   keepContentWhenOpen = false,
+  preserveScrollOnExpand = true,
   collapsedContent,
   children,
   className,
@@ -48,7 +55,7 @@ export function DisclosureRow({
   chevronClassName,
   titleClassName,
 }: DisclosureRowProps) {
-  const { rootRef, noteExpand } = useExpandScrollPreserve(open)
+  const { rootRef, noteExpand } = useExpandScrollPreserve(open, preserveScrollOnExpand)
   const rowExpands = expandable && expandOnRowClick
 
   const runToggle = () => {

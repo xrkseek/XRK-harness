@@ -6,6 +6,10 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
+import {
+  isLoopbackRemoteAddress,
+  timingSafeTokenEqual,
+} from "@xrkseek/im-gateway-contract";
 import { registerDshCompatUpgrade } from "./dsh-compat-upgrades.js";
 import { ingestImWebhook } from "./im-messaging-bridge.js";
 
@@ -17,17 +21,16 @@ const ingress: { xrkHome?: string; env: NodeJS.ProcessEnv } = {
   env: process.env,
 };
 
-function isLocalHost(req: IncomingMessage): boolean {
-  const host = String(req.headers.host ?? "");
-  return /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(host);
-}
-
 function pushAuthorized(req: IncomingMessage, env: NodeJS.ProcessEnv): boolean {
   const expected = env.XRK_IM_GATEWAY_TOKEN?.trim();
-  if (!expected) return isLocalHost(req);
+  if (!expected) return isLoopbackRemoteAddress(req.socket.remoteAddress);
   const header = String(req.headers["x-im-gateway-token"] ?? "");
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
-  return header === expected || url.searchParams.get("token") === expected;
+  const queryToken = url.searchParams.get("token") ?? "";
+  return (
+    timingSafeTokenEqual(header, expected) ||
+    timingSafeTokenEqual(queryToken, expected)
+  );
 }
 
 function writeFrame(socket: Duplex, opcode: number, payload: Buffer): void {

@@ -1,0 +1,9 @@
+{
+  "id": "example-commands",
+  "kind": "commands",
+  "entry": "./plugin.mjs",
+  "trust": {
+    "note": "Process plugin — loads into the Host Node process (same privileges as the Host).",
+    "capabilities": ["commands"]
+  }
+}

@@ -807,6 +807,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
               : t('deleteDescriptionWithCredential'),
             deleteTarget,
           )}
+        layout="inset"
         className={styles['deleteDialog'] as string}
         footer={(
           <>

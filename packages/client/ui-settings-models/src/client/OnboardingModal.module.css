@@ -6,7 +6,9 @@
 .content {
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 48px);
+  /* Cap against the Modal card (`100%`), not only the viewport — APP
+     shell-frames Modals, so 100dvh alone can overflow into the IME. */
+  max-height: min(calc(100vh - 48px), 100%);
   padding: 28px;
   box-sizing: border-box;
   overflow-y: auto;
@@ -18,7 +20,7 @@
 
 @supports (height: 100dvh) {
   .content {
-    max-height: calc(100dvh - 48px);
+    max-height: min(calc(100dvh - 48px), 100%);
   }
 }
 
@@ -50,22 +52,21 @@
 }
 
 @media (max-width: 767px) {
-  /* Phone Modal is full-bleed — vertically settle the welcome block so it
-     does not glue to the browser chrome with a void below. */
+  /* Phone Modal is a centered card (not a full-bleed sheet). Keep the
+     welcome block readable inside the card without stretching to 100vh. */
   .dialog {
-    height: 100%;
-    max-height: none;
+    width: min(600px, 100%);
+    max-height: min(85dvh, 100%);
   }
 
   .content {
-    height: 100%;
-    max-height: none;
-    justify-content: center;
+    max-height: min(85dvh, 100%);
+    justify-content: flex-start;
     padding:
-      max(48px, calc(env(safe-area-inset-top, 0px) + 28px))
-      max(24px, env(safe-area-inset-right, 0px))
-      max(28px, calc(env(safe-area-inset-bottom, 0px) + 16px))
-      max(24px, env(safe-area-inset-left, 0px));
+      max(24px, env(safe-area-inset-top, 0px))
+      max(20px, env(safe-area-inset-right, 0px))
+      max(20px, calc(env(safe-area-inset-bottom, 0px) + 8px))
+      max(20px, env(safe-area-inset-left, 0px));
   }
 
   .title {

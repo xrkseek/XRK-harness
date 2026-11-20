@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@xrkseek/client-runtime/client'
 import {
   PRESENCE_DOCK_EXIT_MS,
+  PRESENCE_ICON_ONLY_ENTER,
   PresenceDock,
 } from '../src/client/PresenceDock.tsx'
 import { bindPresenceSettingsRuntime } from '../src/client/PresenceBall.tsx'
@@ -158,6 +159,7 @@ describe('PresenceDock', () => {
   })
 
   it('shows a header-density compact ball when Overview is closed', async () => {
+    vi.stubGlobal('innerWidth', PRESENCE_ICON_ONLY_ENTER + 80)
     const frame = document.createElement('div')
     frame.setAttribute('data-dsh-frame', '')
     frame.setAttribute('data-details-collapsed', '')
@@ -167,9 +169,49 @@ describe('PresenceDock', () => {
 
     await waitFor(() => {
       const ball = document.querySelector('[data-overview-presence][data-compact]')
-      expect(document.querySelector('[data-presence-dock]')).toBeTruthy()
+      const dock = document.querySelector('[data-presence-dock]')
+      expect(dock).toBeTruthy()
+      expect(dock?.hasAttribute('data-icon-only')).toBe(false)
       expect(ball).toBeTruthy()
       expect(ball?.getAttribute('data-density')).toBe('header')
+    })
+  })
+
+  it('collapses to an icon-only frame on mid-width desktop', async () => {
+    vi.stubGlobal('innerWidth', PRESENCE_ICON_ONLY_ENTER - 1)
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    frame.setAttribute('data-details-collapsed', '')
+    document.body.appendChild(frame)
+
+    renderDock()
+
+    await waitFor(() => {
+      const dock = document.querySelector('[data-presence-dock]')
+      expect(dock).toBeTruthy()
+      expect(dock?.hasAttribute('data-icon-only')).toBe(true)
+      expect(dock?.hasAttribute('data-phone-dock')).toBe(false)
+      expect(document.querySelector('[data-overview-presence][data-compact]')).toBeTruthy()
+    })
+  })
+
+  it('collapses to icon-only when the conversation header is squeezed', async () => {
+    vi.stubGlobal('innerWidth', PRESENCE_ICON_ONLY_ENTER + 200)
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    frame.setAttribute('data-details-collapsed', '')
+    const header = document.createElement('header')
+    header.setAttribute('data-conversation-header', '')
+    Object.defineProperty(header, 'clientWidth', { configurable: true, value: 480 })
+    frame.appendChild(header)
+    document.body.appendChild(frame)
+
+    renderDock()
+
+    await waitFor(() => {
+      const dock = document.querySelector('[data-presence-dock]')
+      expect(dock).toBeTruthy()
+      expect(dock?.hasAttribute('data-icon-only')).toBe(true)
     })
   })
 

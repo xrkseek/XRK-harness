@@ -2,8 +2,8 @@
  * Native client gold sample — composer tool-row action.
  *
  * Reads the session standard kit (`useModelSelection`, `useInput`,
- * `inputActions`) without going through dsh-compat. Clicking the button
- * prefixes the draft with a short note that names the current model route.
+ * `inputActions`). Clicking the button prefixes the draft with a short note
+ * that names the current model route.
  */
 window.__ModuleLoader__.load({
   id: "example-composer-action",

@@ -1,24 +1,42 @@
 # example-composer-action
 
-Native **client** gold sample for XRK-Harness (not a process `tools` plugin, not dsh-compat).
+> **读者**：插件作者（XRK Plug · client 金样）
 
-Registers on `conversation.input.right`. The button reads the session standard kit:
+在 `conversation.input.right` 挂一颗演示按钮，读取会话标准工具包：
+
+| Prop | 来源 | 用途 |
+|------|------|------|
+| `useModelSelection` | `@xrkseek/client-ui-model-selection` | 当前 `provider` / `model` |
+| `modelSelectionActions` | 同上 | `available` · `select` · `reload` |
+| `useInput` / `inputActions` | `@xrkseek/client-ui-conversation` | 读写草稿 |
+
+点击时在草稿前加 `[optimize via <provider>/<model>] `（本地演示，不调模型）。
+
+## 安装
+
+```bash
+xrkh plugin add ./extensions/example-composer-action
+```
+
+Settings → 插件 → **重载**。
+
+教科书：[docs/client-plugin-development.md](../../docs/client-plugin-development.md)。
+
+---
+
+# example-composer-action
+
+> **Audience**: Plugin authors (XRK Plug · client gold sample)
+
+Registers a demo button on `conversation.input.right` that reads the session standard kit:
 
 | Prop | Source | Use |
 |------|--------|-----|
-| `useModelSelection` | `@xrkseek/client-ui-model-selection` via `sessions.provide` | Current `provider` / `model` · `groups` |
-| `modelSelectionActions` | same | `available` · `select` · `reload`（与座位同路径；子代理 `available=false`） |
-| `useInput` | `@xrkseek/client-ui-conversation` | Composer draft text |
-| `inputActions.setDraft` | same | Write the draft back |
+| `useModelSelection` | `@xrkseek/client-ui-model-selection` | Current `provider` / `model` |
+| `modelSelectionActions` | same | `available` · `select` · `reload` |
+| `useInput` / `inputActions` | `@xrkseek/client-ui-conversation` | Read / write draft |
 
-Click prefixes the draft with `[optimize via <provider>/<model>] ` (local demo only — no LLM call). The button title reports whether `modelSelectionActions.available` is true so authors can see the write face without injecting `ctx.modelDirectories`.
-
-## Layout
-
-```text
-package.json      # xrk.client + inject
-lib/client.js     # ModuleLoader factory → slots.register
-```
+Click prefixes the draft with `[optimize via <provider>/<model>] ` (local demo only).
 
 ## Install
 
@@ -26,20 +44,6 @@ lib/client.js     # ModuleLoader factory → slots.register
 xrkh plugin add ./extensions/example-composer-action
 ```
 
-With Host already running, open **Settings → Plugins** and use **Reload** on the row (or wait for soft remount after install). Disable / delete soft-unload the overlay; hard-refresh only if UI stays dark or unload fails.
+Settings → Plugins → **Reload**.
 
-Monorepo smoke without a global install:
-
-```bash
-XRK_PLUGINS_DIR=./extensions node apps/cli/dist/bin.js web --workspace .
-```
-
-## Vs process plugins
-
-| Goal | Package |
-|------|---------|
-| Model-callable tool | `extensions/example-tools` (`kind: tools`) |
-| Composer UI control | **this package** (`xrk.client`) |
-| Theme token overlay | `extensions/example-theme-tokens` |
-
-Textbook: [docs/client-plugin-development.md](../../docs/client-plugin-development.md) · [docs/plugin-development.md](../../docs/plugin-development.md).
+Textbook: [docs/client-plugin-development.md](../../docs/client-plugin-development.md).

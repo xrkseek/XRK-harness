@@ -113,6 +113,14 @@
   .viewDialog {
     width: 100%;
   }
+
+  /* Soft keyboard: Modal already shrinks — don't reserve half the viewport. */
+  .viewArea {
+    min-height: 28vh;
+    max-height: min(48vh, 70dvh);
+    font-size: 16px; /* avoid iOS focus zoom */
+    line-height: 24px;
+  }
 }
 
 .viewArea {

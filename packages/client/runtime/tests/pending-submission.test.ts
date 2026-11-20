@@ -338,7 +338,9 @@ describe('beginSubmission', () => {
     expect(session.getSnapshot().pendingSubmissions[0]).toMatchObject({
       requestId: handle.requestId,
       placement: 'queued',
-      text: '编辑前',
+      // Host re-list after edit rewrite is authoritative — keep the local
+      // echo text aligned so a later 插队 bubble does not paint the pre-edit body.
+      text: '编辑后',
     })
     expect(session.getSnapshot().queue).toHaveLength(1)
   })
@@ -364,6 +366,34 @@ describe('beginSubmission', () => {
     expect(result.ok).toBe(true)
     expect(onRetire).toHaveBeenCalledWith({ reason: 'failed' })
     expect(session.getSnapshot().pendingSubmissions).toEqual([])
+  })
+
+  it('accepted queue edit patches the matching local echo before the next session/queue frame', async () => {
+    const { api } = bareApi()
+    const updateQueue = vi.fn(async () => ok({ accepted: true as const }))
+    const session = new Session(SID, {
+      ...api,
+      sessions: { ...api.sessions, updateQueue },
+    }, remotes())
+    session.handleRunning(true)
+    const handle = session.beginSubmission({
+      mode: 'queue', text: '原始', attachments: [],
+    })
+    session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, [{
+      id: 'qi-1',
+      rpcId: handle.requestId,
+      body: '原始',
+    }]))
+    const result = await session.updateQueue('qi-1' as never, {
+      kind: 'edit',
+      content: [{ type: 'text', text: '已改' }],
+    })
+    expect(result.ok).toBe(true)
+    expect(session.getSnapshot().pendingSubmissions[0]).toMatchObject({
+      requestId: handle.requestId,
+      placement: 'queued',
+      text: '已改',
+    })
   })
 
   it('session/subscribed mirror clear does not retire still-queued echoes', () => {

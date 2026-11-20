@@ -1,20 +1,32 @@
 # example-theme-tokens
 
-Native **client** gold sample: restyle the product shell with first-party `ThemeRuntime.overrideTokens` — no dsh-compat, no community skin pack.
+> **读者**：插件作者（XRK Plug · client 金样）
 
-Overrides two alias tokens:
+用 `ctx.theme.overrideTokens` 叠两层别名 token（须同时给 light / dark）：
 
 - `--dsw-alias-label-primary`
 - `--dsw-alias-bg-layer-1`
 
-Both light and dark values are required (ThemeRuntime validates at the boundary).
+## 安装
 
-## Layout
-
-```text
-package.json
-lib/client.js
+```bash
+xrkh plugin add ./extensions/example-theme-tokens
 ```
+
+Settings → 插件 → **重载**。
+
+教科书：[docs/client-plugin-development.md](../../docs/client-plugin-development.md)。
+
+---
+
+# example-theme-tokens
+
+> **Audience**: Plugin authors (XRK Plug · client gold sample)
+
+Overlays two alias tokens via `ctx.theme.overrideTokens` (both `light` and `dark` required):
+
+- `--dsw-alias-label-primary`
+- `--dsw-alias-bg-layer-1`
 
 ## Install
 
@@ -22,13 +34,6 @@ lib/client.js
 xrkh plugin add ./extensions/example-theme-tokens
 ```
 
-With Host already running, **Settings → Plugins → Reload** soft-remounts the overlay. Disable / delete soft-unload the override; hard-refresh only if UI stays dark.
-
-## Vs community skins
-
-| Path | When |
-|------|------|
-| **This package** (`ctx.theme.overrideTokens`) | Small token / palette tweaks; first-party |
-| Community skin packs (`/skin-assets`, skin-center, …) | Full artwork skins; Host compat bridge (optional; planned separate npm `@xrkseek/dsh-compat` at 0.9) |
+Settings → Plugins → **Reload**.
 
 Textbook: [docs/client-plugin-development.md](../../docs/client-plugin-development.md).

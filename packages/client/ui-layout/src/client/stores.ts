@@ -85,6 +85,9 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       },
       openDetails: (d) => {
         if (d.details === 0) d.details = d.detailsLast
+        // Mid-width「概况」: drop a narrow re-expand so the concession chain
+        // can reclaim the left rail for the Overview column.
+        if (d.narrow) d.narrowExpanded = false
       },
       closeDetails: (d) => {
         if (d.details > 0) d.detailsLast = d.details

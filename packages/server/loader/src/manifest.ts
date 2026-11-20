@@ -1,6 +1,12 @@
 import { access, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
+/** Author trust disclosure on disk (declarative; not a sandbox). */
+export interface PluginManifestTrust {
+  readonly note?: string;
+  readonly capabilities?: readonly string[];
+}
+
 /** On-disk plugin descriptor (xrk.plugin.json or package.json plugin fields). */
 export interface PluginManifest {
   readonly id: string;
@@ -17,6 +23,11 @@ export interface PluginManifest {
    * startup entries). Default `false` — optional plugins fail in isolation.
    */
   readonly required?: boolean;
+  /**
+   * Optional trust note / capability tags. Process plugins still load into
+   * the Host Node process with full local privileges.
+   */
+  readonly trust?: PluginManifestTrust;
 }
 
 export interface DiscoveryHit {
@@ -64,12 +75,54 @@ function parseManifestObject(
     throw new Error(`${source}: missing string entry`);
   }
   const kindTrim = kind.trim();
+  const trust = parseTrustField(o.trust, source);
   return {
     id: id.trim(),
     kind: kindTrim,
     entry: entry.trim(),
     ...(kindTrim === "cordis" ? { skipLoad: true as const } : {}),
     ...(o.required === true ? { required: true as const } : {}),
+    ...(trust ? { trust } : {}),
+  };
+}
+
+function parseTrustField(
+  raw: unknown,
+  source: string,
+): PluginManifestTrust | undefined {
+  if (raw === undefined) return undefined;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`${source}: trust must be an object`);
+  }
+  const t = raw as Record<string, unknown>;
+  let note: string | undefined;
+  if (t.note !== undefined) {
+    if (typeof t.note !== "string") {
+      throw new Error(`${source}: trust.note must be a string`);
+    }
+    const trimmed = t.note.trim();
+    if (trimmed) note = trimmed;
+  }
+  let capabilities: string[] | undefined;
+  if (t.capabilities !== undefined) {
+    if (!Array.isArray(t.capabilities)) {
+      throw new Error(`${source}: trust.capabilities must be an array`);
+    }
+    capabilities = [];
+    for (let i = 0; i < t.capabilities.length; i += 1) {
+      const cap = t.capabilities[i];
+      if (typeof cap !== "string" || !cap.trim()) {
+        throw new Error(
+          `${source}: trust.capabilities[${i}] must be a non-empty string`,
+        );
+      }
+      capabilities.push(cap.trim());
+    }
+  }
+  if (!note && (!capabilities || capabilities.length === 0)) return undefined;
+  return {
+    ...(note ? { note } : {}),
+    ...(capabilities && capabilities.length > 0 ? { capabilities } : {}),
   };
 }
 

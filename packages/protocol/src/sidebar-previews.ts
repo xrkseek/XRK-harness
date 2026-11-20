@@ -30,6 +30,8 @@ export interface BrowserEmbedProbe {
     | "empty-url"
     | "invalid-url"
     | "unsupported-scheme"
+    | "blocked-host"
+    | "credentials-in-url"
     | string;
   readonly xFrameOptions?: string;
   readonly frameAncestors?: readonly string[];

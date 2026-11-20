@@ -292,11 +292,10 @@ describe('queue snapshot intake', () => {
 })
 
 describe('queue operation transport', () => {
-  it('addresses the session.updateQueue RPC without optimistic local mutation', async () => {
+  it('addresses the session.updateQueue RPC and patches mirror text on accepted edit', async () => {
     const api = new FakeApiClient()
     const session = new Session(SID, api, fakeRemote())
     session.handleMuxEnvelope(rid('env-op'), queueFrame([{ id: 'q-op', body: 'pending' }]))
-    const before = session.getSnapshot().queue
 
     await expect(session.updateQueue(iid('q-op'), { kind: 'edit', content: text('next') }))
       .resolves.toEqual({ ok: true, value: { accepted: true } })
@@ -314,7 +313,12 @@ describe('queue operation transport', () => {
         action: { kind: 'steer' },
       },
     ])
-    expect(session.getSnapshot().queue).toBe(before)
+    // Accepted edit patches the local mirror immediately so QueueDock does not
+    // flash the pre-edit body while waiting for the next session/queue frame.
+    // Steer still waits for Host publish for placement.
+    expect(session.getSnapshot().queue.map(row => ({ id: row.id, text: row.text }))).toEqual([
+      { id: 'q-op', text: 'next' },
+    ])
   })
 })
 

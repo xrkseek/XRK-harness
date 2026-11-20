@@ -1,9 +1,11 @@
 /**
  * AI Office → Harness webhook surface (`/api/harness/connector/*`).
  * Jobs persist under ~/.xrk/harness-connector when xrkHome is wired.
+ * Mounted on tryHandlePublic (before API auth) — gate non-loopback peers.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
+import { assertImPublicIngressAuthorized } from "@xrkseek/im-gateway-contract";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { parseJsonBody, drainMutatingBody } from "./underlying/http-kit.js";
 import {
@@ -12,6 +14,38 @@ import {
   touchConnectorHeartbeat,
   type ConnectorJobRecord,
 } from "./harness-connector-store.js";
+
+function connectorAuthOrReject(
+  req: IncomingMessage,
+  res: ServerResponse,
+): boolean {
+  const auth = assertImPublicIngressAuthorized({
+    remoteAddress: req.socket.remoteAddress,
+    authorization:
+      typeof req.headers.authorization === "string"
+        ? req.headers.authorization
+        : undefined,
+    gatewayTokenHeader:
+      typeof req.headers["x-im-gateway-token"] === "string"
+        ? req.headers["x-im-gateway-token"]
+        : undefined,
+    apiKeyHeader:
+      typeof req.headers["x-api-key"] === "string"
+        ? req.headers["x-api-key"]
+        : undefined,
+  });
+  if (auth.ok) return true;
+  res.writeHead(401, { "content-type": "application/json; charset=utf-8" });
+  res.end(
+    JSON.stringify({
+      ok: false,
+      code: auth.code,
+      message: auth.message,
+      adapter: DSH_COMPAT_ADAPTER,
+    }),
+  );
+  return false;
+}
 
 export interface HarnessConnectorOptions {
   readonly xrkHome?: string;
@@ -81,6 +115,7 @@ export async function handleHarnessConnectorHttp(
   options: HarnessConnectorOptions = {},
 ): Promise<boolean> {
   if (!pathname.startsWith("/api/harness/connector")) return false;
+  if (!connectorAuthOrReject(req, res)) return true;
   const method = (req.method ?? "GET").toUpperCase();
 
   if (pathname === "/api/harness/connector/heartbeat") {

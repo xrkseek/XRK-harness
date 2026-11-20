@@ -592,6 +592,12 @@
   color: var(--dsw-alias-label-primary);
 }
 
+@media (max-width: 767px) {
+  .renameInput {
+    font-size: 16px; /* avoid iOS / WebView focus zoom */
+  }
+}
+
 /* Same dialog field family as HeroShell's .modalInput: the resting hairline
    carries focus by re-tinting, no second ring. */
 .renameInput:focus-visible {

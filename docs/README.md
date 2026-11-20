@@ -47,7 +47,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 接 HTTP / Face | [http-api](./http-api.md) · [host-face](./host-face.md) |
 | **接 XRK-AGT（通道平台）** | **[integrators/agt-bridge](./integrators/agt-bridge.md)** |
 | 选 preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
-| 写进程插件 / **原生 client 壳扩展** | [plugin-development](./plugin-development.md) · [client-plugin-development](./client-plugin-development.md) · [plugin-loader](./plugin-loader.md) |
+| 写进程插件 / **原生 client 壳扩展** | [plugin-development](./plugin-development.md) · [client-plugin-development](./client-plugin-development.md) · [plugin-surface-map](./plugin-surface-map.md) · [plugin-loader](./plugin-loader.md) |
 | 装社区 client（可选兼容器） | [community-plugins](./community-plugins.md) |
 | 写工具 / 守卫 | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
 | Session / 压缩 / meter | [session](./session.md) · [session-log](./session-log.md) · [session-compaction](./session-compaction.md) · [modules/session-projection](./modules/session-projection.md)（含 `turnOutline`） · [protocol-events](./protocol-events.md) |
@@ -60,7 +60,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 跑测 / 提 PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | 交接本仓 | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | 发版 | [publishing](./publishing.md)（维护者） |
-| 版本说明 | [releases/](./releases/)（当前 [v0.8.0](./releases/v0.8.0.md) = `@latest` · 上一正式线 [v0.7.22](./releases/v0.7.22.md) · 回退钉 [v0.3.11](./releases/v0.3.11.md)） |
+| 版本说明 | [releases/](./releases/)（当前 [v0.8.2](./releases/v0.8.2.md) = `@latest` · 上一补丁 [v0.8.1](./releases/v0.8.1.md) · 上一正式线 [v0.7.22](./releases/v0.7.22.md) · 回退钉 [v0.3.11](./releases/v0.3.11.md)） |
 | 改码笔记 | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ## 规格索引
@@ -100,6 +100,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [profiles.md](./profiles.md) | Preset 选型 |
 | [plugin-development.md](./plugin-development.md) | 进程插件 |
 | [client-plugin-development.md](./client-plugin-development.md) | 原生 client 壳扩展（槽位 · 标准工具包 · 主题） |
+| [plugin-surface-map.md](./plugin-surface-map.md) | P0–P3 插件表面分类（XRK Plug） |
 | [plugin-loader.md](./plugin-loader.md) | 插件 discover / load |
 | [community-plugins.md](./community-plugins.md) | 社区插件 Host 契约（可选；0.9 兼容器独立包） |
 | [community-plugin-compat.md](./community-plugin-compat.md) | 社区插件逐表面兼容矩阵（CC-mods 粒度） |
@@ -158,7 +159,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [learn.md](./learn.md) | 要义摘录 |
 | [modules/](./modules/README.md) | 包文件地图 |
 | [adr/](./adr/README.md) | 架构决策 |
-| [releases/](./releases/) | 发行说明（当前 [v0.8.0](./releases/v0.8.0.md) = `@latest` · 上一正式线 [v0.7.22](./releases/v0.7.22.md) · 回退钉 [v0.3.11](./releases/v0.3.11.md)） |
+| [releases/](./releases/) | 发行说明（当前 [v0.8.2](./releases/v0.8.2.md) = `@latest` · 上一补丁 [v0.8.1](./releases/v0.8.1.md) · 上一正式线 [v0.7.22](./releases/v0.7.22.md) · 回退钉 [v0.3.11](./releases/v0.3.11.md)） |
 
 ---
 
@@ -211,7 +212,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | Architecture | [architecture](./architecture.md) → [compose](./compose.md) → [adr/](./adr/README.md) |
 | HTTP / Face | [http-api](./http-api.md) · [host-face](./host-face.md) |
 | Choose preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
-| Process plugins / **native client shell** | [plugin-development](./plugin-development.md) · [client-plugin-development](./client-plugin-development.md) · [plugin-loader](./plugin-loader.md) |
+| Process plugins / **native client shell** | [plugin-development](./plugin-development.md) · [client-plugin-development](./client-plugin-development.md) · [plugin-surface-map](./plugin-surface-map.md) · [plugin-loader](./plugin-loader.md) |
 | Community clients (optional compat) | [community-plugins](./community-plugins.md) |
 | Tools / guards | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
 | Session / compaction / meter | [session](./session.md) · [session-log](./session-log.md) · [session-compaction](./session-compaction.md) · [modules/session-projection](./modules/session-projection.md) (incl. `turnOutline`) · [protocol-events](./protocol-events.md) |
@@ -224,7 +225,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | Test / PR | [testing](./testing.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 | Handoff | [maintainer](./maintainer.md) · [audiences](./audiences.md) |
 | Release | [publishing](./publishing.md) (maintainers) |
-| Release notes | [releases/](./releases/) (current [v0.8.0](./releases/v0.8.0.md) = `@latest` · prior formal line [v0.7.22](./releases/v0.7.22.md) · rollback pin [v0.3.11](./releases/v0.3.11.md)) |
+| Release notes | [releases/](./releases/) (current [v0.8.2](./releases/v0.8.2.md) = `@latest` · previous patch [v0.8.1](./releases/v0.8.1.md) · prior formal line [v0.7.22](./releases/v0.7.22.md) · rollback pin [v0.3.11](./releases/v0.3.11.md)) |
 | Coding notes | [AGENTS](../AGENTS.md) · `.cursor/skills` |
 
 ## Spec index
@@ -264,6 +265,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [profiles.md](./profiles.md) | Preset selection |
 | [plugin-development.md](./plugin-development.md) | Process plugins |
 | [client-plugin-development.md](./client-plugin-development.md) | Native client shell (slots · standard kit · theme) |
+| [plugin-surface-map.md](./plugin-surface-map.md) | P0–P3 plugin surface map (XRK Plug) |
 | [plugin-loader.md](./plugin-loader.md) | Discover / load |
 | [community-plugins.md](./community-plugins.md) | Community Host contracts (optional; 0.9 compat package) |
 | [community-plugin-compat.md](./community-plugin-compat.md) | Per-surface community plugin compat matrix (CC-mods grain) |
@@ -320,4 +322,4 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [learn.md](./learn.md) | Short digest |
 | [modules/](./modules/README.md) | Package file map |
 | [adr/](./adr/README.md) | Architecture decisions |
-| [releases/](./releases/) | Release notes (current [v0.8.0](./releases/v0.8.0.md) = `@latest` · prior formal line [v0.7.22](./releases/v0.7.22.md) · rollback pin [v0.3.11](./releases/v0.3.11.md)) |
+| [releases/](./releases/) | Release notes (current [v0.8.2](./releases/v0.8.2.md) = `@latest` · previous patch [v0.8.1](./releases/v0.8.1.md) · prior formal line [v0.7.22](./releases/v0.7.22.md) · rollback pin [v0.3.11](./releases/v0.3.11.md)) |

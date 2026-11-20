@@ -1007,20 +1007,21 @@
     touch-action: manipulation;
   }
 
-  /* Phone Modal fills the viewport — drop the 76/88vh desktop card caps. */
+  /* Phone: centered card. Modal root owns the keyboard band — no second subtract. */
   .dialogWide {
-    width: 100%;
+    width: min(820px, 100%);
     max-width: none;
-    max-height: none;
-    height: 100%;
+    height: auto;
+    max-height: min(85dvh, 100%);
   }
 
   .sheet {
     flex: 1 1 auto;
     min-height: 0;
-    max-height: none;
+    max-height: min(70dvh, 100%);
     overflow: auto;
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

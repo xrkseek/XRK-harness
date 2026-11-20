@@ -87,7 +87,9 @@
   max-width: 100%;
   min-width: 0;
   padding: 10px 12px 12px;
-  contain: layout;
+  /* Allow delegate peek balls to paint — `contain: layout` was clipping the
+     leftmost 委派方 into the rail edge (right seat looked fine). */
+  overflow: visible;
   border-bottom: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 70%, transparent);
   background:
     linear-gradient(
@@ -113,16 +115,64 @@
 
 .delegatePair {
   display: grid;
-  /* Stages top-aligned — align-items:end made the smaller 委派方 ball sink
-     under the taller 被委派方 stage (经理 floated above 老板). */
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  /* Left stack needs more track than the solo 被委派方 — equal 1fr|1fr
+     crushed peeks into the detailsCol clip (overflow:hidden on the column). */
+  grid-template-columns: minmax(0, 1.35fr) auto minmax(0, 1fr);
   align-items: start;
-  gap: 2px 4px;
+  /* Keep arrow+「委派」clear of the lead stage (meta used to paint over them). */
+  gap: 4px 14px;
   width: 100%;
   min-width: 0;
+  overflow: visible;
+  /* Shared stage for BOTH seats. Stack growth trims both sides together. */
+  --xrk-delegate-stage: 118px;
 }
 
-/* N 委派方 (root → … → immediate) stacked left of the arrow → 1 child. */
+.delegatePair[data-stack-count='2'] {
+  --xrk-delegate-stage: 100px;
+}
+
+.delegatePair[data-stack-count='3'],
+.delegatePair[data-stack-count='4'] {
+  --xrk-delegate-stage: 88px;
+}
+
+@media (max-width: 767px) {
+  .delegatePair {
+    --xrk-delegate-stage: 104px;
+    grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1fr);
+    gap: 4px 10px;
+  }
+
+  .delegatePair[data-stack-count='2'] {
+    --xrk-delegate-stage: 92px;
+  }
+
+  .delegatePair[data-stack-count='3'],
+  .delegatePair[data-stack-count='4'] {
+    --xrk-delegate-stage: 80px;
+  }
+}
+
+:global(html[data-xrk-layout-phone]) .delegatePair {
+  --xrk-delegate-stage: 104px;
+  grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1fr);
+  gap: 4px 10px;
+}
+
+:global(html[data-xrk-layout-phone]) .delegatePair[data-stack-count='2'] {
+  --xrk-delegate-stage: 92px;
+}
+
+:global(html[data-xrk-layout-phone]) .delegatePair[data-stack-count='3'],
+:global(html[data-xrk-layout-phone]) .delegatePair[data-stack-count='4'] {
+  --xrk-delegate-stage: 80px;
+}
+
+/* N 委派方 → arrow → 1 被委派方.
+   Lead = Face parents[] last (most recent bubble). Fan hugs the arrow;
+   left padding keeps peek rims inside the cell. overflow:hidden keeps lead
+   meta from painting over the middle「委派」column (detailsCol also clips). */
 .delegateFromStack {
   display: flex;
   flex-direction: row;
@@ -130,69 +180,73 @@
   justify-content: flex-end;
   min-width: 0;
   width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  /* Deepest peek rim ≈ 42% of a stage — reserved so it never sits under the clip. */
+  padding-left: calc(var(--xrk-delegate-stage, 118px) * 0.42);
 }
 
 .delegateFromStack[data-count='1'] {
   justify-content: center;
+  padding-left: 0;
 }
 
 .delegateFromLayer {
-  min-width: 0;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  width: var(--xrk-delegate-stage, 118px);
+  max-width: 100%;
   transform-origin: top center;
+  transition:
+    transform 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.3s ease,
+    margin-right 0.38s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Single 委派方 must fill the left grid cell — same definite width the right
- * seat gets as a direct grid child. After N→1 wrapped the left ball in a flex
- * stack, PresenceBall `width:100%` nested in `flex:0 1 auto` + `min-width:0`
- * left percentage stage widths cyclic; Android WebView collapsed the boss
- * stage to a tiny circle while the child card stayed full size. */
-.delegateFromStack[data-count='1'] .delegateFromLayer {
-  width: 100%;
-  flex: 1 1 auto;
-}
-
-/* Lead in an N-stack also needs a definite box; ancestors stay shrink peeks.
- * Use a px floor (not min(100%, N)) so flex-shrink against peek siblings cannot
- * re-collapse the lead stage on phone the way single-seat did. */
-.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer[data-lead] {
-  flex: 1 1 auto;
-  min-width: 124px;
-}
-
-@media (max-width: 767px) {
-  .delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer[data-lead] {
-    min-width: 132px;
+@media (prefers-reduced-motion: reduce) {
+  .delegateFromLayer {
+    transition: none;
   }
 }
 
-:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer[data-lead] {
-  min-width: 132px;
+.delegateFromStack[data-count='1'] .delegateFromLayer {
+  width: 100%;
+  max-width: 100%;
+  flex: 1 1 auto;
 }
 
-/* Ancestors shrink/fade toward root (depth from lead). Lead stays full size.
-   Keep pair-stage shape (not compact chips) so the stack reads as N balls. */
+/* Fan toward the lead / arrow. Origin top-right so peeks tuck under the lead
+   instead of floating in empty left space. ~40% rim stays readable. */
+.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:not([data-lead]) {
+  transform-origin: top right;
+}
+
 .delegateFromLayer[data-depth='1'] {
-  margin-right: -42%;
-  opacity: 0.9;
-  transform: scale(0.88);
+  margin-right: calc(var(--xrk-delegate-stage, 118px) * -0.56);
+  opacity: 0.88;
+  transform: scale(0.86);
 }
 
 .delegateFromLayer[data-depth='2'] {
-  margin-right: -42%;
+  margin-right: calc(var(--xrk-delegate-stage, 118px) * -0.6);
   opacity: 0.78;
   transform: scale(0.76);
 }
 
 .delegateFromLayer[data-depth='3'] {
-  margin-right: -42%;
-  opacity: 0.66;
-  transform: scale(0.66);
+  margin-right: calc(var(--xrk-delegate-stage, 118px) * -0.64);
+  opacity: 0.68;
+  transform: scale(0.68);
 }
 
-/* Non-lead layers: peek stages only — meta would stack as unreadably overlapping captions. */
+/* Default peeks ignore clicks (would steal the lead). Boss peek stays
+   interactive so 老板 mood sheet works when a 干员 is the recent lead. */
 .delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:not([data-lead]) {
   pointer-events: none;
+}
+
+.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:not([data-lead])[data-boss] {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer:not([data-lead]) [data-presence-meta] {
@@ -201,52 +255,57 @@
 
 .delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer[data-lead] {
   position: relative;
-  z-index: 2;
+  z-index: 1;
+  /* Meta/caption must stay inside the stage column — never spill onto「委派」. */
+  max-width: 100%;
+  overflow: hidden;
 }
 
-/* Collapsed rail: one lead chip only — overlapping compact chips read as noise. */
 .delegatePair[data-collapsed] .delegateFromLayer:not([data-lead]) {
   display: none;
 }
 
-/* Narrow Overview: stronger overlap so N stages fit beside the child ball. */
 @media (max-width: 767px) {
-  .delegateFromLayer[data-depth='1'],
-  .delegateFromLayer[data-depth='2'],
+  .delegateFromStack {
+    padding-left: calc(var(--xrk-delegate-stage, 118px) * 0.38);
+  }
+
+  .delegateFromLayer[data-depth='1'] {
+    margin-right: calc(var(--xrk-delegate-stage, 118px) * -0.58);
+  }
+
+  .delegateFromLayer[data-depth='2'] {
+    margin-right: calc(var(--xrk-delegate-stage, 118px) * -0.62);
+  }
+
   .delegateFromLayer[data-depth='3'] {
-    margin-right: -55%;
-  }
-
-  /* 3–4 parents: peek more aggressively or the left column clips the lead. */
-  .delegateFromStack[data-count='3'] .delegateFromLayer[data-depth='1'],
-  .delegateFromStack[data-count='3'] .delegateFromLayer[data-depth='2'],
-  .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='1'],
-  .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='2'],
-  .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='3'] {
-    margin-right: -64%;
+    margin-right: calc(var(--xrk-delegate-stage, 118px) * -0.66);
   }
 }
 
-:global(html[data-xrk-layout-phone]) .delegateFromLayer[data-depth='1'],
-:global(html[data-xrk-layout-phone]) .delegateFromLayer[data-depth='2'],
+:global(html[data-xrk-layout-phone]) .delegateFromStack {
+  padding-left: calc(var(--xrk-delegate-stage, 118px) * 0.38);
+}
+
+:global(html[data-xrk-layout-phone]) .delegateFromLayer[data-depth='1'] {
+  margin-right: calc(var(--xrk-delegate-stage, 118px) * -0.58);
+}
+
+:global(html[data-xrk-layout-phone]) .delegateFromLayer[data-depth='2'] {
+  margin-right: calc(var(--xrk-delegate-stage, 118px) * -0.62);
+}
+
 :global(html[data-xrk-layout-phone]) .delegateFromLayer[data-depth='3'] {
-  margin-right: -55%;
-}
-
-:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='3'] .delegateFromLayer[data-depth='1'],
-:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='3'] .delegateFromLayer[data-depth='2'],
-:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='1'],
-:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='2'],
-:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='4'] .delegateFromLayer[data-depth='3'] {
-  margin-right: -64%;
+  margin-right: calc(var(--xrk-delegate-stage, 118px) * -0.66);
 }
 
 .delegatePair:not([data-collapsed]) {
-  min-height: 212px;
+  /* Track stage height (4/5 of --xrk-delegate-stage) + meta, not a flat 212. */
+  min-height: calc(var(--xrk-delegate-stage, 118px) * 1.25 + 48px);
 }
 
 .presenceRail[data-delegate]:not([data-collapsed]) {
-  min-height: 258px;
+  min-height: calc(var(--xrk-delegate-stage, 118px) * 1.25 + 72px);
 }
 
 .delegatePair[data-collapsed] {
@@ -261,26 +320,33 @@
   justify-content: center;
   gap: 4px;
   width: 52px;
-  /* Align to pair-stage mid (~155px), not the role/emotion meta under the lead. */
+  min-width: 52px;
+  /* Mid of the shared stage box — follows --xrk-delegate-stage when stack grows. */
   align-self: start;
-  margin-top: 56px;
+  margin-top: calc(var(--xrk-delegate-stage, 118px) * 0.42);
   padding-bottom: 0;
   color: var(--dsw-alias-label-tertiary);
   flex: none;
   pointer-events: none;
   user-select: none;
+  /* Always above the left fan — lead meta used to cover「委派」+ dash path. */
+  position: relative;
+  z-index: 6;
+  isolation: isolate;
 }
 
 .delegatePair[data-collapsed] .delegateArrow {
-  width: 36px;
+  width: 40px;
+  min-width: 40px;
   margin-top: 0;
   padding-bottom: 0;
 }
 
 .delegateArrow svg {
-  width: 48px;
-  height: 28px;
+  width: 44px;
+  height: 26px;
   overflow: visible;
+  flex: none;
 }
 
 .delegateArrow path {
@@ -1016,7 +1082,7 @@
   gap: 8px;
   width: 100%;
   max-width: 100%;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: none;
   background: transparent;
   color: inherit;
@@ -1096,13 +1162,13 @@
 }
 
 .sectionBody {
-  padding: 0 12px 12px;
+  padding: 0 10px 10px;
   border-top: 1px solid transparent;
 }
 
 .sectionBody:not([hidden]) {
   border-top-color: var(--dsw-alias-border-l2);
-  padding-top: 8px;
+  padding-top: 6px;
   animation: overviewSectionBodyIn var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease) both;
 }
 

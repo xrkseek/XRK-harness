@@ -45,12 +45,12 @@ describe('resolvePresenceStageSize', () => {
       memberLook: undefined,
       bossSize: 0.8,
       pairSeat: true,
-    })).toBe(0.94)
+    })).toBe(0.92)
     expect(resolvePresenceStageSize({
       compact: false,
       memberLook: { size: 1.2 },
       bossSize: 0.8,
       pairSeat: true,
-    })).toBe(1.08)
+    })).toBe(1.06)
   })
 })

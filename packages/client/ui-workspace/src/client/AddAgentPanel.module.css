@@ -129,10 +129,11 @@
   color: var(--dsw-alias-state-danger);
 }
 
-/* Phone sheet: balanced 2-column tiles (auto-fill left a ragged left column). */
+/* Phone card: balanced 2-column tiles (auto-fill left a ragged left column). */
 @media (max-width: 767px) {
   .dialog {
     width: 100%;
+    max-height: min(85dvh, 100%);
   }
 
   .body {

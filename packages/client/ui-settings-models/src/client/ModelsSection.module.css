@@ -745,11 +745,10 @@ select.input {
   background: var(--dsw-alias-bg-layer-1);
 }
 
-/* Phone Modal is a full-viewport sheet; a fixed 360px list left a blank band
-   under the candidates. Cap to the remaining sheet under chrome instead. */
+/* Phone Modal is a centered card; cap the candidate list under chrome. */
 @media (max-width: 767px) {
   .candidateList {
-    max-height: calc(100dvh - 14rem);
+    max-height: min(50dvh, calc(85dvh - 14rem));
   }
 }
 

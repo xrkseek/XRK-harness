@@ -439,6 +439,20 @@ export class Session implements SessionFace {
       if (result.ok && action.kind === 'remove' && row?.rpcId !== undefined) {
         this.retireFailedSubmission(row.rpcId as SessionRequestId)
       }
+      // Queue edit lands on Host first; ChatView still prefers the local echo
+      // once the row is steered (blob previews + mount stability). Patch the
+      // echo + mirror here so 插队中 / dock preview do not paint the pre-edit
+      // body while waiting for the next session/queue frame — and so
+      // Ctrl+Enter / dock steer cannot race ahead of that frame.
+      if (result.ok && action.kind === 'edit') {
+        const editedText = textFromQueueEditContent(action.content)
+        if (this.queueMirror.applyEdit(itemId, action.content)) {
+          this.notifier.markDirty()
+        }
+        if (row?.rpcId !== undefined) {
+          this.patchSubmissionText(row.rpcId as SessionRequestId, editedText)
+        }
+      }
       return result
     } catch (error) {
       return transportError(error)
@@ -1358,20 +1372,37 @@ export class Session implements SessionFace {
       // Host `context` rows are not a client echo surface — treat as queued.
       const placement: PendingSubmission['placement'] =
         row.placement === 'steering' ? 'steering' : 'queued'
+      // Host queue text is authoritative after edit rewrite / re-list.
+      const text = row.text
       if (echo.placement === 'transcript') {
         // Idle first-send / pause follow-ups stay in chat when Host briefly
         // lists them — they never set dockAligned. A docked echo that a false
         // FIFO handoff promoted must restore when Host re-lists the same rpcId.
         if (echo.dockAligned !== true) return echo
         changed = true
-        return { ...echo, placement, dockAligned: true as const }
+        return { ...echo, placement, dockAligned: true as const, text }
       }
-      if (echo.placement === placement && echo.dockAligned === true) return echo
+      if (echo.placement === placement && echo.dockAligned === true && echo.text === text) {
+        return echo
+      }
       changed = true
-      return { ...echo, placement, dockAligned: true as const }
+      return { ...echo, placement, dockAligned: true as const, text }
     })
     if (!changed) return
     this.pendingSubmissions = next
+  }
+
+  /** Align one local echo's text with a Host-accepted queue edit. */
+  private patchSubmissionText(requestId: SessionRequestId, text: string): void {
+    let changed = false
+    const next = this.pendingSubmissions.map((echo) => {
+      if (echo.requestId !== requestId || echo.text === text) return echo
+      changed = true
+      return { ...echo, text }
+    })
+    if (!changed) return
+    this.pendingSubmissions = next
+    this.notifier.markDirty()
   }
 
   /**
@@ -1613,6 +1644,18 @@ function attachmentRefsIn(content: unknown): readonly (ImageAttachmentRef | File
     }
   }
   return refs
+}
+
+/** Flatten text blocks from a Host-accepted queue edit payload. */
+function textFromQueueEditContent(
+  content: Extract<QueueAction, { kind: 'edit' }>['content'],
+): string {
+  return content
+    .filter((block): block is { readonly type: 'text'; readonly text: string } => (
+      block.type === 'text' && typeof block.text === 'string'
+    ))
+    .map(block => block.text)
+    .join('')
 }
 
 /**

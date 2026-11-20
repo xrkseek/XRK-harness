@@ -164,6 +164,7 @@ export const FACE_MCP_SCHEMA: FaceSchemaEnvelope = {
         args: 2,
         cwd: 1,
         cwdAllowWorkspace: 14,
+        enabled: 14,
         env: 15,
       },
     },

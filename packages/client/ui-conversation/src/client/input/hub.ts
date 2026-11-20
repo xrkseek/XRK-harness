@@ -26,6 +26,7 @@ import {
   takeEditStagingFor,
 } from '../chat/resubmit-intent.ts'
 import { confirmAndExecuteResubmit } from '../chat/resubmit-execute.ts'
+import { flushQueueDockEdit } from '../queue/dock-edit-flush.ts'
 
 /** Structural command face for per-session popup resolution. */
 interface CommandFace {
@@ -326,6 +327,13 @@ export class InputHub implements SessionInputResolver {
    * @param shell - the resident shell (notice outlet).
    */
   private async steerQueue(session: SessionFace, shell: SessionInputShell): Promise<void> {
+    // Open QueueDock inline edits must land before steer — otherwise Ctrl+Enter
+    // ships the pre-edit admit while the dock draft is discarded with the row.
+    const flush = await flushQueueDockEdit(session.sessionId)
+    if (flush === 'failed') {
+      shell.notify('error', this.t('queue.editFailed'))
+      return
+    }
     const queued = session.getSnapshot().queue.filter(item => item.placement === 'queued')
     if (queued.length === 0) return
     for (const item of queued) {

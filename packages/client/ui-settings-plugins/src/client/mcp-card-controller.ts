@@ -52,6 +52,8 @@ export interface McpServerDraft {
   readonly cwd?: string
   /** Acknowledge workspace litter when `cwd` is under the Host workspace. */
   readonly cwdAllowWorkspace?: boolean
+  /** Per-server soft switch; false keeps the row listed but not connected. */
+  readonly enabled?: boolean
 }
 
 /** Transport kind the card edits for one row. */
@@ -86,6 +88,8 @@ export interface McpServerRow {
   readonly cwd: string
   /** Staged ack for workspace cwd (saved as cwdAllowWorkspace). */
   readonly cwdAllowWorkspace: boolean
+  /** Desired per-server on; false survives card Save (inventory / Face toggle). */
+  readonly enabled: boolean
   /** Derived live status for this desired name. */
   readonly status: McpRowStatus
   /** Tool count when connected; otherwise 0. */
@@ -174,7 +178,8 @@ export interface McpCardFace extends CardActions {
 export class McpCardController {
   private readonly store: SnapshotStore<McpCardState>
   private rows: McpServerRow[] = []
-  private allowConnect = false
+  /** Product default on (Face schema `allowConnect: true`) until scope seeds. */
+  private allowConnect = true
   /** True after the user toggles Allow connect (so save respects an explicit park). */
   private allowTouched = false
   /**
@@ -702,7 +707,7 @@ export class McpCardController {
     const imported = rowsFromMcpPaste(raw)
     if (imported.length === 0) return 'invalid'
     const snapshot = this.scope.getSnapshot()
-    // Paste implies connect (DSH: configured servers come up live).
+    // Paste implies connect (configured servers come up live).
     this.allowConnect = true
     // Status badges use scope allow; stage as allow-on so paste rows show idle
     // (to-be-connected) rather than parked before Save.
@@ -842,7 +847,12 @@ function connectingSet(snapshot: SettingsScopeSnapshot<McpSettings>): Set<string
 function resolveRowStatus(
   serverName: string,
   snapshot: SettingsScopeSnapshot<McpSettings>,
+  enabled = true,
 ): { status: McpRowStatus; toolCount: number; failureMessage?: string } {
+  // Soft-off from Plugin list: keep the row, do not pretend it is mounting.
+  if (!enabled) {
+    return { status: 'idle', toolCount: 0 }
+  }
   const live = connectedMap(snapshot).get(serverName)
   if (live) {
     return {
@@ -886,7 +896,7 @@ function enrichRowStatus(
   snapshot: SettingsScopeSnapshot<McpSettings>,
   oauthByServer: Map<string, McpOauthRowState>,
 ): McpServerRow {
-  const resolved = resolveRowStatus(row.serverName, snapshot)
+  const resolved = resolveRowStatus(row.serverName, snapshot, row.enabled)
   const withStatus = { ...row, ...resolved }
   return enrichRowOauth(withStatus, oauthByServer, new Set())
 }
@@ -915,6 +925,7 @@ function normalizeStoredRow(raw: McpServerDraft): McpServerDraft {
     ...(args && args.length > 0 ? { args } : {}),
     ...(cwd ? { cwd } : {}),
     ...(raw.cwdAllowWorkspace === true ? { cwdAllowWorkspace: true } : {}),
+    ...(raw.enabled === false ? { enabled: false } : {}),
   }
 }
 
@@ -924,7 +935,8 @@ function rowToUi(
   oauthByServer: Map<string, McpOauthRowState>,
 ): McpServerRow {
   const transport: McpTransport = draft.url ? 'http' : 'stdio'
-  const resolved = resolveRowStatus(draft.serverName, snapshot)
+  const enabled = draft.enabled !== false
+  const resolved = resolveRowStatus(draft.serverName, snapshot, enabled)
   const base: McpServerRow = {
     serverName: draft.serverName,
     transport,
@@ -933,6 +945,7 @@ function rowToUi(
     args: (draft.args ?? []).join(', '),
     cwd: draft.cwd ?? '',
     cwdAllowWorkspace: draft.cwdAllowWorkspace === true,
+    enabled,
     ...resolved,
   }
   return enrichRowOauth(base, oauthByServer, new Set())
@@ -940,8 +953,9 @@ function rowToUi(
 
 function rowFromUi(row: McpServerRow): McpServerDraft {
   const serverName = row.serverName.trim()
+  const softOff = row.enabled === false ? { enabled: false as const } : {}
   if (row.transport === 'http') {
-    return { serverName, url: row.url.trim() }
+    return { serverName, url: row.url.trim(), ...softOff }
   }
   const args = row.args
     .split(',')
@@ -954,6 +968,7 @@ function rowFromUi(row: McpServerRow): McpServerDraft {
     ...(args.length > 0 ? { args } : {}),
     ...(cwd ? { cwd } : {}),
     ...(cwd && row.cwdAllowWorkspace ? { cwdAllowWorkspace: true } : {}),
+    ...softOff,
   }
 }
 
@@ -1005,6 +1020,7 @@ export function rowsFromMcpPaste(raw: string): McpServerRow[] {
         args: '',
         cwd: '',
         cwdAllowWorkspace: false,
+        enabled: true,
         status: 'idle',
         toolCount: 0,
       })
@@ -1019,6 +1035,7 @@ export function rowsFromMcpPaste(raw: string): McpServerRow[] {
       args: argsList.join(', '),
       cwd,
       cwdAllowWorkspace: Boolean(cwd) && cwdAllowWorkspace,
+      enabled: true,
       status: 'idle',
       toolCount: 0,
     })

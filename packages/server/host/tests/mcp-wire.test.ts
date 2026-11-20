@@ -195,6 +195,7 @@ describe("host mcp-wire", () => {
         { serverName: "ok", command: "npx" },
         { serverName: "skip" },
         { serverName: "http", url: "https://example.com" },
+        { serverName: "parked", command: "npx", enabled: false },
       ]),
     ).toEqual([
       { serverName: "ok", command: "npx" },

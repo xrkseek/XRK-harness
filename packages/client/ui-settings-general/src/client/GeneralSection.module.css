@@ -1,5 +1,5 @@
-/* Feature-contributed rows own their chrome and separators; the section
- * strips the trailing separator wherever the column ends. */
+/* Feature-contributed rows own their chrome; the section stacks them like
+ * Plugins `.cards` so Settings and Plugins home share one rhythm. */
 
 .section {
   display: flex;
@@ -8,21 +8,24 @@
   width: 100%;
 }
 
-.heading {
-  margin: 0;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
-}
-
 .intro {
   margin: 0;
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--dsw-alias-label-tertiary);
 }
 
-.section > :global([data-slot='settings.general.item']) > :last-child {
-  border-bottom: none;
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Slot list wrappers should not invent extra chrome. */
+.stack > :global([data-slot='settings.general.item']) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
 }

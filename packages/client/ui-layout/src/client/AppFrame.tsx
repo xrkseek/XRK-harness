@@ -10,10 +10,13 @@
  * through the three framework shares — zero cordis or framework imports,
  * zero self-made hooks.
  *
- * Phone viewports (< PHONE_MAX) keep the same React tree but zero the sidebar
- * and details tracks so the conversation is full-bleed; the sidebar becomes a
- * drawer overlay (always wide) and details a full-screen sheet. Narrow tablet
- * viewports (PHONE_MAX..SIDEBAR_AUTO_COLLAPSE) keep the compact rail.
+ * Phone chrome (< PHONE_MAX) keys off the window width, not the AppFrame box:
+ * a desktop workbench that squeezes `#root` must not flip mobile UI. Phone
+ * keeps the same React tree but zeros sidebar/details tracks so the
+ * conversation is full-bleed; the sidebar becomes a drawer overlay (always
+ * wide) and details a full-screen sheet. Narrow tablet windows
+ * (PHONE_MAX..SIDEBAR_AUTO_COLLAPSE) keep the compact rail. Column solve
+ * still uses the live frame width so workbench push correctly shrinks center.
  *
  * Overview open + width are per-Session (localStorage); unrelated Sessions
  * do not share a forced-open column or each other's drag width. Parent↔child
@@ -28,8 +31,9 @@ import {
   type ShortcutEntry,
 } from '@xrkseek/client-ui-primitives'
 import {
-  computeColumns, phoneDrawerWidth, resolveShellTracks,
-  SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT,
+  computeColumns, latchWidthBreakpoint, phoneDrawerWidth, resolveShellTracks,
+  PHONE_EXPAND, PHONE_MAX, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_AUTO_EXPAND,
+  SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT,
 } from './columns.ts'
 import {
   rememberDetailsOpen,
@@ -61,6 +65,7 @@ import { DesktopChrome, hasDesktopChrome } from './DesktopChrome.tsx'
 import {
   applyDesktopChromeDomAliases,
   clearDesktopChromeDomAliases,
+  mirrorWorkbenchPushToDshAliases,
 } from './dsh-style-aliases.ts'
 import css from './AppFrame.module.css'
 
@@ -226,7 +231,10 @@ export function AppFrame({
   const detailsParentRef = useRef<string | undefined>(undefined)
   const panelsDetailsRef = useRef(panels.details)
   panelsDetailsRef.current = panels.details
-  const [viewport, setViewport] = useState(() => window.innerWidth)
+  /** Live AppFrame box width — may shrink when a workbench pushes `#root`. */
+  const [frameWidth, setFrameWidth] = useState(() => window.innerWidth)
+  /** Window width for phone / narrow chrome — independent of workbench push. */
+  const [chromeWidth, setChromeWidth] = useState(() => window.innerWidth)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [shortcutsFilter, setShortcutsFilter] = useState('')
   const [shortcutOverrides, setShortcutOverrides] = useState<ShellShortcutOverrides>(() => loadShortcutOverrides())
@@ -404,42 +412,79 @@ export function AppFrame({
     rememberDetailsOpen(id, false)
   }, [detailsSession, panels.details])
 
-  // Track the frame's own box (not the window): rAF-throttled ResizeObserver.
-  useEffect(() => {
+  // Track the frame's own box (may be squeezed by workbench push).
+  // Sync — never rAF-defer: shell.overlay workbenches write `--xrkh-workbench-*`
+  // in useLayoutEffect (child before parent). A deferred RO callback painted one
+  // frame of full-width columns under a pushed #root (composer overflow +
+  // duplicated header chrome). RO itself fires before paint; flush setState here.
+  useLayoutEffect(() => {
     const el = frameRef.current
     /* v8 ignore next -- the ref is always attached by effect time: the frame div renders unconditionally. */
     if (el === null) return
-    let raf: number | null = null
-    const observer = new ResizeObserver(() => {
-      raf ??= requestAnimationFrame(() => {
-        raf = null
-        const width = el.getBoundingClientRect().width
-        if (width > 0) setViewport(width)
-      })
-    })
+    const sync = (): void => {
+      const width = Math.round(el.getBoundingClientRect().width)
+      if (width > 0) setFrameWidth((prev) => (prev === width ? prev : width))
+    }
+    sync()
+    const observer = new ResizeObserver(sync)
     observer.observe(el)
+    // Workbench push mutates documentElement style; #root width changes without
+    // always delivering an RO tick on the first layout pass in every engine.
+    const mo = new MutationObserver(sync)
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
     return () => {
       observer.disconnect()
+      mo.disconnect()
+    }
+  }, [])
+
+  // Window chrome width for phone / narrow — independent of frame squeeze.
+  useEffect(() => {
+    let raf: number | null = null
+    const measure = () => {
+      raf = null
+      setChromeWidth(window.innerWidth)
+    }
+    const onResize = () => {
+      raf ??= requestAnimationFrame(measure)
+    }
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
       if (raf !== null) cancelAnimationFrame(raf)
     }
   }, [])
 
-  // Narrow viewports auto-collapse the sidebar; the store mirror keeps
+  // Narrow / phone chrome use enter+exit hysteresis so resize jitter around
+  // the breakpoint cannot clear narrowExpanded (sidebar "opens then snaps shut").
+  const [narrow, setNarrowLatched] = useState(() => chromeWidth < SIDEBAR_AUTO_COLLAPSE)
+  const [phone, setPhoneLatched] = useState(() => chromeWidth < PHONE_MAX)
+  useEffect(() => {
+    setNarrowLatched((prev) => latchWidthBreakpoint(prev, chromeWidth, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_AUTO_EXPAND))
+    setPhoneLatched((prev) => latchWidthBreakpoint(prev, chromeWidth, PHONE_MAX, PHONE_EXPAND))
+  }, [chromeWidth])
+  // Narrow windows auto-collapse the sidebar; the store mirror keeps
   // toggleSidebar's semantics right (narrow toggles flip the manual
   // re-expand override, stores.ts). Collapsed is decided here, so the
   // solver stays breakpoint-free: a narrow re-expand passes the preference
   // (or the default when the wide preference is closed) and the center
   // absorbs the squeeze. Phone inherits the same narrow flag / override.
-  const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
   useEffect(() => { actions.setNarrow(narrow) }, [actions, narrow])
   const sidebarCollapsed = narrow ? !panels.narrowExpanded : panels.sidebar === 0
   const sidebarPreference = sidebarCollapsed
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
   const detailsPreference = detailsSession === undefined ? 0 : panels.details
-  const solved = computeColumns(viewport, sidebarPreference, detailsPreference)
-  const { tracks: cols, phone } = resolveShellTracks(viewport, solved)
-  const drawerWidth = phoneDrawerWidth(viewport)
+  const solved = computeColumns(frameWidth, sidebarPreference, detailsPreference)
+  // Phone from window latch; columns from frame width — workbench push must
+  // not flip mobile chrome. Concession may visually zero Overview (prefs kept).
+  const { tracks: cols } = resolveShellTracks(frameWidth, solved, phone)
+  const drawerWidth = phoneDrawerWidth(frameWidth)
+  // Chrome follows the resolved track: when concession snaps an open preference
+  // down to the icon rail, paint rail UI (not truncated labels) until the
+  // frame is wide enough for SIDEBAR_MIN again. Preference stays open.
+  const sidebarRailChrome = !phone && cols.sidebar <= SIDEBAR_COLLAPSED
+  const sidebarChromeCollapsed = phone ? false : (sidebarCollapsed || sidebarRailChrome)
   const detailsCollapsed = phone ? detailsPreference === 0 : cols.details === 0
   detailsCollapsedRef.current = detailsCollapsed
   const colsRef = useRef(solved)
@@ -479,12 +524,14 @@ export function AppFrame({
     }
     const root = document.documentElement
     const readPluginBottom = (): number => {
+      // First-party plugins write `--xrkh-workbench-*` only; inbound mirror
+      // below republishes `--dsh-sidebar-*` for community CSS.
       const raw = root.style.getPropertyValue('--xrkh-workbench-height').trim()
-        || root.style.getPropertyValue('--dsh-sidebar-height').trim()
       const n = Number.parseFloat(raw)
       return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0
     }
     const sync = (): void => {
+      mirrorWorkbenchPushToDshAliases()
       publishLayoutInsets({
         details: detailsCollapsed ? 0 : colsRef.current.details,
         detailsOpen,
@@ -546,17 +593,17 @@ export function AppFrame({
   // so does a toggle arriving with a viewport change (responsive auto-collapse
   // mid-resize). Community skins (orca) also select [data-animating].
   const [animating, setAnimating] = useState(0)
-  const trackToggle = `${sidebarCollapsed}:${detailsCollapsed}`
+  const trackToggle = `${sidebarChromeCollapsed}:${detailsCollapsed}`
   const previousToggle = useRef(trackToggle)
-  const previousViewport = useRef(viewport)
+  const previousFrameWidth = useRef(frameWidth)
   useLayoutEffect(() => {
-    const viewportChanged = previousViewport.current !== viewport
-    previousViewport.current = viewport
+    const frameChanged = previousFrameWidth.current !== frameWidth
+    previousFrameWidth.current = frameWidth
     if (previousToggle.current === trackToggle) return
     previousToggle.current = trackToggle
-    if (viewportChanged) return
+    if (frameChanged) return
     setAnimating(token => token + 1)
-  }, [trackToggle, viewport])
+  }, [trackToggle, frameWidth])
   useEffect(() => {
     if (animating === 0) return
     const frame = frameRef.current
@@ -647,8 +694,8 @@ export function AppFrame({
   }, [actions])
 
   const desktopChrome = hasDesktopChrome()
-  // Publish chrome height on <html> (+ DSH aliases) so floating workbenches
-  // and community layout.css / glass rules align without frame-scoped vars.
+  // Publish chrome height on <html> (XRK + inbound aliases) so floating
+  // workbenches and community layout.css align without frame-scoped vars.
   useEffect(() => {
     applyDesktopChromeDomAliases(desktopChrome)
     return () => {
@@ -660,8 +707,10 @@ export function AppFrame({
     <div
       ref={frameRef}
       className={css.frame}
-      // Stable anchors for community layout.css (`[data-dsh-frame]` /
-      // `[data-pane="conversation"]`) — same geometry as DSH shells.
+      // Canonical frame anchor for first-party workbench CSS. Host also
+      // stamps the inbound community alias so third-party layout.css keeps
+      // resolving without every plugin dual-writing.
+      data-xrk-frame=""
       data-dsh-frame=""
       style={{
         // Phone: one in-flow track only. Absolute sidebar/details leave the
@@ -678,9 +727,9 @@ export function AppFrame({
             }
           : null),
       }}
-      data-sidebar-collapsed={sidebarCollapsed || undefined}
+      data-sidebar-collapsed={(phone ? sidebarCollapsed : sidebarChromeCollapsed) || undefined}
       data-details-collapsed={detailsCollapsed || undefined}
-      // DSH rightbar collapse gate — community glass CSS still reads it.
+      // Inbound community glass may still read this collapse gate.
       data-rightbar-collapsed={detailsCollapsed || undefined}
       data-dragging={dragging || undefined}
       data-animating={animating > 0 || undefined}
@@ -706,7 +755,7 @@ export function AppFrame({
             (collapsed follows the resolved rail, so a derived auto-collapse
             renders the rail UI too). Phone always feeds the wide drawer. */}
         {renderSlot('sidebar', {
-          collapsed: phone ? false : sidebarCollapsed,
+          collapsed: sidebarChromeCollapsed,
           width: phone ? drawerWidth : cols.sidebar,
         })}
       </div>
@@ -723,7 +772,7 @@ export function AppFrame({
       {/* DSH shell.leading seat — maid CSS targets [data-shell-leading] when
           the sidebar is collapsed (traffic-light / chrome clearance). Empty
           until a Host occupant registers; still stamp the anchor. */}
-      {!phone && sidebarCollapsed ? (
+      {!phone && sidebarChromeCollapsed ? (
         <div className={css.leadingSeat} data-shell-leading="" />
       ) : null}
       <ShortcutsPanel
@@ -804,13 +853,14 @@ export function AppFrame({
           onClick={() => { actions.toggleSidebar() }}
         />
       )}
-      {/* The collapsed rail is fixed-width: no resize handle while closed.
+      {/* The collapsed rail is fixed-width: no resize handle while closed
+          or while concession has snapped an open preference to the rail.
           Phone overlays skip drag handles entirely. */}
-      {!phone && !sidebarCollapsed && (
+      {!phone && !sidebarChromeCollapsed && (
         <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />
       )}
       {!phone && cols.details > 0 && (
-        <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />
+        <DragHandle side="details" left={frameWidth - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />
       )}
     </div>
   )

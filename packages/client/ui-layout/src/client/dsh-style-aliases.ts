@@ -60,6 +60,8 @@ export function applyDesktopChromeDomAliases(
   root.style.setProperty(DSH_FRAME_CSS.topClearance, px)
   root.style.setProperty(DSH_FRAME_CSS.chromeTop, px)
   root.style.setProperty(DSH_FRAME_CSS.overlayTop, `calc(${px} + 20px)`)
+  // Match AppFrame desktop chrome — community glass reads this on <html>.
+  root.style.setProperty(DSH_WINDOWS_CONTENT_RADIUS_CSS, '16px')
 }
 
 /** Remove desktop-chrome alias attrs / CSS vars. */
@@ -71,6 +73,7 @@ export function clearDesktopChromeDomAliases(): void {
   root.style.removeProperty(DSH_FRAME_CSS.topClearance)
   root.style.removeProperty(DSH_FRAME_CSS.chromeTop)
   root.style.removeProperty(DSH_FRAME_CSS.overlayTop)
+  root.style.removeProperty(DSH_WINDOWS_CONTENT_RADIUS_CSS)
 }
 
 /**
@@ -161,3 +164,39 @@ export const DSH_DOM_ATTR_ALIASES = Object.freeze({
 
 /** DSH content-radius published under desktop chrome (maid frame tuck). */
 export const DSH_WINDOWS_CONTENT_RADIUS_CSS = '--dsh-windows-content-radius' as const
+
+/** First-party workbench push (better-sidebar) — XRK-only writer names. */
+export const XRK_WORKBENCH_CSS = Object.freeze({
+  width: '--xrkh-workbench-width',
+  height: '--xrkh-workbench-height',
+} as const)
+
+/** Legacy DSH names community layout.css still reads for the workbench strip. */
+export const DSH_SIDEBAR_PUSH_CSS = Object.freeze({
+  width: '--dsh-sidebar-width',
+  height: '--dsh-sidebar-height',
+} as const)
+
+/**
+ * Inbound mirror: copy first-party `--xrkh-workbench-*` onto `--dsh-sidebar-*`
+ * so community skins keep resolving without every plugin dual-writing.
+ * Call from Host (AppFrame) whenever workbench geometry may have changed.
+ */
+export function mirrorWorkbenchPushToDshAliases(): void {
+  const root = document.documentElement
+  for (const axis of ['width', 'height'] as const) {
+    const raw = root.style.getPropertyValue(XRK_WORKBENCH_CSS[axis]).trim()
+    if (raw === '') {
+      root.style.removeProperty(DSH_SIDEBAR_PUSH_CSS[axis])
+    } else {
+      root.style.setProperty(DSH_SIDEBAR_PUSH_CSS[axis], raw)
+    }
+  }
+}
+
+/** Clear inbound DSH workbench aliases (e.g. plugin unload). */
+export function clearDshWorkbenchPushAliases(): void {
+  const root = document.documentElement
+  root.style.removeProperty(DSH_SIDEBAR_PUSH_CSS.width)
+  root.style.removeProperty(DSH_SIDEBAR_PUSH_CSS.height)
+}

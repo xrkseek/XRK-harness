@@ -80,13 +80,17 @@ async function handleOverlayBootChanged(
 ): Promise<void> {
   const result = await ctx.remote.pluginInventory.clientBoot()
   if (!result.ok) {
-    markPluginClientRefreshHint()
+    markPluginClientRefreshHint('generic')
     return
   }
   const overlay = normalizeOverlayUrls(result.value as ClientBootOverlay)
   const applied = await applyOverlayBootPlan(ctx, session, overlay)
-  if (applied.unloadFailed || applied.remountFailed) {
-    markPluginClientRefreshHint()
+  if (applied.remountFailed) {
+    markPluginClientRefreshHint('remount')
+    return
+  }
+  if (applied.unloadFailed) {
+    markPluginClientRefreshHint('unload')
     return
   }
   if (!session.unloadPending) clearPluginClientRefreshHint()

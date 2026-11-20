@@ -129,6 +129,7 @@ describe("plugin-install-ui-session", () => {
 
     markPluginClientRefreshHint();
     expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(true);
+    expect(getPluginInstallUiSnapshot().clientRefreshKind).toBe("generic");
 
     clearPluginInstallSettledUi();
     expect(getPluginInstallUiSnapshot().success).toBe(false);
@@ -137,5 +138,28 @@ describe("plugin-install-ui-session", () => {
 
     clearPluginClientRefreshHint();
     expect(getPluginInstallUiSnapshot().clientRefreshHint).toBe(false);
+    expect(getPluginInstallUiSnapshot().clientRefreshKind).toBeNull();
+  });
+
+  it("upgrades soft-remount failure hints unload → remount", async () => {
+    const {
+      markPluginClientRefreshHint,
+      clearPluginClientRefreshHint,
+    } = await import("../src/client/plugin-install-ui-session.ts");
+
+    markPluginClientRefreshHint("unload");
+    expect(getPluginInstallUiSnapshot()).toMatchObject({
+      clientRefreshHint: true,
+      clientRefreshKind: "unload",
+    });
+
+    markPluginClientRefreshHint("generic");
+    expect(getPluginInstallUiSnapshot().clientRefreshKind).toBe("unload");
+
+    markPluginClientRefreshHint("remount");
+    expect(getPluginInstallUiSnapshot().clientRefreshKind).toBe("remount");
+
+    clearPluginClientRefreshHint();
+    expect(getPluginInstallUiSnapshot().clientRefreshKind).toBeNull();
   });
 });

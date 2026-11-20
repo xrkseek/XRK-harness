@@ -4,11 +4,12 @@
 
 版本约定：`MAJOR.MINOR.PATCH` 里 **MINOR（第二位）奇偶**——**奇数正式**（如 `0.3.x` · `0.5.x`）、**偶数预览**（如 `0.2.x` · `0.4.x`）。**不是** PATCH（第三位）。
 
-**本版**：[v0.8.1](./v0.8.1.md) 接管 npm **`@latest`**。上一补丁 [v0.8.0](./v0.8.0.md)；过程号留档 [v0.8.0-rc.2](./v0.8.0-rc.2.md) · [v0.8.0-rc.1](./v0.8.0-rc.1.md)；上一正式线收官 [v0.7.22](./v0.7.22.md)；首发 [v0.7.0](./v0.7.0.md)。上一预览线收官 [v0.6.23](./v0.6.23.md)；收口号 [v0.6.0](./v0.6.0.md) 与过程号留档。上一正式线 **v0.5.31** 退为更早档。`0.4.x` 预览线已于 **v0.4.12** 收口。
+**本版**：[v0.8.2](./v0.8.2.md) 接管 npm **`@latest`**。上一补丁 [v0.8.1](./v0.8.1.md) · [v0.8.0](./v0.8.0.md)；过程号留档 [v0.8.0-rc.2](./v0.8.0-rc.2.md) · [v0.8.0-rc.1](./v0.8.0-rc.1.md)；上一正式线收官 [v0.7.22](./v0.7.22.md)；首发 [v0.7.0](./v0.7.0.md)。上一预览线收官 [v0.6.23](./v0.6.23.md)；收口号 [v0.6.0](./v0.6.0.md) 与过程号留档。上一正式线 **v0.5.31** 退为更早档。`0.4.x` 预览线已于 **v0.4.12** 收口。
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **当前（@latest）** | [v0.8.1](./v0.8.1.md)                   | `0.8.x` 补丁：**present 画廊 · 停止全部 · 展开保锚 · admit 复用** |
+| **当前（@latest）** | [v0.8.2](./v0.8.2.md)                   | `0.8.x` 补丁：**XRK Plug · MCP 总/单台热启停 · Git worktree 卡 · 手机键盘浮层** |
+| **上一补丁**        | [v0.8.1](./v0.8.1.md)                   | `0.8.x` 补丁：**present 画廊 · 停止全部 · 展开保锚 · admit 复用** |
 | **上一补丁**        | [v0.8.0](./v0.8.0.md)                   | `0.8.x` 正式线首发（并入 rc.1/rc.2）：**协作/子代理回传 · lanes · Voice×Lane · 策展 live · soft remount · Desktop 时区镜像 · 手机桥** |
 | **过程号（@rc 留档）** | [v0.8.0-rc.2](./v0.8.0-rc.2.md)       | `0.8.x` rc.2：**远程=本机 xrk-phone · 浮层收球 · team_save omit 磁盘稿** |
 | **上一正式线**      | [v0.7.22](./v0.7.22.md)                 | `0.7.x` 补丁：**壁纸/表情 Cordis · 干员团队即存 · 工作区发现 · Desktop npm** |
@@ -42,7 +43,7 @@
 | **过程号（文稿）**  | [rc.1](./v0.4.0-rc.1.md)…[rc.4](./v0.4.0-rc.4.md) | 已并入；npm 已撤                                           |
 | **上一轮预览（文稿）** | [v0.2.7](./v0.2.7.md)                | npm 已撤；GitHub 对照留档                                            |
 
-对照：预览终态 [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.23](./v0.6.23.md) → [v0.7.0](./v0.7.0.md) → … → [v0.7.22](./v0.7.22.md) → 过程号 [v0.8.0-rc.1](./v0.8.0-rc.1.md) → [v0.8.0-rc.2](./v0.8.0-rc.2.md) → [v0.8.0](./v0.8.0.md) → **[v0.8.1](./v0.8.1.md)**（`@latest`）；回退钉 **0.3.11**。仓库 `docs/releases/v*` 仍可查阅。
+对照：预览终态 [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.23](./v0.6.23.md) → [v0.7.0](./v0.7.0.md) → … → [v0.7.22](./v0.7.22.md) → 过程号 [v0.8.0-rc.1](./v0.8.0-rc.1.md) → [v0.8.0-rc.2](./v0.8.0-rc.2.md) → [v0.8.0](./v0.8.0.md) → [v0.8.1](./v0.8.1.md) → **[v0.8.2](./v0.8.2.md)**（`@latest`）；回退钉 **0.3.11**。仓库 `docs/releases/v*` 仍可查阅。
 
 安装与发包见 [publishing.md](../publishing.md)。
 
@@ -50,9 +51,9 @@
 
 | 用途           | 命令                                                            |
 | -------------- | --------------------------------------------------------------- |
-| 当前（推荐）   | `npm i -g @xrkseek/harness-cli@latest`（= v0.8.1）后 `xrkh web` |
-| 精确锁版本     | `npm i -g @xrkseek/harness-cli@0.8.1` 后 `xrkh web`              |
-| 上一补丁       | `npm i -g @xrkseek/harness-cli@0.8.0` 后 `xrkh web`              |
+| 当前（推荐）   | `npm i -g @xrkseek/harness-cli@latest`（= v0.8.2）后 `xrkh web` |
+| 精确锁版本     | `npm i -g @xrkseek/harness-cli@0.8.2` 后 `xrkh web`              |
+| 上一补丁       | `npm i -g @xrkseek/harness-cli@0.8.1` 后 `xrkh web`              |
 | 上一正式线     | `npm i -g @xrkseek/harness-cli@0.7.22` 后 `xrkh web`              |
 | 过程号（@rc 留档） | `npm i -g @xrkseek/harness-cli@0.8.0-rc.2` 或 `@rc` 后 `xrkh web` |
 | 上一预览收官   | `npm i -g @xrkseek/harness-cli@0.6.23` 后 `xrkh web`             |
@@ -70,11 +71,12 @@
 
 Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = formal** (e.g. `0.3.x` · `0.5.x`), **even = preview** (e.g. `0.2.x` · `0.4.x`). **Not** the PATCH digit.
 
-**Current**: [v0.8.1](./v0.8.1.md) owns npm **`@latest`**. Previous patch [v0.8.0](./v0.8.0.md). Process numbers archived: [v0.8.0-rc.2](./v0.8.0-rc.2.md) · [v0.8.0-rc.1](./v0.8.0-rc.1.md). Prior formal line closed at [v0.7.22](./v0.7.22.md); line open [v0.7.0](./v0.7.0.md). Prior preview closed at [v0.6.23](./v0.6.23.md); closing number [v0.6.0](./v0.6.0.md). Prior formal **v0.5.31** is older. The `0.4.x` preview closed at **v0.4.12**.
+**Current**: [v0.8.2](./v0.8.2.md) owns npm **`@latest`**. Previous patches [v0.8.1](./v0.8.1.md) · [v0.8.0](./v0.8.0.md). Process numbers archived: [v0.8.0-rc.2](./v0.8.0-rc.2.md) · [v0.8.0-rc.1](./v0.8.0-rc.1.md). Prior formal line closed at [v0.7.22](./v0.7.22.md); line open [v0.7.0](./v0.7.0.md). Prior preview closed at [v0.6.23](./v0.6.23.md); closing number [v0.6.0](./v0.6.0.md). Prior formal **v0.5.31** is older. The `0.4.x` preview closed at **v0.4.12**.
 
 | Slot | Version | Notes |
 | ---- | ------- | ----- |
-| **Current (@latest)** | [v0.8.1](./v0.8.1.md) | `0.8.x` patch: **present gallery · Stop all · expand-anchor · admit reuse** |
+| **Current (@latest)** | [v0.8.2](./v0.8.2.md) | `0.8.x` patch: **XRK Plug · MCP master/per-server hot · Git worktree card · phone IME overlays** |
+| **Previous patch** | [v0.8.1](./v0.8.1.md) | `0.8.x` patch: **present gallery · Stop all · expand-anchor · admit reuse** |
 | **Previous patch** | [v0.8.0](./v0.8.0.md) | Opens `0.8.x` (folds rc.1/rc.2): **collab/subagent report-back · lanes · Voice×Lane · curated live · soft remount · Desktop timezone mirrors · phone bridge** |
 | **Process (@rc archive)** | [v0.8.0-rc.2](./v0.8.0-rc.2.md) | `0.8.x` rc.2: **remote=guest xrk-phone · overlay ball · team_save omit prefers disk playbook** |
 | **Prior formal line** | [v0.7.22](./v0.7.22.md) | `0.7.x` patch: **wallpaper/emotion Cordis · team live save · workspace discovery · Desktop npm** |
@@ -104,7 +106,7 @@ Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **
 | **Prior preview close** | [v0.4.12](./v0.4.12.md) | `0.4.x` close: Mux drop-over-budget without kill · 5-miss heartbeat |
 | **Rollback pin** | [v0.3.11](./v0.3.11.md) | `MINOR=3`; npm rollback pin (`@0.3.11`) |
 
-Trail: preview close [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.23](./v0.6.23.md) → [v0.7.0](./v0.7.0.md) → … → [v0.7.22](./v0.7.22.md) → process [v0.8.0-rc.1](./v0.8.0-rc.1.md) → [v0.8.0-rc.2](./v0.8.0-rc.2.md) → [v0.8.0](./v0.8.0.md) → **[v0.8.1](./v0.8.1.md)** (`@latest`); rollback pin **0.3.11**. Older `docs/releases/v*` stay readable.
+Trail: preview close [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.23](./v0.6.23.md) → [v0.7.0](./v0.7.0.md) → … → [v0.7.22](./v0.7.22.md) → process [v0.8.0-rc.1](./v0.8.0-rc.1.md) → [v0.8.0-rc.2](./v0.8.0-rc.2.md) → [v0.8.0](./v0.8.0.md) → [v0.8.1](./v0.8.1.md) → **[v0.8.2](./v0.8.2.md)** (`@latest`); rollback pin **0.3.11**. Older `docs/releases/v*` stay readable.
 
 Install and publish: [publishing.md](../publishing.md).
 
@@ -112,9 +114,9 @@ Install and publish: [publishing.md](../publishing.md).
 
 | Use | Command |
 | --- | ------- |
-| Current (recommended) | `npm i -g @xrkseek/harness-cli@latest` (= v0.8.1) then `xrkh web` |
-| Exact pin | `npm i -g @xrkseek/harness-cli@0.8.1` then `xrkh web` |
-| Previous patch | `npm i -g @xrkseek/harness-cli@0.8.0` then `xrkh web` |
+| Current (recommended) | `npm i -g @xrkseek/harness-cli@latest` (= v0.8.2) then `xrkh web` |
+| Exact pin | `npm i -g @xrkseek/harness-cli@0.8.2` then `xrkh web` |
+| Previous patch | `npm i -g @xrkseek/harness-cli@0.8.1` then `xrkh web` |
 | Prior formal line | `npm i -g @xrkseek/harness-cli@0.7.22` then `xrkh web` |
 | Process (@rc archive) | `npm i -g @xrkseek/harness-cli@0.8.0-rc.2` or `@rc` then `xrkh web` |
 | Prior preview close | `npm i -g @xrkseek/harness-cli@0.6.23` then `xrkh web` |

@@ -17,12 +17,15 @@ import {
 } from '@xrkseek/client-ui-primitives'
 import type { QueueAction, QueueItemId, QueueRow } from '../contract/queue.ts'
 import { NS } from '../locales.ts'
+import { registerQueueDockEditFlush } from './dock-edit-flush.ts'
 import css from './QueueDock.module.css'
 
 /** Queue operations injected by the session-scoped registration. */
 export interface QueueDockInjected {
   updateQueue: (itemId: QueueItemId, action: QueueAction) => Promise<'ok' | 'steer-queued'>
   notify: (level: 'info' | 'error', text: string) => void
+  /** Return keyboard focus to the session composer after leaving inline edit. */
+  focusComposer: () => void
   /** Resolve one durable queued image into a session-scoped browser URL.
    * `peek` returns the settled URL synchronously once the cache holds it, so a
    * re-rendered row paints instead of dropping back to its placeholder. */
@@ -164,7 +167,9 @@ const NO_DOCK_ROWS: readonly DockRow[] = []
  * Queue strip: Host queued rows plus pre-admit local queued echoes. Multiple
  * items default to a collapsible count header; an empty strip renders nothing.
  */
-export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: QueueDockProps) {
+export function QueueDock({
+  sessionId, useSession, updateQueue, notify, focusComposer, loadImage, t,
+}: QueueDockProps) {
   const inbox = useSession(s => s.queue)
   const pendingSubmissions = useSession(s => s.pendingSubmissions)
   const dockRows = useMemo((): readonly DockRow[] => {
@@ -204,13 +209,29 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
   const [collapsed, setCollapsed] = useState(true)
   const listId = useId()
   const fileInputId = useId()
+  const editingRef = useRef(editing)
+  editingRef.current = editing
+  const saveEditRef = useRef<() => Promise<boolean>>(async () => true)
 
   useEffect(() => {
     if (rowCount === 0 && !collapsed) setCollapsed(true)
     if (editing !== null && (!queueMutable || !dockRows.some(entry => (
       entry.kind === 'host' && entry.row.id === editing.id
-    )))) setEditing(null)
-  }, [collapsed, dockRows, editing, queueMutable, rowCount])
+    )))) {
+      // Row left (steer / remove / reconnect) while the inline editor was open.
+      setEditing(null)
+      focusComposer()
+    }
+  }, [collapsed, dockRows, editing, focusComposer, queueMutable, rowCount])
+
+  useEffect(() => {
+    registerQueueDockEditFlush(sessionId, async () => {
+      if (editingRef.current === null) return 'idle'
+      const ok = await saveEditRef.current()
+      return ok ? 'flushed' : 'failed'
+    })
+    return () => { registerQueueDockEditFlush(sessionId, null) }
+  }, [sessionId])
 
   if (rowCount === 0) return null
 
@@ -218,11 +239,22 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
   const expanded = !collapsed || interactionActive
   const listVisible = rowCount === 1 || expanded
 
+  const leaveEdit = (): void => {
+    setEditing(null)
+    // Inline editor unmount drops focus; restore so Ctrl+Enter / typing keep working.
+    focusComposer()
+  }
+
   const applyAction = async (
     itemId: QueueItemId,
     action: QueueAction,
     failure: string,
   ): Promise<boolean> => {
+    // Commit an open inline edit before steer so Host never sees the pre-edit body.
+    if (action.kind === 'steer' && editingRef.current !== null) {
+      const saved = await saveEditRef.current()
+      if (!saved) return false
+    }
     setBusy(itemId)
     try {
       const outcome = await updateQueue(itemId, action)
@@ -248,25 +280,30 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
     return editing.text.trim() !== '' || kept.length > 0 || editing.files.length > 0
   })()
 
-  const saveEdit = async (): Promise<void> => {
-    if (editing === null || editingHost === undefined) return
+  const saveEdit = async (): Promise<boolean> => {
+    if (editing === null || editingHost === undefined) return true
     const kept = editingHost.content.filter(block => block.type === 'image' || block.type === 'file')
     let uploaded: Awaited<ReturnType<typeof encodeQueueFile>>[] = []
     try {
       uploaded = await Promise.all(editing.files.map(encodeQueueFile))
     } catch {
       notify('error', t('queue.editFailed'))
-      return
+      return false
     }
     const text = editing.text
     const textParts = text.trim() === '' ? [] : [{ type: 'text' as const, text }]
-    if (kept.length === 0 && uploaded.length === 0 && textParts.length === 0) return
+    if (kept.length === 0 && uploaded.length === 0 && textParts.length === 0) return false
     if (await applyAction(
       editing.id,
       { kind: 'edit', content: [...kept, ...uploaded, ...textParts] as never },
       t('queue.editFailed'),
-    )) setEditing(null)
+    )) {
+      leaveEdit()
+      return true
+    }
+    return false
   }
+  saveEditRef.current = saveEdit
 
   return (
     <section className={css.root} data-queue-dock aria-label={t('queue.title')}>
@@ -323,6 +360,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                 fileInputId={fileInputId}
                 canSaveEdit={canSaveEdit}
                 setEditing={setEditing}
+                cancelEdit={leaveEdit}
                 saveEdit={saveEdit}
                 applyAction={applyAction}
                 loadImage={loadImage}
@@ -378,6 +416,7 @@ function HostQueueRow({
   fileInputId,
   canSaveEdit,
   setEditing,
+  cancelEdit,
   saveEdit,
   applyAction,
   loadImage,
@@ -391,7 +430,8 @@ function HostQueueRow({
   fileInputId: string
   canSaveEdit: boolean
   setEditing: (next: EditingState | null) => void
-  saveEdit: () => Promise<void>
+  cancelEdit: () => void
+  saveEdit: () => Promise<boolean>
   applyAction: (itemId: QueueItemId, action: QueueAction, failure: string) => Promise<boolean>
   loadImage: QueueDockInjected['loadImage']
   t: QueueDockProps['t']
@@ -460,7 +500,7 @@ function HostQueueRow({
               }}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
-                  setEditing(null)
+                  cancelEdit()
                   return
                 }
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
@@ -553,7 +593,7 @@ function HostQueueRow({
                     className={css.action}
                     aria-label={t('queue.cancelEdit')}
                     disabled={busy !== null}
-                    onClick={() => { setEditing(null) }}
+                    onClick={() => { cancelEdit() }}
                   >
                     <IconCloseOutlineRegular size={14} />
                   </button>
@@ -651,6 +691,7 @@ export const queueDockEntry = {
         return {
           updateQueue: (itemId, action) => conversation.updateQueue(itemId, action),
           notify: (level, text) => { conversation.input.for(actx).notify(level, text) },
+          focusComposer: () => { conversation.input.for(actx).focus() },
           loadImage: Object.assign(
             (attachment: ImageAttachmentRef) => conversation.resolveImage(sessionId, attachment),
             { peek: (attachment: ImageAttachmentRef) => conversation.peekImage(sessionId, attachment) },

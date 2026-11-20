@@ -15,6 +15,7 @@
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
+  transition: padding 120ms var(--ds-ease-out, ease), color 120ms ease;
 }
 
 .trigger:hover,
@@ -36,6 +37,44 @@
 
 .count {
   margin: 0 5px;
+}
+
+.countFull,
+.countShort {
+  transition: opacity 120ms var(--ds-ease-out, ease);
+}
+
+.countShort {
+  display: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Conversation header is a size container: when the column is squeezed
+   (Overview + workbench), collapse the long 「N 个后台任务」 label to the
+   bare count so crumbs / tabs keep a readable share of the title row. */
+@container (max-width: 640px) {
+  .countFull {
+    display: none;
+  }
+
+  .countShort {
+    display: inline;
+  }
+
+  .trigger {
+    gap: 2px;
+    padding: 3px 4px;
+  }
+
+  .count {
+    margin: 0 2px;
+  }
+}
+
+@container (max-width: 420px) {
+  .trigger svg {
+    display: none;
+  }
 }
 
 .menu {

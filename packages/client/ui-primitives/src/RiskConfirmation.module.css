@@ -1,6 +1,6 @@
+/* Width only — phone centering / max-height / keyboard inset live on Modal. */
 .confirmation {
   width: min(440px, 100%);
-  max-height: calc(100vh - 48px);
   overflow: hidden;
 }
 
@@ -8,12 +8,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-
-@supports (height: 100dvh) {
-  .confirmation {
-    max-height: calc(100dvh - 48px);
-  }
 }
 
 .warning {
@@ -75,13 +69,6 @@
 @media (max-width: 767px) {
   .confirmation {
     width: 100%;
-    max-height: calc(100vh - 24px);
-  }
-
-  @supports (height: 100dvh) {
-    .confirmation {
-      max-height: calc(100dvh - 24px);
-    }
   }
 
   .acknowledgement {
@@ -98,6 +85,6 @@
 
   .modalAction,
   .confirmAction {
-    min-height: 40px;
+    min-height: 44px;
   }
 }

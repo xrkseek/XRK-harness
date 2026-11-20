@@ -889,7 +889,7 @@ describe("Face settings U2", () => {
     ).namespaces.find((n) => n.ns === "mcp");
     expect(mcp?.applies).toBe("live");
     expect(mcp?.value.note).toContain("Allow connect");
-    expect(mcp?.value).toMatchObject({ allowConnect: false });
+    expect(mcp?.value).toMatchObject({ allowConnect: true });
 
     const draft = [
       { serverName: "fs", command: "npx", args: ["-y", "mcp-server"] },

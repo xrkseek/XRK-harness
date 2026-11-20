@@ -83,6 +83,8 @@ Host `stop` 会对已登记插件逐个 `unregister`（含 `dispose`；dispose �
 
 可选 `"required": true`：加载失败则抛 `RequiredPluginLoadError` 并中止 Host spawn / reconcile；缺省为可选——单插件失败只记入 `failures`，不拖垮其余。
 
+可选 `"trust"`：`{ "note"?: string, "capabilities"?: string[] }`——作者披露（同进程全权提示）；**不是**沙箱。Settings 插件列表另有固定提示。
+
 或 `package.json` 同形字段：`xrkseek.plugin` · `dsh.plugin` · `deepseek.plugin`（嵌套 `dsh.plugin` / 顶层 `"dsh.plugin"` 均可）。
 
 无上述字段、但 `peerDependencies` / `dependencies` 含 `@xrkseek/cordis` → `kind: "cordis"` stub（`skipLoad`）。
@@ -325,6 +327,8 @@ Per plugin directory (priority top to bottom):
 ```
 
 Optional `"required": true`: load failure throws `RequiredPluginLoadError` and aborts Host spawn / reconcile; default is optional — a single failure is recorded in `failures` without taking down siblings.
+
+Optional `"trust"`: `{ "note"?: string, "capabilities"?: string[] }` — author disclosure (same-process privileges); **not** a sandbox. Settings → Plugin list also shows a fixed hint.
 
 Or equivalent fields in `package.json`: `xrkseek.plugin` · `dsh.plugin` · `deepseek.plugin` (nested `dsh.plugin` or top-level `"dsh.plugin"`).
 

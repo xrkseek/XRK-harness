@@ -52,16 +52,36 @@ describe('collapsed overview presence rail', () => {
 describe('delegate stack overlap', () => {
   it('keeps pair-stage shape via CSS scale (not compact chip mounts)', () => {
     expect(previewCss).toMatch(
-      /\.delegateFromLayer\[data-depth='1'\][\s\S]*?transform:\s*scale\(0\.88\)/,
+      /\.delegateFromLayer\[data-depth='1'\][\s\S]*?transform:\s*scale\(0\.86\)/,
     )
     expect(previewCss).toMatch(
-      /\.delegateFromLayer\[data-depth='3'\][\s\S]*?transform:\s*scale\(0\.66\)/,
+      /\.delegateFromLayer\[data-depth='3'\][\s\S]*?transform:\s*scale\(0\.68\)/,
     )
   })
 
-  it('tightens overlap on phone / narrow Overview', () => {
-    expect(previewCss).toMatch(/margin-right:\s*-55%/)
-    expect(previewCss).toMatch(/margin-right:\s*-64%/)
+  it('fans peeks with fixed stage width so behind balls never flex-shrink away', () => {
+    expect(previewCss).toMatch(/flex:\s*0\s+0\s+auto/)
+    expect(previewCss).toMatch(
+      /margin-right:\s*calc\(var\(--xrk-delegate-stage,\s*118px\)\s*\*\s*-0\.56\)/,
+    )
+    expect(previewCss).toMatch(
+      /padding-left:\s*calc\(var\(--xrk-delegate-stage,\s*118px\)\s*\*\s*0\.42\)/,
+    )
+    expect(previewCss).toMatch(/grid-template-columns:\s*minmax\(0,\s*1\.35fr\)/)
+    expect(previewCss).not.toMatch(/margin-right:\s*-55%/)
+    expect(previewCss).not.toMatch(/margin-right:\s*-64%/)
+  })
+
+  it('keeps the 委派 arrow above the left fan', () => {
+    const block = cssBlock(previewCss, '.delegateArrow')
+    expect(block).toMatch(/z-index:\s*6/)
+    expect(previewCss).toMatch(/\.delegateFromStack\s*\{[^}]*overflow:\s*hidden/)
+  })
+
+  it('keeps boss peeks clickable when a 干员 is the recent lead', () => {
+    expect(previewCss).toMatch(
+      /\.delegateFromLayer:not\(\[data-lead\]\)\[data-boss\][\s\S]*?pointer-events:\s*auto/,
+    )
   })
 
   it('single 委派方 layer fills the left grid cell (avoids phone stage collapse)', () => {
@@ -70,26 +90,30 @@ describe('delegate stack overlap', () => {
     expect(block).toMatch(/flex:\s*1\s+1\s+auto/)
   })
 
-  it('N-stack lead keeps a px min-width so peeks cannot flex-crush it on phone', () => {
+  it('publishes a shared stage reference that shrinks with stack count', () => {
+    expect(previewCss).toMatch(/--xrk-delegate-stage:\s*118px/)
     expect(previewCss).toMatch(
-      /\.delegateFromStack\[data-count\]:not\(\[data-count='1'\]\)\s*\.delegateFromLayer\[data-lead\]\s*\{[^}]*min-width:\s*124px/,
+      /\.delegatePair\[data-stack-count='2'\]\s*\{[^}]*--xrk-delegate-stage:\s*100px/,
     )
     expect(previewCss).toMatch(
-      /html\[data-xrk-layout-phone\][^{]*\[data-lead\]\s*\{[^}]*min-width:\s*132px/,
+      /\.delegatePair\[data-stack-count='3'\][\s\S]*?--xrk-delegate-stage:\s*88px/,
+    )
+  })
+
+  it('N-stack layers pin stage width so peeks and lead stay isometric', () => {
+    expect(previewCss).toMatch(
+      /\.delegateFromLayer\s*\{[^}]*width:\s*var\(--xrk-delegate-stage/,
     )
   })
 })
 
 describe('phone pair stage floor', () => {
-  it('uses a definite pair width + min-height so flex-wrapped from seats do not collapse', () => {
+  it('pair stages read --xrk-delegate-stage so L/R stay isometric', () => {
     expect(ballCss).toMatch(
-      /\[data-pair\]:not\(\[data-compact\]\)\s*\.stage\s*\{[^}]*width:\s*132px/,
-    )
-    expect(ballCss).toMatch(
-      /\[data-pair\]:not\(\[data-compact\]\)\s*\.stage\s*\{[^}]*min-height:\s*165px/,
+      /\[data-pair\]:not\(\[data-compact\]\)\s*\.stage\s*\{[^}]*var\(--xrk-delegate-stage/,
     )
     expect(ballCss).not.toMatch(
-      /html\[data-xrk-layout-phone\][^{]*\[data-pair\][^{]*\.stage\s*\{[^}]*width:\s*min\(100%,\s*132px\)/,
+      /\[data-pair\]:not\(\[data-compact\]\)\s*\.stage\s*\{[^}]*width:\s*132px/,
     )
   })
 })
