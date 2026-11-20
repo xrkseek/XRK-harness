@@ -429,9 +429,12 @@
   }
 
   .root[data-pair]:not([data-compact]) .stage {
-    /* Keep both seats readable on phone — was 112px and felt tiny next to chrome. */
-    width: min(100%, 132px);
-    min-height: 0;
+    /* Absolute width (not min(100%, N)) so a flex-shrink-wrapped left seat
+     * still gets a real stage on Android WebView; max-width keeps narrow cols. */
+    width: 132px;
+    max-width: 100%;
+    min-height: 165px;
+    aspect-ratio: 4 / 5;
   }
 
   /* Collapsed chip: round stage so it still reads as the presence ball. */
@@ -484,6 +487,8 @@
 }
 
 :global(html[data-xrk-layout-phone]) .root[data-pair]:not([data-compact]) .stage {
-  width: min(100%, 132px);
-  min-height: 0;
+  width: 132px;
+  max-width: 100%;
+  min-height: 165px;
+  aspect-ratio: 4 / 5;
 }

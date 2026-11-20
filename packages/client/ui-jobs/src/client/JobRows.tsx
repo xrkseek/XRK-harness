@@ -142,7 +142,37 @@ export function JobOutputPanel({
   )
 }
 
-/** Two-press stop control (shared by row actions and collapsed multi-job chrome). */
+function markKillFailed(
+  setState: (next: KillState) => void,
+  failTimer: { current: ReturnType<typeof setTimeout> | undefined },
+): void {
+  setState('failed')
+  if (failTimer.current !== undefined) clearTimeout(failTimer.current)
+  failTimer.current = setTimeout(() => { setState('idle') }, KILL_FAILED_MS)
+}
+
+/** Run one or many kill calls; surface sync throw and Promise rejection alike. */
+function requestKills(
+  ids: readonly string[],
+  killJob: (jobId: string) => void | Promise<void>,
+  onFail: () => void,
+): void {
+  try {
+    const pending = ids.map((id) => killJob(id))
+    const promises = pending.filter(
+      (value): value is Promise<void> =>
+        value !== undefined
+        && value !== null
+        && typeof (value as Promise<void>).then === 'function',
+    )
+    if (promises.length === 0) return
+    void Promise.all(promises).catch(() => { onFail() })
+  } catch {
+    onFail()
+  }
+}
+
+/** Two-press stop control for one live job row. */
 export function KillButton({
   job,
   t,
@@ -152,7 +182,7 @@ export function KillButton({
   job: JobView
   t: TranslateNS<'job'>
   css: JobRowStyle
-  killJob: (jobId: string) => void
+  killJob: (jobId: string) => void | Promise<void>
 }) {
   const [state, setState] = useState<KillState>('idle')
   const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -186,13 +216,7 @@ export function KillButton({
     }
     if (armTimer.current !== undefined) clearTimeout(armTimer.current)
     setState('pending')
-    try {
-      killJob(job.id)
-    } catch {
-      setState('failed')
-      if (failTimer.current !== undefined) clearTimeout(failTimer.current)
-      failTimer.current = setTimeout(() => { setState('idle') }, KILL_FAILED_MS)
-    }
+    requestKills([job.id], killJob, () => { markKillFailed(setState, failTimer) })
   }
 
   return (
@@ -213,6 +237,87 @@ export function KillButton({
     >
       <IconStopFillRegular size={10} />
       {state === 'armed' ? <span className={css.stopLabel}>{t('kill.confirmAction')}</span> : null}
+    </button>
+  )
+}
+
+/**
+ * Collapsed multi-job chrome: one stop that cancels every live job.
+ * (A single-job KillButton next to "N running" looked like stop-all but only
+ * killed the oldest row.)
+ */
+export function KillAllButton({
+  jobs,
+  t,
+  css,
+  killJob,
+}: {
+  jobs: readonly JobView[]
+  t: TranslateNS<'job'>
+  css: JobRowStyle
+  killJob: (jobId: string) => void | Promise<void>
+}) {
+  const [state, setState] = useState<KillState>('idle')
+  const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const failTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const count = String(jobs.length)
+  const live = jobs.some((job) => job.status === 'running' || job.status === 'stopping')
+
+  useEffect(() => () => {
+    if (armTimer.current !== undefined) clearTimeout(armTimer.current)
+    if (failTimer.current !== undefined) clearTimeout(failTimer.current)
+  }, [])
+
+  useEffect(() => {
+    if (live) return
+    setState('idle')
+  }, [live])
+
+  const title = state === 'armed'
+    ? t('kill.confirmAllTitle', { count })
+    : state === 'failed'
+      ? t('kill.failedTitle')
+      : t('action.stopAll.aria', { count })
+
+  const onPress = (event: MouseEvent<HTMLButtonElement>): void => {
+    event.stopPropagation()
+    if (state === 'pending' || jobs.length === 0) return
+    if (state === 'idle' || state === 'failed') {
+      setState('armed')
+      if (armTimer.current !== undefined) clearTimeout(armTimer.current)
+      armTimer.current = setTimeout(() => { setState('idle') }, KILL_ARM_MS)
+      return
+    }
+    if (armTimer.current !== undefined) clearTimeout(armTimer.current)
+    setState('pending')
+    requestKills(
+      jobs.map((job) => job.id),
+      killJob,
+      () => { markKillFailed(setState, failTimer) },
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className={
+        state === 'armed'
+          ? `${css.stop} ${css.stopArmed}`
+          : state === 'failed'
+            ? `${css.stop} ${css.stopFailed}`
+            : css.stop
+      }
+      data-kill-state={state}
+      data-kill-all=""
+      disabled={state === 'pending' || jobs.length === 0}
+      aria-label={title}
+      title={title}
+      onClick={onPress}
+    >
+      <IconStopFillRegular size={10} />
+      {state === 'armed'
+        ? <span className={css.stopLabel}>{t('kill.confirmAllAction')}</span>
+        : null}
     </button>
   )
 }

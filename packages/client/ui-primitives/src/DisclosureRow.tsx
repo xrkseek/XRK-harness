@@ -1,5 +1,6 @@
 import { type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
+import { useExpandScrollPreserve } from './expand-scroll-preserve.ts'
 import { IconChevronDownOutlineRegular } from './icons/index.tsx'
 import css from './DisclosureRow.module.css'
 
@@ -47,15 +48,22 @@ export function DisclosureRow({
   chevronClassName,
   titleClassName,
 }: DisclosureRowProps) {
+  const { rootRef, noteExpand } = useExpandScrollPreserve(open)
   const rowExpands = expandable && expandOnRowClick
+
+  const runToggle = () => {
+    if (!open && expandable) noteExpand()
+    onToggle()
+  }
+
   const toggleFromLeading = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
-    onToggle()
+    runToggle()
   }
   const toggleFromKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!rowExpands || (event.key !== 'Enter' && event.key !== ' ')) return
     event.preventDefault()
-    onToggle()
+    runToggle()
   }
   const collapsedLeading = previewChevron
     ? (
@@ -70,7 +78,7 @@ export function DisclosureRow({
     : collapsedLeading
 
   return (
-    <div className={clsx(css.root, className)} data-open={open || undefined}>
+    <div ref={rootRef} className={clsx(css.root, className)} data-open={open || undefined}>
       {/* DSH wraps the row in [data-disclosure-header]; maid/orca select it. */}
       <div className={css.header} data-disclosure-header="">
         <div
@@ -80,7 +88,7 @@ export function DisclosureRow({
           role={rowExpands ? 'button' : undefined}
           tabIndex={rowExpands ? 0 : undefined}
           aria-expanded={rowExpands ? open : undefined}
-          onClick={rowExpands ? onToggle : undefined}
+          onClick={rowExpands ? runToggle : undefined}
           onKeyDown={rowExpands ? toggleFromKeyboard : undefined}
         >
           {expandable && !rowExpands ? (

@@ -10,6 +10,7 @@ import {
   IconChevronRightOutlineRegular,
   IconDeliverDocRegular,
   IconSparkleRegular,
+  useExpandScrollPreserve,
 } from '@xrkseek/client-ui-primitives'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { contextBody } from './ContextBody.tsx'
@@ -155,6 +156,7 @@ function noticeIcon(
  */
 export function ContextInjectionRow({ content, source, provenance, form, t }: ContextInjectionRowProps) {
   const [open, setOpen] = useState(false)
+  const { rootRef: cardRef, noteExpand } = useExpandScrollPreserve(open)
   const { rendered, summary, body } = contextBody(form, { content, source, t })
   const chrome = projectTranscriptChrome({ surface: 'context', source })
   const localizedSource = localizeSourceLabel(provenance.label, t)
@@ -177,6 +179,11 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
   const expandable = true
   const headerOpen = open
 
+  const toggleOpen = () => {
+    if (!open) noteExpand()
+    setOpen(value => !value)
+  }
+
   return (
     <div
       className={css.noticeRow}
@@ -185,12 +192,12 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
       data-context-form={rendered ?? undefined}
       data-context-plugin={provenance.label ?? undefined}
     >
-      <div className={css.noticeCard} data-open={headerOpen || undefined}>
+      <div ref={cardRef} className={css.noticeCard} data-open={headerOpen || undefined}>
         <button
           type="button"
           className={css.noticeHeader}
           aria-expanded={headerOpen}
-          onClick={() => { setOpen(value => !value) }}
+          onClick={toggleOpen}
         >
           <span className={css.noticeLeading} aria-hidden>
             <span className={css.noticeGlyph}>

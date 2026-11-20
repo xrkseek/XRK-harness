@@ -151,7 +151,7 @@ describe('tool-call-model', () => {
       name: 'present',
       argsRaw: '{"files":[{"path":"out/report.md","description":"summary"}]}',
     }))
-    expect(one.title).toBe('Present')
+    expect(one.title).toBe('Show')
     expect(one.state).toBe('running')
     expect(one.summary).toBe('out/report.md')
     expect(one.filePath).toBe('out/report.md')
@@ -809,21 +809,131 @@ describe('PresentRow', () => {
     t,
   })
 
-  it('shows Delivering while running and Delivered when settled', () => {
+  it('shows Showing while running and Shown when settled', () => {
     const view = render(<PresentRow {...presentProps(running({
       name: 'present',
       argsRaw: '{"files":[{"path":"report.txt"}]}',
     }))} />)
-    expect(view.getByText('交付物')).toBeTruthy()
+    expect(view.getByText('展示')).toBeTruthy()
     expect(view.getByText('report.txt')).toBeTruthy()
     expect(view.getByText(zh['present.delivering'])).toBeTruthy()
 
     view.rerender(<PresentRow {...presentProps(result({
       call: { name: 'present', argsRaw: '{"files":[{"path":"report.txt"}]}' },
-      content: [{ type: 'text', text: 'Presented report.txt' }],
+      content: [{ type: 'text', text: 'presented report.txt' }],
     }))} />)
     expect(view.getByText(zh['present.delivered'])).toBeTruthy()
     expect(view.queryByText(zh['present.delivering'])).toBeNull()
+  })
+
+  it('renders an inline image gallery for present image deliverables', () => {
+    const loadImage = vi.fn(async () => 'blob:test')
+    const renderSlot = vi.fn((_name: string, props: { images: unknown[] }) => (
+      <div data-testid="present-gallery">{props.images.length}</div>
+    ))
+    const view = render(
+      <PresentRow
+        {...presentProps(result({
+          call: {
+            name: 'present',
+            argsRaw: JSON.stringify({ files: [{ path: 'out/deck.png' }] }),
+          },
+          content: [
+            { type: 'text', text: 'presented out/deck.png' },
+            {
+              type: 'image',
+              attachment: {
+                attachmentId: 'sha256:deck' as never,
+                mediaType: 'image/png',
+                bytes: 120,
+                width: 80,
+                height: 45,
+                name: 'deck.png',
+              },
+            },
+          ],
+          meta: { path: 'out/deck.png' },
+        }))}
+        loadImage={loadImage}
+        renderSlot={renderSlot as never}
+      />,
+    )
+    expect(view.getByTestId('present-gallery').textContent).toBe('1')
+    expect(view.getByText('out/deck.png')).toBeTruthy()
+    expect(view.queryByText(/presented out\/deck\.png/)).toBeNull()
+    const body = view.container.querySelector('[data-present-deliverable]')
+    expect(body).toBeTruthy()
+    expect(body!.querySelector('[data-tool-media="image"]')).toBeTruthy()
+  })
+
+  it('lists every multi-file path without collapsing to a single truncated line', () => {
+    const paths = [
+      '.tmp/multi-delivery/01-README.md',
+      '.tmp/multi-delivery/05-chart.svg',
+      '.tmp/multi-delivery/07-script.py',
+    ]
+    const view = render(<PresentRow {...presentProps(running({
+      name: 'present',
+      argsRaw: JSON.stringify({ files: paths.map((path) => ({ path })) }),
+    }))} />)
+    for (const path of paths) {
+      expect(view.getByText(path)).toBeTruthy()
+    }
+    expect(view.container.querySelector('[data-force-expanded]')).toBeTruthy()
+  })
+
+  it('keeps every path above the gallery when multi-file includes an image', () => {
+    const loadImage = vi.fn(async () => 'blob:test')
+    const renderSlot = vi.fn((_name: string, props: { images: unknown[] }) => (
+      <div data-testid="present-gallery">{props.images.length}</div>
+    ))
+    const paths = [
+      '.tmp/multi/01-README.md',
+      '.tmp/multi/05-chart.png',
+      '.tmp/multi/07-script.py',
+    ]
+    const view = render(
+      <PresentRow
+        {...presentProps(result({
+          call: {
+            name: 'present',
+            argsRaw: JSON.stringify({ files: paths.map((path) => ({ path })) }),
+          },
+          content: [
+            { type: 'text', text: paths.map((p) => `presented ${p}`).join('\n') },
+            {
+              type: 'image',
+              attachment: {
+                attachmentId: 'sha256:chart' as never,
+                mediaType: 'image/png',
+                bytes: 80,
+                width: 40,
+                height: 30,
+                name: '05-chart.png',
+              },
+            },
+          ],
+          meta: { path: paths[0], paths },
+        }))}
+        loadImage={loadImage}
+        renderSlot={renderSlot as never}
+      />,
+    )
+    const root = view.container.querySelector('[data-present-deliverable]')!
+    expect(root).toBeTruthy()
+    for (const path of paths) {
+      expect(view.getByText(path)).toBeTruthy()
+    }
+    const pathButtons = root.querySelectorAll('button')
+    expect(pathButtons.length).toBe(paths.length)
+    const gallery = root.querySelector('[data-testid="present-gallery"]')
+      ?? view.getByTestId('present-gallery')
+    expect(gallery.textContent).toBe('1')
+    // Paths precede the gallery in DOM order (not covered / folded away).
+    const pathNode = view.getByText(paths[0]!)
+    expect(
+      Boolean(pathNode.compareDocumentPosition(gallery) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true)
   })
 
   it('keeps shared failure/stopped labels instead of claiming delivery', () => {

@@ -88,23 +88,37 @@
   outline-offset: 1px;
 }
 
+/* Lives inside `.list`, so horizontal inset already matches session rows.
+   Keep width constrained — bare flex children here used to paint under the
+   shell trailing padding and get mid-glyph clipped by `.splitPane`. */
 .agentEmpty {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: flex-start;
-  gap: 4px;
-  padding: 8px 8px 12px;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px 2px 16px 8px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
-  line-height: 18px;
+  line-height: 1.55;
 }
 
 .agentEmptyTitle {
   color: var(--dsw-alias-label-secondary);
   font-size: 13px;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+.agentEmptyHint {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 .iconButton {
@@ -212,8 +226,10 @@
     visibility 0s linear;
 }
 
+/* Wide chrome: search + up to three 28px actions (view / team / add).
+   96px clipped the third icon under sectionHeader overflow:hidden. */
 .root:not(.rail) .headerActions {
-  max-width: 96px;
+  max-width: 120px;
 }
 
 .headerActionsHidden {

@@ -138,6 +138,50 @@ function displayImagePath(path: string, sessionCwd?: string, home?: string): str
   return abbreviateHomePath(relativizeToCwd(path, sessionCwd), home)
 }
 
+/** Paths from `present` args.files (object `{ path }` or legacy string entries). */
+function presentFilePaths(args: Record<string, unknown> | undefined): string[] {
+  if (args === undefined) return []
+  const files = args.files
+  if (!Array.isArray(files)) {
+    return typeof args.path === 'string' && args.path.trim() !== '' ? [args.path.trim()] : []
+  }
+  const paths: string[] = []
+  for (const entry of files) {
+    if (typeof entry === 'string' && entry.trim() !== '') paths.push(entry.trim())
+    else if (typeof entry === 'object' && entry !== null) {
+      const path = (entry as { path?: unknown }).path
+      if (typeof path === 'string' && path.trim() !== '') paths.push(path.trim())
+    }
+  }
+  return paths
+}
+
+/**
+ * Card label for a gallery: single path when known; empty for multi-file
+ * `present` (header fileLinks own the paths); attachment name as last resort.
+ */
+function galleryPathLabel(
+  name: string,
+  args: Record<string, unknown> | undefined,
+  metaPath: string,
+  refs: readonly ImageAttachmentRef[],
+): string {
+  if (name === 'present') {
+    const paths = presentFilePaths(args)
+    // Multi-file: no gallery label — ToolRow header lists every path.
+    if (paths.length > 1) return ''
+    if (paths.length === 1) return paths[0]!
+    if (metaPath !== '') return metaPath
+    return refs.length === 1 ? (refs[0]?.name ?? '') : ''
+  }
+  if (metaPath !== '') return metaPath
+  if (name === 'read_image') {
+    const filePath = args?.file_path
+    if (typeof filePath === 'string' && filePath.trim() !== '') return filePath.trim()
+  }
+  return refs[0]?.name ?? 'image'
+}
+
 /**
  * Derive a settled image card after validating the call head, persisted
  * metadata (or its argument fallback), and durable image content blocks.
@@ -159,19 +203,14 @@ export function imageCardModel(
   // failed an LF-only regex and fell back to IN/OUT with no preview.
   const refs = imageReferences(block.content)
   if (refs === null) return null
-  let pathLabel = imageMeta(block.meta)?.path ?? ''
-  if (pathLabel === '' && name === 'read_image') {
-    const filePath = call?.args.file_path
-    if (typeof filePath === 'string' && filePath.trim() !== '') pathLabel = filePath
-  }
-  if (pathLabel === '' && name === 'present') {
-    const files = call?.args.files
-    if (Array.isArray(files) && typeof files[0] === 'string') pathLabel = files[0]
-    else if (typeof call?.args.path === 'string') pathLabel = call.args.path
-  }
-  if (pathLabel === '') pathLabel = refs[0]?.name ?? 'image'
+  const pathLabel = galleryPathLabel(
+    name,
+    call?.args,
+    imageMeta(block.meta)?.path ?? '',
+    refs,
+  )
   return {
-    label: displayImagePath(pathLabel, sessionCwd, home),
+    label: pathLabel === '' ? '' : displayImagePath(pathLabel, sessionCwd, home),
     images: refs.map(ref => ({ attachment: ref, role: 'result' as const })),
     text: '',
   }

@@ -1,6 +1,10 @@
 /**
  * Rewrite a pending admit while keeping relative FIFO order of the tail.
  * Withdraw + append alone would move the edited item to the end of the queue.
+ *
+ * AdmitIds stay stable across rewrite so Face rpc maps and client queue row
+ * identity do not churn. `listPendingAdmits` folds chronologically, so
+ * withdraw → re-admit with the same id is pending again.
  */
 
 import {
@@ -18,23 +22,6 @@ export type AdmitRpcMaps = {
   readonly admitRpcMap: Map<string, string>;
   readonly rpcAdmitMap: Map<string, string>;
 };
-
-function newAdmitId(): string {
-  return `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function remaps(
-  maps: AdmitRpcMaps,
-  oldId: string,
-  newId: string,
-): void {
-  const rpc = maps.admitRpcMap.get(oldId);
-  maps.admitRpcMap.delete(oldId);
-  if (rpc) {
-    maps.admitRpcMap.set(newId, rpc);
-    maps.rpcAdmitMap.set(rpc, newId);
-  }
-}
 
 /**
  * Replace one pending admit's content (and optionally delivery), preserving
@@ -62,21 +49,45 @@ export function rewritePendingAdmit(
 
   // Preserve durable producer tags (seat / handoff / plugin). Dropping
   // `source` would re-admit as human `kind:"user"` and break 委派方 chrome.
-  const head = admitPrompt(store, sessionId, content, {
+  // Reuse admitIds so admitRpcMap / QueueDock row ids stay put. Stamp rpcId
+  // from the live map (or prior receipt) onto the new admitted event for
+  // cold reload when maps are rebuilt from the log.
+  const head = reAdmit(store, sessionId, {
+    admitId: itemId,
+    content,
     delivery,
-    admitId: newAdmitId(),
-    ...(tail[0]?.source !== undefined ? { source: tail[0].source } : {}),
+    source: tail[0]?.source,
+    rpcId: maps.admitRpcMap.get(itemId) ?? tail[0]?.rpcId,
   });
-  remaps(maps, itemId, head.admitId);
 
   for (const row of tail.slice(1)) {
-    const next = admitPrompt(store, sessionId, row.content, {
+    reAdmit(store, sessionId, {
+      admitId: row.admitId,
+      content: row.content,
       delivery: row.delivery,
-      admitId: newAdmitId(),
-      ...(row.source !== undefined ? { source: row.source } : {}),
+      source: row.source,
+      rpcId: maps.admitRpcMap.get(row.admitId) ?? row.rpcId,
     });
-    remaps(maps, row.admitId, next.admitId);
   }
 
   return head;
+}
+
+function reAdmit(
+  store: SessionStore,
+  sessionId: string,
+  args: {
+    readonly admitId: string;
+    readonly content: MessageContent;
+    readonly delivery: PromptDelivery;
+    readonly source: AdmitReceipt["source"];
+    readonly rpcId: string | undefined;
+  },
+): AdmitReceipt {
+  return admitPrompt(store, sessionId, args.content, {
+    delivery: args.delivery,
+    admitId: args.admitId,
+    ...(args.source !== undefined ? { source: args.source } : {}),
+    ...(args.rpcId !== undefined ? { rpcId: args.rpcId } : {}),
+  });
 }

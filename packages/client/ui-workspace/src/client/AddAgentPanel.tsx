@@ -247,7 +247,12 @@ export function AddAgentPanel({
         <p className={css.hint}>{t('team.needSession')}</p>
       ) : (
         <div className={css.body}>
-          <p className={css.hint}>{t('agent.pickHint', { agent: seatTitles.agent })}</p>
+          <p className={css.hint}>
+            {t('agent.pickHint', {
+              agent: seatTitles.agent,
+              manager: seatTitles.manager,
+            })}
+          </p>
           {homeCandidates.length === 0 ? (
             <div className={css.empty}>
               <p>{t('agent.pickEmpty', { agent: seatTitles.agent })}</p>

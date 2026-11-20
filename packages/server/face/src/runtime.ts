@@ -433,6 +433,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
   const rpcAdmitMap = new Map<string, string>();
   const admitRpcMap = new Map<string, string>();
+  /** >0 while queue rewrite batches withdraw+re-admit (see withQueuePublishSuppressed). */
+  let queuePublishSuppressDepth = 0;
   const pendingUserRpc = new Map<string, FacePendingUserEcho[]>();
   const sessionModels = new Map<
     string,
@@ -1852,12 +1854,21 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { webPlugins: options.webPlugins }
       : {}),
     publishQueue(sessionId) {
+      if (queuePublishSuppressDepth > 0) return;
       const pending = listPendingAdmits(readEvents(sessionId), sessionId);
       bus.publishMux({
         type: "session/queue",
         sessionId,
         items: toQueueItems(pending, admitRpcMap),
       });
+    },
+    withQueuePublishSuppressed(fn) {
+      queuePublishSuppressDepth += 1;
+      try {
+        return fn();
+      } finally {
+        queuePublishSuppressDepth -= 1;
+      }
     },
     publishApprovals(sessionId) {
       for (const item of approvals.listPending(sessionId)) {

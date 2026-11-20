@@ -63,6 +63,35 @@ describe('delegate stack overlap', () => {
     expect(previewCss).toMatch(/margin-right:\s*-55%/)
     expect(previewCss).toMatch(/margin-right:\s*-64%/)
   })
+
+  it('single 委派方 layer fills the left grid cell (avoids phone stage collapse)', () => {
+    const block = cssBlock(previewCss, ".delegateFromStack[data-count='1'] .delegateFromLayer")
+    expect(block).toMatch(/width:\s*100%/)
+    expect(block).toMatch(/flex:\s*1\s+1\s+auto/)
+  })
+
+  it('N-stack lead keeps a px min-width so peeks cannot flex-crush it on phone', () => {
+    expect(previewCss).toMatch(
+      /\.delegateFromStack\[data-count\]:not\(\[data-count='1'\]\)\s*\.delegateFromLayer\[data-lead\]\s*\{[^}]*min-width:\s*124px/,
+    )
+    expect(previewCss).toMatch(
+      /html\[data-xrk-layout-phone\][^{]*\[data-lead\]\s*\{[^}]*min-width:\s*132px/,
+    )
+  })
+})
+
+describe('phone pair stage floor', () => {
+  it('uses a definite pair width + min-height so flex-wrapped from seats do not collapse', () => {
+    expect(ballCss).toMatch(
+      /\[data-pair\]:not\(\[data-compact\]\)\s*\.stage\s*\{[^}]*width:\s*132px/,
+    )
+    expect(ballCss).toMatch(
+      /\[data-pair\]:not\(\[data-compact\]\)\s*\.stage\s*\{[^}]*min-height:\s*165px/,
+    )
+    expect(ballCss).not.toMatch(
+      /html\[data-xrk-layout-phone\][^{]*\[data-pair\][^{]*\.stage\s*\{[^}]*width:\s*min\(100%,\s*132px\)/,
+    )
+  })
 })
 
 describe('presence ball mount geometry', () => {

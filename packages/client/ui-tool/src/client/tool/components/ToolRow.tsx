@@ -45,6 +45,9 @@ type ToolImageLoader = ((attachment: ImageAttachmentRef) => Promise<string>) & {
 /** Long-edge cap for an expanded Tool image card (lightbox keeps the original). */
 const TOOL_IMAGE_MAX_EDGE = 280
 
+/** Stable no-op for force-expanded rows (avoid a fresh closure every paint). */
+const NOOP_TOGGLE = (): void => {}
+
 export interface ToolRowProps {
   /** The render site's conversation locale seat (terminal/code body copy). */
   t: TranslateNS<'conversation'>
@@ -226,7 +229,10 @@ export function ToolRow({
     if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
   }
   const cardBody = variant === 'code' ? null : body
+  // forceExpanded present may clear the path summary (paths live in the body)
+  // but still needs the showing/shown suffix beside the title.
   const showSummarySlot = multiLinks || summaryText !== ''
+    || (forceExpanded && suffix !== null)
   return (
     <div
       className={css.root}
@@ -249,7 +255,7 @@ export function ToolRow({
         expandable={expandable && !forceExpanded}
         expandOnRowClick={!forceExpanded}
         keepContentWhenOpen
-        onToggle={forceExpanded ? () => {} : toggleExpand}
+        onToggle={forceExpanded ? NOOP_TOGGLE : toggleExpand}
         collapsedContent={(
           (thumbAttachment !== undefined && loadImage !== undefined) || showSummarySlot
         ) ? (
@@ -257,44 +263,59 @@ export function ToolRow({
             {thumbAttachment !== undefined && loadImage !== undefined
               ? <CollapsedThumb attachment={thumbAttachment} loadImage={loadImage} />
               : null}
-            {showSummarySlot && (
-              <>
-                <span className={css.sep} aria-hidden />
-                {multiLinks ? (
-                  <span className={css.fileLinks}>
-                    {fileLinks!.map((link, i) => (
-                      <Fragment key={`${link.path}\0${String(i)}`}>
-                        {i > 0 ? <span className={css.fileLinkSep} aria-hidden>·</span> : null}
-                        <button
-                          type="button"
-                          className={css.fileLinkItem}
-                          onClick={openLinkedFile(link.path)}
-                          onKeyDown={fileLinkKeyDown}
-                        >
-                          {link.label}
-                        </button>
-                      </Fragment>
-                    ))}
-                  </span>
-                ) : fileLink ? (
-                  <button
-                    type="button"
-                    className={css.fileLink}
-                    onClick={openFile}
-                    onKeyDown={fileLinkKeyDown}
-                  >
-                    {summaryText}
-                  </button>
-                ) : (
-                  <span
-                    className={clsx(css.summary, failureLine !== null && css.errorSummary)}
-                  >
-                    {summaryText}
-                  </span>
-                )}
-                {suffix !== null && <span className={css.summarySuffix}>{suffix}</span>}
-              </>
-            )}
+            {showSummarySlot && (() => {
+              const pathSlot = multiLinks ? (
+                <span className={css.fileLinks}>
+                  {fileLinks!.map((link, i) => (
+                    <Fragment key={`${link.path}\0${String(i)}`}>
+                      {!forceExpanded && i > 0
+                        ? <span className={css.fileLinkSep} aria-hidden>·</span>
+                        : null}
+                      <button
+                        type="button"
+                        className={css.fileLinkItem}
+                        onClick={openLinkedFile(link.path)}
+                        onKeyDown={fileLinkKeyDown}
+                      >
+                        {link.label}
+                      </button>
+                    </Fragment>
+                  ))}
+                </span>
+              ) : fileLink ? (
+                <button
+                  type="button"
+                  className={css.fileLink}
+                  onClick={openFile}
+                  onKeyDown={fileLinkKeyDown}
+                >
+                  {summaryText}
+                </button>
+              ) : (
+                <span
+                  className={clsx(css.summary, failureLine !== null && css.errorSummary)}
+                >
+                  {summaryText}
+                </span>
+              )
+              // forceExpanded (present): status stays on the title line; paths
+              // stack underneath. Collapsed rows keep sep · paths · suffix.
+              if (forceExpanded) {
+                return (
+                  <>
+                    {suffix !== null ? <span className={css.summarySuffix}>{suffix}</span> : null}
+                    {pathSlot}
+                  </>
+                )
+              }
+              return (
+                <>
+                  <span className={css.sep} aria-hidden />
+                  {pathSlot}
+                  {suffix !== null ? <span className={css.summarySuffix}>{suffix}</span> : null}
+                </>
+              )
+            })()}
           </>
         ) : false}
       >

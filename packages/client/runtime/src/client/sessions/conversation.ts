@@ -370,6 +370,13 @@ export type PendingSubmissionPlacement = 'transcript' | 'queued' | 'steering'
 export interface PendingSubmission {
   readonly requestId: SessionRequestId
   readonly placement: PendingSubmissionPlacement
+  /**
+   * True once this echo painted as docked (`queued` / `steering`). Survives a
+   * false FIFO handoff so Host re-listing the same rpcId can restore the dock
+   * (queue edit rewrite used to publish empty intermediates). Idle first-send
+   * stays undocked and never demotes into the queue strip.
+   */
+  readonly dockAligned?: boolean
   /** Client wall-clock ms when the submission began. */
   readonly time: number
   readonly text: string

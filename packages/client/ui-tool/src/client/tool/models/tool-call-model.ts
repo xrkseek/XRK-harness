@@ -107,7 +107,7 @@ const TOOL_TITLES: Record<string, string> = {
   read_image: 'Read image',
   image_generate: 'Image generation',
   video_generate: 'Video generation',
-  present: 'Present',
+  present: 'Show',
   propose_skill: 'Write skill',
   job_list: 'List jobs',
   job_output: 'Job output',

@@ -116,4 +116,16 @@ describe('WorkspaceBrowser.module.css list', () => {
     expect(declarations('.rail .iconButton')?.get('width')).toBe('36px')
     expect(declarations('.rail .search')?.get('width')).toBe('36px')
   })
+
+  it('keeps agent empty copy inside the list inset (no mid-glyph clip)', () => {
+    const empty = declarations('.agentEmpty')
+    const hint = declarations('.agentEmptyHint')
+    expect(empty?.get('width')).toBe('100%')
+    expect(empty?.get('max-width')).toBe('100%')
+    expect(empty?.get('min-width')).toBe('0')
+    expect(empty?.get('box-sizing')).toBe('border-box')
+    expect(hint?.get('overflow-wrap')).toBe('anywhere')
+    // Wide header: three 28px actions + gaps fit under overflow:hidden.
+    expect(declarations('.root:not(.rail) .headerActions')?.get('max-width')).toBe('120px')
+  })
 })

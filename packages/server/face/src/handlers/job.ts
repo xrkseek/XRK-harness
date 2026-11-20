@@ -62,7 +62,12 @@ export const jobKill: FaceHandler = async (runtime, _rpcId, payload) => {
   const shell = scopedShell(runtime.shell, target.sessionId);
   if (!shell) return jobHostUnavailable;
   try {
-    const outcome = await shell.killJob(target.jobId);
+    // Human UI / Face RPC — leave `reported` false so settle still steers the
+    // model (status: killed). Model `job_kill` uses shell.killJob directly with
+    // the default report:true (tool result is already the receipt).
+    const outcome = await shell.killJob(target.jobId, "ui-stop", {
+      report: false,
+    });
     runtime.publishJobs(target.sessionId);
     return { ok: true, value: { outcome } };
   } catch {

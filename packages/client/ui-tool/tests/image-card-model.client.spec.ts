@@ -152,6 +152,56 @@ describe('imageCardModel', () => {
     }))
     expect(model?.images).toHaveLength(1)
   })
+
+  it('builds a present gallery and leaves multi-file labels to the header links', () => {
+    const one = imageCardModel(settled({
+      call: { name: 'present', argsRaw: JSON.stringify({ files: [{ path: 'out/deck.png' }] }) },
+      meta: { path: 'out/deck.png' },
+      content: [
+        { type: 'text', text: 'presented out/deck.png' },
+        imageContent[1]!,
+      ],
+    }), '/ws')
+    expect(one?.label).toBe('out/deck.png')
+    expect(one?.images).toHaveLength(1)
+
+    const many = imageCardModel(settled({
+      call: {
+        name: 'present',
+        argsRaw: JSON.stringify({
+          files: [{ path: 'a.png' }, { path: 'b.png' }],
+        }),
+      },
+      meta: { path: 'a.png', paths: ['a.png', 'b.png'] },
+      content: [
+        { type: 'text', text: 'presented a.png\npresented b.png' },
+        {
+          type: 'image',
+          attachment: {
+            attachmentId: 'sha256:a' as never,
+            mediaType: 'image/png' as const,
+            bytes: 10,
+            width: 2,
+            height: 2,
+            name: 'a.png',
+          },
+        },
+        {
+          type: 'image',
+          attachment: {
+            attachmentId: 'sha256:b' as never,
+            mediaType: 'image/png' as const,
+            bytes: 11,
+            width: 2,
+            height: 2,
+            name: 'b.png',
+          },
+        },
+      ],
+    }))
+    expect(many?.label).toBe('')
+    expect(many?.images).toHaveLength(2)
+  })
 })
 
 describe('toolRowModel read_image title', () => {

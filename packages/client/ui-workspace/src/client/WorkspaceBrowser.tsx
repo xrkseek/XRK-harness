@@ -1529,21 +1529,38 @@ export function WorkspaceBrowser({
         />
       ))
 
+  // Empty / no-match must sit inside `.list` — same trailing inset as rows.
+  // Rendering beside an empty SessionTree put the copy in bare `.listArea`,
+  // which bleeds into the shell padding and gets clipped by `.splitPane`.
   const agentList = wide && (
     normalizedAgentQuery !== '' && agentWorkspaces.length === 0
       ? (
-        <div className={css.agentEmpty}>{t('search.noMatches')}</div>
+        <div className={clsx(css.treeBody, css.wide)}>
+          <div className={css.list}>
+            <div className={css.agentEmpty}>{t('search.noMatches')}</div>
+          </div>
+        </div>
       )
-      : (
-        <>
-          {agentWorkspacesAll.length === 0
-            ? (
+      : agentWorkspacesAll.length === 0
+        ? (
+          <div className={clsx(css.treeBody, css.wide)}>
+            <div className={css.list}>
               <div className={css.agentEmpty}>
-                <span className={css.agentEmptyTitle}>{t('agent.empty', { agent: seatTitles.agent })}</span>
-                <span>{t('agent.emptyHint', { agent: seatTitles.agent })}</span>
+                <span className={css.agentEmptyTitle}>
+                  {t('agent.empty', { agent: seatTitles.agent })}
+                </span>
+                <span className={css.agentEmptyHint}>
+                  {t('agent.emptyHint', {
+                    agent: seatTitles.agent,
+                    boss: seatTitles.boss,
+                    manager: seatTitles.manager,
+                  })}
+                </span>
               </div>
-            )
-            : null}
+            </div>
+          </div>
+        )
+        : (
           <SessionTree
             useSessions={useSessions}
             onSessionRename={onSessionRename}
@@ -1576,8 +1593,7 @@ export function WorkspaceBrowser({
             ungroupedOrderKey={AGENT_UNGROUPED_ORDER_KEY}
             showEmpty={false}
           />
-        </>
-      )
+        )
   )
 
   return (

@@ -3,7 +3,7 @@ import type { JobView } from '@xrkseek/client-runtime/client'
 import type { PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } from '@xrkseek/client-ui-primitives'
 import { isLiveJob, orderedJobs, type JobListActions } from './job-list-shared.ts'
-import { JobOutputPanel, JobRows, KillButton } from './JobRows.tsx'
+import { JobOutputPanel, JobRows, KillAllButton } from './JobRows.tsx'
 import type { JobListInjected } from './JobListAction.tsx'
 import { useJobClock } from './use-job-clock.ts'
 import { NS } from './locales.ts'
@@ -20,6 +20,9 @@ export type JobInputDockProps =
  * Input-zone strip for live background jobs (TodoDock posture): visible while
  * at least one job is running so Stop / Background stay near the composer.
  * One live job renders the action row directly (no empty collapsible chrome).
+ *
+ * Collapsed multi-job chrome keeps one **Stop all** control (not "stop the
+ * oldest row") so the summary count and the button mean the same thing.
  *
  * Multi-job expand mounts {@link JobOutputPanel} *beside* the row list so the
  * list stays a short scrollport and TerminalBlock owns output scrolling.
@@ -44,7 +47,6 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
   const actions: JobListActions = { killJob, backgroundJob }
   const single = rows.length === 1
   const listOpen = single || !collapsed
-  const primary = rows[0]
   const expandedJob = expandedId === undefined
     ? undefined
     : rows.find((job) => job.id === expandedId)
@@ -82,10 +84,10 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
                   {collapsed ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
                 </span>
               </button>
-              {collapsed && primary !== undefined
+              {collapsed
                 ? (
-                  <KillButton
-                    job={primary}
+                  <KillAllButton
+                    jobs={rows}
                     t={t}
                     css={headerCss}
                     killJob={killJob}

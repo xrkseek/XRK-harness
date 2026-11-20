@@ -36,6 +36,24 @@ describe("shell background jobs", () => {
     expect(after?.finishedAt).toBeTypeOf("number");
   });
 
+  it("killJob report:false leaves reported clear for human UI settle notices", async () => {
+    const shell = createLocalShell({
+      subprocess: createLocalSubprocess(),
+      backend: process.platform === "win32" ? "cmd" : "bash",
+    });
+
+    const started = await shell.startJob(sleepCmd(8000));
+    const outcome = await shell.killJob(started.id, "ui-stop", { report: false });
+    expect(outcome).toBe("requested");
+    const stopping = (await shell.listJobs()).find((j) => j.id === started.id);
+    expect(stopping?.status).toBe("stopping");
+    expect(stopping?.reported).toBe(false);
+
+    await shell.waitJob(started.id, 5_000);
+    const after = (await shell.listJobs()).find((j) => j.id === started.id);
+    expect(after?.status).toBe("killed");
+  });
+
   it("killJob unknown id throws", async () => {
     const shell = createLocalShell({
       subprocess: createLocalSubprocess(),

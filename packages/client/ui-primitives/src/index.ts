@@ -25,6 +25,15 @@ export { subagentActivityDot } from './subagent-activity-dot.ts'
 export type { SubagentOutcomeKind } from './subagent-activity-dot.ts'
 export { DisclosureRow } from './DisclosureRow.tsx'
 export type { DisclosureRowProps } from './DisclosureRow.tsx'
+export {
+  beginExpandPreserve,
+  cancelExpandPreserve,
+  expandScrollerOf,
+  isExpandFollowSuppressed,
+  registerExpandScrollWriter,
+  settleExpandPreserve,
+  useExpandScrollPreserve,
+} from './expand-scroll-preserve.ts'
 export { Button } from './Button.tsx'
 export type { ButtonVariant } from './Button.tsx'
 export { Switch } from './Switch.tsx'

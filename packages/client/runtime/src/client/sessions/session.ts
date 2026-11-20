@@ -266,22 +266,26 @@ export class Session implements SessionFace {
    */
   beginSubmission(input: BeginSubmissionInput): SubmissionHandle {
     const requestId = brandRpcId(randomUuid()) as SessionRequestId
+    // Steer always docks as steering. Queue placement must paint in ONE
+    // place on the first frame:
+    // - Host already has a backlog → mirror it as `queued` (otherwise
+    //   transcript→dock demotion flashes "sent, then queued").
+    // - Local turn is already running with an empty Host mirror → still
+    //   start as `queued`. QueueDock paints pre-admit local queued echoes;
+    //   starting as `transcript` then demoting on Host admit was the
+    //   busy-send flash. (Idle / Host-admits-straight-into-a-new-turn stays
+    //   `transcript` so the echo is never parked only in the dock.)
+    const placement: PendingSubmission['placement'] = input.mode === 'steer'
+      ? 'steering'
+      : (this.queueMirror.snapshot().length > 0 || this.running)
+        ? 'queued'
+        : 'transcript'
     this.pendingSubmissions = [...this.pendingSubmissions, {
       requestId,
-      // Steer always docks as steering. Queue placement must paint in ONE
-      // place on the first frame:
-      // - Host already has a backlog → mirror it as `queued` (otherwise
-      //   transcript→dock demotion flashes "sent, then queued").
-      // - Local turn is already running with an empty Host mirror → still
-      //   start as `queued`. QueueDock paints pre-admit local queued echoes;
-      //   starting as `transcript` then demoting on Host admit was the
-      //   busy-send flash. (Idle / Host-admits-straight-into-a-new-turn stays
-      //   `transcript` so the echo is never parked only in the dock.)
-      placement: input.mode === 'steer'
-        ? 'steering'
-        : (this.queueMirror.snapshot().length > 0 || this.running)
-          ? 'queued'
-          : 'transcript',
+      placement,
+      ...(placement === 'queued' || placement === 'steering'
+        ? { dockAligned: true as const }
+        : {}),
       time: Date.now(),
       text: input.text,
       attachments: input.attachments,
@@ -1351,20 +1355,20 @@ export class Session implements SessionFace {
     const next = this.pendingSubmissions.map((echo) => {
       const row = byRpc.get(echo.requestId)
       if (row === undefined) return echo
-      // Never demote a transcript echo into the dock. Host may briefly queue an
-      // idle admit before FIFO claim; QueueDock already skips host rows whose
-      // rpcId is already inChat (local transcript). Demoting caused the
-      // empty-session "flash in queue then jump to chat" on first send — and
-      // after pause, promoting a follow-up out of the chat column into the
-      // dock made the bubble vanish into a waiting-line flash.
-      // ChatView paints 「发送中」/「插队中」 on the in-chat echo instead.
-      if (echo.placement === 'transcript') return echo
       // Host `context` rows are not a client echo surface — treat as queued.
       const placement: PendingSubmission['placement'] =
         row.placement === 'steering' ? 'steering' : 'queued'
-      if (echo.placement === placement) return echo
+      if (echo.placement === 'transcript') {
+        // Idle first-send / pause follow-ups stay in chat when Host briefly
+        // lists them — they never set dockAligned. A docked echo that a false
+        // FIFO handoff promoted must restore when Host re-lists the same rpcId.
+        if (echo.dockAligned !== true) return echo
+        changed = true
+        return { ...echo, placement, dockAligned: true as const }
+      }
+      if (echo.placement === placement && echo.dockAligned === true) return echo
       changed = true
-      return { ...echo, placement }
+      return { ...echo, placement, dockAligned: true as const }
     })
     if (!changed) return
     this.pendingSubmissions = next
@@ -1392,7 +1396,8 @@ export class Session implements SessionFace {
         return echo
       }
       changed = true
-      return { ...echo, placement: 'transcript' as const }
+      // Keep dockAligned so a later Host re-list can restore (false handoff).
+      return { ...echo, placement: 'transcript' as const, dockAligned: true as const }
     })
     if (!changed) return
     this.pendingSubmissions = next

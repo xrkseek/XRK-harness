@@ -27,7 +27,8 @@ shell.startManagedJob({
 await shell.listJobs();
 shell.readJobOutput(id); // terminal read → reported
 await shell.waitJob(id, 30_000); // 等到终态；超时不杀、不置 reported
-await shell.killJob(id); // → stopping + reported，再由 producer settle
+await shell.killJob(id); // → stopping + reported（默认）；`{ report: false }` 给人壳停
+await shell.killJob(id, "ui-stop", { report: false });
 await shell.dispose(); // teardown cancel 全量 → reported，清空
 ```
 
@@ -62,7 +63,7 @@ Host（harness/server）共享一份 root registry；composition 用 `createSess
 
 | 位 | 行为 |
 |----|------|
-| `reported` | 终态读、等到 settle 的 `wait`、`kill`、`dispose` teardown 置位；有 live waiter 时 settle **先**置位再 `onJobsChanged` |
+| `reported` | 终态读、等到 settle 的 `wait`、默认 `kill`、`dispose` teardown 置位；`kill(..., { report: false })` 不置位（给人壳停用）；有 live waiter 时 settle **先**置位再 `onJobsChanged` |
 | `statusLine` | `[status: completed, wait: stdin_read]`（detail 进 trailer） |
 | `outputLimitBytes` | producer 可选正整数；`job_output` / Face notice 按 UTF-8 裁 |
 | `maxConcurrentJobs` | 默认 10；**按 owner 桶**拒绝超额 `start` |
@@ -93,6 +94,14 @@ Harness 登记 `tool:fs-routing` · `tool:shell-routing`（含 jobs settle）· 
 
 文案 `formatJobCompletionNotice`；有 `outputLimitBytes` 时预留 id 前缀与收集指令。
 
+`reported` 与谁发起停止：
+
+| 路径 | `killJob` `report` | 模型怎么知道 |
+|------|-------------------|--------------|
+| 模型 `job_kill` 工具 | 默认 `true`（请求时即置位） | 工具结果本身就是回传；settle 不再二次 steer |
+| 产品壳 / Face `job.kill` / Sidebar | `{ report: false }` | settle 后仍发 `[status: killed]` 完成通知（steer） |
+| 会话 Stop（`session.cancel`） | 默认 `true` | 整轮已 abort，不另发 job 完成通知 |
+
 ## 产品壳（`client-ui-jobs`）
 
 > **读者**：终端用户 · 集成者（网页壳可见行为）
@@ -102,7 +111,7 @@ Harness 登记 `tool:fs-routing` · `tool:shell-routing`（含 jobs settle）· 
 | **何时出现** | 本会话有**已结束** job 时，会话标题栏显示历史芯片；**运行中**只在输入区 dock，避免 turn 未结束时两条「运行中」 |
 | **触发器** | 如「1 个后台任务」（已结束）；运行中文案在输入区 dock |
 | **展开列表** | 每行：**kind** · **label** · **status/detail** · **已运行/耗时** |
-| **停止** | `running` / `stopping` 行在输入区 dock → 等同 `job_kill` / RPC `job.kill` |
+| **停止** | 展开后每行各自停止；折叠多任务时输入区 dock 为 **停止全部**（不是只停最早一个）→ Face `job.kill` |
 | **后台** | 仅 wire **`foreground: true`** 且仍在 `running` 的行（前台 bash yield wait 仍附着）→ 解除 turn 阻塞，进程继续 |
 | **输入区 dock** | 有 live job 时在 composer 上方显示（`order: 5`），承担停止 / 后台 |
 
@@ -153,7 +162,8 @@ shell.startManagedJob({
 await shell.listJobs();
 shell.readJobOutput(id); // terminal read → reported
 await shell.waitJob(id, 30_000); // wait for terminal state; timeout does not kill or set reported
-await shell.killJob(id); // → stopping + reported, then producer settles
+await shell.killJob(id); // → stopping + reported (default); `{ report: false }` for human UI
+await shell.killJob(id, "ui-stop", { report: false });
 await shell.dispose(); // teardown cancel all → reported, clear
 ```
 
@@ -188,7 +198,7 @@ Product-shell UI: see **Product shell** below; RPC: `Session.killJob` / `Session
 
 | Field | Behavior |
 |----|------|
-| `reported` | Set on terminal read, settled `wait`, `kill`, `dispose` teardown; when a live waiter exists, settle sets it **before** `onJobsChanged` |
+| `reported` | Set on terminal read, settled `wait`, default `kill`, `dispose` teardown; `kill(..., { report: false })` leaves it clear for human UI stops; when a live waiter exists, settle sets it **before** `onJobsChanged` |
 | `statusLine` | `[status: completed, wait: stdin_read]` (detail in trailer) |
 | `outputLimitBytes` | Optional positive integer from producer; `job_output` / Face notice truncates by UTF-8 |
 | `maxConcurrentJobs` | Default 10; reject excess `start` **per owner bucket** |
@@ -219,6 +229,14 @@ Settle notices use **`delivery: steer`** (Codex-style inject into a running turn
 
 Copy via `formatJobCompletionNotice`; with `outputLimitBytes`, reserve id prefix and collect instructions.
 
+Who sets `reported` on stop:
+
+| Path | `killJob` `report` | How the model learns |
+|------|-------------------|----------------------|
+| Model `job_kill` tool | default `true` (set on request) | Tool result is the receipt; settle does not steer again |
+| Product shell / Face `job.kill` / Sidebar | `{ report: false }` | Settle still steers a `[status: killed]` completion notice |
+| Session Stop (`session.cancel`) | default `true` | Whole turn already aborted; no per-job completion notice |
+
 ## Product shell (`client-ui-jobs`)
 
 > **Audience**: End users · integrators (visible web-shell behavior)
@@ -228,7 +246,7 @@ Copy via `formatJobCompletionNotice`; with `outputLimitBytes`, reserve id prefix
 | **When it appears** | Session header chip only when **this session** has at least one **settled** job; hidden when the set is empty. Live jobs belong to the input dock only |
 | **Trigger** | Copy like “1 background job” / “2 background jobs” (settled). Live copy lives on the input dock |
 | **Popover list** | **kind** · **label** · **status/detail** · **elapsed/duration** per row |
-| **Stop** | On `running` / `stopping` rows → same as model `job_kill` / RPC `job.kill` (input dock) |
+| **Stop** | Per-row when expanded; collapsed multi-job chrome is **Stop all** (not “oldest only”) → Face `job.kill` |
 | **Background** | Only on live `running` rows with wire **`foreground: true`** (foreground bash yield wait still attached) → unblocks the turn, process keeps running (input dock) |
 | **Input dock** | When any job is live, a strip above the composer (`order: 5`): one live job paints the action row directly; several share a collapsible header |
 

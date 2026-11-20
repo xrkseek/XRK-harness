@@ -144,9 +144,18 @@ export interface ShellService {
   listJobsNow(): readonly ShellJobInfo[];
   /**
    * Request cancellation (CV DSH `jobs.kill`).
-   * Live → `stopping` + `reported`, then producer settle; already terminal → `already-finished`.
+   * Live → `stopping` (+ `reported` when `opts.report !== false`), then producer
+   * settle; already terminal → `already-finished`.
+   *
+   * Default `report: true` so model `job_kill` (tool result is the receipt) does
+   * not also fire a Face completion steer. Human Face `job.kill` passes
+   * `{ report: false }` so settle can still notify the model.
    */
-  killJob(id: string, reason?: string): Promise<KillJobResult>;
+  killJob(
+    id: string,
+    reason?: string,
+    opts?: { readonly report?: boolean },
+  ): Promise<KillJobResult>;
   /**
    * Read output for a background job. Managed jobs use the consuming
    * `readOutput` cursor; bash jobs return retained stdout/stderr (including
@@ -655,7 +664,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       return listNow();
     },
 
-    async killJob(id, reason) {
+    async killJob(id, reason, opts) {
       const job = jobs.get(id);
       if (!job) {
         throw new Error(`shell job not found: ${id}`);
@@ -673,10 +682,12 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       } else {
         job.handle?.kill();
       }
+      // `report: false` keeps Face settle free to steer a human-cancel notice.
+      const report = opts?.report !== false;
       job.info = {
         ...job.info,
         status: "stopping",
-        reported: true,
+        ...(report ? { reported: true } : {}),
       };
       notifyChanged();
       return "requested";
@@ -883,9 +894,9 @@ export function createSessionScopedShell(
       }),
     listJobs: async () => shell.listJobsNow().filter(visible),
     listJobsNow: () => shell.listJobsNow().filter(visible),
-    killJob: async (id, reason) => {
+    killJob: async (id, reason, opts) => {
       expectVisible(id);
-      return shell.killJob(id, reason);
+      return shell.killJob(id, reason, opts);
     },
     readJobOutput: (id, opts) => {
       expectVisible(id);

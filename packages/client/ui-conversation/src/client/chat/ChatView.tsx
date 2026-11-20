@@ -26,7 +26,13 @@ import {
   triggerBrowserOrShellDownload,
 } from '@xrkseek/client-runtime/client'
 import type { FileAttachmentRef, ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
-import { Button, IconChevronDownOutlineRegular, Modal } from '@xrkseek/client-ui-primitives'
+import {
+  Button,
+  IconChevronDownOutlineRegular,
+  isExpandFollowSuppressed,
+  Modal,
+  registerExpandScrollWriter,
+} from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble, previewAttachmentsOf } from './MessageItem.tsx'
 import {
@@ -1201,8 +1207,17 @@ export function ChatView({
     const isAtBottom = movedByReader
       ? floor - el.scrollTop <= FOLLOW_THRESHOLD + 1
       : atBottomRef.current
+    // Programmatic pins (streaming ResizeObserver follow) fire scroll events
+    // that match the ledger. Re-entering toBottom every frame re-ran setState /
+    // chatScroll.save for no geometry change — only re-pin when a shrink clamp
+    // left us short of the floor while we still own follow.
     if (!movedByReader && isAtBottom) {
-      toBottom(el)
+      if (floor - el.scrollTop > FOLLOW_THRESHOLD + 1) {
+        toBottom(el)
+      } else {
+        observedTopRef.current = el.scrollTop
+        lastScrollHeightRef.current = el.scrollHeight
+      }
       return
     }
     atBottomRef.current = isAtBottom
@@ -1252,6 +1267,9 @@ export function ChatView({
     const nextHeight = el.scrollHeight
     const growth = nextHeight - prevHeight
     lastScrollHeightRef.current = nextHeight
+    // Mid-column disclosure expands suppress the floor pin so the header the
+    // reader just opened stays on screen (mobile short viewports).
+    if (isExpandFollowSuppressed()) return
     const floor = Math.max(0, el.scrollHeight - el.clientHeight)
     const distance = floor - el.scrollTop
     if (!shouldFollowContentGrowth({
@@ -1495,10 +1513,21 @@ export function ChatView({
   // Folds that land above the reader restore the offset themselves. Route the
   // write through here so the observed-top ledger records it; otherwise the
   // scroll handler reads the restored offset as reader input and drops follow.
+  // The same writer serves mid-column disclosure expands (expand-scroll-preserve).
   const writeFoldScroll = useCallback((scrollport: HTMLElement, top: number): void => {
     scrollport.scrollTop = top
     observedTopRef.current = scrollport.scrollTop
+    const floor = Math.max(0, scrollport.scrollHeight - scrollport.clientHeight)
+    const isAtBottom = floor - scrollport.scrollTop <= FOLLOW_THRESHOLD + 1
+    if (atBottomRef.current !== isAtBottom) {
+      atBottomRef.current = isAtBottom
+      setAtBottom(isAtBottom)
+    }
   }, [])
+  useEffect(() => {
+    registerExpandScrollWriter(writeFoldScroll)
+    return () => { registerExpandScrollWriter(null) }
+  }, [writeFoldScroll])
   // A fold moves every row below it, compensated or not, so the persisted
   // reading anchor has to be re-sampled even when `scrollTop` itself stayed
   // put. Reusing the scroll handler keeps the follow latch and the saved

@@ -273,7 +273,7 @@ describe('node predicates', () => {
     expect(isProcessMember(namedTool('b', 'bash'))).toBe(true)
   })
 
-  it('flushes the process run around a present row so 交付物 stays flat', () => {
+  it('flushes the process run around a present row so 展示 stays flat', () => {
     const entries = entriesOf([
       namedTool('t1', 'bash'),
       namedTool('p1', 'present'),

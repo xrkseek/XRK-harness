@@ -1940,14 +1940,16 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
           },
         };
       }
-      rewritePendingAdmit(
-        runtime.store,
-        sessionId,
-        itemId,
-        target.content,
-        "steer",
-        maps,
-      );
+      runtime.withQueuePublishSuppressed(() => {
+        rewritePendingAdmit(
+          runtime.store,
+          sessionId,
+          itemId,
+          target.content,
+          "steer",
+          maps,
+        );
+      });
       runtime.drain.wake(sessionId);
     } else if (kind === "edit") {
       const content = (action as { content?: unknown }).content;
@@ -2018,14 +2020,16 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
           }
         }
       }
-      rewritePendingAdmit(
-        runtime.store,
-        sessionId,
-        itemId,
-        nextContent,
-        target.delivery,
-        maps,
-      );
+      runtime.withQueuePublishSuppressed(() => {
+        rewritePendingAdmit(
+          runtime.store,
+          sessionId,
+          itemId,
+          nextContent,
+          target.delivery,
+          maps,
+        );
+      });
     } else {
       return {
         ok: false,

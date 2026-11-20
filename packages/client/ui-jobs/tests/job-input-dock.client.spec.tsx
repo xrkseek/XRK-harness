@@ -115,6 +115,26 @@ describe('JobInputDock actions', () => {
     expect(killJob).toHaveBeenCalledWith('bash-1')
   })
 
+  it('collapsed multi-job stop kills every live job, not only the oldest', () => {
+    const killJob = vi.fn()
+    render(<JobInputDock {...props([
+      job({ id: 'bash-1' as JobView['id'], label: 'earlier', startedAt: START }),
+      job({ id: 'bash-2' as JobView['id'], label: 'mid', startedAt: START + 1_000 }),
+      job({ id: 'bash-3' as JobView['id'], label: 'later', startedAt: START + 2_000 }),
+    ], { killJob })} />)
+    expect(screen.queryByRole('list', { name: zh['list.aria'] })).toBeNull()
+    const stopAll = screen.getByRole('button', { name: '停止全部 3 个后台任务' })
+    fireEvent.click(stopAll)
+    expect(killJob).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '再按一次确认停止全部 3 个' }))
+    expect(killJob).toHaveBeenCalledTimes(3)
+    expect(killJob.mock.calls.map((call) => call[0]).toSorted()).toEqual([
+      'bash-1',
+      'bash-2',
+      'bash-3',
+    ])
+  })
+
   it('expands a row and polls jobs.output into TerminalBlock', async () => {
     vi.useRealTimers()
     const fetchImpl = vi.fn(async () =>

@@ -23,7 +23,10 @@ describe("job.kill / job.background", () => {
       ok: true,
       value: { outcome: "requested" },
     });
-    expect(root.listJobsNow()[0]?.status).toBe("stopping");
+    const after = root.listJobsNow()[0];
+    expect(after?.status).toBe("stopping");
+    // Human Face kill must not mark reported — settle still steers the model.
+    expect(after?.reported).toBe(false);
   });
 
   it("background detaches a foreground wait", async () => {

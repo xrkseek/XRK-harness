@@ -1,5 +1,7 @@
+import { basename } from "node:path";
 import type { ToolDefinition, ToolExecuteExtras } from "@xrkseek/core-tools";
-import type { FsService } from "./index.js";
+import type { AttachmentStore, ImageAttachmentRef } from "@xrkseek/attachment";
+import { imageMediaTypeForPath } from "./read-image.js";
 
 /**
  * Per-call delivery limit, aligned with DSH `tool-present` (default 8).
@@ -11,10 +13,25 @@ export interface PresentFileArg {
   readonly description?: string;
 }
 
+/** Minimal FS surface used by `present` (stat + optional image byte read). */
+export interface PresentFs {
+  stat(userPath: string): Promise<{ readonly isFile: boolean }>;
+  readBytes?(userPath: string, maxBytes?: number): Promise<Uint8Array>;
+}
+
 export interface PresentToolOptions {
   /** Maximum files per call. Must be a positive safe integer. */
   readonly maxFiles?: number;
+  /**
+   * When set, PNG/JPEG/WebP/GIF deliverables are persisted as durable image
+   * attachments so the chat row can gallery them like `read_image` /
+   * `image_generate`. Non-image files stay path-only.
+   */
+  readonly attachments?: AttachmentStore;
 }
+
+type TextPart = { readonly type: "text"; readonly text: string };
+type ImagePart = { readonly type: "image"; readonly attachment: ImageAttachmentRef };
 
 /**
  * `present` — model-declared final deliverables (DSH `tool-present`).
@@ -22,24 +39,27 @@ export interface PresentToolOptions {
  * Declares existing files as outputs the user asked to receive. Unlike the
  * turn-end `workspace/changes` diff capture (which only sees write/edit/patch
  * paths), `present` lets the model declare files created through shell /
- * scripts / downloads as deliverables. Renders through the same produced-files
- * card as diffs (`producedPaths` reads the edit-kind call locations).
+ * scripts / downloads as deliverables. Image paths also ride durable
+ * `type: "image"` blocks so the client shows an inline gallery.
  */
 export function createPresentTool(
-  fs: FsService,
+  fs: PresentFs,
   options: PresentToolOptions = {},
 ): ToolDefinition {
   const maxFiles = options.maxFiles ?? PRESENT_MAX_FILES;
   if (!Number.isSafeInteger(maxFiles) || maxFiles < 1) {
     throw new Error("present requires a positive integer maxFiles");
   }
+  const attachments = options.attachments;
   return {
     name: "present",
     description:
-      "Declare existing files as final deliverables the user asked to receive. " +
+      "Declare existing files as final deliverables the user asked to receive " +
+      "(delivery + on-screen display). " +
       "Call present after writing a file (including files created through Bash, scripts, or downloads) " +
       "and before your final response; mentioning the path in your reply does not replace this call. " +
-      "Relative paths resolve against the workspace root; contents are not copied.",
+      "PNG/JPEG/WebP/GIF paths are shown inline in chat like read_image / image_generate. " +
+      "Relative paths resolve against the workspace root; contents are not copied for non-image files.",
     parameters: {
       type: "object",
       properties: {
@@ -99,11 +119,56 @@ export function createPresentTool(
       if (extras) {
         extras.emitToolEvent("deliverables/presented", { files: declared });
       }
+
       const lines = declared.map((file) => {
         const desc = file.description ? ` (${file.description})` : "";
         return `presented ${file.path}${desc}`;
       });
-      return { content: lines.join("\n") };
+      const textBlock: TextPart = { type: "text", text: lines.join("\n") };
+
+      // No attachment store or no image byte reader → path text only (standing tools).
+      if (attachments === undefined || fs.readBytes === undefined) {
+        return { content: textBlock.text };
+      }
+
+      const imageParts: ImagePart[] = [];
+      for (const file of declared) {
+        const mediaType = imageMediaTypeForPath(file.path);
+        if (mediaType === undefined) continue;
+        if (!attachments.imageLimits.mediaTypes.includes(mediaType)) continue;
+        try {
+          const byteCap = Math.min(
+            attachments.imageLimits.maxImageBytes,
+            attachments.imageLimits.maxMessageImageBytes,
+          );
+          const data = await fs.readBytes(file.path, byteCap);
+          const ref = await attachments.saveImage({
+            data,
+            mediaType,
+            name: basename(file.path),
+            sourcePath: file.path,
+          });
+          imageParts.push({ type: "image", attachment: ref });
+        } catch {
+          // Soft-degrade: path text still delivers; skip the broken image tile.
+          continue;
+        }
+      }
+
+      if (imageParts.length === 0) {
+        return {
+          content: textBlock.text,
+          meta: { path: declared[0]?.path },
+        };
+      }
+
+      return {
+        content: [textBlock, ...imageParts],
+        meta: {
+          path: declared[0]?.path,
+          ...(declared.length > 1 ? { paths: declared.map((f) => f.path) } : {}),
+        },
+      };
     },
     isConcurrencySafe: () => true,
     presentCall: (args) => {

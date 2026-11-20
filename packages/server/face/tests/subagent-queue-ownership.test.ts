@@ -136,8 +136,64 @@ describe("session.updateQueue · subagent ownership + FIFO", () => {
       "third",
     ]);
     expect(pending[0]?.admitId).toBe(a.admitId);
-    expect(pending[1]?.admitId).not.toBe(b.admitId);
-    expect(pending[2]?.admitId).not.toBe(c.admitId);
+    expect(pending[1]?.admitId).toBe(b.admitId);
+    expect(pending[2]?.admitId).toBe(c.admitId);
+  });
+
+  it("edit publishes one final session/queue without empty intermediates", async () => {
+    // withdraw+re-admit used to publishQueue on every prompt/withdrawn /
+    // prompt/admitted; clients treated the empty frames as FIFO claim.
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+    });
+
+    const created = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    runtime.admitRpcMap.set(
+      admitPrompt(store, sessionId, "hold-a").admitId,
+      "rpc-a",
+    );
+    const target = admitPrompt(store, sessionId, "edit-me");
+    runtime.admitRpcMap.set(target.admitId, "rpc-edit");
+    runtime.admitRpcMap.set(
+      admitPrompt(store, sessionId, "hold-b").admitId,
+      "rpc-b",
+    );
+
+    const queues: Array<{ readonly items: readonly { readonly id: string }[] }> = [];
+    const stop = runtime.bus.subscribeMux((_rpcId, frame) => {
+      if (frame.type === "session/queue" && frame.sessionId === sessionId) {
+        queues.push({ items: frame.items.map((item) => ({ id: item.id })) });
+      }
+    });
+
+    const edited = await dispatchFaceMethod(runtime, "session.updateQueue", "e", {
+      sessionId,
+      itemId: target.admitId,
+      action: {
+        kind: "edit",
+        content: [{ type: "text", text: "edited" }],
+      },
+    });
+    stop();
+    expect(edited.result.ok).toBe(true);
+
+    expect(queues.length).toBe(1);
+    expect(queues[0]?.items).toHaveLength(3);
+    expect(queues.every((frame) => frame.items.length > 0)).toBe(true);
+
+    const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
+    expect(pending.map((row) => row.content)).toEqual([
+      "hold-a",
+      "edited",
+      "hold-b",
+    ]);
   });
 
   it("steer requires a running drain and then wakes", async () => {
@@ -242,20 +298,23 @@ describe("cold subagent queue reconstitution", () => {
     store.create("s");
     const a = admitPrompt(store, "s", "a");
     const b = admitPrompt(store, "s", "b");
-    admitPrompt(store, "s", "c");
+    const c = admitPrompt(store, "s", "c");
     const maps = {
       admitRpcMap: new Map<string, string>([[b.admitId, "rpc-b"]]),
       rpcAdmitMap: new Map<string, string>([["rpc-b", b.admitId]]),
     };
     const head = rewritePendingAdmit(store, "s", b.admitId, "b2", "queue", maps);
-    expect(maps.admitRpcMap.get(head.admitId)).toBe("rpc-b");
-    expect(maps.rpcAdmitMap.get("rpc-b")).toBe(head.admitId);
-    expect(
-      listPendingAdmits(store.get("s").events, "s").map((row) => row.content),
-    ).toEqual(["a", "b2", "c"]);
-    expect(listPendingAdmits(store.get("s").events, "s")[0]?.admitId).toBe(
+    expect(head.admitId).toBe(b.admitId);
+    expect(maps.admitRpcMap.get(b.admitId)).toBe("rpc-b");
+    expect(maps.rpcAdmitMap.get("rpc-b")).toBe(b.admitId);
+    const pending = listPendingAdmits(store.get("s").events, "s");
+    expect(pending.map((row) => row.content)).toEqual(["a", "b2", "c"]);
+    expect(pending.map((row) => row.admitId)).toEqual([
       a.admitId,
-    );
+      b.admitId,
+      c.admitId,
+    ]);
+    expect(pending[1]?.rpcId).toBe("rpc-b");
   });
 
   it("rewritePendingAdmit preserves seat/handoff source tags", () => {

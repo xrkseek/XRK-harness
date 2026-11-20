@@ -202,7 +202,7 @@ export function closedTurn(node: ChatNode): boolean {
  * Tools that stay as flat transcript rows — never join a process fold.
  *
  * Explore/search/bash fold into「Explored N files…」; deliverables and
- * interactive surfaces must stay visible (present = 交付物; ask / todo /
+ * interactive surfaces must stay visible (present = 展示; ask / todo /
  * media gen / propose_skill are the same class of "don't hide behind 过程").
  */
 export function isStandaloneTranscriptTool(name: string): boolean {

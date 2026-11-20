@@ -142,6 +142,34 @@
   transform-origin: top center;
 }
 
+/* Single 委派方 must fill the left grid cell — same definite width the right
+ * seat gets as a direct grid child. After N→1 wrapped the left ball in a flex
+ * stack, PresenceBall `width:100%` nested in `flex:0 1 auto` + `min-width:0`
+ * left percentage stage widths cyclic; Android WebView collapsed the boss
+ * stage to a tiny circle while the child card stayed full size. */
+.delegateFromStack[data-count='1'] .delegateFromLayer {
+  width: 100%;
+  flex: 1 1 auto;
+}
+
+/* Lead in an N-stack also needs a definite box; ancestors stay shrink peeks.
+ * Use a px floor (not min(100%, N)) so flex-shrink against peek siblings cannot
+ * re-collapse the lead stage on phone the way single-seat did. */
+.delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer[data-lead] {
+  flex: 1 1 auto;
+  min-width: 124px;
+}
+
+@media (max-width: 767px) {
+  .delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer[data-lead] {
+    min-width: 132px;
+  }
+}
+
+:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count]:not([data-count='1']) .delegateFromLayer[data-lead] {
+  min-width: 132px;
+}
+
 /* Ancestors shrink/fade toward root (depth from lead). Lead stays full size.
    Keep pair-stage shape (not compact chips) so the stack reads as N balls. */
 .delegateFromLayer[data-depth='1'] {

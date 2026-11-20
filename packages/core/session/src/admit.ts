@@ -141,35 +141,44 @@ export function admitPrompt(
   };
 }
 
-/** Pending admits in FIFO order (admitted without later promoted/withdrawn). */
+/**
+ * Pending admits in FIFO order.
+ *
+ * Chronological fold: each `prompt/admitted` opens (or replaces) a row;
+ * `prompt/promoted` / `prompt/withdrawn` close it. A later admit with the same
+ * id after withdraw is pending again — required for queue edit/steer rewrite
+ * that keeps stable admitIds. The old "closed forever" scan rejected re-admits
+ * and forced rewrite to mint new ids + remap rpc tables.
+ */
 export function listPendingAdmits(
   events: readonly SessionEvent[],
   sessionId = "",
 ): readonly AdmitReceipt[] {
-  const closed = new Set<string>();
+  const order: string[] = [];
+  const open = new Map<string, AdmitReceipt>();
   for (const ev of events) {
+    if (ev.type === "prompt/admitted") {
+      const receipt: AdmitReceipt = {
+        admitId: ev.admitId,
+        sessionId,
+        content: ev.content,
+        delivery: effectiveDelivery(ev.delivery),
+        ...(typeof ev.rpcId === "string" && ev.rpcId.length > 0
+          ? { rpcId: ev.rpcId }
+          : {}),
+        ...(ev.source !== undefined ? { source: ev.source } : {}),
+      };
+      if (!open.has(ev.admitId)) order.push(ev.admitId);
+      open.set(ev.admitId, receipt);
+      continue;
+    }
     if (ev.type === "prompt/promoted" || ev.type === "prompt/withdrawn") {
-      closed.add(ev.admitId);
+      if (!open.delete(ev.admitId)) continue;
+      const at = order.indexOf(ev.admitId);
+      if (at >= 0) order.splice(at, 1);
     }
   }
-  const out: AdmitReceipt[] = [];
-  const seen = new Set<string>();
-  for (const ev of events) {
-    if (ev.type !== "prompt/admitted") continue;
-    if (closed.has(ev.admitId) || seen.has(ev.admitId)) continue;
-    seen.add(ev.admitId);
-    out.push({
-      admitId: ev.admitId,
-      sessionId,
-      content: ev.content,
-      delivery: effectiveDelivery(ev.delivery),
-      ...(typeof ev.rpcId === "string" && ev.rpcId.length > 0
-        ? { rpcId: ev.rpcId }
-        : {}),
-      ...(ev.source !== undefined ? { source: ev.source } : {}),
-    });
-  }
-  return out;
+  return order.map((id) => open.get(id)!);
 }
 
 /**

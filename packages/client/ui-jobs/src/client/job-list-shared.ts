@@ -98,6 +98,7 @@ export function orderedJobs(jobs: readonly JobView[]): JobView[] {
 }
 
 export type JobListActions = {
-  killJob(jobId: string): void
-  backgroundJob(jobId: string): void
+  /** May return a Promise — UI awaits rejection to show the failed arm. */
+  killJob(jobId: string): void | Promise<void>
+  backgroundJob(jobId: string): void | Promise<void>
 }

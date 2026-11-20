@@ -89,17 +89,6 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* present (and similar force-expanded rows): long deliverable paths wrap. */
-.root[data-force-expanded] .summary,
-.root[data-force-expanded] .fileLink {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: unset;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  line-height: 20px;
-}
-
 /* Trailing summary fragment kept out of .summary's ellipsis, for a count whose
    whole value is that it survives a narrow row (the todo row's parallel-active
    `+n`). Repeats .summary's type because it sits beside that text, and its
@@ -114,13 +103,9 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* File-tool path: same geometry as .summary, with a persistent link affordance. */
-.fileLink {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Shared openable path affordance (single-file .fileLink + multi .fileLinkItem). */
+.fileLink,
+.fileLinkItem {
   margin: 0;
   padding: 0;
   border: none;
@@ -134,14 +119,23 @@
   text-decoration-color: var(--dsw-alias-label-quaternary);
   text-underline-offset: 3px;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
-.fileLink:hover {
+.fileLink:hover,
+.fileLinkItem:hover {
   color: var(--dsw-alias-label-primary);
   text-decoration-color: currentColor;
 }
 
-/* Multi-file present header: every path is its own openable link. */
+.fileLink {
+  flex: 1 1 auto;
+}
+
+/* Multi-file header: every path is its own openable link (collapsed = one line). */
 .fileLinks {
   flex: 1 1 auto;
   min-width: 0;
@@ -161,28 +155,65 @@
 
 .fileLinkItem {
   flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: none;
-  font: inherit;
-  text-align: left;
-  font-size: 14px;
-  line-height: 24px;
-  color: var(--dsw-alias-label-secondary);
-  text-decoration: underline;
-  text-decoration-color: var(--dsw-alias-label-quaternary);
-  text-underline-offset: 3px;
-  cursor: pointer;
 }
 
-.fileLinkItem:hover {
-  color: var(--dsw-alias-label-primary);
-  text-decoration-color: currentColor;
+/*
+ * Force-expanded deliverable rows (present): grow past DisclosureRow's fixed
+ * 24px chrome. Layout: [icon][title][status] then a full-width path column
+ * (one path per line, xxs-12 — same scale as markdown-small / caption UI).
+ * Target [data-disclosure-row]: ToolRow `.row` is a different CSS-module class.
+ */
+.root[data-force-expanded] [data-disclosure-row] {
+  height: auto;
+  min-height: 24px;
+  align-items: flex-start;
+  overflow: visible;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  padding-block: 2px;
+}
+
+.root[data-force-expanded] .leading {
+  margin-top: 4px;
+}
+
+.root[data-force-expanded] .summarySuffix {
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+  margin-left: 8px;
+  margin-top: 3px;
+}
+
+/* Full path, no ellipsis — same wrap grammar as .imageLabel. */
+.root[data-force-expanded] .summary,
+.root[data-force-expanded] .fileLink,
+.root[data-force-expanded] .fileLinkItem {
+  max-width: 100%;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font: var(--dsw-font-xxs-12);
+}
+
+.root[data-force-expanded] .fileLinks {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  overflow: visible;
+  min-width: 0;
+}
+
+.root[data-force-expanded] .fileLink,
+.root[data-force-expanded] .summary {
+  flex: 1 1 100%;
+}
+
+.root[data-force-expanded] .fileLinkItem {
+  flex: none;
 }
 
 /* Error row's collapsed summary: the failure's first line in the error color. */

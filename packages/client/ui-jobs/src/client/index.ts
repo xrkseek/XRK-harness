@@ -30,11 +30,17 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-job: dictionaries')
   const sessions = ctx.sessions
   const jobActions = (ownerSessionId: SessionId): JobListInjected => ({
-    killJob(jobId) {
-      void sessions.binding(ownerSessionId)?.session.killJob(jobId)
+    async killJob(jobId) {
+      const session = sessions.binding(ownerSessionId)?.session
+      if (!session) throw new Error('session unavailable')
+      const result = await session.killJob(jobId)
+      if (!result.ok) throw new Error(result.error.message)
     },
-    backgroundJob(jobId) {
-      void sessions.binding(ownerSessionId)?.session.backgroundJob(jobId)
+    async backgroundJob(jobId) {
+      const session = sessions.binding(ownerSessionId)?.session
+      if (!session) throw new Error('session unavailable')
+      const result = await session.backgroundJob(jobId)
+      if (!result.ok) throw new Error(result.error.message)
     },
   })
   ctx.slots.inject(

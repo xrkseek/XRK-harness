@@ -1,8 +1,9 @@
 /* Live background-job strip in the composer context stack: same dock column
    as Todo / GoalBar. Collapsed multi-job chrome stays one thin row so Stop
-   stays reachable without expanding; a single job skips the chrome entirely.
-   Expanded output mounts beside the row list (not inside it) so multi-job
-   expand keeps one short list scrollport + one TerminalBlock scrollport. */
+   all stays reachable without expanding; a single job skips the chrome
+   entirely. Expanded output mounts beside the row list (not inside it) so
+   multi-job expand keeps one short list scrollport + one TerminalBlock
+   scrollport. */
 
 .root {
   box-sizing: border-box;

@@ -1046,7 +1046,13 @@ export function createHarnessComposition(
   const tools = createToolRegistry();
   for (const tool of createFsTools(
     fs,
-    options.attachments ? { attachments: options.attachments } : {},
+    options.attachments
+      ? {
+          attachments: options.attachments,
+          // Inline gallery for present(PNG/JPEG/WebP/GIF) — same store as read_image.
+          presentAttachments: options.attachments,
+        }
+      : {},
   )) {
     tools.register(tool);
   }

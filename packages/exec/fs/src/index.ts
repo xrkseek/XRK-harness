@@ -51,6 +51,7 @@ import {
 import { applyPatchToFs } from "./apply-patch.js";
 import { PatchParseError } from "./apply-patch-parser.js";
 import { ApplyPatchError } from "./apply-patch-apply.js";
+import type { AttachmentStore } from "@xrkseek/attachment";
 import { createPresentTool } from "./present-deliverable.js";
 import { parseAttachmentFilePath } from "./read-image.js";
 
@@ -169,6 +170,7 @@ export {
   createPresentTool,
   PRESENT_MAX_FILES,
   type PresentFileArg,
+  type PresentFs,
   type PresentToolOptions,
 } from "./present-deliverable.js";
 
@@ -593,6 +595,11 @@ export interface FsToolsOptions {
       readonly sourcePath?: string;
     }): string | undefined;
   };
+  /**
+   * Full image attachment store for `present` inline galleries (PNG/JPEG/WebP/GIF).
+   * Distinct from {@link attachments} (file-id reads for `read_file`).
+   */
+  readonly presentAttachments?: AttachmentStore;
   /** Byte cap when reading via attachment id (mirrors FsLocal defaultMaxBytes). */
   readonly attachmentMaxBytes?: number;
 }
@@ -936,7 +943,11 @@ export function createFsTools(
       presentResult: presentGrepResult,
       isConcurrencySafe: () => true,
     },
-    createPresentTool(fs),
+    createPresentTool(fs, {
+      ...(options.presentAttachments
+        ? { attachments: options.presentAttachments }
+        : {}),
+    }),
   ];
 }
 

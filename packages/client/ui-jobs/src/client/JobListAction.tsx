@@ -20,8 +20,9 @@ import css from './JobListAction.module.css'
 
 /** Business actions supplied by the slot registration. */
 export interface JobListInjected {
-  killJob(jobId: string): void
-  backgroundJob(jobId: string): void
+  /** May return a Promise — stop controls await rejection for the failed arm. */
+  killJob(jobId: string): void | Promise<void>
+  backgroundJob(jobId: string): void | Promise<void>
 }
 
 /** Full props for the session-header background-job action. */

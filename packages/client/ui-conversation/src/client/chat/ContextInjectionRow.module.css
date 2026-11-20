@@ -24,6 +24,8 @@
     var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.03)) 8%
   );
   box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-caption, #000) 4%, transparent);
+  /* Browser scroll-anchoring can lift mid-column expands off-screen. */
+  overflow-anchor: none;
 }
 
 .noticeCard[data-open] {
@@ -95,6 +97,17 @@
 .noticeHeader:hover .noticeDisclosure,
 .noticeHeader:focus-visible .noticeDisclosure {
   opacity: 1;
+}
+
+/* Touch / coarse pointers never hover — keep the chevron as the expand cue. */
+@media (hover: none), (pointer: coarse) {
+  .noticeGlyph {
+    opacity: 0;
+  }
+
+  .noticeDisclosure {
+    opacity: 1;
+  }
 }
 
 .noticeTitle {

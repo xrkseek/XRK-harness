@@ -13,6 +13,9 @@
  * In-view floor folds apply with no turn-spacer; only above-reader folds
  * compensate scrollTop.
  *
+ * Manual unfold scroll preserve lives on DisclosureRow (the click target), not
+ * here — doubling begin/settle stole the token and left a stale settle no-op.
+ *
  * Auto-fold policy: once the seat reports settled, the run latches closed.
  * A later tool burst clears that latch. Mount already-settled starts folded
  * so the first paint never flashes open height.

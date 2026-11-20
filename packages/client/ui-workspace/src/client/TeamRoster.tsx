@@ -1273,7 +1273,7 @@ export function TeamRoster({
                   <ol className={css.howTo}>
                     <li>{t('team.howTo.pick')}</li>
                     <li>{t('team.howTo.edit')}</li>
-                    <li>{t('team.howTo.share')}</li>
+                    <li>{t('team.howTo.share', { agent: seatTitles.agent })}</li>
                   </ol>
                 </div>
               ) : bossSelected ? (
@@ -1481,14 +1481,22 @@ export function TeamRoster({
               ) : (
                 <div className={css.editor}>
                   {managerSelected ? (
-                    <p className={css.fieldHint}>{t('team.managerHint', { manager: seatTitles.manager })}</p>
+                    <p className={css.fieldHint}>
+                      {t('team.managerHint', {
+                        manager: seatTitles.manager,
+                        boss: seatTitles.boss,
+                        agent: seatTitles.agent,
+                      })}
+                    </p>
                   ) : sunflowerSelected ? (
                     <p className={css.fieldHint}>{t('team.sunflowerHint')}</p>
                   ) : catalogSeed ? (
                     <p className={css.fieldHint}>{t('team.catalogHint')}</p>
                   ) : null}
                   {isDraftMemberId(selectedId) || managerSelected || sunflowerSelected ? null : (
-                    <p className={css.fieldHint}>{t('team.editorHint')}</p>
+                    <p className={css.fieldHint}>
+                      {t('team.editorHint', { agent: seatTitles.agent })}
+                    </p>
                   )}
                   <fieldset className={css.editorLock} disabled={busy || fieldsLocked}>
                   <div className={css.field}>

@@ -17,7 +17,12 @@ import type { KeyboardEvent } from 'react'
 import type { Context } from '@xrkseek/cordis'
 import clsx from 'clsx'
 import {
-  IconApiOutlineRegular, IconChevronDownOutlineRegular, InspectAction, StateDot, TerminalBlock,
+  IconApiOutlineRegular,
+  IconChevronDownOutlineRegular,
+  InspectAction,
+  StateDot,
+  TerminalBlock,
+  useExpandScrollPreserve,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
@@ -76,11 +81,16 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
     && (model.body !== null || model.output !== null)
   const expandable = terminal !== null || genericError
   const open = expanded && expandable
+  const { rootRef, noteExpand } = useExpandScrollPreserve(open)
   const failureLine = model.state === 'error' ? model.errorSummary : null
+  const runToggle = () => {
+    if (!open && expandable) noteExpand()
+    toggleExpand()
+  }
   const toggleFromKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!expandable || (event.key !== 'Enter' && event.key !== ' ')) return
     event.preventDefault()
-    toggleExpand()
+    runToggle()
   }
   const leading = open
     ? <IconChevronDownOutlineRegular className={css.chevron} />
@@ -95,6 +105,7 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
   return (
     <div className={css.card}>
       <div
+        ref={rootRef}
         className={css.root}
         data-sample="bash"
         data-variant="bash"
@@ -103,7 +114,7 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
         role={expandable ? 'button' : undefined}
         tabIndex={expandable ? 0 : undefined}
         aria-expanded={expandable ? open : undefined}
-        onClick={expandable ? toggleExpand : undefined}
+        onClick={expandable ? runToggle : undefined}
         onKeyDown={expandable ? toggleFromKeyboard : undefined}
       >
         <span className={css.leading}>{leading}</span>

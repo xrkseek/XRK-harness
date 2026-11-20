@@ -311,6 +311,38 @@ describe('beginSubmission', () => {
     expect(onRetire).not.toHaveBeenCalled()
   })
 
+  it('restores dock after false FIFO handoff when Host re-lists the same rpcId', () => {
+    // Queue edit rewrite used to publish empty session/queue frames between
+    // withdraw and re-admit; that looked like FIFO claim → transcript「假发送」.
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    session.handleRunning(true)
+    const handle = session.beginSubmission({
+      mode: 'queue', text: '编辑前', attachments: [],
+    })
+    session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, [{
+      id: 'qi-1',
+      rpcId: handle.requestId,
+      body: '编辑前',
+    }]))
+    expect(session.getSnapshot().pendingSubmissions[0]?.placement).toBe('queued')
+
+    session.handleMuxEnvelope(RpcId('q2'), queueFrame(SID, []))
+    expect(session.getSnapshot().pendingSubmissions[0]?.placement).toBe('transcript')
+
+    session.handleMuxEnvelope(RpcId('q3'), queueFrame(SID, [{
+      id: 'qi-2',
+      rpcId: handle.requestId,
+      body: '编辑后',
+    }]))
+    expect(session.getSnapshot().pendingSubmissions[0]).toMatchObject({
+      requestId: handle.requestId,
+      placement: 'queued',
+      text: '编辑前',
+    })
+    expect(session.getSnapshot().queue).toHaveLength(1)
+  })
+
   it('explicit Host queue remove retires the admitted local echo', async () => {
     const { api } = bareApi()
     const updateQueue = vi.fn(async () => ok({ accepted: true as const }))

@@ -412,6 +412,12 @@ export interface FaceRuntime {
   /** Publish store appends as mux session/event. */
   watchSession(sessionId: string): void;
   publishQueue(sessionId: string): void;
+  /**
+   * Run `fn` without per-admit `session/queue` mux frames. Queue edit/steer
+   * rewrite withdraws then re-admits; intermediate empties make the client
+   * treat the row as FIFO-claimed (fake send). Caller publishes once after.
+   */
+  withQueuePublishSuppressed<T>(fn: () => T): T;
   publishApprovals(sessionId: string): void;
   /**
    * DSH `session/jobs`. `undefined` = no registry (emit nothing).

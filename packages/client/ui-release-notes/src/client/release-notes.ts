@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.1',
+    date: '2026-11-20',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'present 交付 PNG/JPEG/WebP/GIF 时对话行先路径再画廊（与 read_image 同槽）。',
+        en: 'present PNG/JPEG/WebP/GIF deliverables show paths then a gallery (same slot as read_image).',
+      },
+      {
+        zh: '后台任务折叠多任务时「停止全部」；人壳停后模型仍能收到 killed 通知。',
+        en: 'Collapsed multi-job chrome is Stop all; human UI stop still steers a killed notice to the model.',
+      },
+      {
+        zh: '手机展开过程保住阅读锚点；排队改稿可复用同一 admitId。完整清单见 docs/releases/v0.8.1.md。',
+        en: 'Mid-column expands keep the reading anchor; queue edit/steer can reuse admitIds. Full list: docs/releases/v0.8.1.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.0',
     date: '2026-11-19',
     title: {

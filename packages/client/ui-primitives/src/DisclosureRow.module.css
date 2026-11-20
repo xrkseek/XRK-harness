@@ -6,6 +6,8 @@
   width: 100%;
   min-width: 0;
   contain: style;
+  /* Browser scroll-anchoring can lift mid-column expands off-screen. */
+  overflow-anchor: none;
 }
 
 /* DSH wraps the row in [data-disclosure-header]; community skins (maid) select
@@ -89,6 +91,17 @@ button.leading {
 .row:hover .chevronHover,
 .row:focus-within .chevronHover {
   opacity: 1;
+}
+
+/* Touch / coarse pointers never hover — keep the chevron as the expand cue. */
+@media (hover: none), (pointer: coarse) {
+  .root:not([data-open]) .iconIdle {
+    opacity: 0;
+  }
+
+  .root:not([data-open]) .chevronHover {
+    opacity: 1;
+  }
 }
 
 /* Open: chevron points up. Leading swaps icon→chevron on toggle, so this is

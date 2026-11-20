@@ -51,6 +51,23 @@ describe("newSession / admit", () => {
     expect(deriveMessages(store.get(s.id).events)).toEqual([]);
   });
 
+  it("re-admit after withdraw with the same id is pending again", () => {
+    // Queue edit rewrite keeps stable admitIds; the old closed-forever scan
+    // would drop the second admit and force minting new ids.
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const first = admitPrompt(store, s.id, "before");
+    withdrawAdmit(store, s.id, first.admitId);
+    const again = admitPrompt(store, s.id, "after", { admitId: first.admitId });
+    expect(again.admitId).toBe(first.admitId);
+    const pending = listPendingAdmits(store.get(s.id).events, s.id);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({
+      admitId: first.admitId,
+      content: "after",
+    });
+  });
+
   it("promote with empty inbox throws", () => {
     const store = createMemorySessionStore();
     const s = newSession(store);
