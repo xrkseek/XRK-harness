@@ -583,7 +583,7 @@ function renderPage(catalog, env, zh, request) {
         </aside>
         <div class="pane">
           <div class="chrome">
-            ${ballMount(SEEDS[0], "sm")}
+            <button type="button" class="hero-ball chrome-ball" data-play-ball aria-label="${escapeHtml(t.clickPlay)}">${ballMount(SEEDS[0], "sm")}</button>
             <strong id="thread-title">${escapeHtml(t.trunkTitle)}</strong>
             <span id="thread-tag">${escapeHtml(t.trunk)}</span>
           </div>

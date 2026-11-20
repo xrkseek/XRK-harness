@@ -29,13 +29,6 @@ XRK-Harness 为自研 TypeScript Agent Harness + Server Kit。设计吸收 Codex
   <img src="./docs/assets/screenshots/host-settings.png" alt="设置" width="48%" />
 </p>
 
-![官网首屏](./docs/assets/screenshots/site-hero-zh.png)
-
-<p align="center">
-  <img src="./docs/assets/screenshots/site-workbench-zh.png" alt="官网工作台预览" width="48%" />
-  <img src="./docs/assets/screenshots/site-download-zh.png" alt="下载" width="48%" />
-</p>
-
 <p align="center">
   <img src="./docs/assets/screenshots/operators-zh.png" alt="干员站" width="72%" />
 </p>
@@ -196,13 +189,6 @@ XRK-Harness is an independently developed TypeScript Agent Harness + Server Kit.
 <p align="center">
   <img src="./docs/assets/screenshots/host-chat.png" alt="Chat" width="48%" />
   <img src="./docs/assets/screenshots/host-settings.png" alt="Settings" width="48%" />
-</p>
-
-![Marketing site hero](./docs/assets/screenshots/site-hero-en.png)
-
-<p align="center">
-  <img src="./docs/assets/screenshots/site-workbench-zh.png" alt="Marketing workbench preview" width="48%" />
-  <img src="./docs/assets/screenshots/site-download-zh.png" alt="Downloads" width="48%" />
 </p>
 
 <p align="center">

@@ -197,6 +197,16 @@
   border-bottom: 1px solid var(--border);
 }
 .chrome .stage { flex: none; }
+.chrome-ball {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 10px;
+  line-height: 0;
+  /* Shell is pointer-events:none for the demo; balls stay tappable. */
+  pointer-events: auto;
+}
 .chrome strong { font-size: 13px; }
 #thread-tag { font-size: 11px; color: var(--tertiary); }
 .thread {
