@@ -56,6 +56,25 @@
   font-weight: 600;
   text-wrap: balance;
 }
+.dl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+}
+.dl-head h2 { margin: 0; }
+/* Phone-only presence next to Download; desktop keeps hero .pair. */
+.dl-presence {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.dl-presence .stage {
+  width: 44px;
+  height: 44px;
+}
 .hint { margin: 0 0 8px; color: var(--tertiary); max-width: 40rem; line-height: 20px; }
 .shell {
   margin-top: 10px;
@@ -176,20 +195,6 @@
   gap: 8px;
   padding: 10px 20px;
   border-bottom: 1px solid var(--border);
-}
-.chrome-balls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-}
-.chrome-balls .hero-ball {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  border-radius: 10px;
-  line-height: 0;
 }
 .chrome .stage { flex: none; }
 .chrome strong { font-size: 13px; }
@@ -603,11 +608,10 @@ html[data-theme="dark"] .copy:hover { filter: brightness(1.12); }
   .pair {
     display: none; /* hero balls are desktop decoration */
   }
-  .play { margin-top: var(--section-gap); }
-  .chrome-balls .stage.sm {
-    width: 40px;
-    height: 40px;
+  .dl-presence {
+    display: flex; /* three download-section presence balls */
   }
+  .play { margin-top: var(--section-gap); }
   .play .hint { margin-bottom: 8px; }
   .shell {
     display: block;
