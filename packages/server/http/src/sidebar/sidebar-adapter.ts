@@ -880,7 +880,13 @@ async function dispatchMethod(
       if (!bridge) {
         return fail("unavailable", "open.external requires XRK Host Face bridge");
       }
-      const action = payload.action === "url" ? "url" : "reveal";
+      const rawAction = payload.action;
+      const action =
+        rawAction === "url"
+          ? "url"
+          : rawAction === "open"
+            ? "open"
+            : "reveal";
       const pathValue =
         typeof payload.path === "string" ? payload.path : undefined;
       const urlValue = typeof payload.url === "string" ? payload.url : undefined;

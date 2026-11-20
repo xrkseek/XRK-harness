@@ -29,7 +29,8 @@ export type SidebarChangesWireEvent = {
 
 export interface SidebarFaceBridge {
   readonly openExternal: (payload: {
-    action: "reveal" | "url";
+    /** `open` = OS default handler (same as chat without sidebar); `reveal` = folder select. */
+    action: "open" | "reveal" | "url";
     path?: string;
     url?: string;
   }) => Promise<{ ok: true }>;

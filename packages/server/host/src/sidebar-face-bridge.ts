@@ -90,10 +90,13 @@ export function createSidebarFaceBridgeFromFace(
         await openNativePath(payload.url.trim());
         return { ok: true };
       }
-      if (payload.action === "reveal" && payload.path?.trim()) {
+      if (
+        (payload.action === "open" || payload.action === "reveal")
+        && payload.path?.trim()
+      ) {
         const opened = await hostOpenPath({
           path: payload.path.trim(),
-          reveal: true,
+          ...(payload.action === "reveal" ? { reveal: true } : {}),
         });
         if (!opened.ok) {
           throw new Error(opened.error.message);
@@ -118,7 +121,10 @@ export function createSidebarFaceBridgeFromFace(
         return { ok: false, killed: false, reason: "no-background-job-host" };
       }
       try {
-        const result = await shell.killJob(jobId, reason);
+        // Sidebar peek kill is human UI — same report:false as Face job.kill.
+        const result = await shell.killJob(jobId, reason ?? "ui-stop", {
+          report: false,
+        });
         return {
           ok: true,
           killed: result === "requested",

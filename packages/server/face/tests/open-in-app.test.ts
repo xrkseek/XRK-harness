@@ -95,7 +95,7 @@ describe("host open-in-app", () => {
     expect(spawnCalls).toHaveLength(0);
   });
 
-  it("openInApp rejects a file path (workspace must be a directory)", async () => {
+  it("openInApp rejects a file path for file managers (workspace must be a directory)", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-open-in-file-"));
     try {
       const file = path.join(root, "note.txt");
@@ -111,6 +111,27 @@ describe("host open-in-app", () => {
       if (res.ok) return;
       expect(res.error.code).toBe("invalid-payload");
       expect(spawnCalls).toHaveLength(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("openInApp accepts a file path for argv editors (sidebar Open with Cursor/VS Code)", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-open-in-editor-file-"));
+    try {
+      const file = path.join(root, "note.txt");
+      await writeFile(file, "x");
+      // Probe may miss Cursor/VS Code on CI — skip when neither is listed.
+      const apps = listInstalledOpenInApps();
+      const app = apps.includes("cursor")
+        ? "cursor"
+        : apps.includes("vscode")
+          ? "vscode"
+          : undefined;
+      if (app === undefined) return;
+      const res = await hostOpenInApp({ app, path: file });
+      expect(res.ok).toBe(true);
+      expect(spawnCalls.length).toBeGreaterThan(0);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

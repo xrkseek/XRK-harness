@@ -395,15 +395,20 @@ export async function hostOpenInApp(
       error: { code: "not-found", message: `path not found: ${path}` },
     };
   }
+  const entry = openInAppCatalog().find((e) => e.id === app);
   try {
     if (!statSync(path).isDirectory()) {
-      return {
-        ok: false,
-        error: {
-          code: "invalid-payload",
-          message: "path must be a directory",
-        },
-      };
+      // Overview opens a workspace directory. Sidebar "Open with Cursor/VS Code"
+      // passes a file — argv editors accept files; file managers stay dirs-only.
+      if (entry === undefined || entry.kind !== "argv") {
+        return {
+          ok: false,
+          error: {
+            code: "invalid-payload",
+            message: "path must be a directory",
+          },
+        };
+      }
     }
   } catch {
     return {
