@@ -108,11 +108,11 @@ function loadBallScripts() {
 }
 
 async function mountBalls() {
-  // Phone: only mount download-presence balls (hero/rail/orbit stay CSS-hidden).
+  // Phone: workbench chrome balls only (hero/rail/orbit stay CSS-hidden).
   // Desktop: mount every data-ball.
   const phone = isPhoneLayout();
   const nodes = phone
-    ? document.querySelectorAll("#download [data-ball]")
+    ? document.querySelectorAll("#play .chrome [data-ball]")
     : document.querySelectorAll("[data-ball]");
   if (!nodes.length) return;
   await loadBallScripts();

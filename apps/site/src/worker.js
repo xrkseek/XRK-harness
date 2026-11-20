@@ -575,7 +575,10 @@ function renderPage(catalog, env, zh, request) {
         </aside>
         <div class="pane">
           <div class="chrome">
-            ${ballMount(SEEDS[0], "sm")}
+            <div class="chrome-balls" aria-hidden="true">
+              ${SEEDS.slice(0, 3).map((m) =>
+                `<button type="button" class="hero-ball" data-play-ball aria-label="${escapeHtml(t.clickPlay)}">${ballMount(m, "sm")}</button>`).join("")}
+            </div>
             <strong id="thread-title">${escapeHtml(t.trunkTitle)}</strong>
             <span id="thread-tag">${escapeHtml(t.trunk)}</span>
           </div>
@@ -657,13 +660,7 @@ function renderPage(catalog, env, zh, request) {
       <div class="dots">${dots}</div>
     </section>
     <section class="download" id="download">
-      <div class="dl-head">
-        <h2>${escapeHtml(t.download)}</h2>
-        <div class="dl-presence" aria-hidden="true">
-          ${SEEDS.slice(0, 2).map((m) =>
-            `<button type="button" class="hero-ball" data-play-ball aria-label="${escapeHtml(t.clickPlay)}">${ballMount(m)}</button>`).join("")}
-        </div>
-      </div>
+      <h2>${escapeHtml(t.download)}</h2>
       ${downloadBlocks}
       <div class="cli-panel">
         <h3>${escapeHtml(t.cli)}</h3>

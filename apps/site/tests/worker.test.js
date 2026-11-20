@@ -83,7 +83,7 @@ test("english query lists desktop and phone groups; mac stays unavailable", asyn
   assert.match(html, /Host cold start/);
   assert.match(html, /Open with xrkh web on the command line/);
   assert.match(html, /dl-panel/);
-  assert.match(html, /dl-presence/);
+  assert.match(html, /chrome-balls/);
   assert.match(html, /id="download"/);
   assert.match(html, /class="chip"/);
   assert.doesNotMatch(html, /download\/mac-/);
