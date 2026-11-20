@@ -69,7 +69,7 @@ const LABELS = {
     placeholderBusy: "Enter 排队 · Cmd/Ctrl+Enter 插队",
     trunk: "主线",
     branch: "支线",
-    trunkTitle: "发版 0.5.17",
+    trunkTitle: "发版", // version suffix filled from releases.json in renderPage
     branchTitle: "修 Host 冷启动",
     opener: "核对 Windows 安装包。",
     queuedMsg: "再跑一遍相关测试。",
@@ -149,7 +149,7 @@ const LABELS = {
     placeholderBusy: "Enter queues · Cmd/Ctrl+Enter steers",
     trunk: "Main",
     branch: "Branch",
-    trunkTitle: "Ship 0.5.17",
+    trunkTitle: "Ship", // version suffix filled from releases.json in renderPage
     branchTitle: "Host cold start",
     opener: "Check the Windows installer.",
     queuedMsg: "Run the related tests again.",
@@ -393,7 +393,6 @@ function ballMount(member, extraClass = "") {
 }
 
 function renderPage(catalog, env, zh, request) {
-  const t = zh ? LABELS.zh : LABELS.en;
   const preferProxy = preferGithubProxy(request);
   const live = Array.isArray(catalog.products) ? catalog.products : [];
   // Marketing download URLs come from releases.json → GitHub Release assets.
@@ -415,6 +414,15 @@ function renderPage(catalog, env, zh, request) {
   const cli = catalog.cli || fallbackCatalog.cli || "npm i -g @xrkseek/harness-cli";
   const win = products.find((row) => row.target === "win-x64");
   const android = products.find((row) => row.target === "android-arm64");
+  // Demo chrome title tracks current ship (same source as download chips).
+  const shipVersion = String(win?.version || android?.version || "").trim();
+  const baseLabels = zh ? LABELS.zh : LABELS.en;
+  const t = {
+    ...baseLabels,
+    trunkTitle: shipVersion
+      ? `${baseLabels.trunkTitle} ${shipVersion}`
+      : baseLabels.trunkTitle,
+  };
   const first = SEEDS[0];
   const firstName = zh ? first.name : first.nameEn;
   const firstBrief = zh ? first.brief : first.briefEn;
