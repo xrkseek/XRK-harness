@@ -56,6 +56,25 @@
   font-weight: 600;
   text-wrap: balance;
 }
+.dl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+}
+.dl-head h2 { margin: 0; }
+/* Phone-only presence next to Download; desktop keeps hero .pair. */
+.dl-presence {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.dl-presence .stage {
+  width: 44px;
+  height: 44px;
+}
 .hint { margin: 0 0 8px; color: var(--tertiary); max-width: 40rem; line-height: 20px; }
 .shell {
   margin-top: 10px;
@@ -588,6 +607,9 @@ html[data-theme="dark"] .copy:hover { filter: brightness(1.12); }
 @media (max-width: 860px) {
   .pair {
     display: none; /* hero balls are desktop decoration */
+  }
+  .dl-presence {
+    display: flex; /* download section keeps a small presence cluster */
   }
   .play { margin-top: var(--section-gap); }
   .play .hint { margin-bottom: 8px; }

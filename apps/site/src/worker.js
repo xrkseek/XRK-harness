@@ -657,7 +657,13 @@ function renderPage(catalog, env, zh, request) {
       <div class="dots">${dots}</div>
     </section>
     <section class="download" id="download">
-      <h2>${escapeHtml(t.download)}</h2>
+      <div class="dl-head">
+        <h2>${escapeHtml(t.download)}</h2>
+        <div class="dl-presence" aria-hidden="true">
+          ${SEEDS.slice(0, 2).map((m) =>
+            `<button type="button" class="hero-ball" data-play-ball aria-label="${escapeHtml(t.clickPlay)}">${ballMount(m)}</button>`).join("")}
+        </div>
+      </div>
       ${downloadBlocks}
       <div class="cli-panel">
         <h3>${escapeHtml(t.cli)}</h3>

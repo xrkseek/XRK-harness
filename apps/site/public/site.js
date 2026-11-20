@@ -108,9 +108,12 @@ function loadBallScripts() {
 }
 
 async function mountBalls() {
-  // Phone hides hero / rail / orbit balls — skip ~210KB SVG runtime.
-  if (isPhoneLayout()) return;
-  const nodes = document.querySelectorAll("[data-ball]");
+  // Phone: only mount download-presence balls (hero/rail/orbit stay CSS-hidden).
+  // Desktop: mount every data-ball.
+  const phone = isPhoneLayout();
+  const nodes = phone
+    ? document.querySelectorAll("#download [data-ball]")
+    : document.querySelectorAll("[data-ball]");
   if (!nodes.length) return;
   await loadBallScripts();
   const create = window.EmotionBall && window.EmotionBall.create;
@@ -413,7 +416,8 @@ const first = document.querySelector(".roster .ball");
 if (first) selectMember(first.dataset.member || "");
 function startUi() {
   void mountBalls();
-  if (!isPhoneLayout()) bindPlayBalls();
+  // Phone still needs click/bounce on #download presence balls.
+  bindPlayBalls();
   runDesk();
 }
 if (document.readyState === "loading") {
