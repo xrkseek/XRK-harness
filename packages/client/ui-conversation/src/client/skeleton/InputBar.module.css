@@ -341,10 +341,20 @@
   gap: 12px;
 }
 
-/* Squeezed row: tighten descendant chrome only — a size container cannot
-   restyle its own gap/padding via @container against itself. */
-@container (max-width: 420px) {
+/* Squeezed composer card (Overview / workbench eating the center): commit to
+   a deliberate two-row chrome instead of an accidental half-wrap where model
+   + send sit on a short trailing strip under the attach chips.
+   Row 1 = tools/modes; row 2 = model · meter · send, full width, end-aligned.
+   Phone @media still forces a single nowrap row (Termux ~360). */
+@container (max-width: 440px) {
+  .row {
+    row-gap: 6px;
+    column-gap: 8px;
+    align-items: stretch;
+  }
+
   .tools {
+    flex: 1 1 100%;
     gap: 8px;
   }
 
@@ -353,7 +363,10 @@
   }
 
   .trailing {
-    gap: 6px;
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+    gap: 8px;
   }
 }
 
@@ -520,7 +533,10 @@
   }
 
   /* Termux ~360px: keep attach · access · model · send on ONE toolbar row.
-     Wrapping put permission on line 1 and model/send on line 2 (staircase). */
+     Wrapping put permission on line 1 and model/send on line 2 (staircase).
+     Also resets the desktop @container two-row flex bases — phone media and
+     a ~360 card container can both match; nowrap alone is not enough if
+     trailing still claims `flex-basis: 100%`. */
   .row {
     flex-wrap: nowrap;
     align-items: center;

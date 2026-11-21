@@ -67,7 +67,12 @@ describe('delegate stack overlap', () => {
     expect(previewCss).toMatch(
       /padding-left:\s*calc\(var\(--xrk-delegate-stage,\s*118px\)\s*\*\s*0\.42\)/,
     )
-    expect(previewCss).toMatch(/grid-template-columns:\s*minmax\(0,\s*1\.35fr\)/)
+    // Equal seat tracks — never reintroduce 1.35fr left bias.
+    expect(previewCss).toMatch(
+      /\.delegatePair\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+minmax\(0,\s*1fr\)/,
+    )
+    expect(previewCss).not.toMatch(/minmax\(0,\s*1\.35fr\)/)
+    expect(previewCss).not.toMatch(/minmax\(0,\s*1\.3fr\)/)
     expect(previewCss).not.toMatch(/margin-right:\s*-55%/)
     expect(previewCss).not.toMatch(/margin-right:\s*-64%/)
   })
@@ -84,10 +89,36 @@ describe('delegate stack overlap', () => {
     )
   })
 
-  it('single 委派方 layer fills the left grid cell (avoids phone stage collapse)', () => {
+  it('solo lead stays on the shared stage cap (not width:100% of a biased track)', () => {
     const block = cssBlock(previewCss, ".delegateFromStack[data-count='1'] .delegateFromLayer")
-    expect(block).toMatch(/width:\s*100%/)
-    expect(block).toMatch(/flex:\s*1\s+1\s+auto/)
+    expect(block).toMatch(/width:\s*min\(100%,\s*var\(--xrk-delegate-stage/)
+    expect(block).toMatch(/flex:\s*0\s+0\s+auto/)
+    // Reject bare `width: 100%` (old fill-the-1.35fr-track rule), not max-width.
+    expect(block).not.toMatch(/(^|[\s;])width:\s*100%/)
+    expect(block).not.toMatch(/flex:\s*1\s+1\s+auto/)
+  })
+
+  it('solo lead never keeps a peek left gutter (desktop + phone)', () => {
+    expect(previewCss).toMatch(
+      /\.delegateFromStack\[data-count='1'\]\s*\{[^}]*padding-left:\s*0/,
+    )
+    expect(previewCss).toMatch(
+      /html\[data-xrk-layout-phone\]\)\s*\.delegateFromStack\[data-count='1'\]\s*\{[^}]*padding-left:\s*0/,
+    )
+    // Phone peek pad must be gated — a bare .delegateFromStack override used
+    // to reintroduce empty air beside 老板 on full-bleed Overview.
+    expect(previewCss).toMatch(
+      /html\[data-xrk-layout-phone\]\)\s*\.delegateFromStack:not\(\[data-count='1'\]\)\s*\{[^}]*padding-left:/,
+    )
+  })
+
+  it('right seat hugs the arrow with the same stage cap as the lead', () => {
+    expect(previewCss).toMatch(
+      /\.delegateToSeat\s*\{[^}]*justify-content:\s*flex-start/,
+    )
+    expect(previewCss).toMatch(
+      /\.delegateToSeat\s*>\s*\*\s*\{[^}]*width:\s*min\(100%,\s*var\(--xrk-delegate-stage/,
+    )
   })
 
   it('publishes a shared stage reference that shrinks with stack count', () => {
@@ -102,7 +133,7 @@ describe('delegate stack overlap', () => {
 
   it('N-stack layers pin stage width so peeks and lead stay isometric', () => {
     expect(previewCss).toMatch(
-      /\.delegateFromLayer\s*\{[^}]*width:\s*var\(--xrk-delegate-stage/,
+      /\.delegateFromLayer\s*\{[^}]*width:\s*min\(100%,\s*var\(--xrk-delegate-stage/,
     )
   })
 })

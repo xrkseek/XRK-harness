@@ -439,19 +439,15 @@ export function AppFrame({
   }, [])
 
   // Window chrome width for phone / narrow — independent of frame squeeze.
+  // Measure synchronously: CDP device metrics / background Electron windows can
+  // starve rAF, leaving phone/narrow latches stuck on a wide chromeWidth.
   useEffect(() => {
-    let raf: number | null = null
-    const measure = () => {
-      raf = null
+    const onResize = (): void => {
       setChromeWidth(window.innerWidth)
-    }
-    const onResize = () => {
-      raf ??= requestAnimationFrame(measure)
     }
     window.addEventListener('resize', onResize)
     return () => {
       window.removeEventListener('resize', onResize)
-      if (raf !== null) cancelAnimationFrame(raf)
     }
   }, [])
 
@@ -519,6 +515,8 @@ export function AppFrame({
       const root = document.documentElement
       root.style.setProperty('--xrkh-workbench-width', '0px')
       root.style.setProperty('--xrkh-workbench-height', '0px')
+      root.removeAttribute('data-xrk-layout-side')
+      root.removeAttribute('data-xrk-layout-bottom')
       mirrorWorkbenchPushToDshAliases()
       publishLayoutInsets({
         details: 0,
@@ -566,6 +564,29 @@ export function AppFrame({
     if (!phoneSessionPrimed.current) { phoneSessionPrimed.current = true; return }
     if (!sidebarCollapsedRef.current) actions.toggleSidebar()
   }, [actions, currentSession, phone])
+
+  // Phone: Overview is a full-frame sheet. Inheriting a desktop-open preference
+  // (resize or restore) would cover the conversation and hide phone chrome
+  // (menu / Status). Park the open bit on enter; restore on leave so widen
+  // brings the column back. Status chrome still opens the sheet while parked.
+  const phoneDetailsParked = useRef(false)
+  const wasPhoneRef = useRef(false)
+  useEffect(() => {
+    const entered = phone && !wasPhoneRef.current
+    const left = !phone && wasPhoneRef.current
+    wasPhoneRef.current = phone
+    if (entered) {
+      if (!detailsCollapsedRef.current) {
+        phoneDetailsParked.current = true
+        actions.closeDetails()
+      }
+      return
+    }
+    if (left && phoneDetailsParked.current) {
+      phoneDetailsParked.current = false
+      if (detailsSessionRef.current !== undefined) actions.openDetails()
+    }
+  }, [actions, phone])
 
   // Phone: opening the details sheet yields the stack to the sheet — a drawer
   // sitting above it would trap the user with no clear path to the sheet.
@@ -757,12 +778,13 @@ export function AppFrame({
           : {})}
       >
         {/* Render-site slot call with live concession output: a closed
-            sidebar keeps the mounted slot at the compact-rail width, and the
-            component sees its rendered state as owner params decided here
-            (collapsed follows the resolved rail, so a derived auto-collapse
-            renders the rail UI too). Phone always feeds the wide drawer. */}
+            sidebar keeps the mounted slot at the compact-rail width.
+            `collapsed` is the *preference* (toggle target); paint follows
+            `width` (concession may snap an open preference to the icon rail
+            without flipping the preference — so expand must not close it).
+            Phone always feeds the wide drawer. */}
         {renderSlot('sidebar', {
-          collapsed: sidebarChromeCollapsed,
+          collapsed: phone ? false : sidebarCollapsed,
           width: phone ? drawerWidth : cols.sidebar,
         })}
       </div>

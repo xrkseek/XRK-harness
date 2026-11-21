@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { IconChevronDownOutlineRegular } from '@xrkseek/client-ui-primitives'
+import { Button, IconChevronDownOutlineRegular, Modal } from '@xrkseek/client-ui-primitives'
 import type {
   CronApiClient,
   CronJobMutationResponse,
@@ -12,6 +12,7 @@ import type {
 import type { ScheduleLocaleKey } from './locales.ts'
 import {
   deliveryLabel,
+  isOneShotComplete,
   jobDisplayName,
   lastStatusLabel,
   runLabel,
@@ -159,9 +160,12 @@ export function ScheduleSettingsTab({
                 const title = jobDisplayName(job, t)
                 const open = expandedId === job.id
                 const detailId = `${runsId}-details-${encodeURIComponent(job.id)}`
+                const oneShotDone = isOneShotComplete(job)
                 const ariaBits = [
                   title,
                   job.enabled ? t('enabledTag') : t('disabledTag'),
+                  job.schedule.kind === 'at' ? t('oneShotTag') : null,
+                  oneShotDone ? t('oneShotDone') : null,
                   scheduleLabel(job.schedule, t),
                   lastStatusLabel(job, t),
                 ].filter(Boolean).join(', ')
@@ -171,6 +175,8 @@ export function ScheduleSettingsTab({
                     key={job.id}
                     data-job-id={job.id}
                     data-enabled={job.enabled ? 'true' : 'false'}
+                    data-schedule={job.schedule.kind}
+                    data-one-shot-done={oneShotDone ? 'true' : undefined}
                     data-open={open ? 'true' : undefined}
                   >
                     <button
@@ -190,9 +196,14 @@ export function ScheduleSettingsTab({
                         ) : (
                           <span className={css.disabledTag}>{t('disabledTag')}</span>
                         )}
+                        {job.schedule.kind === 'at' ? (
+                          <span className={css.oneShotTag}>{t('oneShotTag')}</span>
+                        ) : null}
                       </span>
                       <span className={css.cardTrailing}>
-                        <span className={css.scheduleTag}>{scheduleLabel(job.schedule, t)}</span>
+                        <span className={css.scheduleTag} title={scheduleLabel(job.schedule, t)}>
+                          {oneShotDone ? t('oneShotDone') : scheduleLabel(job.schedule, t)}
+                        </span>
                         <span
                           className={css.statusDot}
                           data-status={job.lastStatus ?? 'never'}
@@ -245,17 +256,20 @@ function JobDetail({
   const [busy, setBusy] = useState<JobAction | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [runsTick, setRunsTick] = useState(0)
+  const [removeOpen, setRemoveOpen] = useState(false)
 
   const act = (action: JobAction): void => {
     if (busy) return
-    if (action === 'remove' && !globalThis.confirm?.(t('confirmRemove'))) return
+    if (action === 'remove') {
+      setRemoveOpen(true)
+      return
+    }
     setBusy(action)
     setActionError(null)
     const run =
       action === 'pause' ? api.pause(job.id)
         : action === 'resume' ? api.resume(job.id)
-          : action === 'run' ? api.runNow(job.id)
-            : api.remove(job.id)
+          : api.runNow(job.id)
     void run.then(
       (response: CronJobMutationResponse) => {
         setBusy(null)
@@ -273,6 +287,27 @@ function JobDetail({
     )
   }
 
+  const confirmRemove = (): void => {
+    if (busy) return
+    setBusy('remove')
+    setActionError(null)
+    void api.remove(job.id).then(
+      () => {
+        setBusy(null)
+        setRemoveOpen(false)
+        onChanged()
+      },
+      () => {
+        setBusy(null)
+        setActionError(t('actionError'))
+        setRemoveOpen(false)
+      },
+    )
+  }
+
+  const oneShotDone = isOneShotComplete(job)
+  const workspaceId = job.run.kind === 'agent' ? job.run.workspaceId : undefined
+
   return (
     <div className={css.cardDetails} id={detailId}>
       <div className={css.actions} role="group" aria-label={jobDisplayName(job, t)}>
@@ -281,7 +316,12 @@ function JobDetail({
             {busy === 'pause' ? t('actionBusy') : t('actionPause')}
           </button>
         ) : (
-          <button type="button" disabled={busy !== null} onClick={() => act('resume')}>
+          <button
+            type="button"
+            disabled={busy !== null || oneShotDone}
+            onClick={() => act('resume')}
+            title={oneShotDone ? t('oneShotDone') : undefined}
+          >
             {busy === 'resume' ? t('actionBusy') : t('actionResume')}
           </button>
         )}
@@ -297,8 +337,18 @@ function JobDetail({
           {busy === 'remove' ? t('actionBusy') : t('actionRemove')}
         </button>
       </div>
+      {job.run.kind === 'agent' ? (
+        <p className={css.runHint} role="note">{t('runNowAgentHint')}</p>
+      ) : null}
       {actionError ? <p className={css.actionError} role="alert">{actionError}</p> : null}
       <dl className={css.details}>
+        <div>
+          <dt>{t('detailSchedule')}</dt>
+          <dd>
+            {scheduleLabel(job.schedule, t)}
+            {oneShotDone ? ` · ${t('oneShotDone')}` : ''}
+          </dd>
+        </div>
         <div>
           <dt>{t('detailRun')}</dt>
           <dd title={job.run.kind === 'agent' ? job.run.prompt : job.run.command}>
@@ -309,6 +359,12 @@ function JobDetail({
           <dt>{t('detailModel')}</dt>
           <dd>{modelLabel(job, t)}</dd>
         </div>
+        {workspaceId ? (
+          <div>
+            <dt>{t('detailWorkspace')}</dt>
+            <dd className={css.mono}>{workspaceId}</dd>
+          </div>
+        ) : null}
         <div>
           <dt>{t('detailDelivery')}</dt>
           <dd>{deliveryLabel(job.delivery, t)}</dd>
@@ -317,12 +373,46 @@ function JobDetail({
           <dt>{t('detailLastRun')}</dt>
           <dd>{lastStatusLabel(job, t)}{job.lastRunAt ? ` · ${formatTimestamp(job.lastRunAt)}` : ''}</dd>
         </div>
+        {job.lastError ? (
+          <div>
+            <dt>{t('detailLastError')}</dt>
+            <dd className={css.lastError}>{job.lastError}</dd>
+          </div>
+        ) : null}
       </dl>
       <RunHistory
         api={api}
         job={job}
         t={t}
         refreshKey={`${job.lastRunAt ?? ''}:${job.updatedAt}:${runsTick}`}
+      />
+      <Modal
+        open={removeOpen}
+        onClose={() => { if (busy !== 'remove') setRemoveOpen(false) }}
+        title={t('confirmRemoveTitle')}
+        description={t('confirmRemove')}
+        closeLabel={t('confirmRemoveClose')}
+        layout="inset"
+        footer={(
+          <>
+            <Button
+              variant="outline"
+              disabled={busy === 'remove'}
+              onClick={() => { setRemoveOpen(false) }}
+            >
+              {t('confirmRemoveCancel')}
+            </Button>
+            <Button
+              variant="outline"
+              className={css.deleteAction}
+              disabled={busy === 'remove'}
+              autoFocus
+              onClick={confirmRemove}
+            >
+              {busy === 'remove' ? t('actionBusy') : t('actionRemove')}
+            </Button>
+          </>
+        )}
       />
     </div>
   )

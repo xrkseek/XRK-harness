@@ -21,6 +21,7 @@ import {
   applyLayoutInsetsDom,
   clearLayoutInsetsDom,
   EMPTY_LAYOUT_INSETS,
+  LAYOUT_INSET_ATTR,
   layoutInsetsEqual,
   type LayoutInsets,
   type LayoutInsetsFace,
@@ -115,6 +116,8 @@ export class LayoutController implements ILayout {
     const bottom = Math.max(0, Math.round(height))
     const root = document.documentElement
     root.style.setProperty(XRK_WORKBENCH_CSS.height, `${bottom}px`)
+    if (bottom > 0) root.setAttribute(LAYOUT_INSET_ATTR.bottom, '')
+    else root.removeAttribute(LAYOUT_INSET_ATTR.bottom)
     mirrorWorkbenchPushToDshAliases()
     const prev = this.#insets.getSnapshot()
     this.publishInsets({
@@ -130,11 +133,15 @@ export class LayoutController implements ILayout {
    * Canonical side-strip reservation (CSS pixels; 0 = closed).
    * The shell frame reads `--xrkh-workbench-width` as `margin-right` so the
    * in-flow columns yield instead of painting under the fixed panel.
+   * Also stamps {@link LAYOUT_INSET_ATTR.side} so Host chrome (header pad /
+   * PresenceDock) can select without knowing a first-party plugin id.
    */
   reserveSide(width: number): void {
     const side = Math.max(0, Math.round(width))
     const root = document.documentElement
     root.style.setProperty(XRK_WORKBENCH_CSS.width, `${side}px`)
+    if (side > 0) root.setAttribute(LAYOUT_INSET_ATTR.side, '')
+    else root.removeAttribute(LAYOUT_INSET_ATTR.side)
     mirrorWorkbenchPushToDshAliases()
   }
 
@@ -143,6 +150,8 @@ export class LayoutController implements ILayout {
     const root = document.documentElement
     root.style.removeProperty(XRK_WORKBENCH_CSS.width)
     root.style.removeProperty(XRK_WORKBENCH_CSS.height)
+    root.removeAttribute(LAYOUT_INSET_ATTR.side)
+    root.removeAttribute(LAYOUT_INSET_ATTR.bottom)
     clearDshWorkbenchPushAliases()
     this.#insets.set(EMPTY_LAYOUT_INSETS)
     clearLayoutInsetsDom()

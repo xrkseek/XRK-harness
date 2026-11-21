@@ -86,6 +86,15 @@ export const LAYOUT_INSET_ATTR = Object.freeze({
   phone: 'data-xrk-layout-phone',
   /** Settled Session can open Overview / Status (AppFrame stamps; blank clears). */
   status: 'data-xrk-layout-status',
+  /**
+   * Side workbench strip reserved (`ctx.layout.reserveSide` &gt; 0).
+   * Host chrome (header padding, PresenceDock icon-only) selects this —
+   * not a first-party plugin attribute — so any floating workbench plugin
+   * that calls `reserveSide` gets the same seam behavior.
+   */
+  side: 'data-xrk-layout-side',
+  /** Bottom workbench strip reserved (`ctx.layout.reserveBottom` &gt; 0). */
+  bottom: 'data-xrk-layout-bottom',
 } as const)
 
 /** Observable face plugins read via `ctx.layout.insets`. */
@@ -118,6 +127,8 @@ export function clearLayoutInsetsDom(): void {
   root.removeAttribute(LAYOUT_INSET_ATTR.detailsOpen)
   root.removeAttribute(LAYOUT_INSET_ATTR.phone)
   root.removeAttribute(LAYOUT_INSET_ATTR.status)
+  root.removeAttribute(LAYOUT_INSET_ATTR.side)
+  root.removeAttribute(LAYOUT_INSET_ATTR.bottom)
 }
 
 /** True when two inset snapshots are equal for publish short-circuit. */

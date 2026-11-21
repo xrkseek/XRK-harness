@@ -178,10 +178,20 @@ export function listSessionInjectDocuments(
   return out;
 }
 
+/** How many entry titles to peek per zone/target on the inject census card. */
+const MEMORY_TITLE_PEEK = 12;
+
+function formatEntryTitles(ids: readonly string[]): string {
+  if (ids.length === 0) return "(empty)";
+  const shown = ids.slice(0, MEMORY_TITLE_PEEK);
+  const more = ids.length - shown.length;
+  return shown.join(", ") + (more > 0 ? ` (+${more})` : "");
+}
+
 /**
- * Inject-catalog card: which zones this seat opens, entry counts, default write
- * scope. Bodies stay on the system freeze + live `<external_curated_memory>`
- * fragment — never dump MEMORY.md here.
+ * Inject-catalog card: which zones this seat opens, entry counts + titles,
+ * default write scope. Bodies stay on the system freeze + live
+ * `<external_curated_memory>` fragment — never dump MEMORY.md here.
  */
 function formatSessionMemoryDocument(
   runtime: FaceRuntime,
@@ -216,17 +226,19 @@ function formatSessionMemoryDocument(
       (workspaceId ? ` · workspace=${workspaceId}` : "") +
       (agentId ? ` · agent=${agentId}` : " · agent=(none)") +
       ` · defaultWrite=${layered.defaultScope}.`,
-    "Zone census (entry counts; bodies stay on freeze / live fragment / memory tool):",
+    "Zone census (titles below; bodies stay on freeze / live fragment / memory tool):",
   ];
   for (const layer of layered.layers) {
     const memoryEntries = layer.store.listEntries("memory");
     const userEntries = layer.store.listEntries("user");
-    const memN = Array.isArray(memoryEntries) ? memoryEntries.length : 0;
-    const userN = Array.isArray(userEntries) ? userEntries.length : 0;
+    const memIds = Array.isArray(memoryEntries) ? memoryEntries : [];
+    const userIds = Array.isArray(userEntries) ? userEntries : [];
     lines.push(
-      `  zone ${layer.scope}: MEMORY ${memN} · USER ${userN}` +
+      `  zone ${layer.scope}: MEMORY ${memIds.length} · USER ${userIds.length}` +
         (layer.scope === layered.defaultScope ? " ← default write" : ""),
     );
+    lines.push(`    MEMORY titles: ${formatEntryTitles(memIds)}`);
+    lines.push(`    USER titles: ${formatEntryTitles(userIds)}`);
   }
   const snap = runtime.curatedMemoryConsolidate;
   if (snap && snap.sessionId === sessionId) {
@@ -241,7 +253,7 @@ function formatSessionMemoryDocument(
     lines.push("Last consolidate: (none for this session yet).");
   }
   lines.push(
-    "Full rows: call `memory` with action=list (or read the freeze / live fragment). This card is a census, not a dump.",
+    "Full bodies: call `memory` with action=list (or read the freeze / live fragment). This card lists titles, not a dump.",
   );
   lines.push("</session_memory>");
   return lines.join("\n");

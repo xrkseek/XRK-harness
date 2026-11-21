@@ -60,32 +60,71 @@ describe('computeColumns', () => {
     expect(computeColumns(1920, open(1), open(DETAILS_DEFAULT)).sidebar).toBe(SIDEBAR_MIN)
   })
 
-  it('step 2: details shrinks first, center pinned at min', () => {
-    // Default trio is 1240; one pixel under that, details concedes first.
+  it('step 2: below CENTER_MIN trio softens center before shrinking Overview', () => {
+    // Soft preferred details first — Overview must not grow while shrinking.
     const viewport = SIDEBAR_DEFAULT + DETAILS_DEFAULT + CENTER_MIN - 1
     const cols = computeColumns(viewport, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
     expect(cols).toEqual({
       sidebar: SIDEBAR_DEFAULT,
-      center: CENTER_MIN,
-      details: viewport - SIDEBAR_DEFAULT - CENTER_MIN,
+      center: viewport - SIDEBAR_DEFAULT - DETAILS_DEFAULT,
+      details: DETAILS_DEFAULT,
     })
+    expect(cols.center).toBeLessThan(CENTER_MIN)
+    expect(cols.center).toBeGreaterThanOrEqual(CHAT_FLOOR)
   })
 
-  it('boundary: exactly at the step-1/step-2 seam', () => {
+  it('boundary: exactly at the step-1/soft seam', () => {
     const cols = computeColumns(300 + 360 + CENTER_MIN, open(300), open(360))
     expect(cols).toEqual({ sidebar: 300, center: CENTER_MIN, details: 360 })
     const one = computeColumns(300 + 360 + CENTER_MIN - 1, open(300), open(360))
-    expect(one).toEqual({ sidebar: 300, center: CENTER_MIN, details: 359 })
+    expect(one).toEqual({
+      sidebar: 300,
+      center: 300 + 360 + CENTER_MIN - 1 - 300 - 360,
+      details: 360,
+    })
   })
 
-  it('step 3: one pixel under preferred snaps to the icon rail (no labeled shrink)', () => {
-    const viewport = SIDEBAR_DEFAULT + DETAILS_MIN + CENTER_MIN - 1
-    const cols = computeColumns(viewport, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
+  it('step 3: below DESKTOP_COEXIST_FLOOR shrinks Overview to DETAILS_MIN, keeps labels', () => {
+    const cols = computeColumns(
+      DESKTOP_COEXIST_FLOOR - 1,
+      open(SIDEBAR_DEFAULT),
+      open(DETAILS_DEFAULT),
+    )
     expect(cols).toEqual({
-      sidebar: SIDEBAR_COLLAPSED,
-      center: CENTER_MIN,
+      sidebar: SIDEBAR_DEFAULT,
+      center: DESKTOP_COEXIST_FLOOR - 1 - SIDEBAR_DEFAULT - DETAILS_MIN,
       details: DETAILS_MIN,
     })
+  })
+
+  it('step 4: one pixel under labeled+DETAILS_MIN+CHAT_FLOOR snaps to the icon rail', () => {
+    const floor = SIDEBAR_DEFAULT + DETAILS_MIN + CHAT_FLOOR
+    expect(computeColumns(floor, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT)).sidebar)
+      .toBe(SIDEBAR_DEFAULT)
+    const cols = computeColumns(floor - 1, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
+    expect(cols.sidebar).toBe(SIDEBAR_COLLAPSED)
+    expect(cols.details).toBe(DETAILS_MIN)
+  })
+
+  it('sidebar and details are monotonic as the frame shrinks (open + Overview)', () => {
+    let prevS = Number.POSITIVE_INFINITY
+    let prevD = Number.POSITIVE_INFINITY
+    for (let vp = 1600; vp >= 500; vp -= 1) {
+      const { sidebar, details } = computeColumns(vp, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
+      expect(sidebar).toBeLessThanOrEqual(prevS)
+      if (details > 0 && prevD > 0) expect(details).toBeLessThanOrEqual(prevD)
+      prevS = sidebar
+      if (details > 0) prevD = details
+      else prevD = 0
+    }
+  })
+
+  it('closing Overview never shrinks a labeled left column that still fits', () => {
+    for (let vp = 1600; vp >= SIDEBAR_DEFAULT + CHAT_FLOOR; vp -= 1) {
+      const withOverview = computeColumns(vp, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
+      const without = computeColumns(vp, open(SIDEBAR_DEFAULT), closed(DETAILS_DEFAULT))
+      expect(without.sidebar).toBeGreaterThanOrEqual(withOverview.sidebar)
+    }
   })
 
   it('closed details: preferred width or rail — never a squeezed labeled column', () => {
@@ -95,19 +134,28 @@ describe('computeColumns', () => {
       center: CENTER_MIN,
       details: 0,
     })
-    // 220 + CENTER_MIN is short of preferred 240 → rail.
-    const tightPref = computeColumns(SIDEBAR_MIN + CENTER_MIN, open(SIDEBAR_DEFAULT), closed(DETAILS_DEFAULT))
-    expect(tightPref).toEqual({
-      sidebar: SIDEBAR_COLLAPSED,
-      center: CENTER_MIN,
+    // Soft labeled keeps preferred width down to CHAT_FLOOR (no premature rail).
+    const soft = computeColumns(SIDEBAR_DEFAULT + CHAT_FLOOR, open(SIDEBAR_DEFAULT), closed(DETAILS_DEFAULT))
+    expect(soft).toEqual({
+      sidebar: SIDEBAR_DEFAULT,
+      center: CHAT_FLOOR,
       details: 0,
     })
-    const tight = computeColumns(700, open(SIDEBAR_DEFAULT), closed(DETAILS_DEFAULT))
+    const tight = computeColumns(SIDEBAR_DEFAULT + CHAT_FLOOR - 1, open(SIDEBAR_DEFAULT), closed(DETAILS_DEFAULT))
     expect(tight).toEqual({
       sidebar: SIDEBAR_COLLAPSED,
-      center: CENTER_MIN,
+      center: SIDEBAR_DEFAULT + CHAT_FLOOR - 1 - SIDEBAR_COLLAPSED,
       details: 0,
     })
+  })
+
+  it('tracks always sum to the viewport', () => {
+    for (let vp = 400; vp <= 1600; vp += 13) {
+      for (const details of [0, DETAILS_DEFAULT]) {
+        const cols = computeColumns(vp, open(SIDEBAR_DEFAULT), details)
+        expect(cols.sidebar + cols.center + cols.details).toBe(vp)
+      }
+    }
   })
 
   it('never paints an open preference other than preferred width or the icon rail', () => {
@@ -119,23 +167,24 @@ describe('computeColumns', () => {
   })
 
   it('step 4: Overview stays open down to CHAT_FLOOR before yielding', () => {
-    const fits = computeColumns(
-      SIDEBAR_COLLAPSED + DETAILS_MIN + CENTER_MIN,
+    // Soft preferred details (closed sidebar = rail) while center softens.
+    const softPreferred = computeColumns(
+      SIDEBAR_COLLAPSED + DETAILS_DEFAULT + CHAT_FLOOR,
       closed(300),
       open(DETAILS_DEFAULT),
     )
-    expect(fits).toEqual({
+    expect(softPreferred).toEqual({
       sidebar: SIDEBAR_COLLAPSED,
-      center: CENTER_MIN,
-      details: DETAILS_MIN,
+      center: CHAT_FLOOR,
+      details: DETAILS_DEFAULT,
     })
-    // Below CENTER_MIN trio but above CHAT_FLOOR trio — Overview stays.
-    const soft = computeColumns(
+    // Below preferred soft floor — Overview shrinks to DETAILS_MIN (rail already).
+    const softMin = computeColumns(
       SIDEBAR_COLLAPSED + DETAILS_MIN + CHAT_FLOOR,
       closed(300),
       open(DETAILS_DEFAULT),
     )
-    expect(soft).toEqual({
+    expect(softMin).toEqual({
       sidebar: SIDEBAR_COLLAPSED,
       center: CHAT_FLOOR,
       details: DETAILS_MIN,

@@ -6,6 +6,8 @@
 .root {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
   font-size: 16px;
   line-height: 28px;
   color: var(--dsw-alias-label-primary);
@@ -52,6 +54,8 @@
 
 /* Finalized footer offset (figma 43:32997); chrome lives in MessageIconActions. */
 .actions {
+  box-sizing: border-box;
+  max-width: 100%;
   margin-top: 16px;
   /* Optical align with 28px icon hit targets that pad 6px past the glyph. */
   margin-left: -6px;

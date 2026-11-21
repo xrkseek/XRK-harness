@@ -50,10 +50,15 @@ export function SidebarRoot({
   t,
   renderSlot,
 }: SidebarRootComponentProps) {
-  // Owner `collapsed` or a sub-labeled track → rail chrome immediately.
+  // `collapsed` is the width *preference* (toggle target). Paint follows
+  // `width`: concession may snap an open preference to the icon rail, so
+  // labeled chrome only when the preference is open *and* the track is wide.
   // A delayed settle used to freeze the wide tree inside the shrinking
   // column and clip labels for ~150ms (and for the whole concession snap).
   const wide = !collapsed && width >= LABELED_SIDEBAR_MIN
+  // Preference-open rail: affordance is collapse (not a fake expand that
+  // would flip the open preference shut).
+  const toggleOpenLabel = collapsed
 
   // Rail-in only crossfades a live collapse: a refresh straight into the
   // collapsed state renders the rail statically (no delay-hidden icons).
@@ -132,11 +137,11 @@ export function SidebarRoot({
         )}
         {/* Rail resting state is the whale mark; hovering swaps in the panel
             icon (the expand affordance, figma sidebar-hover flow). */}
-        <Tooltip label={wide ? t('toggle.collapse') : t('toggle.open')}>
+        <Tooltip label={toggleOpenLabel ? t('toggle.open') : t('toggle.collapse')}>
           <button
             type="button"
             className={clsx(css.iconButton, css.toggle)}
-            aria-label={wide ? t('toggle.collapse') : t('toggle.open')}
+            aria-label={toggleOpenLabel ? t('toggle.open') : t('toggle.collapse')}
             onClick={() => { toggleSidebar() }}
           >
             {!wide && <BrandMark className={css.railMark} size={24} />}
@@ -172,7 +177,7 @@ export function SidebarRoot({
       <div className={css.regionArea}>
         {renderSlot('sidebar.workspaces', {
           wide,
-          expandSidebar: () => { if (!wide) toggleSidebar() },
+          expandSidebar: () => { if (collapsed) toggleSidebar() },
         })}
       </div>
 

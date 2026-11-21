@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.6',
+    date: '2026-11-21',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '概况委派球左右平分、等比缩放；拖窄概况两侧一起变小，箭头两端等距。',
+        en: 'Overview delegate seats split evenly and stay isometric; narrowing shrinks both; equal arrow gaps.',
+      },
+      {
+        zh: '定时任务删除改产品 Modal；列宽链与侧栏 FAB 让位更稳。',
+        en: 'Schedule delete uses the product Modal; column chain and side-FAB clearance are steadier.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.6。完整清单见 docs/releases/v0.8.6.md。',
+        en: 'Desktop / npm / phone align to 0.8.6. Full list: docs/releases/v0.8.6.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.5',
     date: '2026-11-21',
     title: {

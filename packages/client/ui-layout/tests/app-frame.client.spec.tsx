@@ -16,7 +16,7 @@ import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@xrkseek/client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@xrkseek/client-ui-layout/src/client/AppFrame.tsx'
 import {
-  CENTER_MIN, DETAILS_MIN, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MIN, PHONE_MAX,
+  CENTER_MIN, CHAT_FLOOR, DETAILS_MIN, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MIN, PHONE_MAX,
 } from '@xrkseek/client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@xrkseek/client-ui-layout/src/client/stores.ts'
 import { resetDetailsOpenMemoryForTests } from '@xrkseek/client-ui-layout/src/client/details-open-memory.ts'
@@ -392,13 +392,15 @@ describe('AppFrame', () => {
   })
 
   it('drag base is the rendered (concession-clamped) width, not the preference', () => {
-    frameWidth = 1250 // step-2 squeeze: details shrinks while preference stays wide
+    // Soft floor keeps preferred details (500) while center softens — drag
+    // still bases on the painted width, not a hard CENTER_MIN clamp.
+    frameWidth = 1250
     const { frame, instance } = mountFrame()
     act(() => {
       instance.actions.openDetails()
       instance.actions.setDetails(500)
     })
-    const detailsRendered = 1250 - SIDEBAR_DEFAULT - 640
+    const detailsRendered = 500
     expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, detailsRendered])
     const handles = frame.querySelectorAll('[class*="handle"]')
     const detailsLeft = 1250 - detailsRendered
@@ -445,7 +447,8 @@ describe('AppFrame', () => {
     })
     frameWidth = 1250
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
-    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 1250 - SIDEBAR_DEFAULT - 640])
+    // Soft floor keeps preferred details; center softens (not Overview).
+    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 500])
     frameWidth = 1920
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
     expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 500])
@@ -511,8 +514,11 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
     expect(document.documentElement.hasAttribute('data-xrk-layout-phone')).toBe(false)
     // Center still concedes to the squeezed frame (desktop tracks, not phone full-bleed).
     expect(frame.style.gridTemplateColumns).not.toBe('minmax(0, 1fr)')
-    // Closed-details yield protects CENTER_MIN by snapping to the icon rail
-    // when labels cannot fit — not a phone flip, and not a clipped-label width.
+    // Closed Overview soft floor still keeps labels at 767 (>= SIDEBAR_DEFAULT+CHAT_FLOOR).
+    expect(tracks(frame)[0]).toBe(SIDEBAR_DEFAULT)
+    // Below the soft labeled floor the icon rail paints — still not a phone flip.
+    squeezeFrame(SIDEBAR_DEFAULT + CHAT_FLOOR - 1)
+    expect(frame.hasAttribute('data-phone')).toBe(false)
     expect(tracks(frame)[0]).toBe(SIDEBAR_COLLAPSED)
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
   })
@@ -520,12 +526,14 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
   it('concession-snapped rail paints icon chrome while preference stays open', () => {
     const { frame, instance, slotCalls } = mountFrame()
     act(() => { instance.actions.openDetails() })
-    // Prefer open sidebar + Overview; squeeze so labels cannot fit.
-    squeezeFrame((SIDEBAR_MIN - 1) + DETAILS_MIN + CENTER_MIN)
-    expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, DETAILS_MIN])
+    // Below labeled + DETAILS_MIN + CHAT_FLOOR the soft floor yields to the rail.
+    squeezeFrame(SIDEBAR_DEFAULT + DETAILS_MIN + CHAT_FLOOR - 1) // 819
+    expect(tracks(frame)[0]).toBe(SIDEBAR_COLLAPSED)
+    expect(tracks(frame)[1]).toBeGreaterThan(0)
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
+    // Preference stays open — slot `collapsed` is the toggle target, not paint.
     expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({
-      collapsed: true,
+      collapsed: false,
       width: SIDEBAR_COLLAPSED,
     })
     expect(instance.getSnapshot().sidebar).toBe(SIDEBAR_DEFAULT)
@@ -548,6 +556,21 @@ describe('AppFrame — phone drawer chrome', () => {
       width: SIDEBAR_DEFAULT,
     })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+
+  it('entering phone parks an open Overview so chat stays full-bleed; widen restores', () => {
+    const { frame, instance, getByLabelText, queryByLabelText } = mountFrame()
+    act(() => { instance.actions.openDetails() })
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
+    resizeWindow(PHONE_MAX - 1)
+    expect(frame.hasAttribute('data-phone')).toBe(true)
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(true)
+    expect(getByLabelText('Open sidebar')).toBeTruthy()
+    expect(getByLabelText('Status')).toBeTruthy()
+    expect(queryByLabelText('Close sidebar')).toBeNull()
+    resizeWindow(1920)
+    expect(frame.hasAttribute('data-phone')).toBe(false)
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
   })
 
   it('phone Status chrome opens the details sheet', () => {
@@ -704,6 +727,6 @@ describe('AppFrame — unmount with an in-flight resize frame', () => {
     })
     frameWidth = 1250
     act(() => { fireResize?.(); fireResize?.(); vi.advanceTimersByTime(20) })
-    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 1250 - SIDEBAR_DEFAULT - 640])
+    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 500])
   })
 })

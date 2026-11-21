@@ -23,14 +23,15 @@ XRK-Harness 把扩展面收成 **XRK Plug**（`@xrkseek/plug`）：进程半部�
 
 ## 多端几何（必读）
 
-第三方**不要**为让位去改 Host；也不要假定本机有社区 `layout.css`。
+第三方**不要**为让位去改 Host；也不要假定本机有社区 `layout.css`。让位只走 `reserveSide` / `reserveBottom`——**不要**再给 `#root` 叠写 `margin-right`（与 AppFrame 双让位会留黑空隙）。
 
-1. **侧宽**：`ctx.layout.reserveSide(px)`（`0` = 关）→ 壳整框 `margin-right`  
-2. **底高**：`ctx.layout.reserveBottom(px)`（`0` = 关）→ 对话列 `padding-bottom`  
-3. **读壳已占**：`ctx.layout.insets` 或 `--xrk-layout-inset-*`  
-4. **地板**：`xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`；视口不够则 push `0`（浮层）  
-5. **手机**：`insets.phone` 时壳强制底/侧为 `0`；概况开时收 FAB / 抽屉  
-6. **键盘**：宽屏 `--xrk-keyboard-inset = 0`；Flutter 薄壳自管  
+1. **侧宽**：`ctx.layout.reserveSide(px)`（`0` = 关）→ 壳整框 `margin-right`，并戳 `data-xrk-layout-side`  
+2. **底高**：`ctx.layout.reserveBottom(px)`（`0` = 关）→ 对话列 `padding-bottom`，并戳 `data-xrk-layout-bottom`  
+3. **读壳已占**：`ctx.layout.insets` 或 `--xrk-layout-inset-*` / `XRK_PLUG.layoutAttrs`  
+4. **顶栏右缝**：Host PresenceDock 在 `header.utilities`；浮动 FAB 由**插件**自己画。侧栏打开时 Host 凭 `data-xrk-layout-side` 给顶栏留 `padding-right`、球收成 icon-only——**不**绑定某一插件 id。未装工作台插件时无 FAB、无额外 padding（正常空态，不是异常）。  
+5. **地板**：`xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`；视口不够则 push `0`（浮层）  
+6. **手机**：`insets.phone` 时壳强制底/侧为 `0`；概况开时收 FAB / 抽屉  
+7. **键盘**：宽屏 `--xrk-keyboard-inset = 0`；Flutter 薄壳自管  
 
 完整契约：[sidebar-workbench](./sidebar-workbench.md)。
 
@@ -57,7 +58,7 @@ import {
 | `XRK_PLUG.processKinds` | Host 可发现的进程 kind |
 | `XRK_PLUG.slots` | 常用槽位名 |
 | `XRK_PLUG.layoutInsetCssVars` / `workbenchCssVars` | CSS 名（优先 JS API） |
-| `XRK_PLUG.keyboardInsetCss` · `layoutAttrs` | 键盘 / phone 选择器 |
+| `XRK_PLUG.keyboardInsetCss` · `layoutAttrs` | 键盘 / phone / **side** / **bottom** 选择器（`reserve*` 戳的 `data-xrk-layout-*`） |
 | `xrkPlugPushFloor` · `xrkPlugShellOccupied` | 推挤地板 |
 | `xrkPlugWorkbenchRoom` · `xrkPlugFitWorkbenchWidth` | 侧栏宽度求解（与第一方工作台同政策） |
 
@@ -109,14 +110,15 @@ Surface classes (P0–P3): [plugin-surface-map](./plugin-surface-map.md). Depend
 
 ## Multi-end geometry (required)
 
-Third parties must **not** patch the Host for yield, and must **not** assume a community `layout.css` is present.
+Third parties must **not** patch the Host for yield, and must **not** assume a community `layout.css` is present. Yield only via `reserveSide` / `reserveBottom` — do **not** also shrink `#root` with `margin-right` (dual yield leaves a black void).
 
-1. **Side width:** `ctx.layout.reserveSide(px)` (`0` = closed) → shell frame `margin-right`  
-2. **Bottom height:** `ctx.layout.reserveBottom(px)` (`0` = closed) → conversation `padding-bottom`  
-3. **Read shell occupancy:** `ctx.layout.insets` or `--xrk-layout-inset-*`  
-4. **Floor:** `xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`; push `0` (float) when the viewport is too narrow  
-5. **Phone:** `insets.phone` forces bottom/side to `0`; hide FABs / drawers when Overview is open  
-6. **Keyboard:** wide `--xrk-keyboard-inset = 0`; Flutter thin shells own the inset  
+1. **Side width:** `ctx.layout.reserveSide(px)` (`0` = closed) → shell frame `margin-right` + `data-xrk-layout-side`  
+2. **Bottom height:** `ctx.layout.reserveBottom(px)` (`0` = closed) → conversation `padding-bottom` + `data-xrk-layout-bottom`  
+3. **Read shell occupancy:** `ctx.layout.insets` or `--xrk-layout-inset-*` / `XRK_PLUG.layoutAttrs`  
+4. **Header right seam:** Host PresenceDock lives in `header.utilities`; floating FABs are **plugin-owned**. When the side is reserved, Host pads the header and collapses the ball to icon-only via `data-xrk-layout-side` — **not** a first-party plugin id. With no workbench plugin: no FABs, no extra padding (empty is normal, not an error).  
+5. **Floor:** `xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`; push `0` (float) when the viewport is too narrow  
+6. **Phone:** `insets.phone` forces bottom/side to `0`; hide FABs / drawers when Overview is open  
+7. **Keyboard:** wide `--xrk-keyboard-inset = 0`; Flutter thin shells own the inset  
 
 Full contract: [sidebar-workbench](./sidebar-workbench.md).
 
@@ -133,7 +135,7 @@ Full contract: [sidebar-workbench](./sidebar-workbench.md).
 | `XRK_PLUG.processKinds` | Discoverable process kinds |
 | `XRK_PLUG.slots` | Common slot names |
 | `XRK_PLUG.layoutInsetCssVars` / `workbenchCssVars` | CSS names (prefer JS APIs) |
-| `XRK_PLUG.keyboardInsetCss` · `layoutAttrs` | Keyboard / phone selectors |
+| `XRK_PLUG.keyboardInsetCss` · `layoutAttrs` | Keyboard / phone / **side** / **bottom** selectors (`data-xrk-layout-*` from `reserve*`) |
 | `xrkPlugPushFloor` · `xrkPlugShellOccupied` | Push floors |
 | `xrkPlugWorkbenchRoom` · `xrkPlugFitWorkbenchWidth` | Side-width solve (same policy as the first-party workbench) |
 

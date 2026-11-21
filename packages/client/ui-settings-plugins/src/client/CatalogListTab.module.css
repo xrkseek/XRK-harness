@@ -362,7 +362,7 @@
 .body {
   margin: 0 4px 6px;
   padding: 10px 12px;
-  max-height: min(320px, 42vh);
+  max-height: min(480px, 58vh);
   overflow: auto;
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 70%, transparent);

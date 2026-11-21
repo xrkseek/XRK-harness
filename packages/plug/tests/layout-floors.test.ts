@@ -65,6 +65,8 @@ describe('XRK_PLUG layout floors', () => {
   it('exposes layout attrs / keyboard / phone floor for authors', () => {
     expect(XRK_PLUG.keyboardInsetCss).toBe('--xrk-keyboard-inset')
     expect(XRK_PLUG.layoutAttrs.phone).toBe('data-xrk-layout-phone')
+    expect(XRK_PLUG.layoutAttrs.side).toBe('data-xrk-layout-side')
+    expect(XRK_PLUG.layoutAttrs.bottom).toBe('data-xrk-layout-bottom')
     expect(XRK_PLUG.phoneMaxPx).toBe(768)
     expect(XRK_PLUG.layoutFloors.workbenchPanelMin).toBe(280)
   })

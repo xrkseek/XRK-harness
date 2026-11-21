@@ -1,11 +1,15 @@
-/* Two icon pills side by side under the composer, 13/20 tertiary text tier
-   with a hover-pill affordance; each pill's click-open panel wears the shared
-   stat-dialog.module.css skin. */
+/* Two icon pills under the composer, 13/20 tertiary text tier with a
+   hover-pill affordance; each pill's click-open panel wears the shared
+   stat-dialog.module.css skin. Always one row: labels ellipsize; full
+   figures live in the click dialog (never wrap to a second line when the
+   center column is squeezed). */
 
 .root {
   display: flex;
+  flex-wrap: nowrap;
   justify-content: center;
-  gap: 10px;
+  align-items: center;
+  column-gap: 10px;
   /* Match the input card cap (content + 32) so the pills sit under the
      capsule, not a narrower measure that floated mid-air beside it. */
   max-width: min(var(--dsh-composer-card-max-width), 100%);
@@ -15,12 +19,15 @@
   padding: 2px var(--dsh-composer-side-clearance, 16px) 2px;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  min-width: 0;
 }
 
-/* Dialog anchor: shrink-wraps its pill so the panel clamp measures the pill. */
+/* Dialog anchor: share remaining width so either pill can ellipsize. */
 .anchor {
   display: inline-flex;
   min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
 }
 
 .pill {
@@ -29,6 +36,7 @@
   gap: 6px;
   box-sizing: border-box;
   max-width: 100%;
+  min-width: 0;
   padding: 1px 8px;
   border: none;
   border-radius: 24px;
@@ -38,6 +46,7 @@
   font-variant-numeric: tabular-nums;
   line-height: inherit;
   white-space: nowrap;
+  text-align: start;
 }
 
 .pill svg {
@@ -62,16 +71,18 @@ button.pill[aria-expanded='true'] {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sep {
   color: var(--dsw-alias-separator-primary);
   margin: 0 6px;
+  flex: none;
 }
 
 @media (max-width: 767px) {
   .root {
-    gap: 6px;
+    column-gap: 6px;
     padding: 0 var(--dsh-composer-side-clearance, 10px) 2px;
     font-size: 12px;
     line-height: 18px;

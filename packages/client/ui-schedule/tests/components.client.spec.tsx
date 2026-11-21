@@ -12,6 +12,8 @@ import {
 import { en, type ScheduleLocaleKey } from '../src/client/locales.ts'
 import {
   deliveryLabel,
+  formatScheduleAt,
+  isOneShotComplete,
   jobDisplayName,
   lastStatusLabel,
   runLabel,
@@ -70,9 +72,19 @@ describe('schedule-view projections', () => {
   it('renders every / at / cron schedules', () => {
     expect(scheduleLabel({ kind: 'every', everySeconds: 300 }, t)).toBe('Every 300s')
     expect(scheduleLabel({ kind: 'at', at: '2026-02-01T00:00:00.000Z' }, t)).toBe(
-      '2026-02-01T00:00:00.000Z one-shot',
+      `${formatScheduleAt('2026-02-01T00:00:00.000Z')} one-shot`,
     )
     expect(scheduleLabel({ kind: 'cron', expr: '0 3 * * *' }, t)).toBe('cron 0 3 * * *')
+  })
+
+  it('marks fired one-shots as complete', () => {
+    expect(isOneShotComplete({
+      ...JOB,
+      schedule: { kind: 'at', at: '2026-02-01T00:00:00.000Z' },
+      enabled: false,
+      nextRunAt: null,
+    })).toBe(true)
+    expect(isOneShotComplete(JOB)).toBe(false)
   })
 
   it('renders agent and script runs', () => {
@@ -210,6 +222,32 @@ describe('ScheduleSettingsTab', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: en.actionPause })).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: en.actionPause }))
     await waitFor(() => expect(api.pause).toHaveBeenCalledWith('job-1'))
+  })
+
+  it('deletes through the product modal instead of window.confirm', async () => {
+    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(false)
+    const api = stubApi({
+      listJobs: vi.fn(async () => ({ jobs: [JOB] })),
+      remove: vi.fn(async () => ({ ok: true as const, id: 'job-1', removed: true })),
+    })
+    render(<ScheduleSettingsTab {...props(api)} />)
+
+    await waitFor(() => expect(screen.getByText('nightly digest')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /nightly digest/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: en.actionRemove })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: en.actionRemove }))
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(api.remove).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByText(en.confirmRemoveTitle)).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: en.confirmRemoveCancel }))
+    await waitFor(() => expect(screen.queryByText(en.confirmRemoveTitle)).toBeNull())
+
+    fireEvent.click(screen.getByRole('button', { name: en.actionRemove }))
+    await waitFor(() => expect(screen.getByText(en.confirmRemoveTitle)).toBeTruthy())
+    const deleteButtons = screen.getAllByRole('button', { name: en.actionRemove })
+    fireEvent.click(deleteButtons[deleteButtons.length - 1]!)
+    await waitFor(() => expect(api.remove).toHaveBeenCalledWith('job-1'))
+    confirmSpy.mockRestore()
   })
 
   it('closes the expanded job when the catalog reloads without it', async () => {

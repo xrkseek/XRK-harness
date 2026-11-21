@@ -72,6 +72,7 @@ import {
 } from './overview-load-cache.ts'
 import { overviewStatusPollMs } from './overview-status-poll.ts'
 import { EMPTY_PRESENCE_SESSION_CUES } from './presence-session-cues.ts'
+import { resolveDelegatePairGeometry } from './delegate-pair-geometry.ts'
 import css from './PreviewTabs.module.css'
 
 export { overviewStatusPollMs } from './overview-status-poll.ts'
@@ -637,11 +638,27 @@ function previewCompactionReasonLabel(
   }
 }
 
-function injectEventLabel(ev: Extract<LiveTimelineEvent, { kind: 'inject' }>): string {
-  if (ev.name) return `${ev.source ?? ev.form ?? 'inject'}:${ev.name}`
-  if (ev.source) return ev.source
-  if (ev.form) return ev.form
-  return 'inject'
+/** Human label for Status/Context inject rows (form · source · skill name). */
+function injectEventDisplay(
+  ev: Extract<LiveTimelineEvent, { kind: 'inject' }>,
+  t: PreviewTabsProps['t'],
+): { title: string; meta: string } {
+  const form = ev.form?.trim()
+  const source = ev.source?.trim()
+  const name = ev.name?.trim()
+  const bits = [
+    form && form !== 'inject' ? form : null,
+    source && source !== form ? source : null,
+    name ?? null,
+  ].filter(Boolean) as string[]
+  const title = bits.length > 0
+    ? `${t('preview.status.timelineLegend.inject')} · ${bits.join(' · ')}`
+    : t('preview.status.timelineLegend.inject')
+  const metaBits = [
+    ev.sub === 'skill' ? t('preview.status.timelineInjectSkill') : null,
+    `#${ev.seq}`,
+  ].filter(Boolean)
+  return { title, meta: metaBits.join(' · ') }
 }
 
 type TimelineRow = {
@@ -650,12 +667,12 @@ type TimelineRow = {
   spillPath?: string
 }
 
-function timelineEventMeta(ev: LiveTimelineEvent): TimelineRow | null {
+function timelineEventMeta(
+  ev: LiveTimelineEvent,
+  t: PreviewTabsProps['t'],
+): TimelineRow | null {
   if (ev.kind === 'inject') {
-    return {
-      title: `inject · ${injectEventLabel(ev)}`,
-      meta: ev.sub ? `skill · #${ev.seq}` : `#${ev.seq}`,
-    }
+    return injectEventDisplay(ev, t)
   }
   if (ev.kind === 'compaction') {
     const shadowed = typeof ev.shadowedTokenCount === 'number'
@@ -1746,12 +1763,15 @@ function StatusPanel({
         </div>
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.timelineInject')}</span>
-          <span>
-            {injectSources.length === 0
-              ? t('preview.status.timelineInjectEmpty')
-              : injectSources.slice(0, 6).join(', ')
-                + (injectSources.length > 6 ? ` (+${injectSources.length - 6})` : '')}
-          </span>
+          {injectSources.length === 0
+            ? <span>{t('preview.status.timelineInjectEmpty')}</span>
+            : (
+              <ul className={css.injectSourceList} aria-label={t('preview.status.timelineInject')}>
+                {injectSources.map((source) => (
+                  <li key={source} className={css.injectSourceChip} title={source}>{source}</li>
+                ))}
+              </ul>
+            )}
         </div>
         {lastCompactReason
           ? (
@@ -1932,7 +1952,7 @@ function ContextBrowserPanel({
   const current = liveTimeline?.current ?? status.timeline
   const liveEvents = Array.isArray(liveTimeline?.events) ? liveTimeline.events : []
   const interesting = liveEvents
-    .map(timelineEventMeta)
+    .map((ev) => timelineEventMeta(ev, t))
     .filter((row): row is TimelineRow => row !== null)
   const recent = interesting.slice(-CONTEXT_BROWSER_LIMIT).reverse()
   const folded = Math.max(0, interesting.length - recent.length)
@@ -1946,7 +1966,7 @@ function ContextBrowserPanel({
       >
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.timelineTotal')}</span>
-          <span>{current.total}</span>
+          <span>{current.total.toLocaleString()}</span>
         </div>
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.timelineRequests')}</span>
@@ -1963,17 +1983,23 @@ function ContextBrowserPanel({
           </span>
         </div>
         <div className={css.row}>
-          <span className={css.label}>sys/tools/user/inject</span>
+          <span className={css.label}>{t('preview.status.timelineBreakdown')}</span>
           <span>
-            {current.system}/{current.tools}/{current.user}/{current.inject}
+            {t('preview.status.timelineLegend.system')} {current.system.toLocaleString()}
+            {' · '}
+            {t('preview.status.timelineLegend.tools')} {current.tools.toLocaleString()}
+            {' · '}
+            {t('preview.status.timelineLegend.user')} {current.user.toLocaleString()}
+            {' · '}
+            {t('preview.status.timelineLegend.inject')} {current.inject.toLocaleString()}
           </span>
         </div>
         {recent.length === 0
           ? <div className={css.empty}>{t('preview.status.timelineLiveEmpty')}</div>
           : (
-            <ul className={css.itemList}>
+            <ul className={css.itemList} aria-label={t('preview.status.timelineLive')}>
               {recent.map((row, i) => (
-                <li key={`${row.title}-${row.meta}-${i}`} className={css.itemRow}>
+                <li key={`${row.title}-${row.meta}-${i}`} className={css.itemRow} data-live>
                   <span className={css.itemTitle}>{row.title}</span>
                   <span className={css.itemMeta}>{row.meta}</span>
                   {row.spillPath && openSpillPath
@@ -2331,6 +2357,36 @@ export function PreviewTabs({
     delegateFlipKey,
     Boolean(delegatedOverview && !presenceRailCompact && delegateParentPaintChain.length > 1),
   )
+  // Shared --xrk-delegate-stage from equal-track fit so L/R shrink together when
+  // Overview narrows (never leave a fixed 118px left ball while the right dies).
+  const delegatePairRef = useRef<HTMLDivElement>(null)
+  const [delegateStagePx, setDelegateStagePx] = useState<number | undefined>()
+  useLayoutEffect(() => {
+    if (!delegatedOverview) {
+      setDelegateStagePx(undefined)
+      return
+    }
+    const el = delegatePairRef.current
+    if (!el) return
+    const stackCount = Math.max(1, delegateParentPaintChain.length)
+    const measure = () => {
+      const phone = typeof document !== 'undefined' && (
+        document.documentElement.hasAttribute('data-xrk-layout-phone')
+        || window.matchMedia('(max-width: 767px)').matches
+      )
+      const next = resolveDelegatePairGeometry({
+        containerWidth: el.getBoundingClientRect().width,
+        stackCount,
+        phone,
+      }).stagePx
+      setDelegateStagePx((prev) => (prev === next ? prev : next))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => { ro.disconnect() }
+  }, [delegatedOverview, delegateParentPaintChain.length, presenceRailCompact])
   // Fingerprint the whole stack so ancestor/peer drain wakes soft-poll.
   const homeCatalogRev = useSessions((s) => {
     if (parentMuxIds.length === 0) return ''
@@ -2687,6 +2743,8 @@ export function PreviewTabs({
               className={css.tab}
               aria-selected={tab === 'status'}
               aria-controls={panelId}
+              aria-label={t('preview.status')}
+              title={t('preview.status')}
               tabIndex={tab === 'status' ? 0 : -1}
               onClick={() => { selectTab('status') }}
             >
@@ -2699,6 +2757,8 @@ export function PreviewTabs({
               className={css.tab}
               aria-selected={tab === 'changes'}
               aria-controls={panelId}
+              aria-label={t('preview.changes')}
+              title={t('preview.changes')}
               tabIndex={tab === 'changes' ? 0 : -1}
               onClick={() => { selectTab('changes') }}
             >
@@ -2711,6 +2771,8 @@ export function PreviewTabs({
               className={css.tab}
               aria-selected={tab === 'context'}
               aria-controls={panelId}
+              aria-label={t('preview.context')}
+              title={t('preview.context')}
               tabIndex={tab === 'context' ? 0 : -1}
               onClick={() => { selectTab('context') }}
             >
@@ -2723,6 +2785,8 @@ export function PreviewTabs({
               className={css.tab}
               aria-selected={tab === 'todos'}
               aria-controls={panelId}
+              aria-label={t('preview.todos')}
+              title={t('preview.todos')}
               tabIndex={tab === 'todos' ? 0 : -1}
               onClick={() => { selectTab('todos') }}
             >
@@ -2735,6 +2799,8 @@ export function PreviewTabs({
               className={css.tab}
               aria-selected={tab === 'canvas'}
               aria-controls={panelId}
+              aria-label={t('preview.canvas')}
+              title={t('preview.canvas')}
               tabIndex={tab === 'canvas' ? 0 : -1}
               onClick={() => { selectTab('canvas') }}
             >
@@ -2805,10 +2871,14 @@ export function PreviewTabs({
         {delegatedOverview
           ? (
             <div
+              ref={delegatePairRef}
               className={css.delegatePair}
               data-collapsed={presenceRailCompact ? '' : undefined}
               data-pending={!status?.companionBall ? '' : undefined}
               data-stack-count={String(delegateParentPaintChain.length)}
+              style={delegateStagePx != null
+                ? { ['--xrk-delegate-stage' as string]: `${delegateStagePx}px` }
+                : undefined}
               role="group"
               aria-label={`${
                 (status?.delegate?.parents?.length
@@ -2932,33 +3002,35 @@ export function PreviewTabs({
                   )
                   : null}
               </div>
-              <PresenceBall
-                sessionId={sessionId}
-                {...(status?.presence ? { presence: status.presence } : {})}
-                memberLook={childMemberLook}
-                pairSeat
-                seat="to"
-                roleLabel={childSeatLabel}
-                turnActive={ownTurnActive}
-                runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
-                runningSubs={ownSubs}
-                fleetHealth={status?.fleet.health ?? 'ok'}
-                queued={status?.delivery.queued ?? 0}
-                steering={status?.delivery.steering ?? 0}
-                compactionBusy={status?.compaction.phase === 'busy'}
-                {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
-                activityAt={Math.max(
-                  presenceCue.activityAt,
-                  status?.presence?.updatedAt ?? 0,
-                )}
-                compact={presenceRailCompact}
-                engineActive={Boolean(overviewOpen && presenceEngineReady && status)}
-                {...(sideline ? { captionHint: sideline } : {})}
-                t={t as (key: string, params?: Record<string, string>) => string}
-                loadingLabel={t('preview.status.presenceLoading')}
-                errorLabel={t('preview.status.presenceError')}
-                clickHint={t('preview.status.presenceClick')}
-              />
+              <div className={css.delegateToSeat}>
+                <PresenceBall
+                  sessionId={sessionId}
+                  {...(status?.presence ? { presence: status.presence } : {})}
+                  memberLook={childMemberLook}
+                  pairSeat
+                  seat="to"
+                  roleLabel={childSeatLabel}
+                  turnActive={ownTurnActive}
+                  runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
+                  runningSubs={ownSubs}
+                  fleetHealth={status?.fleet.health ?? 'ok'}
+                  queued={status?.delivery.queued ?? 0}
+                  steering={status?.delivery.steering ?? 0}
+                  compactionBusy={status?.compaction.phase === 'busy'}
+                  {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
+                  activityAt={Math.max(
+                    presenceCue.activityAt,
+                    status?.presence?.updatedAt ?? 0,
+                  )}
+                  compact={presenceRailCompact}
+                  engineActive={Boolean(overviewOpen && presenceEngineReady && status)}
+                  {...(sideline ? { captionHint: sideline } : {})}
+                  t={t as (key: string, params?: Record<string, string>) => string}
+                  loadingLabel={t('preview.status.presenceLoading')}
+                  errorLabel={t('preview.status.presenceError')}
+                  clickHint={t('preview.status.presenceClick')}
+                />
+              </div>
               {!presenceRailCompact && officeBossSeat
                 ? (
                   <button

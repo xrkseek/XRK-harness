@@ -1,19 +1,24 @@
 /**
  * Pure concession-chain column solver for the three-column AppFrame.
- * Chain order (protect center as long as possible):
- * 1. Prefer preferred sidebar + details widths.
- * 2. Shrink details toward DETAILS_MIN while center >= CENTER_MIN.
- * 3. Keep the open sidebar at its preferred width, or snap to the
- *    SIDEBAR_COLLAPSED icon rail (no labeled shrink) while center >= CENTER_MIN.
- * 4. Keep Overview (>= DETAILS_MIN) + rail while center >= CHAT_FLOOR.
+ * Chain order (monotonic on shrink: sidebar and details widths must not grow):
+ * 1. Preferred sidebar + details while center >= CENTER_MIN.
+ * 2. Soft chat floor — keep preferred details (and labeled sidebar when open)
+ *    while center >= CHAT_FLOOR ({@link DESKTOP_COEXIST_FLOOR}). Softening
+ *    center runs *before* shrinking Overview, so a narrower frame cannot
+ *    widen the Overview column (old hard-then-soft path did).
+ * 3. Shrink details to DETAILS_MIN; keep labeled sidebar while center >= CHAT_FLOOR.
+ * 4. Snap open preference to the SIDEBAR_COLLAPSED icon rail (no labeled
+ *    shrink); Overview stays at DETAILS_MIN down to CHAT_FLOOR.
  * 5. Force details track to 0 (visual Overview close; preferences untouched).
  * 6. Final fallback: center takes the remainder.
+ * Closed-Overview path also softens before railing so closing「概况」cannot
+ * collapse a labeled left column that still fits with CHAT_FLOOR.
  * Preferences are never rewritten, so re-widening restores preferred widths.
  * Inputs are the layout store's plain width preferences (0 = closed); a
  * closed sidebar resolves to SIDEBAR_COLLAPSED while closed details resolve
  * to zero. SIDEBAR_AUTO_COLLAPSE is consumed by AppFrame before solving.
  *
- * Desktop coexistence target (left rail + Overview + chat) is
+ * Desktop coexistence target (labeled left + Overview + chat strip) is
  * {@link DESKTOP_COEXIST_FLOOR}. Workbench plugins that push `#root` should
  * leave at least that much window width so fullscreen「概况 + 侧栏」stays usable.
  */
@@ -122,62 +127,58 @@ export function computeColumns(viewport: number, sidebar: number, details: numbe
   const s0 = preferOpen ? clampWidth(sidebar, SIDEBAR_MIN, SIDEBAR_MAX) : SIDEBAR_COLLAPSED
   const d0 = details === 0 ? 0 : clampWidth(details, DETAILS_MIN, DETAILS_MAX)
   const vp = Math.max(0, Math.round(viewport))
+  const sRail = SIDEBAR_COLLAPSED
 
-  // Step 1: everything fits at preferred widths.
+  // Step 1: everything fits at preferred widths with a hard chat floor.
   if (s0 + d0 + CENTER_MIN <= vp) {
     return { sidebar: s0, center: vp - s0 - d0, details: d0 }
   }
 
-  // Closed details: shrink open sidebar toward the rail, then yield center.
+  // Closed Overview: soften center before railing so dismissing「概况」cannot
+  // collapse a labeled left column that still fits with CHAT_FLOOR.
   if (d0 === 0) {
     if (!preferOpen) {
-      return { sidebar: SIDEBAR_COLLAPSED, center: Math.max(0, vp - SIDEBAR_COLLAPSED), details: 0 }
+      return { sidebar: sRail, center: Math.max(0, vp - sRail), details: 0 }
     }
-    const room = vp - CENTER_MIN
-    if (room >= SIDEBAR_COLLAPSED) {
-      return { sidebar: fitLabeledOrRail(s0, room), center: CENTER_MIN, details: 0 }
+    if (s0 + CHAT_FLOOR <= vp) {
+      return { sidebar: s0, center: vp - s0, details: 0 }
     }
-    return { sidebar: SIDEBAR_COLLAPSED, center: Math.max(0, vp - SIDEBAR_COLLAPSED), details: 0 }
+    return { sidebar: sRail, center: Math.max(0, vp - sRail), details: 0 }
   }
 
-  // Step 2: shrink details toward DETAILS_MIN while protecting CENTER_MIN.
-  const d1 = Math.max(DETAILS_MIN, vp - s0 - CENTER_MIN)
-  if (s0 + d1 + CENTER_MIN <= vp) {
-    return { sidebar: s0, center: CENTER_MIN, details: d1 }
-  }
-
-  // Step 3: shrink sidebar toward the rail while details stay at least DETAILS_MIN.
-  // Below SIDEBAR_MIN the track snaps to the icon rail (no truncated labels).
-  if (preferOpen) {
-    const room = vp - DETAILS_MIN - CENTER_MIN
-    if (room >= SIDEBAR_COLLAPSED) {
-      return {
-        sidebar: fitLabeledOrRail(s0, room),
-        center: CENTER_MIN,
-        details: DETAILS_MIN,
-      }
-    }
-  } else if (SIDEBAR_COLLAPSED + DETAILS_MIN + CENTER_MIN <= vp) {
-    return { sidebar: SIDEBAR_COLLAPSED, center: CENTER_MIN, details: DETAILS_MIN }
-  }
-
-  // Step 4: keep Overview open down to CHAT_FLOOR before forcing it closed.
-  const sRail = SIDEBAR_COLLAPSED
+  // Step 2: soft chat floor — keep preferred Overview width (and labeled
+  // sidebar when open). Must run before any DETAILS_MIN shrink so Overview
+  // cannot grow while the frame shrinks past the CENTER_MIN band.
   if (s0 + d0 + CHAT_FLOOR <= vp) {
     return { sidebar: s0, center: vp - s0 - d0, details: d0 }
   }
-  const dChat = Math.max(DETAILS_MIN, vp - s0 - CHAT_FLOOR)
-  if (s0 + dChat + CHAT_FLOOR <= vp) {
-    return { sidebar: s0, center: CHAT_FLOOR, details: dChat }
-  }
-  if (sRail + DETAILS_MIN + CHAT_FLOOR <= vp) {
-    const dKeep = Math.min(d0, Math.max(DETAILS_MIN, vp - sRail - CHAT_FLOOR))
-    return { sidebar: sRail, center: Math.max(CHAT_FLOOR, vp - sRail - dKeep), details: dKeep }
+
+  // Step 3: shrink Overview to DETAILS_MIN; keep labeled sidebar when open.
+  if (preferOpen && s0 + DETAILS_MIN + CHAT_FLOOR <= vp) {
+    return {
+      sidebar: s0,
+      center: Math.max(CHAT_FLOOR, vp - s0 - DETAILS_MIN),
+      details: DETAILS_MIN,
+    }
   }
 
-  // Step 5: force Overview track to 0 (visual close); keep rail; protect CENTER_MIN if possible.
+  // Step 4: icon rail + Overview at DETAILS_MIN. Prefer CENTER_MIN when it
+  // still fits; else keep Overview down to CHAT_FLOOR. Never restore labeled
+  // width or preferred details here.
+  if (sRail + DETAILS_MIN + CENTER_MIN <= vp) {
+    return { sidebar: sRail, center: CENTER_MIN, details: DETAILS_MIN }
+  }
+  if (sRail + DETAILS_MIN + CHAT_FLOOR <= vp) {
+    return {
+      sidebar: sRail,
+      center: Math.max(CHAT_FLOOR, vp - sRail - DETAILS_MIN),
+      details: DETAILS_MIN,
+    }
+  }
+
+  // Step 5: force Overview track to 0 (visual close); keep rail.
   if (sRail + CENTER_MIN <= vp) {
-    return { sidebar: sRail, center: CENTER_MIN, details: 0 }
+    return { sidebar: sRail, center: vp - sRail, details: 0 }
   }
 
   // Step 6: final fallback — center takes the remainder.

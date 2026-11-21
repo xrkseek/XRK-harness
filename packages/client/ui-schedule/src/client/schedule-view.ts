@@ -16,13 +16,24 @@ import type { ScheduleLocaleKey } from './locales.ts'
 
 export type ScheduleT = (key: ScheduleLocaleKey, params?: Record<string, string | number>) => string
 
+/** Browser-locale medium timestamp for one-shot `at` ISO strings. */
+export function formatScheduleAt(iso: string): string {
+  const parsed = new Date(iso)
+  return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleString()
+}
+
 /** Localized schedule caption: every / one-shot at / cron expression. */
 export function scheduleLabel(schedule: CronScheduleView, t: ScheduleT): string {
   switch (schedule.kind) {
     case 'every': return t('scheduleEvery', { seconds: schedule.everySeconds })
-    case 'at': return t('scheduleAt', { time: schedule.at })
+    case 'at': return t('scheduleAt', { time: formatScheduleAt(schedule.at) })
     case 'cron': return t('scheduleCron', { expr: schedule.expr })
   }
+}
+
+/** True when a one-shot already fired (Host clears nextRunAt and disables). */
+export function isOneShotComplete(job: CronJobView): boolean {
+  return job.schedule.kind === 'at' && !job.enabled && job.nextRunAt === null
 }
 
 const PROMPT_CLAMP = 160

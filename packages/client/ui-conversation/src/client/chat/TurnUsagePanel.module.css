@@ -1,8 +1,10 @@
-/* Icon-row Turn-stat pill trigger. Dialog surface: stat-dialog.module.css. */
+/* Icon-row Turn-stat pill trigger. Dialog surface: stat-dialog.module.css.
+   Keep the pill on one line (no ellipsis, no mid-label wrap). When the
+   IconActions row is truly too narrow, the whole pill wraps with .endInfo. */
 
 .root {
   display: inline-flex;
-  min-width: 0;
+  flex: none;
 }
 
 .root + .root {
@@ -13,7 +15,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-width: 0;
+  box-sizing: border-box;
   height: 28px;
   padding: 6px 8px;
   border: none;
@@ -28,9 +30,7 @@
 }
 
 .label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: none;
 }
 
 .trigger svg {

@@ -2,10 +2,13 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .actions {
   margin-left: -6px;
+  max-width: 100%;
 }
 
 /* Action strip stays mounted and visible on every settled turn (no hover gate). */

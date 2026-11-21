@@ -50,10 +50,15 @@
 }
 
 .header {
+  /* Inline container: when Overview + workbench share a squeezed column (~300px),
+     collapse tab labels to icons so 画布 stays reachable (no hidden scrollbar). */
+  container-type: inline-size;
+  container-name: overview-header;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  min-width: 0;
   padding: 8px 12px 7px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 62%, var(--dsw-alias-bg-base));
@@ -115,11 +120,13 @@
 
 .delegatePair {
   display: grid;
-  /* Left stack needs more track than the solo 被委派方 — equal 1fr|1fr
-     crushed peeks into the detailsCol clip (overflow:hidden on the column). */
-  grid-template-columns: minmax(0, 1.35fr) auto minmax(0, 1fr);
+  /* Equal seat tracks — solo lead + 被委派方 split the row 50/50. Peeks fan
+     inside the left track (pad + negative margin); never invent a wider left
+     column (1.35fr used to leave empty air beside the boss and only crush the
+     right ball when Overview narrowed). See resolveDelegatePairGeometry. */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: start;
-  /* Keep arrow+「委派」clear of the lead stage (meta used to paint over them). */
+  /* Symmetric gaps so arrow endpoints sit equally off both stage cards. */
   gap: 4px 14px;
   width: 100%;
   min-width: 0;
@@ -140,7 +147,7 @@
 @media (max-width: 767px) {
   .delegatePair {
     --xrk-delegate-stage: 104px;
-    grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     gap: 4px 10px;
   }
 
@@ -156,7 +163,7 @@
 
 :global(html[data-xrk-layout-phone]) .delegatePair {
   --xrk-delegate-stage: 104px;
-  grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 4px 10px;
 }
 
@@ -170,9 +177,9 @@
 }
 
 /* N 委派方 → arrow → 1 被委派方.
-   Lead = Face parents[] last (most recent bubble). Fan hugs the arrow;
-   left padding keeps peek rims inside the cell. overflow:hidden keeps lead
-   meta from painting over the middle「委派」column (detailsCol also clips). */
+   Lead hugs the arrow (flex-end). Solo lead: no left pad. Stacked: pad only
+   for peek rims — compress stage via --xrk-delegate-stage, do not widen the
+   left track. overflow:hidden keeps lead meta off「委派」. */
 .delegateFromStack {
   display: flex;
   flex-direction: row;
@@ -182,18 +189,19 @@
   width: 100%;
   box-sizing: border-box;
   overflow: hidden;
-  /* Deepest peek rim ≈ 42% of a stage — reserved so it never sits under the clip. */
+  /* Deepest peek rim ≈ 42% of a stage — only when peeks exist (data-count≠1). */
   padding-left: calc(var(--xrk-delegate-stage, 118px) * 0.42);
 }
 
 .delegateFromStack[data-count='1'] {
-  justify-content: center;
+  /* Solo: still hug the arrow so L/R gaps match the right seat (flex-start). */
+  justify-content: flex-end;
   padding-left: 0;
 }
 
 .delegateFromLayer {
   flex: 0 0 auto;
-  width: var(--xrk-delegate-stage, 118px);
+  width: min(100%, var(--xrk-delegate-stage, 118px));
   max-width: 100%;
   transform-origin: top center;
   transition:
@@ -208,10 +216,31 @@
   }
 }
 
+/* Solo lead stays on the shared stage cap — never width:100% of a biased
+   left track (that made only the right ball shrink when Overview narrowed). */
 .delegateFromStack[data-count='1'] .delegateFromLayer {
-  width: 100%;
+  width: min(100%, var(--xrk-delegate-stage, 118px));
   max-width: 100%;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+}
+
+/* Right seat cell: hug the arrow (flex-start) so endpoint gaps match the left. */
+.delegateToSeat {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Pin 被委派方 to the same stage cap as the lead layer (isometric pair). */
+.delegateToSeat > * {
+  flex: 0 0 auto;
+  width: min(100%, var(--xrk-delegate-stage, 118px));
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Fan toward the lead / arrow. Origin top-right so peeks tuck under the lead
@@ -265,9 +294,16 @@
   display: none;
 }
 
+/* Peek pad only when stacked — never reintroduce left gutter on a solo lead
+   (phone used to override data-count='1' { padding-left:0 } and leave empty
+   air beside 老板 while the arrow gaps looked unequal). */
 @media (max-width: 767px) {
-  .delegateFromStack {
+  .delegateFromStack:not([data-count='1']) {
     padding-left: calc(var(--xrk-delegate-stage, 118px) * 0.38);
+  }
+
+  .delegateFromStack[data-count='1'] {
+    padding-left: 0;
   }
 
   .delegateFromLayer[data-depth='1'] {
@@ -283,8 +319,12 @@
   }
 }
 
-:global(html[data-xrk-layout-phone]) .delegateFromStack {
+:global(html[data-xrk-layout-phone]) .delegateFromStack:not([data-count='1']) {
   padding-left: calc(var(--xrk-delegate-stage, 118px) * 0.38);
+}
+
+:global(html[data-xrk-layout-phone]) .delegateFromStack[data-count='1'] {
+  padding-left: 0;
 }
 
 :global(html[data-xrk-layout-phone]) .delegateFromLayer[data-depth='1'] {
@@ -489,7 +529,7 @@
   transform: rotate(-90deg);
 }
 
-/* Quiet segmented control — single row; scroll when the column is too narrow. */
+/* Quiet segmented control — single row; scroll only as a last resort. */
 .tabs {
   display: flex;
   flex-wrap: nowrap;
@@ -498,6 +538,7 @@
   min-width: 0;
   flex: 1 1 0;
   overflow-x: auto;
+  overflow-y: hidden;
   background: var(--dsw-alias-bg-skeleton);
   border-radius: 8px;
   scrollbar-width: none;
@@ -529,6 +570,28 @@
     color var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
     box-shadow var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
     transform var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
+}
+
+/* Header content box ≈ Overview width − horizontal padding. At ~360px Overview
+   (idle) labels still fit; when workbench squeezes Overview to ~300px the
+   content box drops under ~310 and 画布 would scroll away — then icon-only. */
+@container overview-header (max-width: 310px) {
+  .tab {
+    gap: 0;
+    padding: 5px 7px;
+    font-size: 0;
+    letter-spacing: 0;
+    line-height: 0;
+  }
+
+  .tabIcon {
+    opacity: 0.72;
+  }
+
+  .tab[aria-selected='true'] .tabIcon,
+  .tab:hover .tabIcon {
+    opacity: 0.95;
+  }
 }
 
 .tab:active:not([aria-selected='true']) {
@@ -590,7 +653,8 @@
   height: 26px;
   border: none;
   border-radius: 7px;
-  background: transparent;
+  /* Match header fill so a scrolled tab never peeks under the X. */
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 62%, var(--dsw-alias-bg-base));
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
   position: relative;
@@ -1552,6 +1616,29 @@
   font-size: 11px;
   line-height: 15px;
   font-variant-numeric: tabular-nums;
+}
+
+.injectSourceList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.injectSourceChip {
+  max-width: 100%;
+  border-radius: 5px;
+  padding: 1px 6px;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .spillOpen {

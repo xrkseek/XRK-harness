@@ -72,18 +72,22 @@
   from { opacity: 0; }
 }
 
-/* Logo row (figma pad (4,8,4,8)): expanded keeps the panel toggle at the
-   right edge; the rail gives every control the same base left anchor before
-   the shared entry translation is applied. */
+/* Logo row: expanded keeps the panel toggle at the right edge; the rail
+   gives every control the same base left anchor before the shared entry
+   translation is applied.
+   Height matches the conversation header title band (8+32) so the collapse
+   control and session title share one optical top chrome — the old 60px row
+   left a dead square at the sidebar×topbar junction next to the circular
+   toggle, which read as “empty seat for another ball”. */
 .logoRow {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  height: 60px;
-  padding: 8px 0 8px 4px;
-  margin-bottom: 8px;
+  height: 48px;
+  padding: 8px 4px 8px 4px;
+  margin-bottom: 4px;
   box-sizing: border-box;
   overflow: hidden;
 }

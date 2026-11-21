@@ -200,7 +200,8 @@
 }
 
 .enabledTag,
-.disabledTag {
+.disabledTag,
+.oneShotTag {
   flex: none;
   border-radius: 5px;
   padding: 1px 6px;
@@ -216,6 +217,15 @@
 
 .disabledTag {
   background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.oneShotTag {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.card[data-one-shot-done='true'] .scheduleTag {
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -334,12 +344,36 @@
   margin-left: auto;
 }
 
+.runHint {
+  margin: 0 0 10px;
+  max-width: 56ch;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  text-wrap: pretty;
+}
+
 .actionError {
   margin: 0 0 10px;
   color: var(--dsw-alias-state-error-primary);
   font-size: 12px;
   line-height: 18px;
   text-wrap: pretty;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lastError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.deleteAction {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 35%, transparent);
 }
 
 .details {

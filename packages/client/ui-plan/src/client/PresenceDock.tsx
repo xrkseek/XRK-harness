@@ -136,11 +136,62 @@ function usePhonePresenceSlot(overviewOpen: boolean): HTMLElement | null {
 }
 
 /**
+ * Side workbench reserved. Prefer Host `data-xrk-layout-side` from
+ * `ctx.layout.reserveSide` (any floating workbench plugin). Fallbacks:
+ * first-party `data-xrkh-side-open`, then `--xrkh-workbench-width`.
+ * When open, FABs own the header right seam — chip collapses to icon-only.
+ * With no workbench plugin, reserveSide stays 0 and this stays false (no
+ * empty chrome / false icon-only).
+ */
+function readSideWorkbenchOpen(): boolean {
+  if (typeof document === 'undefined') return false
+  if (document.documentElement.hasAttribute('data-xrk-layout-side')) return true
+  if (document.querySelector('[data-xrkh-panel-host][data-xrkh-side-open]') !== null) {
+    return true
+  }
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue('--xrkh-workbench-width')
+    .trim()
+  const px = Number.parseFloat(raw)
+  return Number.isFinite(px) && px > 0
+}
+
+function useSideWorkbenchOpen(): boolean {
+  const [open, setOpen] = useState(() => readSideWorkbenchOpen())
+  useEffect(() => {
+    const read = (): void => {
+      const next = readSideWorkbenchOpen()
+      setOpen((prev) => (prev === next ? prev : next))
+    }
+    read()
+    const obs = new MutationObserver(read)
+    obs.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-xrkh-side-open', 'style'],
+    })
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style', 'data-xrk-layout-side'],
+    })
+    const id = window.setInterval(read, 800)
+    return () => {
+      obs.disconnect()
+      window.clearInterval(id)
+    }
+  }, [])
+  return open
+}
+
+/**
  * Collapse the chip to the ball frame when the *window* is mid-width OR the
- * conversation header itself is squeezed (Overview open on a wide desktop).
+ * conversation header itself is squeezed (Overview open on a wide desktop)
+ * OR the side workbench is open (toggle cluster owns the right seam).
  */
 function useIconOnlyChrome(seatRef: RefObject<HTMLDivElement | null>): boolean {
-  const [iconOnly, setIconOnly] = useState(() => (
+  const sideOpen = useSideWorkbenchOpen()
+  const [widthIconOnly, setWidthIconOnly] = useState(() => (
     typeof window !== 'undefined' && window.innerWidth < PRESENCE_ICON_ONLY_ENTER
   ))
   useEffect(() => {
@@ -167,7 +218,7 @@ function useIconOnlyChrome(seatRef: RefObject<HTMLDivElement | null>): boolean {
         PRESENCE_HEADER_ICON_ONLY_EXPAND,
       )
       const next = windowActive || headerActive
-      setIconOnly((prev) => (prev === next ? prev : next))
+      setWidthIconOnly((prev) => (prev === next ? prev : next))
     }
 
     const syncHeaderTarget = (): void => {
@@ -212,7 +263,7 @@ function useIconOnlyChrome(seatRef: RefObject<HTMLDivElement | null>): boolean {
       headerRo?.disconnect()
     }
   }, [seatRef])
-  return iconOnly
+  return sideOpen || widthIconOnly
 }
 
 /**

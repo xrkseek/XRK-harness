@@ -57,6 +57,10 @@ export const XRK_PLUG = Object.freeze({
     detailsOpen: 'data-xrk-layout-details-open',
     details: 'data-xrk-layout-details',
     status: 'data-xrk-layout-status',
+    /** `ctx.layout.reserveSide(px)` with px &gt; 0 — Host header / PresenceDock select this. */
+    side: 'data-xrk-layout-side',
+    /** `ctx.layout.reserveBottom(px)` with px &gt; 0. */
+    bottom: 'data-xrk-layout-bottom',
   } as const),
   /**
    * Advisory coexistence floors (px) for floating workbenches that push the shell.

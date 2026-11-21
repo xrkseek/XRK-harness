@@ -1,3 +1,16 @@
+/*
+ * Workbench yield is owned by `[data-xrk-frame]` only (`margin-right` below).
+ * Older sidebar builds also shrank `#root` with the same CSS var; Host + plugin
+ * dual yield left a full-width void between the composer and the side panel.
+ * Pin `#root` full-bleed so stale plugin layout.css cannot reintroduce it.
+ */
+:global(#root) {
+  margin-right: 0 !important;
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .frame {
   position: relative; /* anchors the drag handles, which straddle column borders */
   display: grid;
