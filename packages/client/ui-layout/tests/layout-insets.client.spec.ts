@@ -8,8 +8,10 @@ import {
   LAYOUT_INSET_ATTR,
   LAYOUT_INSET_CSS,
   layoutInsetsEqual,
+  resolveWorkbenchBottomForPublish,
   shellOccupiedWidth,
 } from '../src/client/layout-insets.ts'
+import { XRK_WORKBENCH_CSS } from '../src/client/dsh-style-aliases.ts'
 
 afterEach(() => {
   clearLayoutInsetsDom()
@@ -82,5 +84,45 @@ describe('layout insets contract', () => {
     expect(shellOccupiedWidth({ sidebar: 240, details: 360 })).toBe(600)
     expect(shellOccupiedWidth({ sidebar: 56, details: 0 })).toBe(56)
     expect(shellOccupiedWidth({ sidebar: -1, details: Number.NaN })).toBe(0)
+  })
+
+  it('resolveWorkbenchBottomForPublish preserves when CSS unset; honors explicit 0', () => {
+    expect(resolveWorkbenchBottomForPublish('')).toEqual({ preserve: true })
+    expect(resolveWorkbenchBottomForPublish('   ')).toEqual({ preserve: true })
+    expect(resolveWorkbenchBottomForPublish('0px')).toEqual({ bottom: 0 })
+    expect(resolveWorkbenchBottomForPublish('220px')).toEqual({ bottom: 220 })
+  })
+
+  it('reserveBottom alone survives a column republish that omits bottom', () => {
+    const layout = new LayoutController()
+    layout.publishInsets({ details: 360, detailsOpen: true, sidebar: 280, phone: false })
+    layout.reserveBottom(180)
+    expect(layout.insets.getSnapshot().bottom).toBe(180)
+    expect(document.documentElement.style.getPropertyValue(XRK_WORKBENCH_CSS.height)).toBe('180px')
+    expect(document.documentElement.style.getPropertyValue(LAYOUT_INSET_CSS.bottom)).toBe('180px')
+    // AppFrame column tick: CSS still present → same bottom; then simulate
+    // a CSS-cleared frame that must preserve via omit.
+    layout.publishInsets({ details: 400, detailsOpen: true, sidebar: 280, phone: false })
+    expect(layout.insets.getSnapshot().bottom).toBe(180)
+    document.documentElement.style.removeProperty(XRK_WORKBENCH_CSS.height)
+    const resolved = resolveWorkbenchBottomForPublish(
+      document.documentElement.style.getPropertyValue(XRK_WORKBENCH_CSS.height),
+    )
+    expect(resolved).toEqual({ preserve: true })
+    layout.publishInsets({ details: 320, detailsOpen: false, sidebar: 240, phone: false })
+    expect(layout.insets.getSnapshot().bottom).toBe(180)
+    layout.reserveBottom(0)
+    expect(layout.insets.getSnapshot().bottom).toBe(0)
+    layout.clearInsets()
+  })
+
+  it('reserveSide stamps workbench width for shell frame yield', () => {
+    const layout = new LayoutController()
+    layout.reserveSide(320)
+    expect(document.documentElement.style.getPropertyValue(XRK_WORKBENCH_CSS.width)).toBe('320px')
+    layout.reserveSide(0)
+    expect(document.documentElement.style.getPropertyValue(XRK_WORKBENCH_CSS.width)).toBe('0px')
+    layout.clearInsets()
+    expect(document.documentElement.style.getPropertyValue(XRK_WORKBENCH_CSS.width)).toBe('')
   })
 })

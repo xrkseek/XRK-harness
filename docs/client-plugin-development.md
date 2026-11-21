@@ -2,7 +2,7 @@
 
 > **读者**：集成者 · 贡献者
 
-在产品壳上加 UI、改输入框、叠主题 token，走 **XRK Plug** 原生 **`xrk.client`**（`@xrkseek/plug`）。进程工具仍见 [plugin-development.md](./plugin-development.md)。表面分类见 [plugin-surface-map.md](./plugin-surface-map.md)。
+在产品壳上加 UI、改输入框、叠主题 token，走 **XRK Plug** 原生 **`xrk.client`**（`@xrkseek/plug`）。进程工具仍见 [plugin-development.md](./plugin-development.md)。开放面总览见 [open-platform.md](./open-platform.md)；表面分类见 [plugin-surface-map.md](./plugin-surface-map.md)。
 
 ## 选型
 
@@ -13,6 +13,7 @@
 | 斜杠 / 命令面 | 进程 `kind: commands` | 同上 |
 | **改输入框 / 槽位 UI** | **`xrk.client`** | 本文 · `extensions/example-composer-action` |
 | **改配色 token** | **`xrk.client` + `ThemeRuntime`** | 本文 · `extensions/example-theme-tokens` |
+| **浮动工作台让位** | **`xrk.client` + `ctx.layout`** | 本文 · `extensions/example-workbench-push` · [sidebar-workbench](./sidebar-workbench.md) |
 | 接外部 MCP 服务器 | Settings → MCP | [modules/mcp.md](./modules/mcp.md) |
 | 装第一方原生（侧栏 / 手机桥 / 向日葵） | **设置 → 插件** 或 `xrkh plugin add <npm>` | 下文「第一方原生产品插件」 |
 | 装社区已有壳包 | `xrkh plugin add <npm>` | [community-plugins](./community-plugins.md) |
@@ -34,9 +35,13 @@
 
 ### 浮动工作台作者要点
 
-- 几何只写 `--xrkh-workbench-width` / `--xrkh-workbench-height`；壳已占宽度读 **`ctx.layout.insets`**（或 `--xrk-layout-inset-*`），不要发明插件私有 body stamp。
-- 推挤 `#root` 时用 `xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`；视口已小于该底则 **push 0（浮层）**。
-- 算法与产品壳解耦：任何发布 LayoutInsets 的壳都适用。入口：`@xrkseek/plug`（`XRK_PLUG` · `xrkPlugPushFloor`）。
+- **底栏高度**：`ctx.layout.reserveBottom(px)`（`0` = 关）。壳写入 `--xrk-layout-inset-bottom` 并戳兼容 `--xrkh-workbench-height`。
+- **侧栏宽度**：`ctx.layout.reserveSide(px)`（`0` = 关）。壳戳 `--xrkh-workbench-width` 并对整框 `margin-right` 让位——**不要**假定 Host 自带社区 `layout.css`。
+- **底条左右边**：`left: var(--xrk-layout-inset-sidebar)`；`right: calc(var(--xrk-layout-inset-details) + var(--xrkh-workbench-width, 0px))`。勿依赖 `--xrkh-center-*`。
+- **手机**：`insets.phone` 时底/侧 push 为 0；概况开时收 FAB / 抽屉。
+- **键盘**：宽屏 `--xrk-keyboard-inset = 0`；Flutter 壳自管时 binder 强制 0。
+- 推挤地板用 `xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`；视口已小于该底则 **push 0（浮层）**。
+- 入口：`@xrkseek/plug`（`XRK_PLUG` · `xrkPlugPushFloor`）。金样：`extensions/example-workbench-push`。细节：[sidebar-workbench.md](./sidebar-workbench.md) · [open-platform.md](./open-platform.md)。
 
 ## 最小 client 包
 
@@ -181,9 +186,11 @@ ctx.slots.inject("settings.plugin.item", () =>
 
 ## 相关
 
+- [open-platform.md](./open-platform.md) — 开放平台总览（可玩面）  
 - [plugin-development.md](./plugin-development.md) — 进程插件  
 - [plugin-loader.md](./plugin-loader.md) — discover · `plugin add` · `web/` 叠加  
 - [plugin-surface-map.md](./plugin-surface-map.md) — P0–P3 表面  
+- [sidebar-workbench.md](./sidebar-workbench.md) — 浮动工作台几何  
 - [status.md](./status.md) — 能力诚实  
 
 ---
@@ -192,7 +199,7 @@ ctx.slots.inject("settings.plugin.item", () =>
 
 > **Audience**: Integrators · Contributors
 
-To add UI, composer controls, or theme tokens on the product shell, use a native **`xrk.client`** package under **XRK Plug** (`@xrkseek/plug`). Process tools remain in [plugin-development.md](./plugin-development.md). Surface classes: [plugin-surface-map.md](./plugin-surface-map.md).
+To add UI, composer controls, or theme tokens on the product shell, use a native **`xrk.client`** package under **XRK Plug** (`@xrkseek/plug`). Process tools remain in [plugin-development.md](./plugin-development.md). Open-platform map: [open-platform.md](./open-platform.md). Surface classes: [plugin-surface-map.md](./plugin-surface-map.md).
 
 ## Choose a kind
 
@@ -203,6 +210,7 @@ To add UI, composer controls, or theme tokens on the product shell, use a native
 | Slash / command surface | Process `kind: commands` | Same |
 | **Composer / slot UI** | **`xrk.client`** | This page · `extensions/example-composer-action` |
 | **Palette tokens** | **`xrk.client` + `ThemeRuntime`** | This page · `extensions/example-theme-tokens` |
+| **Floating workbench yield** | **`xrk.client` + `ctx.layout`** | This page · `extensions/example-workbench-push` · [sidebar-workbench](./sidebar-workbench.md) |
 | External MCP server | Settings → MCP | [modules/mcp.md](./modules/mcp.md) |
 | Install first-party native (sidebar / phone bridge / sunflower) | **Settings → Plugins** or `xrkh plugin add <npm>` | “First-party native product plugins” below |
 | Install an existing community shell package | `xrkh plugin add <npm>` | [community-plugins](./community-plugins.md) |
@@ -224,9 +232,13 @@ These are **first-party product plugins** in the XRK / `@xrkseek` line:
 
 ### Floating workbench author notes
 
-- Write geometry only as `--xrkh-workbench-width` / `--xrkh-workbench-height`; read shell-occupied width from **`ctx.layout.insets`** (or `--xrk-layout-inset-*`) — do not invent per-plugin body stamps.
-- When pushing `#root`, use `xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`; if the viewport is already below that floor, **push 0 (float)**.
-- The algorithm is shell-agnostic: any shell that publishes LayoutInsets works. Entry: `@xrkseek/plug` (`XRK_PLUG` · `xrkPlugPushFloor`).
+- **Bottom height:** `ctx.layout.reserveBottom(px)` (`0` = closed). Shell writes `--xrk-layout-inset-bottom` and stamps compat `--xrkh-workbench-height`.
+- **Side width:** `ctx.layout.reserveSide(px)` (`0` = closed). Shell stamps `--xrkh-workbench-width` and yields the whole frame via `margin-right` — do **not** assume a community `layout.css` on Host.
+- **Bottom strip edges:** `left: var(--xrk-layout-inset-sidebar)`; `right: calc(var(--xrk-layout-inset-details) + var(--xrkh-workbench-width, 0px))`. Do not require `--xrkh-center-*`.
+- **Phone:** when `insets.phone`, bottom/side push are 0; hide FABs / drawers while Overview is open.
+- **Keyboard:** wide / desktop keeps `--xrk-keyboard-inset` at 0; Flutter shells force the binder to 0.
+- Cap with `xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`; if the viewport is already below that floor, **push 0 (float)**.
+- Entry: `@xrkseek/plug` (`XRK_PLUG` · `xrkPlugPushFloor`). Gold sample: `extensions/example-workbench-push`. Details: [sidebar-workbench.md](./sidebar-workbench.md) · [open-platform.md](./open-platform.md).
 
 ## Minimal client package
 
@@ -370,7 +382,9 @@ Install → use → disable → enable → reload → delete for `xrkh-better-si
 
 ## Related
 
+- [open-platform.md](./open-platform.md) — open platform map (play surfaces)  
 - [plugin-development.md](./plugin-development.md) — process plugins  
 - [plugin-loader.md](./plugin-loader.md) — discover · `plugin add` · `web/` overlay  
 - [plugin-surface-map.md](./plugin-surface-map.md) — P0–P3 surfaces  
+- [sidebar-workbench.md](./sidebar-workbench.md) — floating workbench geometry  
 - [status.md](./status.md) — capability honesty  

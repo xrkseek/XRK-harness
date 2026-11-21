@@ -3,12 +3,29 @@
  * plugins (right/bottom overlays, not just xrkh-better-sidebar) read so they
  * can sit beside the in-flow AppFrame columns instead of covering them.
  *
- * AppFrame publishes column insets ({@link publishLayoutInsets}). Plugins:
- * - CSS: position against {@link LAYOUT_INSET_CSS} on `document.documentElement`
- * - JS: subscribe to `ctx.layout.insets` or call `ctx.layout.reserveBottom`
+ * ## Author contract (multi-end)
  *
- * New reserved regions add optional fields here and matching CSS custom
- * properties — do not invent per-plugin body stamps.
+ * 1. **Bottom strip (canonical):** `ctx.layout.reserveBottom(px)` (0 = closed).
+ *    Updates `--xrk-layout-inset-bottom`, stamps `--xrkh-workbench-height`,
+ *    survives AppFrame column republish.
+ * 2. **Side strip (canonical):** `ctx.layout.reserveSide(px)` (0 = closed).
+ *    Stamps `--xrkh-workbench-width`; the shell frame yields via `margin-right`
+ *    (product Host — not a missing community `layout.css`).
+ * 3. **Position a bottom strip:** prefer public CSS —
+ *    `left: var(--xrk-layout-inset-sidebar)`;
+ *    `right: calc(var(--xrk-layout-inset-details) + var(--xrkh-workbench-width, 0px))`.
+ *    `--xrkh-center-*` is optional first-party measure; third parties must not
+ *    require it.
+ * 4. **Phone (`insets.phone` / `data-xrk-layout-phone`):** shell forces
+ *    `bottom = 0` and zeros workbench width/height CSS. Collapse drawers / hide
+ *    expand FABs when `detailsOpen` on phone.
+ * 5. **Keyboard:** Host publishes `--xrk-keyboard-inset` for sticky composers.
+ *    Wide / desktop windows keep it at 0. Phone chrome / narrow web may lift.
+ *    Flutter shells that set `SHELL_KEYBOARD_ATTR` force the binder to 0.
+ *
+ * AppFrame publishes column insets ({@link LayoutController.publishInsets}).
+ * Plugins position against {@link LAYOUT_INSET_CSS} and subscribe to
+ * `ctx.layout.insets`.
  *
  * @module
  */
@@ -30,8 +47,9 @@ export interface LayoutInsets {
   /** Left `sidebar` rail (compact or open width as rendered). */
   readonly sidebar: number
   /**
-   * Bottom floating workbench strip (community bottom panel). 0 when closed.
-   * AppFrame publishes 0; plugins call {@link LayoutController.reserveBottom}.
+   * Bottom floating workbench strip. 0 when closed or on phone chrome.
+   * Plugins call {@link LayoutController.reserveBottom}; do not rely on
+   * AppFrame inventing a height from private CSS alone.
    */
   readonly bottom: number
   /** True on the phone shell — floating workbenches should not assume desktop push. */
@@ -121,4 +139,22 @@ export function shellOccupiedWidth(
   const sidebar = Number.isFinite(insets.sidebar) ? Math.max(0, insets.sidebar) : 0
   const details = Number.isFinite(insets.details) ? Math.max(0, insets.details) : 0
   return sidebar + details
+}
+
+/**
+ * AppFrame column republish: map inline `--xrkh-workbench-height` to bottom.
+ *
+ * - Property **absent** → preserve the last {@link LayoutController.reserveBottom}
+ *   value (omit `bottom` on publish). Third parties that only call the JS API
+ *   must not be wiped when Overview width ticks.
+ * - Property **present** (including `0px`) → that value is live truth so CSS-only
+ *   writers and `reserveBottom` stamps stay coherent.
+ */
+export function resolveWorkbenchBottomForPublish(
+  workbenchHeightCss: string,
+): { readonly bottom: number } | { readonly preserve: true } {
+  const raw = workbenchHeightCss.trim()
+  if (raw === '') return { preserve: true }
+  const n = Number.parseFloat(raw)
+  return { bottom: Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0 }
 }

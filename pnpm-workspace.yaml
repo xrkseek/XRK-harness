@@ -19,6 +19,7 @@ packages:
   - "extensions/example-theme-tokens"
   - "extensions/example-shell-wallpaper"
   - "extensions/example-shell-pet"
+  - "extensions/example-workbench-push"
   - "extensions/example-im-mock-sidecar"
   - "extensions/dsh-compat"
   - "extensions/a2a"

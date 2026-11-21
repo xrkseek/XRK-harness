@@ -93,6 +93,8 @@ apps/cli/product-web/
 !/extensions/example-shell-wallpaper/**
 !/extensions/example-shell-pet/
 !/extensions/example-shell-pet/**
+!/extensions/example-workbench-push/
+!/extensions/example-workbench-push/**
 !/extensions/dsh-compat/
 !/extensions/dsh-compat/**
 !/extensions/xrk-sunflower-free/

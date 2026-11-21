@@ -47,6 +47,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | 接 HTTP / Face | [http-api](./http-api.md) · [host-face](./host-face.md) |
 | **接 XRK-AGT（通道平台）** | **[integrators/agt-bridge](./integrators/agt-bridge.md)** |
 | 选 preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
+| **开放平台总览（第三方可玩面）** | **[open-platform](./open-platform.md)** · [plugin-surface-map](./plugin-surface-map.md) · [sidebar-workbench](./sidebar-workbench.md) |
 | 写进程插件 / **原生 client 壳扩展** | [plugin-development](./plugin-development.md) · [client-plugin-development](./client-plugin-development.md) · [plugin-surface-map](./plugin-surface-map.md) · [plugin-loader](./plugin-loader.md) |
 | 装社区 client（可选兼容器） | [community-plugins](./community-plugins.md) |
 | 写工具 / 守卫 | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
@@ -98,6 +99,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [session-identity-scenarios.md](./session-identity-scenarios.md) | 身份场景走查（奇创 / 编码父 / 干员 / IM / 对等父） |
 | [host-preset.md](./host-preset.md) | Host vs preset |
 | [profiles.md](./profiles.md) | Preset 选型 |
+| [open-platform.md](./open-platform.md) | 开放平台：槽位 · layout · Host · Plug 可玩面 |
 | [plugin-development.md](./plugin-development.md) | 进程插件 |
 | [client-plugin-development.md](./client-plugin-development.md) | 原生 client 壳扩展（槽位 · 标准工具包 · 主题） |
 | [plugin-surface-map.md](./plugin-surface-map.md) | P0–P3 插件表面分类（XRK Plug） |
@@ -212,6 +214,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | Architecture | [architecture](./architecture.md) → [compose](./compose.md) → [adr/](./adr/README.md) |
 | HTTP / Face | [http-api](./http-api.md) · [host-face](./host-face.md) |
 | Choose preset | [profiles](./profiles.md) · [host-preset](./host-preset.md) |
+| **Open platform (third-party play surfaces)** | **[open-platform](./open-platform.md)** · [plugin-surface-map](./plugin-surface-map.md) · [sidebar-workbench](./sidebar-workbench.md) |
 | Process plugins / **native client shell** | [plugin-development](./plugin-development.md) · [client-plugin-development](./client-plugin-development.md) · [plugin-surface-map](./plugin-surface-map.md) · [plugin-loader](./plugin-loader.md) |
 | Community clients (optional compat) | [community-plugins](./community-plugins.md) |
 | Tools / guards | [tool-pipeline](./tool-pipeline.md) · [seams](./seams.md) · [policy](./policy.md) |
@@ -263,6 +266,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [session-identity-scenarios.md](./session-identity-scenarios.md) | Identity scenario walkthrough (Qichuang / coding parent / 干员 / IM / peer parent) |
 | [host-preset.md](./host-preset.md) | Host vs preset |
 | [profiles.md](./profiles.md) | Preset selection |
+| [open-platform.md](./open-platform.md) | Open platform: slots · layout · Host · Plug play surfaces |
 | [plugin-development.md](./plugin-development.md) | Process plugins |
 | [client-plugin-development.md](./client-plugin-development.md) | Native client shell (slots · standard kit · theme) |
 | [plugin-surface-map.md](./plugin-surface-map.md) | P0–P3 plugin surface map (XRK Plug) |

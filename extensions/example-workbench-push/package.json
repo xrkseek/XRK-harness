@@ -1,0 +1,20 @@
+{
+  "name": "example-workbench-push",
+  "version": "0.1.0",
+  "private": true,
+  "description": "XRK Plug gold sample: ctx.layout.reserveSide / reserveBottom floating yield",
+  "type": "module",
+  "exports": {
+    "./client": "./lib/client.js"
+  },
+  "xrk": {
+    "client": {
+      "inject": [
+        "@xrkseek/client-runtime",
+        "@xrkseek/client-ui-slots",
+        "@xrkseek/client-ui-layout"
+      ],
+      "platform": "web"
+    }
+  }
+}

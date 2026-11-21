@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.5',
+    date: '2026-11-21',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '浮动工作台让位走 reserveSide / reserveBottom；宽屏不再被键盘噪声顶出空白缝。',
+        en: 'Floating workbench yield uses reserveSide / reserveBottom; wide/desktop no blank band from keyboard noise.',
+      },
+      {
+        zh: '开放平台总览 + 金样 example-workbench-push；Plug 补地板 / 拟合 helpers。',
+        en: 'Open-platform map + example-workbench-push sample; Plug floor / fit helpers.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.5。完整清单见 docs/releases/v0.8.5.md。',
+        en: 'Desktop / npm / phone align to 0.8.5. Full list: docs/releases/v0.8.5.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.4',
     date: '2026-11-21',
     title: {

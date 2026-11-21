@@ -7,6 +7,16 @@
   overflow: hidden;
   overscroll-behavior: none;
   background: var(--dsw-alias-bg-base);
+  /* Horizontal workbench push (platform-owned). Plugins stamp
+     `--xrkh-workbench-width`; the shell yields so conversation / Overview are
+     not covered by the fixed side panel. Bottom yield is padding on
+     `.centerCol` only — the side strip is full-height and must shrink the
+     whole frame. Phone ignores the var (drawer floats). */
+  margin-right: var(--xrkh-workbench-width, var(--dsh-sidebar-width, 0px));
+}
+
+.frame[data-phone] {
+  margin-right: 0;
 }
 
 /* Only a discrete collapse/expand toggle eases the tracks (TSX holds

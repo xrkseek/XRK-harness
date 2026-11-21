@@ -23,12 +23,13 @@
 | `@xrkseek/attachment` | [attachment.md](./attachment.md) | [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) |
 | `@xrkseek/xrk-file-reference` 等 | [references.md](./references.md) | [host-face.md](../host-face.md) · `packages/context/*` |
 
-## 全包索引（42）
+## 全包索引（43）
 
 路径相对 `packages/`。未单列笔记的包以 README + `src/index.ts` 为准。
 
 | 路径 | npm | 规格 / 入口 |
 | --- | --- | --- |
+| `plug/` | `@xrkseek/plug` | [open-platform.md](../open-platform.md) · [plugin-surface-map.md](../plugin-surface-map.md) |
 | `kernel/` | `@xrkseek/kernel` | [architecture.md](../architecture.md) |
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
 | `a2a/` | `@xrkseek/a2a` | A2A 出站：context 持久 · history · 环路上限；`extensions/a2a` |
@@ -125,12 +126,13 @@ Package file maps. Contracts live in parent `docs/`; this page only points to im
 | `@xrkseek/attachment` | [attachment.md](./attachment.md) | [protocol-events.md](../protocol-events.md) · [host-face.md](../host-face.md) |
 | `@xrkseek/xrk-file-reference` etc. | [references.md](./references.md) | [host-face.md](../host-face.md) · `packages/context/*` |
 
-## Full package index (42)
+## Full package index (43)
 
 Paths relative to `packages/`. Packages without a dedicated note use README + `src/index.ts`.
 
 | Path | npm | Spec · entry |
 | --- | --- | --- |
+| `plug/` | `@xrkseek/plug` | [open-platform.md](../open-platform.md) · [plugin-surface-map.md](../plugin-surface-map.md) |
 | `kernel/` | `@xrkseek/kernel` | [architecture.md](../architecture.md) |
 | `protocol/` | `@xrkseek/protocol` | [protocol-events.md](../protocol-events.md) |
 | `a2a/` | `@xrkseek/a2a` | A2A outbound: context persistence · history · anti-loop; `extensions/a2a` |

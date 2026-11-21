@@ -96,7 +96,7 @@ Windows NSIS：仓库路径含非 ASCII 时，固定 `subst X:` → 仓库根，
 
 | 档                  | 版本       | 用途                                                           |
 | ------------------- | ---------- | -------------------------------------------------------------- |
-| **当前（@latest）** | **0.8.4** | `0.8.x` 补丁；`npm i -g @xrkseek/harness-cli@latest` |
+| **当前（@latest）** | **0.8.5** | `0.8.x` 补丁；`npm i -g @xrkseek/harness-cli@latest` |
 | **上一补丁**        | **0.8.2** | `0.8.x` 补丁，仍可精确安装（**0.8.3** 仅 Desktop / 手机，未发 npm） |
 | **上一补丁**        | **0.8.1** | `0.8.x` 补丁，仍可精确安装 |
 | **上一补丁**        | **0.8.0** | `0.8.x` 正式线首发，仍可精确安装 |
@@ -107,13 +107,13 @@ Windows NSIS：仓库路径含非 ASCII 时，固定 `subst X:` → 仓库根，
 | **过程号（历史）**  | **0.8.0-rc.1** · **0.7.0-rc.3** · **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | 仅留档 |
 | **回退钉**          | **0.3.11** | npm 另留此号供回退                                           |
 
-`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发至 **0.7.22**；**0.8.0** 开 `0.8.x`；**0.8.4** 接管 `@latest`（worktree 设置卡 · MCP Menu · 侧栏公告闸；**0.8.3** 未发 npm）。GitHub Release 文稿可保留历史号。
+`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发至 **0.7.22**；**0.8.0** 开 `0.8.x`；**0.8.5** 接管 `@latest`（reserveSide/Bottom · 键盘 inset · 开放平台金样）。GitHub Release 文稿可保留历史号。
 
 npm **不能**同号重发；改坏包就升修订号。清理用 `npm-prune-withdrawn.mjs`（先 unpublish，Granular token 失败则 deprecate）。deprecate 消息不得含空格 / 未配对引号；清除弃用须传真正的空字符串（脚本经 `npm-cli.js`）。
 
 预发布号（`-rc.N`）由 `release.mjs` 自动附 `--tag`；收口号与正式版无后缀 ⇒ 落 `@latest`。
 
-GitHub Release 公开页保留 **v0.8.4**（当前 `@latest`）、**v0.8.3**（Desktop / 手机）、**v0.8.2**、**v0.8.1**、**v0.8.0**、**v0.8.0-rc.2** / **v0.8.0-rc.1**（过程号留档）、**v0.7.22** … **v0.7.0**、**v0.7.0-rc.3**、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
+GitHub Release 公开页保留 **v0.8.5**（当前 `@latest`）、**v0.8.4**、**v0.8.3**（Desktop / 手机）、**v0.8.2**、**v0.8.1**、**v0.8.0**、**v0.8.0-rc.2** / **v0.8.0-rc.1**（过程号留档）、**v0.7.22** … **v0.7.0**、**v0.7.0-rc.3**、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -217,7 +217,7 @@ Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = fo
 
 | Line                      | Version    | Use                                                                          |
 | ------------------------- | ---------- | ---------------------------------------------------------------------------- |
-| **Current (@latest)**     | **0.8.4** | `0.8.x` patch; `npm i -g @xrkseek/harness-cli@latest` |
+| **Current (@latest)**     | **0.8.5** | `0.8.x` patch; `npm i -g @xrkseek/harness-cli@latest` |
 | **Previous patch**        | **0.8.2** | `0.8.x` patch; still installable by exact pin (**0.8.3** Desktop / phone only — no npm) |
 | **Previous patch**        | **0.8.1** | `0.8.x` patch; still installable by exact pin |
 | **Previous patch**        | **0.8.0** | Opens `0.8.x` formal; still installable by exact pin |
@@ -228,12 +228,12 @@ Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = fo
 | **Process numbers (past)**| **0.8.0-rc.1** · **0.7.0-rc.3** · **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | Archive only |
 | **Rollback pin**          | **0.3.11** | Only other npm pin kept for rollback                                         |
 
-`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line through **0.7.22**; **0.8.0** opened `0.8.x`; **0.8.4** owns `@latest` (worktree Settings card · MCP Menu · sidebar notes gate; **0.8.3** skipped npm). GitHub Release notes may retain historical tags.
+`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line through **0.7.22**; **0.8.0** opened `0.8.x`; **0.8.5** owns `@latest` (reserveSide/Bottom · keyboard inset · open-platform sample). GitHub Release notes may retain historical tags.
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Clean with `npm-prune-withdrawn.mjs` (unpublish first; deprecate when Granular tokens block). Deprecation messages must not contain spaces / unbalanced quotes; clearing a deprecation requires a real empty string (script uses `npm-cli.js`).
 
 Prereleases (`-rc.N`) get an automatic `--tag` from `release.mjs`; suffix-free versions land on `@latest`.
 
-The GitHub Releases page keeps **v0.8.4** (current `@latest`), **v0.8.3** (Desktop / phone), **v0.8.2**, **v0.8.1**, **v0.8.0**, **v0.8.0-rc.2** / **v0.8.0-rc.1** (process archive), **v0.7.22** … **v0.7.0**, **v0.7.0-rc.3**, **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
+The GitHub Releases page keeps **v0.8.5** (current `@latest`), **v0.8.4**, **v0.8.3** (Desktop / phone), **v0.8.2**, **v0.8.1**, **v0.8.0**, **v0.8.0-rc.2** / **v0.8.0-rc.1** (process archive), **v0.7.22** … **v0.7.0**, **v0.7.0-rc.3**, **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

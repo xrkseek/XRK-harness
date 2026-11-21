@@ -11,7 +11,7 @@ XRK Plug（`@xrkseek/plug`）下，壳与扩展的落点分类。写插件认本
 | **P0 平台种子** | boot 必载、不可卸 | `ui-slots` · `ui-primitives` · `ui-layout` · `ui-theme` · `runtime` · conversation 骨架 |
 | **P1 默认可停产品面** | 随产品分发；**停用入口仅限 Plugins → 插件列表里 `managed: true` 的安装项**（用户/推荐装）。boot 种子包（`ui-plan` / `ui-goal` 等）在列表可见但无停用开关 | `ui-plan`（概况）· `ui-goal` · `ui-jobs` · `ui-schedule` · `ui-release-notes` |
 | **P2 可选第一方** | 设置一键装 | `xrkh-better-sidebar` · `xrkh-better-sidebar-plugin-office` · `xrk-sunflower-free` · `xrk-phone-bridge` |
-| **P3 金样** | 作者模板 | 进程：`example-tools` · `example-prompt` · `example-commands` · `example-policy` · `example-hooks` · `example-llm` · `example-channel`；client：`example-composer-action` · `example-theme-tokens` · `example-shell-wallpaper` · `example-shell-pet` |
+| **P3 金样** | 作者模板 | 进程：`example-tools` · `example-prompt` · `example-commands` · `example-policy` · `example-hooks` · `example-llm` · `example-channel`；client：`example-composer-action` · `example-theme-tokens` · `example-shell-wallpaper` · `example-shell-pet` · **`example-workbench-push`** |
 
 ## 常用槽位
 
@@ -30,10 +30,12 @@ XRK Plug（`@xrkseek/plug`）下，壳与扩展的落点分类。写插件认本
 | 真源 | 说明 |
 |------|------|
 | `data-xrk-frame` | 壳根锚点；第一方 CSS 只选它 |
-| `--xrkh-workbench-width` / `--xrkh-workbench-height` | 浮动工作台几何；插件只写这对 |
-| `--xrk-layout-inset-*` / `ctx.layout.insets` | 壳已占宽度（左栏 · 概况 · 底栏）；浮动层只读，用于推挤地板 |
+| **`ctx.layout.reserveBottom(px)`** | **底栏高度真源**（`0` = 关）；写入 `--xrk-layout-inset-bottom` 并戳兼容 `--xrkh-workbench-height` |
+| **`ctx.layout.reserveSide(px)`** | **侧栏宽度真源**（`0` = 关）；戳 `--xrkh-workbench-width`，壳整框 `margin-right` 让位 |
+| `--xrk-layout-inset-*` / `ctx.layout.insets` | 壳已占（左栏 · 概况 · 底栏 · phone）；浮动层只读 |
+| `--xrk-keyboard-inset` | sticky 输入抬起；宽屏 / 桌面为 `0` |
 | `XRK_PLUG.layoutFloors` · `xrkPlugPushFloor` | 建议推挤地板与算法入口（见 [sidebar-workbench](./sidebar-workbench.md)） |
-| Host inbound mirror | Host 可双戳社区别名 / 镜像 `--dsh-sidebar-*`，**插件不要双写** |
+| Host inbound mirror | Host 可镜像 `--dsh-sidebar-*`，**插件不要双写社区别名** |
 
 `pnpm verify:first-party-plug` 门禁扫 `extensions/*`（除 inbound 适配器）禁 `dsh.client` / `@deepseek-ai/` / 遗留 `dsh-plugin-*`。
 
@@ -54,7 +56,8 @@ Plugins 设置卡统一：`PluginCard` 折叠/展开 + 可选标题栏 `masterSw
 
 | 包 | DOM / CSS | 作者面 |
 |----|-----------|--------|
-| `xrkh-better-sidebar` | 只写 `--xrkh-workbench-*`；选 `data-xrk-frame` | `xrk.client` · zh/en/ja |
+| `xrkh-better-sidebar` | `reserveSide` / `reserveBottom`（兼容戳 workbench CSS）；选 `data-xrk-frame` | `xrk.client` · zh/en/ja |
+| `example-workbench-push` | 金样：同上 API 演示壳让位 | XRK Plug |
 | `xrkh-better-sidebar-plugin-office` | 同上侧栏扩展点 | `xrk.client` · zh/en/ja |
 | `xrk-sunflower-free` · `xrk-phone-bridge` | 无社区几何双写 | XRK Plug |
 | `example-shell-*` · `example-theme-tokens` | 金样只示范 XRK 槽位 / token | XRK Plug |
@@ -84,7 +87,7 @@ Under XRK Plug (`@xrkseek/plug`), where shell and extensions land. Author agains
 | **P0 platform seed** | Boot-required, not unloadable | `ui-slots` · `ui-primitives` · `ui-layout` · `ui-theme` · `runtime` · conversation skeleton |
 | **P1 default-on product** | Shipped; **disable only for `managed: true` rows in Plugins → Plugin list** (user/recommended installs). Boot seeds (`ui-plan` / `ui-goal` …) appear in the list without a stop switch | `ui-plan` · `ui-goal` · `ui-jobs` · `ui-schedule` · `ui-release-notes` |
 | **P2 optional first-party** | One-click install | `xrkh-better-sidebar` · office · `xrk-sunflower-free` · `xrk-phone-bridge` |
-| **P3 gold samples** | Author templates | Process: `example-tools` · `example-prompt` · `example-commands` · `example-policy` · `example-hooks` · `example-llm` · `example-channel`; client: `example-composer-action` · `example-theme-tokens` · `example-shell-wallpaper` · `example-shell-pet` |
+| **P3 gold samples** | Author templates | Process: `example-tools` · `example-prompt` · `example-commands` · `example-policy` · `example-hooks` · `example-llm` · `example-channel`; client: `example-composer-action` · `example-theme-tokens` · `example-shell-wallpaper` · `example-shell-pet` · **`example-workbench-push`** |
 
 ## Common slots
 
@@ -103,10 +106,12 @@ Constants: `XRK_PLUG.slots` (`@xrkseek/plug`).
 | Source | Rule |
 |--------|------|
 | `data-xrk-frame` | Shell root; first-party CSS selects this only |
-| `--xrkh-workbench-width` / `--xrkh-workbench-height` | Floating workbench geometry; plugins write this pair only |
-| `--xrk-layout-inset-*` / `ctx.layout.insets` | Shell-occupied width (rail · Overview · bottom); floating layers read only, for push floors |
+| **`ctx.layout.reserveBottom(px)`** | **Canonical bottom height** (`0` = closed); writes `--xrk-layout-inset-bottom` and stamps compat `--xrkh-workbench-height` |
+| **`ctx.layout.reserveSide(px)`** | **Canonical side width** (`0` = closed); stamps `--xrkh-workbench-width`; shell frame yields via `margin-right` |
+| `--xrk-layout-inset-*` / `ctx.layout.insets` | Shell-occupied (rail · Overview · bottom · phone); floating layers read only |
+| `--xrk-keyboard-inset` | Sticky composer lift; wide / desktop stays `0` |
 | `XRK_PLUG.layoutFloors` · `xrkPlugPushFloor` | Advisory push floors + algorithm entry (see [sidebar-workbench](./sidebar-workbench.md)) |
-| Host inbound mirror | Host may dual-stamp community aliases / mirror `--dsh-sidebar-*`; **plugins must not dual-write** |
+| Host inbound mirror | Host may mirror `--dsh-sidebar-*`; **plugins must not dual-write community aliases** |
 
 `pnpm verify:first-party-plug` scans `extensions/*` (except the inbound adapter) and rejects `dsh.client` / `@deepseek-ai/` / legacy `dsh-plugin-*`.
 
@@ -127,7 +132,8 @@ Plugins cards share `PluginCard` expand/collapse plus optional header `masterSwi
 
 | Package | DOM / CSS | Author face |
 |---------|-----------|-------------|
-| `xrkh-better-sidebar` | Writes `--xrkh-workbench-*` only; selects `data-xrk-frame` | `xrk.client` · zh/en/ja |
+| `xrkh-better-sidebar` | `reserveSide` / `reserveBottom` (compat workbench CSS stamps); selects `data-xrk-frame` | `xrk.client` · zh/en/ja |
+| `example-workbench-push` | Gold sample: same APIs demo shell yield | XRK Plug |
 | `xrkh-better-sidebar-plugin-office` | Same sidebar extension points | `xrk.client` · zh/en/ja |
 | `xrk-sunflower-free` · `xrk-phone-bridge` | No community geometry dual-write | XRK Plug |
 | `example-shell-*` · `example-theme-tokens` | Samples demonstrate XRK slots / tokens only | XRK Plug |

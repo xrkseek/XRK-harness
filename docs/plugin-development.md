@@ -2,7 +2,7 @@
 
 > **读者**：集成者 · 贡献者
 
-在 XRK-Harness 上扩展能力，认 **XRK Plug**（`@xrkseek/plug`）：优先 **进程插件**（`tools` / `prompt` / `commands`），再由 Host discover → preset 接线。客户端壳叠加见文末「Client 叠加」与 [client-plugin-development.md](./client-plugin-development.md)。表面分级：[plugin-surface-map.md](./plugin-surface-map.md)。
+在 XRK-Harness 上扩展能力，认 **XRK Plug**（`@xrkseek/plug`）：优先 **进程插件**（`tools` / `prompt` / `commands`），再由 Host discover → preset 接线。开放面总览：[open-platform.md](./open-platform.md)。客户端壳叠加见文末「Client 叠加」与 [client-plugin-development.md](./client-plugin-development.md)。表面分级：[plugin-surface-map.md](./plugin-surface-map.md)。
 
 契约 API 细节：[plugin-loader.md](./plugin-loader.md)。选型：[profiles.md](./profiles.md)。
 
@@ -17,7 +17,7 @@
 | 工具前后钩子 | `hooks` | `example-hooks` | `hooks.onPre` / `onPost` → ToolPipeline |
 | LLM brand | `llm` | `example-llm` | `llmBrands[]` → ProviderRegistry |
 | 通道描述 | `channel` | `example-channel` | `channels[]` → `processChannels/list` |
-| 改产品壳 UI | `xrk.client`（client 包） | `example-composer-action` · `example-theme-tokens` | `~/.xrk/plugins/web/` 叠加，**不是**进程 kind；见 [client-plugin-development.md](./client-plugin-development.md) |
+| 改产品壳 UI | `xrk.client`（client 包） | `example-composer-action` · `example-theme-tokens` · **`example-workbench-push`** | `~/.xrk/plugins/web/` 叠加，**不是**进程 kind；见 [client-plugin-development.md](./client-plugin-development.md) · [open-platform.md](./open-platform.md) |
 
 ### 信任边界（必读）
 
@@ -104,7 +104,7 @@ xrkh plugin add ./extensions/example-tools
 
 | 类别 | 落点 | 是否进主仓 git / pnpm workspace |
 |------|------|--------------------------------|
-| **金样 / 内置适配** | `extensions/example-tools` · `example-channel` · `example-composer-action` · `example-theme-tokens` · `a2a` · `dsh-compat` | **是**（`.gitignore` / `pnpm-workspace` 白名单） |
+| **金样 / 内置适配** | `extensions/example-tools` · `example-channel` · `example-composer-action` · `example-theme-tokens` · `example-shell-*` · **`example-workbench-push`** · `a2a` · `dsh-compat` | **是**（`.gitignore` / `pnpm-workspace` 白名单） |
 | **第一方原生产品插件** | `xrk-sunflower-free` · `xrk-phone-bridge` · `xrkh-better-sidebar` · `xrkh-better-sidebar-plugin-office` | 源码可在 `extensions/`；经 **设置 → 插件** / `xrkh plugin add` 装到 `~/.xrk/plugins`；清单见 [client-plugin-development.md](./client-plugin-development.md) |
 | **第三方 / 本地工作树** | `extensions/<plugin-id>/`（对标 AGT 本地 Core） | **默认忽略**；联调产物不提交进主仓 |
 | **用户全局安装** | `~/.xrk/plugins`（`xrkh plugin add`） | 不在源码仓内 |
@@ -177,7 +177,7 @@ xrkh restart
 
 > **Audience**: Integrators · Contributors
 
-On XRK-Harness, prefer **process plugins** (`tools` / `prompt` / `commands`), discovered by the Host and wired through presets. Client-shell overlays are covered under “Client overlay” below.
+On XRK-Harness, prefer **process plugins** (`tools` / `prompt` / `commands`), discovered by the Host and wired through presets. Open-platform map: [open-platform.md](./open-platform.md). Client-shell overlays are covered under “Client overlay” below and [client-plugin-development.md](./client-plugin-development.md). Surfaces: [plugin-surface-map.md](./plugin-surface-map.md).
 
 Contract API details: [plugin-loader.md](./plugin-loader.md). Profile selection: [profiles.md](./profiles.md).
 
@@ -192,7 +192,7 @@ Contract API details: [plugin-loader.md](./plugin-loader.md). Profile selection:
 | Tool pre/post hooks | `hooks` | `example-hooks` | `hooks.onPre` / `onPost` → ToolPipeline |
 | LLM brand | `llm` | `example-llm` | `llmBrands[]` → ProviderRegistry |
 | Channel descriptors | `channel` | `example-channel` | `channels[]` → `processChannels/list` |
-| Product-shell UI | `xrk.client` (client package) | `example-composer-action` · `example-theme-tokens` | Overlay under `~/.xrk/plugins/web/`, **not** a process kind; see [client-plugin-development.md](./client-plugin-development.md) |
+| Product-shell UI | `xrk.client` (client package) | `example-composer-action` · `example-theme-tokens` · **`example-workbench-push`** | Overlay under `~/.xrk/plugins/web/`, **not** a process kind; see [client-plugin-development.md](./client-plugin-development.md) · [open-platform.md](./open-platform.md) |
 
 ### Trust boundary (required reading)
 
@@ -279,7 +279,7 @@ Full Host reload still uses **`restart`** (pid lock). `--force` only stops recog
 
 | Kind | Location | In main-repo git / pnpm workspace? |
 |------|----------|-------------------------------------|
-| **Samples / built-in adapter** | `extensions/example-tools` · `example-channel` · `example-composer-action` · `example-theme-tokens` · `a2a` · `dsh-compat` | **Yes** (`.gitignore` / `pnpm-workspace` whitelist) |
+| **Samples / built-in adapter** | `extensions/example-tools` · `example-channel` · `example-composer-action` · `example-theme-tokens` · `example-shell-*` · **`example-workbench-push`** · `a2a` · `dsh-compat` | **Yes** (`.gitignore` / `pnpm-workspace` whitelist) |
 | **First-party native product plugins** | `xrk-sunflower-free` · `xrk-phone-bridge` · `xrkh-better-sidebar` · `xrkh-better-sidebar-plugin-office` | Source may live under `extensions/`; install via **Settings → Plugins** / `xrkh plugin add` into `~/.xrk/plugins`; inventory in [client-plugin-development.md](./client-plugin-development.md) |
 | **Third-party / local working tree** | `extensions/<plugin-id>/` (AGT-style local Core) | **Ignored by default**; OK for local smoke tests, do not commit into the main repo |
 | **User global install** | `~/.xrk/plugins` (`xrkh plugin add`) | Outside the monorepo |

@@ -6,8 +6,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   XRK_PLUG,
+  xrkPlugFitWorkbenchHeight,
+  xrkPlugFitWorkbenchWidth,
   xrkPlugPushFloor,
   xrkPlugShellOccupied,
+  xrkPlugWorkbenchRoom,
 } from '../src/index.ts'
 
 describe('XRK_PLUG layout floors', () => {
@@ -57,5 +60,22 @@ describe('XRK_PLUG layout floors', () => {
     expect(xrkPlugShellOccupied({ sidebar: 240, details: 360 })).toBe(600)
     expect(xrkPlugShellOccupied({})).toBe(0)
     expect(xrkPlugShellOccupied({ sidebar: Number.NaN, details: -3 })).toBe(0)
+  })
+
+  it('exposes layout attrs / keyboard / phone floor for authors', () => {
+    expect(XRK_PLUG.keyboardInsetCss).toBe('--xrk-keyboard-inset')
+    expect(XRK_PLUG.layoutAttrs.phone).toBe('data-xrk-layout-phone')
+    expect(XRK_PLUG.phoneMaxPx).toBe(768)
+    expect(XRK_PLUG.layoutFloors.workbenchPanelMin).toBe(280)
+  })
+
+  it('xrkPlugWorkbenchRoom / fit width / height follow first-party policy', () => {
+    expect(xrkPlugWorkbenchRoom(1200, 600)).toBe(320)
+    expect(xrkPlugFitWorkbenchWidth(400, 320, true)).toBe(320)
+    expect(xrkPlugFitWorkbenchWidth(400, 200, true)).toBe(0)
+    expect(xrkPlugFitWorkbenchWidth(400, 400, false)).toBe(0)
+    expect(xrkPlugFitWorkbenchHeight(500, 800, true)).toBe(500)
+    expect(xrkPlugFitWorkbenchHeight(600, 800, true)).toBe(520)
+    expect(xrkPlugFitWorkbenchHeight(400, 800, false)).toBe(0)
   })
 })

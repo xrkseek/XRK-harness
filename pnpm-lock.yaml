@@ -264,6 +264,8 @@ importers:
 
   extensions/example-theme-tokens: {}
 
+  extensions/example-workbench-push: {}
+
   packages/a2a:
     dependencies:
       '@xrkseek/core-tools':

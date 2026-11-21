@@ -13,6 +13,11 @@ import { createSnapshotStore, type SnapshotStore } from '@xrkseek/client-runtime
 import type { BoundActions } from '@xrkseek/client-ui-slots'
 import type { createLayoutStore } from './stores.ts'
 import {
+  clearDshWorkbenchPushAliases,
+  mirrorWorkbenchPushToDshAliases,
+  XRK_WORKBENCH_CSS,
+} from './dsh-style-aliases.ts'
+import {
   applyLayoutInsetsDom,
   clearLayoutInsetsDom,
   EMPTY_LAYOUT_INSETS,
@@ -42,11 +47,18 @@ export interface ILayout {
    */
   readonly insets: LayoutInsetsFace
   /**
-   * Reserve the floating bottom workbench height (0 = closed). Survives
-   * AppFrame column republish. Plugins that only stamp `--xrkh-workbench-height`
-   * should still call this so `--xrk-layout-inset-bottom` stays in contract.
+   * Canonical bottom-strip reservation (0 = closed). Updates
+   * `--xrk-layout-inset-bottom`, stamps `--xrkh-workbench-height` for compat
+   * skins, and survives AppFrame column republish. Prefer this over writing
+   * the CSS var alone.
    */
   reserveBottom(height: number): void
+  /**
+   * Canonical side-strip reservation (0 = closed). Stamps
+   * `--xrkh-workbench-width` so the shell frame yields (`margin-right`) and
+   * DSH aliases stay aligned. Prefer this over writing the CSS var alone.
+   */
+  reserveSide(width: number): void
 }
 
 /** Cross-plugin panel-action + insets face (ctx.layout). */
@@ -94,20 +106,44 @@ export class LayoutController implements ILayout {
     applyLayoutInsetsDom(merged)
   }
 
-  /** Community / Host bottom workbench height in CSS pixels. */
+  /**
+   * Canonical bottom-strip reservation (CSS pixels; 0 = closed).
+   * Stamps the workbench-height compat var so AppFrame / DSH aliases / CSS-only
+   * readers stay on one number.
+   */
   reserveBottom(height: number): void {
+    const bottom = Math.max(0, Math.round(height))
+    const root = document.documentElement
+    root.style.setProperty(XRK_WORKBENCH_CSS.height, `${bottom}px`)
+    mirrorWorkbenchPushToDshAliases()
     const prev = this.#insets.getSnapshot()
     this.publishInsets({
       details: prev.details,
       detailsOpen: prev.detailsOpen,
       sidebar: prev.sidebar,
       phone: prev.phone,
-      bottom: Math.max(0, Math.round(height)),
+      bottom,
     })
+  }
+
+  /**
+   * Canonical side-strip reservation (CSS pixels; 0 = closed).
+   * The shell frame reads `--xrkh-workbench-width` as `margin-right` so the
+   * in-flow columns yield instead of painting under the fixed panel.
+   */
+  reserveSide(width: number): void {
+    const side = Math.max(0, Math.round(width))
+    const root = document.documentElement
+    root.style.setProperty(XRK_WORKBENCH_CSS.width, `${side}px`)
+    mirrorWorkbenchPushToDshAliases()
   }
 
   /** Clear published insets (AppFrame unmount). */
   clearInsets(): void {
+    const root = document.documentElement
+    root.style.removeProperty(XRK_WORKBENCH_CSS.width)
+    root.style.removeProperty(XRK_WORKBENCH_CSS.height)
+    clearDshWorkbenchPushAliases()
     this.#insets.set(EMPTY_LAYOUT_INSETS)
     clearLayoutInsetsDom()
   }

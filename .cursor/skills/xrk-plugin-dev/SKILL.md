@@ -16,7 +16,7 @@ user-invocable: false
 | 主题 | 文档 | 代码 |
 |------|------|------|
 | 进程插件 | [plugin-development.md](../../../docs/plugin-development.md) | `extensions/example-tools/` |
-| **原生 client 壳** | [client-plugin-development.md](../../../docs/client-plugin-development.md) | 金样 `example-composer-action` · `example-theme-tokens` · `ui-model-selection`（`useModelSelection`）；**第一方产品** `xrk-sunflower-free` · `xrk-phone-bridge` · `xrkh-better-sidebar`(+office) |
+| **原生 client 壳** | [client-plugin-development.md](../../../docs/client-plugin-development.md) · [open-platform.md](../../../docs/open-platform.md) | 金样 `example-composer-action` · `example-theme-tokens` · **`example-workbench-push`** · `ui-model-selection`（`useModelSelection`）；**第一方产品** `xrk-sunflower-free` · `xrk-phone-bridge` · `xrkh-better-sidebar`(+office) |
 | Loader 契约 | [plugin-loader.md](../../../docs/plugin-loader.md) | `packages/server/loader/` |
 | Preset 接线 | [profiles.md](../../../docs/profiles.md) · [host-preset.md](../../../docs/host-preset.md) | `presets/*/preset.ts` |
 | 社区兼容器（可选 · 0.9 迁出） | [community-plugins.md](../../../docs/community-plugins.md) · [PACKAGE.md](../../../packages/server/http/src/dsh-compat/PACKAGE.md) | `packages/server/http/src/dsh-compat/` |

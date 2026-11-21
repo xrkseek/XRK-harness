@@ -39,7 +39,7 @@ import {
   rememberDetailsOpen,
   selectDetailsOpenMemory,
 } from './details-open-memory.ts'
-import { LAYOUT_INSET_ATTR } from './layout-insets.ts'
+import { LAYOUT_INSET_ATTR, resolveWorkbenchBottomForPublish } from './layout-insets.ts'
 import { bindVisualViewportKeyboard } from './visual-viewport-keyboard.ts'
 import {
   SHELL_SHORTCUT_DEFS,
@@ -513,6 +513,13 @@ export function AppFrame({
   useEffect(() => {
     const detailsOpen = !detailsCollapsed
     if (phone) {
+      // Phone chrome: no desktop bottom/side strip. Zero the compat workbench
+      // vars so CSS readers (and the frame margin-right push) cannot keep a
+      // stale desktop reservation while `insets.bottom` is forced to 0.
+      const root = document.documentElement
+      root.style.setProperty('--xrkh-workbench-width', '0px')
+      root.style.setProperty('--xrkh-workbench-height', '0px')
+      mirrorWorkbenchPushToDshAliases()
       publishLayoutInsets({
         details: 0,
         detailsOpen,
@@ -523,21 +530,21 @@ export function AppFrame({
       return
     }
     const root = document.documentElement
-    const readPluginBottom = (): number => {
-      // First-party plugins write `--xrkh-workbench-*` only; inbound mirror
-      // below republishes `--dsh-sidebar-*` for community CSS.
-      const raw = root.style.getPropertyValue('--xrkh-workbench-height').trim()
-      const n = Number.parseFloat(raw)
-      return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0
-    }
     const sync = (): void => {
+      // Compat: copy `--xrkh-workbench-*` → `--dsh-sidebar-*` for community CSS.
       mirrorWorkbenchPushToDshAliases()
+      // Bottom: CSS present (incl. 0px from reserveBottom) is live truth; CSS
+      // absent preserves the last reserveBottom so column ticks cannot wipe a
+      // JS-only reservation (third-party contract).
+      const resolved = resolveWorkbenchBottomForPublish(
+        root.style.getPropertyValue('--xrkh-workbench-height'),
+      )
       publishLayoutInsets({
         details: detailsCollapsed ? 0 : colsRef.current.details,
         detailsOpen,
         sidebar: colsRef.current.sidebar,
         phone: false,
-        bottom: readPluginBottom(),
+        ...('bottom' in resolved ? { bottom: resolved.bottom } : {}),
       })
     }
     sync()

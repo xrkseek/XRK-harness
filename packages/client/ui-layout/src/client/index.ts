@@ -31,6 +31,7 @@ export {
   applyLayoutInsetsDom,
   clearLayoutInsetsDom,
   layoutInsetsEqual,
+  resolveWorkbenchBottomForPublish,
   shellOccupiedWidth,
 } from './layout-insets.ts'
 /** Column concession floors / helpers — shell solve + workbench push contract. */
@@ -64,11 +65,13 @@ export {
 /** Soft-keyboard inset binder — APP shell attr is re-exported from ui-primitives. */
 export {
   KEYBOARD_INSET_CSS,
+  KEYBOARD_INSET_MAX_FRACTION,
   KEYBOARD_OPEN_ATTR,
   KEYBOARD_OPEN_THRESHOLD_PX,
   SHELL_KEYBOARD_ATTR,
   bindVisualViewportKeyboard,
   computeKeyboardInsetPx,
+  sanitizeKeyboardInsetPx,
 } from './visual-viewport-keyboard.ts'
 
 declare module '@xrkseek/cordis' {

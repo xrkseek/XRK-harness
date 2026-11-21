@@ -65,7 +65,7 @@ npm install -g @xrkseek/harness-cli@latest
 xrkh web
 ```
 
-`@latest` 当前为 **v0.8.4**（`0.8.x` 补丁）。上一 npm 补丁 `0.8.2`（`0.8.3` 仅 Desktop / 手机）、上一正式线 `0.7.22`、回退钉 `0.3.11` 仍可精确安装。
+`@latest` 当前为 **v0.8.5**（`0.8.x` 补丁）。上一 npm 补丁 `0.8.4`、上一正式线 `0.7.22`、回退钉 `0.3.11` 仍可精确安装。
 
 默认 **harness** preset（含 `web_search` / `web_fetch`）。仅要 fs 烟测时加 `--preset minimal`。
 
@@ -108,7 +108,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 多厂商 LLM Registry | **能跑** |
 | 社区 client（自研兼容器） | **能跑**（IM WS/sidecar · Vision · 记忆 · GenUI npm · TongFlow；`xrkh doctor`） |
 | 产品网页与浏览器 E2E | **能跑**（Playwright **17/17**；`pnpm test:web` 不进 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（当前 **v0.8.4** = `@latest`；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（当前 **v0.8.5** = `@latest`；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
 
 完整说明：[docs/status.md](./docs/status.md)。
 
@@ -121,10 +121,10 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 接 HTTP / Face · `@` 引用 | [http-api](./docs/http-api.md) · [host-face](./docs/host-face.md) · [references](./docs/modules/references.md) |
 | 装社区 client 包 | [community-plugins](./docs/community-plugins.md) · [plugin-loader](./docs/plugin-loader.md) |
 | Session、压缩、投影、事件契约 | [session](./docs/session.md) · [session-compaction](./docs/session-compaction.md) · [session-projection](./docs/modules/session-projection.md) · [protocol-events](./docs/protocol-events.md) |
-| 自己写工具 / 进程插件 | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
+| 自己写工具 / 进程插件 / **开放平台** | [open-platform](./docs/open-platform.md) · [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) · [client-plugin-development](./docs/client-plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.8.4](./docs/releases/v0.8.4.md) = `@latest` · 上一 npm [v0.8.2](./docs/releases/v0.8.2.md) · 上一正式线 [v0.7.22](./docs/releases/v0.7.22.md) · 回退钉 [v0.3.11](./docs/releases/v0.3.11.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.8.5](./docs/releases/v0.8.5.md) = `@latest` · 上一 npm [v0.8.4](./docs/releases/v0.8.4.md) · 上一正式线 [v0.7.22](./docs/releases/v0.7.22.md) · 回退钉 [v0.3.11](./docs/releases/v0.3.11.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ## 仓库里有什么
@@ -226,7 +226,7 @@ npm install -g @xrkseek/harness-cli@latest
 xrkh web
 ```
 
-`@latest` is currently **v0.8.4** (`0.8.x` patch). Previous npm patch `0.8.2` (`0.8.3` was Desktop / phone only), prior formal line `0.7.22`, and rollback pin `0.3.11` remain installable by exact pin.
+`@latest` is currently **v0.8.5** (`0.8.x` patch). Previous npm patch `0.8.4`, prior formal line `0.7.22`, and rollback pin `0.3.11` remain installable by exact pin.
 
 The default preset is **harness** (includes `web_search` / `web_fetch`). For an fs-only smoke test, add `--preset minimal`.
 
@@ -269,7 +269,7 @@ Optional: copy `.xrk/.credentials.yaml.example`, or use a brand `apiKeyEnv` (e.g
 | Multi-provider LLM Registry | **Working** |
 | Community clients (first-party adapter) | **Working** (IM WS/sidecar · vision · memory · GenUI npm · TongFlow; `xrkh doctor`) |
 | Product web & browser E2E | **Working** (Playwright **17/17**; `pnpm test:web` not in `pnpm check`) |
-| Public CLI package `@xrkseek/harness-cli` | **Working** (current **v0.8.4** = `@latest`; primary bin **`xrkh`**, also **`xrk-harness`**) |
+| Public CLI package `@xrkseek/harness-cli` | **Working** (current **v0.8.5** = `@latest`; primary bin **`xrkh`**, also **`xrk-harness`**) |
 
 Full matrix: [docs/status.md](./docs/status.md).
 
@@ -282,10 +282,10 @@ Full matrix: [docs/status.md](./docs/status.md).
 | HTTP / Face · `@` mentions | [http-api](./docs/http-api.md) · [host-face](./docs/host-face.md) · [references](./docs/modules/references.md) |
 | Install community clients | [community-plugins](./docs/community-plugins.md) · [plugin-loader](./docs/plugin-loader.md) |
 | Session, compaction, projection, events | [session](./docs/session.md) · [session-compaction](./docs/session-compaction.md) · [session-projection](./docs/modules/session-projection.md) · [protocol-events](./docs/protocol-events.md) |
-| Author tools / process plugins | [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) |
+| Author tools / process plugins / **open platform** | [open-platform](./docs/open-platform.md) · [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) · [client-plugin-development](./docs/client-plugin-development.md) |
 | Troubleshoot | [troubleshooting](./docs/troubleshooting.md) |
 | Short digest | [learn](./docs/learn.md) |
-| Release notes | [releases](./docs/releases/) (current [v0.8.4](./docs/releases/v0.8.4.md) = `@latest` · previous npm [v0.8.2](./docs/releases/v0.8.2.md) · prior formal [v0.7.22](./docs/releases/v0.7.22.md) · rollback pin [v0.3.11](./docs/releases/v0.3.11.md)) |
+| Release notes | [releases](./docs/releases/) (current [v0.8.5](./docs/releases/v0.8.5.md) = `@latest` · previous npm [v0.8.4](./docs/releases/v0.8.4.md) · prior formal [v0.7.22](./docs/releases/v0.7.22.md) · rollback pin [v0.3.11](./docs/releases/v0.3.11.md)) |
 | Full index | [docs/README.md](./docs/README.md) |
 
 ## Repository layout
