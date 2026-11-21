@@ -50,8 +50,8 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
       en: 'Thanks to everyone on the XRK-Harness team.',
     },
     {
-      zh: '感谢何润景、周易恒、炫彩马桶、乔晨欣、张利民、徐航、王乐、焦雅、贺吉诚、寇瑞哲、文具盒、刘雅婷。',
-      en: 'Special thanks to 何润景, 周易恒, 炫彩马桶, 乔晨欣, 张利民, 徐航, 王乐, 焦雅, 贺吉诚, 寇瑞哲, 文具盒, and 刘雅婷.',
+      zh: '感谢何润景、周易恒、炫彩马桶、乔晨欣、张利民、徐航、王乐、焦雅、贺吉诚、寇瑞哲。',
+      en: 'Special thanks to 何润景, 周易恒, 炫彩马桶, 乔晨欣, 张利民, 徐航, 王乐, 焦雅, 贺吉诚, and 寇瑞哲.',
     },
     {
       zh: '11.17 祝乔晨欣生日快乐！',
