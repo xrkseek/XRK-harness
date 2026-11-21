@@ -36,12 +36,6 @@ import {
   shouldShowPluginUpdateBadge,
   type PluginSourceClass,
 } from './plugin-source.ts'
-import {
-  canOfferPluginUpdate,
-  classifyPluginSource,
-  isPhoneGuestEngineEntry,
-  type PluginSourceClass,
-} from './plugin-source.ts'
 import css from './PluginInventorySettingsTab.module.css'
 
 export type { PluginInstallLog } from './plugin-install-ui-session.ts'

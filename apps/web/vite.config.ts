@@ -111,7 +111,8 @@ export default defineConfig({
           return isLangChunk ? 'assets/langs/[name]-[hash].js' : 'assets/[name]-[hash].js'
         },
         assetFileNames(asset): string {
-          const fileName = asset.names[0] ?? ''
+          // Vite 5 may omit `names` for some CSS-derived assets during css-post.
+          const fileName = asset.names?.[0] ?? asset.fileName ?? ''
           const isFont = FONT_EXTENSIONS.some(ext => fileName.endsWith(ext))
           return isFont ? 'assets/fonts/[name]-[hash][extname]' : 'assets/[name]-[hash][extname]'
         },

@@ -45,7 +45,6 @@ import { ProcessChannelsCard } from './ProcessChannelsCard.tsx'
 import { SandboxCard } from './SandboxCard.tsx'
 import { GitAttributionCard } from './GitAttributionCard.tsx'
 import { GitWorktreesCard } from './GitWorktreesCard.tsx'
-import { GitWorktreesCard } from './GitWorktreesCard.tsx'
 import { TelemetryCard } from './TelemetryCard.tsx'
 import { VideoGenCard } from './VideoGenCard.tsx'
 import { VideoAnalyzeCard } from './VideoAnalyzeCard.tsx'
@@ -88,7 +87,6 @@ import {
   GIT_ATTRIBUTION_NS,
   GitAttributionCardController,
 } from './git-attribution-card-controller.ts'
-import { GitWorktreesCardController } from './git-worktrees-card-controller.ts'
 import { GitWorktreesCardController } from './git-worktrees-card-controller.ts'
 import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
