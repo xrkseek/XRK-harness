@@ -45,6 +45,20 @@
   gap: 12px;
 }
 
+/* Between Installed / custom and Built-in / runtime. */
+.installSlot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: 4px 0 12px;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xl, 12px);
+  background: var(--dsw-alias-bg-layer-3);
+}
+
 .installRow {
   display: flex;
   align-items: center;
@@ -76,6 +90,10 @@
 
 .registrySelect {
   box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   height: 32px;
   min-width: 9rem;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -85,6 +103,13 @@
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.registrySelect:disabled {
+  cursor: default;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .registryCustomField {
@@ -392,6 +417,18 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   opacity: 0.85;
+}
+
+@media (max-width: 767px) {
+  .search input {
+    height: 40px;
+    font-size: 16px; /* avoid iOS / WebView focus zoom */
+    line-height: 22px;
+  }
+
+  .search input::placeholder {
+    font-size: 16px;
+  }
 }
 
 @media (max-width: 767px) {
@@ -1427,6 +1464,24 @@
   .cardTitle {
     font-size: 12.5px;
   }
+}
+
+/* Packaged WebView may report width >767 while AppFrame stamps phone —
+   mirror the density rules off the layout stamp. */
+:global(html[data-xrk-layout-phone]) .cards {
+  grid-template-columns: 1fr;
+}
+
+:global(html[data-xrk-layout-phone]) .filterRow {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+:global(html[data-xrk-layout-phone]) .cardContent {
+  min-height: 44px;
+  padding: 8px 10px;
 }
 
 /* Packaged WebView may report width >767 while AppFrame stamps phone —

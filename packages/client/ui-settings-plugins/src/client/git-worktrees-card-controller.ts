@@ -2,6 +2,9 @@
  * Plugins-home card for the optional `git-worktrees` product bundle.
  * Enable path = Face pluginInventory.setEnabled → Host syncManagedProcessPlugins
  * → create_worktree tools when the soft-disable marker is cleared.
+ *
+ * Inject face uses the standard `hooks` seat so web-react synthesizes
+ * `useGitWorktreesCard` (SnapshotStore has no selector hook of its own).
  */
 import { createSnapshotStore, type SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { PluginEntryId } from '@xrkseek/xrk-api-remotes/client'
@@ -16,7 +19,9 @@ export type GitWorktreesCardState = {
 }
 
 export type GitWorktreesCardFace = {
-  readonly useGitWorktreesCard: SnapshotStore<GitWorktreesCardState>['useSnapshot']
+  hooks: {
+    gitWorktreesCard: SnapshotStore<GitWorktreesCardState>
+  }
   readonly setEnabled: (enabled: boolean) => void
   readonly refresh: () => void
 }
@@ -45,9 +50,9 @@ export class GitWorktreesCardController {
     void this.refresh()
   }
 
-  get face(): GitWorktreesCardFace {
+  inject(): GitWorktreesCardFace {
     return {
-      useGitWorktreesCard: this.store.useSnapshot,
+      hooks: { gitWorktreesCard: this.store },
       setEnabled: (enabled) => { void this.apply(enabled) },
       refresh: () => { void this.refresh() },
     }
@@ -67,7 +72,7 @@ export class GitWorktreesCardController {
   }
 
   private publish(): void {
-    this.store.setSnapshot(this.projection())
+    this.store.set(this.projection())
   }
 
   async refresh(): Promise<void> {

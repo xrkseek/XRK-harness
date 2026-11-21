@@ -78,27 +78,54 @@ export function resolveDesktopBuildResourcesDir(
   return path.join(path.resolve(desktopAppRoot), "build");
 }
 
+export interface ResolveDesktopWindowIconPathOptions {
+  readonly platform?: NodeJS.Platform;
+  readonly desktopAppRoot?: string;
+  /** Electron `process.resourcesPath` (optional `icons/` fallback). */
+  readonly resourcesPath?: string;
+  /** Electron `app.getAppPath()` (asar `build/` next to the package). */
+  readonly appPath?: string;
+}
+
 /**
- * Window / taskbar icon path for the running shell.
- * Prefers `.ico` on Windows, `.icns` on macOS, else `icon.png`.
+ * Window icon path — same shape as git-repository-manager
+ * (`path.join(__dirname, 'assets', 'icon.ico')`).
+ *
+ * Prefer `build/icon.ico` beside the app root (dev monorepo or packaged asar;
+ * BrowserWindow accepts an asar string path). Then `resources/icons`.
+ * Win32 prefers `.ico`. Do not gate on `nativeImage.createFromPath` (asar → empty).
  */
 export function resolveDesktopWindowIconPath(
-  options: {
-    readonly platform?: NodeJS.Platform;
-    readonly desktopAppRoot?: string;
-  } = {},
+  options: ResolveDesktopWindowIconPathOptions = {},
 ): string | undefined {
-  const root = resolveDesktopBuildResourcesDir(options.desktopAppRoot);
   const platform = options.platform ?? process.platform;
-  const candidates =
+  const names =
     platform === "win32"
       ? ["icon.ico", "icon.png"]
       : platform === "darwin"
-        ? ["icon.icns", "icon.png"]
-        : ["icon.png"];
-  for (const name of candidates) {
-    const candidate = path.join(root, name);
-    if (existsSync(candidate)) return candidate;
+        ? ["icon.png", "icon.icns", "icon.ico"]
+        : ["icon.png", "icon.ico"];
+
+  const roots: string[] = [
+    resolveDesktopBuildResourcesDir(options.desktopAppRoot),
+  ];
+  if (options.appPath?.trim()) {
+    roots.push(path.join(path.resolve(options.appPath), "build"));
+  }
+  const resourcesPath =
+    options.resourcesPath?.trim() ||
+    (typeof process !== "undefined" && typeof process.resourcesPath === "string"
+      ? process.resourcesPath
+      : undefined);
+  if (resourcesPath) {
+    roots.push(path.join(path.resolve(resourcesPath), "icons"));
+  }
+
+  for (const root of roots) {
+    for (const name of names) {
+      const candidate = path.join(root, name);
+      if (existsSync(candidate)) return candidate;
+    }
   }
   return undefined;
 }

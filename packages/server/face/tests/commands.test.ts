@@ -786,16 +786,6 @@ describe("pluginInventory/list", () => {
     expect(listed.result.value).toEqual({
       entries: [
         {
-          // Product optional (default off) is always listed so Settings can
-          // toggle it; soft-disabled here ⇒ enabled:false, no fiberPhase.
-          entryId: "git-worktrees",
-          moduleName: "git-worktrees",
-          enabled: false,
-          fiberPhase: null,
-          managed: true,
-          kind: "process",
-        },
-        {
           entryId: "@xrkseek/client-runtime",
           moduleName: "@xrkseek/client-runtime",
           enabled: true,
@@ -817,6 +807,16 @@ describe("pluginInventory/list", () => {
           moduleName: "example-tools",
           enabled: true,
           fiberPhase: "active",
+          managed: false,
+          kind: "process",
+        },
+        {
+          // Product optional: runtime list seat (managed:false); Plugins card owns
+          // the switch. Soft-disabled ⇒ enabled:false, no fiberPhase.
+          entryId: "git-worktrees",
+          moduleName: "git-worktrees",
+          enabled: false,
+          fiberPhase: null,
           managed: false,
           kind: "process",
         },
@@ -851,14 +851,6 @@ describe("pluginInventory/list", () => {
     expect(listed.result.value).toEqual({
       entries: [
         {
-          entryId: "git-worktrees",
-          moduleName: "git-worktrees",
-          enabled: false,
-          fiberPhase: null,
-          managed: true,
-          kind: "process",
-        },
-        {
           entryId: "community-cordis",
           moduleName: "community-cordis",
           enabled: true,
@@ -866,6 +858,14 @@ describe("pluginInventory/list", () => {
           // Applied host fiber ≠ CLI-managed; disable/delete stay off without inventory.
           managed: false,
           kind: "cordis",
+        },
+        {
+          entryId: "git-worktrees",
+          moduleName: "git-worktrees",
+          enabled: false,
+          fiberPhase: null,
+          managed: false,
+          kind: "process",
         },
       ],
       agentPresets: expect.any(Array),

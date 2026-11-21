@@ -524,7 +524,9 @@ export function listFacePluginInventory(
     });
   }
 
-  // Product optional bundles (default off) always appear so Settings can toggle.
+  // Product optional bundles (default off) always appear for the Plugins
+  // config card. List them as runtime (managed: false) — the Settings card
+  // owns the switch; Plugin list must not show a second toggle.
   for (const id of OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS) {
     if (seen.has(id)) continue;
     const softDisabled = softDisabledOf(id);
@@ -533,7 +535,7 @@ export function listFacePluginInventory(
       moduleName: id,
       enabled: !softDisabled,
       fiberPhase: softDisabled ? null : "active",
-      managed: true,
+      managed: false,
       kind: "process",
     });
   }
@@ -557,23 +559,47 @@ export function listFacePluginInventory(
     });
   }
 
+  // Desired MCP rows that are soft-off or master-off still need a list row
+  // so Settings can re-enable without re-pasting the card.
+  for (const row of mcpDesired) {
+    const id = `mcp:${row.serverName}`;
+    if (seen.has(id)) continue;
+    const desiredOn = row.enabled !== false;
+    // Master on + desired on but not yet in Host plugins → connecting (not restart).
+    const fiberPhase: FacePluginFiberPhase =
+      desiredOn && mcpMasterOn ? "loading" : null;
+    push({
+      entryId: id,
+      moduleName: id,
+      enabled: desiredOn,
+      fiberPhase,
+      managed: true,
+      kind: "mcp",
+    });
+  }
+
   for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i]!;
-    if (!entry.managed) continue;
+    let entry = entries[i]!;
+    // Product optionals (git-worktrees): always surface under Built-in / runtime
+    // even when a live Host half was classified managed for soft-disable.
+    // The Plugins config card owns enable; list must not show a second switch.
+    const productOptional = OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS.includes(
+      entry.entryId,
+    );
+    if (productOptional && entry.managed) {
+      entry = { ...entry, managed: false };
+      entries[i] = entry;
+    }
+    // needsRestart still tracks a live Host half that disagrees with soft-disable
+    // (product optionals included when live).
+    if (!productOptional && !entry.managed) continue;
     // MCP connect/disconnect is pure hot remount (ensureMcpLiveIfIdle /
     // reconcile). "Not live yet" means connecting / parked / failed — never
     // "restart Host". Skip sticky needsRestart for mcp:* entirely.
     if (entry.kind === "mcp" || entry.entryId.startsWith("mcp:")) continue;
     const live = liveIds.has(entry.entryId);
-    // Host-gated product optionals (e.g. git-worktrees): durable soft-disable is
-    // the live switch. Without a loaded process/client half, restart cannot
-    // materialize the row — do not sticky-flag needsRestart.
-    if (
-      OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS.includes(entry.entryId) &&
-      !live
-    ) {
-      continue;
-    }
+    // Without a loaded process half, restart cannot materialize the row.
+    if (productOptional && !live) continue;
     const needsRestart =
       (entry.enabled && !live) || (!entry.enabled && live);
     if (!needsRestart) continue;
@@ -622,7 +648,11 @@ export function setFacePluginInventoryEnabled(
   }
   const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   if (!entry) return { ok: false, error: "plugin not found" };
-  if (!entry.managed) return { ok: false, error: "builtin plugins cannot be toggled here" };
+  // Product optionals list as runtime (managed: false) but the Plugins config
+  // card still soft-disables them via this path.
+  if (!entry.managed && !isOptionalProductBundle(entryId)) {
+    return { ok: false, error: "builtin plugins cannot be toggled here" };
+  }
   // Durable key = CLI inventory package name; aliases stripped on write.
   setSoftDisabledAt(pluginsDirOf(runtime), {
     enabled,

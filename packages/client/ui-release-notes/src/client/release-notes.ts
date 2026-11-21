@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.3',
+    date: '2026-11-21',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '插件安装区上移；设置多项改 Menu 选择；Git worktree 归运行时面。',
+        en: 'Plugin install slot above builtins; Settings Menu selects; Git worktree as runtime surface.',
+      },
+      {
+        zh: 'Desktop / 手机启动图标圆角牌；奶油底黑瓣进 asar；Win AUMID 改为 com.xrkseek.XRKHarness。',
+        en: 'Desktop / phone launcher icons use the rounded plate; cream+petals in asar; Win AUMID is com.xrkseek.XRKHarness.',
+      },
+      {
+        zh: 'Desktop 对齐 0.8.3。完整清单见 docs/releases/v0.8.3.md。',
+        en: 'Desktop aligns to 0.8.3. Full list: docs/releases/v0.8.3.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.2',
     date: '2026-11-20',
     title: {

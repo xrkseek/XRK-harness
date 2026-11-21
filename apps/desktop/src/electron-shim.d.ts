@@ -3,6 +3,15 @@
  * Runtime still requires a real Electron install (product shell not ready).
  */
 declare module "electron" {
+  export class NativeImage {
+    isEmpty(): boolean;
+    getSize(): { width: number; height: number };
+  }
+
+  export const nativeImage: {
+    createFromPath(path: string): NativeImage;
+  };
+
   export interface WebPreferences {
     preload?: string;
     nodeIntegration?: boolean;
@@ -20,7 +29,7 @@ declare module "electron" {
     minHeight?: number;
     show?: boolean;
     title?: string;
-    icon?: string;
+    icon?: string | NativeImage;
     frame?: boolean;
     resizable?: boolean;
     thickFrame?: boolean;
@@ -45,6 +54,7 @@ declare module "electron" {
     focus(): void;
     close(): void;
     setTitle(title: string): void;
+    setIcon(icon: NativeImage | string): void;
     once(event: "ready-to-show", listener: () => void): this;
     on(
       event: "closed" | "maximize" | "unmaximize",
@@ -64,6 +74,10 @@ declare module "electron" {
 
   export interface App {
     requestSingleInstanceLock(): boolean;
+    setName(name: string): void;
+    getName(): string;
+    /** Windows AppUserModelID — call before creating windows. */
+    setAppUserModelId(id: string): void;
     quit(): void;
     exit(code?: number): void;
     whenReady(): Promise<void>;

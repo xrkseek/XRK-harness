@@ -4,8 +4,14 @@
  * — when one stands — the reset that stages a clear back to the composition
  * layer. Nothing here writes: a control reports what the user typed, and the
  * card's save is the single point where a draft becomes a document mutation.
+ *
+ * Choice controls use the portaled {@link Menu} instead of a native `<select>`:
+ * Settings panels keep `overflow: hidden` + enter transforms, which break the
+ * Android WebView / embedded-browser native picker (tap shows no options).
  */
 
+import { useMemo, useState } from 'react'
+import { IconChevronDownOutlineRegular, Menu } from '@xrkseek/client-ui-primitives'
 import css from './fields.module.css'
 
 /** What every field control needs regardless of its value type. */
@@ -35,6 +41,8 @@ export interface FieldProps {
   /** Stage a clear so the field re-inherits the composition layer. */
   onReset: () => void
 }
+
+type SelectOption = { readonly value: string; readonly label: string }
 
 /**
  * Label + control + hint without override chrome (list editors, MCP rows).
@@ -68,30 +76,85 @@ export function PlainField(props: {
   )
 }
 
-/** Same chrome as PlainField, for a short option list (MCP transport). */
+/** Portaled menu picker — same closed chrome as the old native select. */
+function MenuSelectControl(props: {
+  id: string
+  label: string
+  value: string
+  disabled: boolean
+  invalid?: boolean
+  options: readonly SelectOption[]
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = useMemo(
+    () => props.options.find((option) => option.value === props.value),
+    [props.options, props.value],
+  )
+  const items = useMemo(
+    () => props.options.map((option) => ({ id: option.value, label: option.label })),
+    [props.options],
+  )
+  const display = selected?.label ?? props.value
+  return (
+    <Menu
+      open={open && !props.disabled}
+      onClose={() => { setOpen(false) }}
+      items={items}
+      selectedId={props.value}
+      portal
+      align="start"
+      onSelect={(id) => {
+        setOpen(false)
+        if (id !== props.value) props.onChange(id)
+      }}
+      anchor={(
+        <button
+          type="button"
+          id={props.id}
+          className={
+            props.invalid === true
+              ? `${css.input} ${css.select} ${css.selectTrigger} ${css.inputInvalid}`
+              : `${css.input} ${css.select} ${css.selectTrigger}`
+          }
+          disabled={props.disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open && !props.disabled}
+          aria-label={props.label}
+          aria-invalid={props.invalid === true || undefined}
+          onClick={() => {
+            if (!props.disabled) setOpen((next) => !next)
+          }}
+        >
+          <span className={css.selectValue}>{display}</span>
+          <IconChevronDownOutlineRegular className={css.selectChevron} size={12} aria-hidden="true" />
+        </button>
+      )}
+    />
+  )
+}
+
+/** Same chrome as PlainField, for a short option list (MCP transport / sandbox). */
 export function SelectField(props: {
   id: string
   label: string
   hint: string
   value: string
   disabled: boolean
-  options: readonly { readonly value: string; readonly label: string }[]
+  options: readonly SelectOption[]
   onChange: (value: string) => void
 }) {
   return (
     <div className={css.field}>
       <label className={css.label} htmlFor={props.id}>{props.label}</label>
-      <select
+      <MenuSelectControl
         id={props.id}
-        className={`${css.input} ${css.select}`}
+        label={props.label}
         value={props.value}
         disabled={props.disabled}
-        onChange={(event) => { props.onChange(event.target.value) }}
-      >
-        {props.options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
+        options={props.options}
+        onChange={props.onChange}
+      />
       <p className={css.hint}>{props.hint}</p>
     </div>
   )
@@ -154,7 +217,7 @@ export function ValueField(props: FieldProps & {
  * @returns the labelled control.
  */
 export function ChoiceField(props: FieldProps & {
-  options: readonly { readonly value: string; readonly label: string }[]
+  options: readonly SelectOption[]
 }) {
   return (
     <div className={css.field}>
@@ -176,18 +239,15 @@ export function ChoiceField(props: FieldProps & {
           )
           : null}
       </div>
-      <select
+      <MenuSelectControl
         id={props.id}
-        className={`${css.input} ${css.select}`}
+        label={props.label}
         value={props.text}
         disabled={props.disabled}
-        {...props.invalid ? { 'aria-invalid': true } : {}}
-        onChange={(event) => { props.onEdit(event.target.value) }}
-      >
-        {props.options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
+        invalid={props.invalid}
+        options={props.options}
+        onChange={props.onEdit}
+      />
       <p className={props.invalid ? css.invalid : css.hint}>
         {props.invalid ? props.invalidLabel : props.hint}
       </p>

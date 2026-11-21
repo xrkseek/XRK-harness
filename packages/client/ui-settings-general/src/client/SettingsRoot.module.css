@@ -131,9 +131,10 @@
      styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  /* Enter only (panel unmounts on close). Match Modal: opacity + transform. */
+  /* Enter only (panel unmounts on close). Opacity-only end state — leaving a
+     residual transform / will-change layer breaks Android WebView native
+     pickers and was still risky for portaled menus over the panel. */
   animation: settingsPanelIn 180ms var(--ds-ease-out, ease) both;
-  will-change: opacity, transform;
 }
 
 @keyframes settingsMaskIn {
@@ -148,7 +149,7 @@
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
@@ -309,11 +310,9 @@
 @keyframes settingsOptionsIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 

@@ -370,9 +370,10 @@ describe("managed plugin inventory paths", () => {
       hostPublic: { pluginsDir: altRoot },
     });
     expect(resolveManagedPluginsDir(runtime)).toBe(path.resolve(altRoot));
+    // Managed packages sort ahead of runtime product optionals (git-worktrees).
     expect(
       listFacePluginInventory(runtime).map((e) => e.entryId),
-    ).toEqual(["git-worktrees", "real-plugin"]);
+    ).toEqual(["real-plugin", "git-worktrees"]);
     setFacePluginInventoryEnabled(runtime, "real-plugin", false);
     expect(existsSync(path.join(altRoot, "web", "boot.json"))).toBe(false);
     expect(
@@ -528,7 +529,7 @@ describe("managed plugin inventory paths", () => {
     );
   });
 
-  it("lists git-worktrees as a toggleable optional bundle even when not installed", () => {
+  it("lists git-worktrees as runtime (no list toggle) but Settings card can enable", () => {
     const productDir = mkdtempSync(path.join(tmpdir(), "xrk-git-wt-"));
     temps.push(productDir);
     const plugins = path.join(productDir, "plugins");
@@ -543,7 +544,8 @@ describe("managed plugin inventory paths", () => {
     );
     expect(row).toMatchObject({
       entryId: "git-worktrees",
-      managed: true,
+      // Runtime / Built-in list seat — Plugins config card owns the switch.
+      managed: false,
       enabled: false,
       kind: "process",
     });
@@ -554,9 +556,96 @@ describe("managed plugin inventory paths", () => {
     const enabled = listFacePluginInventory(runtime).find(
       (e) => e.entryId === "git-worktrees",
     );
-    expect(enabled?.enabled).toBe(true);
+    expect(enabled).toMatchObject({
+      managed: false,
+      enabled: true,
+    });
     // Host-gated optional: enable without a live process half must not sticky-flag.
     expect(enabled?.needsRestart).toBeUndefined();
+  });
+
+  it("does not mark needsRestart for desired MCP rows that are not live yet", () => {
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-mcp-nr-"));
+    temps.push(productDir);
+    const plugins = path.join(productDir, "plugins");
+    mkdirSync(plugins, { recursive: true });
+    const namespaces = {
+      ensure: (_ns: string) => ({
+        base: { servers: [], allowConnect: true },
+        user: {
+          allowConnect: true,
+          servers: [
+            { serverName: "everything", command: "npx" },
+            { serverName: "memory", command: "npx", enabled: false },
+          ],
+        },
+      }),
+    };
+    const listed = listFacePluginInventory({
+      productDir,
+      plugins: [],
+      webPlugins: [],
+      hostPublic: { pluginsDir: plugins },
+      settingsNamespaces: namespaces,
+    } as never);
+    const everything = listed.find((e) => e.entryId === "mcp:everything");
+    const memory = listed.find((e) => e.entryId === "mcp:memory");
+    expect(everything).toMatchObject({
+      kind: "mcp",
+      managed: true,
+      enabled: true,
+      fiberPhase: "loading",
+    });
+    expect(everything?.needsRestart).toBeUndefined();
+    expect(memory).toMatchObject({
+      kind: "mcp",
+      managed: true,
+      enabled: false,
+      fiberPhase: null,
+    });
+    expect(memory?.needsRestart).toBeUndefined();
+  });
+
+  it("does not mark needsRestart for desired MCP rows that are not live yet", () => {
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-mcp-nr-"));
+    temps.push(productDir);
+    const plugins = path.join(productDir, "plugins");
+    mkdirSync(plugins, { recursive: true });
+    const namespaces = {
+      ensure: (_ns: string) => ({
+        base: { servers: [], allowConnect: true },
+        user: {
+          allowConnect: true,
+          servers: [
+            { serverName: "everything", command: "npx" },
+            { serverName: "memory", command: "npx", enabled: false },
+          ],
+        },
+      }),
+    };
+    const listed = listFacePluginInventory({
+      productDir,
+      plugins: [],
+      webPlugins: [],
+      hostPublic: { pluginsDir: plugins },
+      settingsNamespaces: namespaces,
+    } as never);
+    const everything = listed.find((e) => e.entryId === "mcp:everything");
+    const memory = listed.find((e) => e.entryId === "mcp:memory");
+    expect(everything).toMatchObject({
+      kind: "mcp",
+      managed: true,
+      enabled: true,
+      fiberPhase: "loading",
+    });
+    expect(everything?.needsRestart).toBeUndefined();
+    expect(memory).toMatchObject({
+      kind: "mcp",
+      managed: true,
+      enabled: false,
+      fiberPhase: null,
+    });
+    expect(memory?.needsRestart).toBeUndefined();
   });
 
   it("does not mark needsRestart for desired MCP rows that are not live yet", () => {

@@ -136,11 +136,19 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-// Windows toasts / taskbar grouping need the same AUMID as electron-builder
-// `appId`. Without it, HTML5 Notification and brief Chromium helpers can show
-// up under Google Chrome and bounce that icon on the taskbar.
+// Jump list / pin title use app.getName(). Packaged package.json `name` is the
+// npm id; unpackaged Electron defaults to "Electron".
+app.setName(DESKTOP_BUILDER_CONFIG.productName);
+
+// Windows: must call before creating windows. Electron's fallback AUMID is
+// `electron.app.<ProductName>` (application_info_win.cc). Share one id with
+// Start Menu / Desktop shortcuts — never with monorepo electron.exe (.dev).
 if (process.platform === "win32") {
-  app.setAppUserModelId(DESKTOP_BUILDER_CONFIG.appId);
+  app.setAppUserModelId(
+    app.isPackaged
+      ? DESKTOP_BUILDER_CONFIG.appId
+      : `${DESKTOP_BUILDER_CONFIG.appId}.dev`,
+  );
 }
 
 /** Resolve splash floor from durable Settings (Host not up yet). */
@@ -151,15 +159,31 @@ function resolveBootColorScheme(): DesktopColorScheme {
   );
 }
 
+/**
+ * Brand icon path for the main window.
+ * git-repository-manager: `icon: path.join(__dirname, 'assets', 'icon.ico')`
+ * — pass a **string path**, not `nativeImage.createFromPath` (asar → empty).
+ */
+function resolveMainWindowBrandIconPath(): string | undefined {
+  return resolveDesktopWindowIconPath({
+    platform: process.platform,
+    resourcesPath: process.resourcesPath,
+    appPath: app.getAppPath(),
+    desktopAppRoot: DESKTOP_APP_ROOT,
+  });
+}
+
 function createMainBrowserWindow(): BrowserWindow {
-  const icon = resolveDesktopWindowIconPath({ platform: process.platform });
+  // git-repository-manager: only `icon: path.join(__dirname, 'assets', 'icon.ico')`.
+  // No setIcon / setAppDetails — those fight Win32 AUMID + shortcut grouping.
+  const brandIconPath = resolveMainWindowBrandIconPath();
   const colorScheme = resolveBootColorScheme();
   const window = new BrowserWindow({
     ...DESKTOP_WINDOW_DEFAULTS,
     backgroundColor: desktopSplashBackgroundColor(colorScheme),
     ...desktopWindowPlatformOptions(process.platform),
     title: desktopWindowTitle(),
-    ...(icon !== undefined ? { icon } : {}),
+    ...(brandIconPath !== undefined ? { icon: brandIconPath } : {}),
     webPreferences: {
       ...DESKTOP_WEB_PREFERENCES,
       preload: PRELOAD_APP,

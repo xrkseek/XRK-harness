@@ -45,6 +45,7 @@ import { ProcessChannelsCard } from './ProcessChannelsCard.tsx'
 import { SandboxCard } from './SandboxCard.tsx'
 import { GitAttributionCard } from './GitAttributionCard.tsx'
 import { GitWorktreesCard } from './GitWorktreesCard.tsx'
+import { GitWorktreesCard } from './GitWorktreesCard.tsx'
 import { TelemetryCard } from './TelemetryCard.tsx'
 import { VideoGenCard } from './VideoGenCard.tsx'
 import { VideoAnalyzeCard } from './VideoAnalyzeCard.tsx'
@@ -87,6 +88,7 @@ import {
   GIT_ATTRIBUTION_NS,
   GitAttributionCardController,
 } from './git-attribution-card-controller.ts'
+import { GitWorktreesCardController } from './git-worktrees-card-controller.ts'
 import { GitWorktreesCardController } from './git-worktrees-card-controller.ts'
 import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
@@ -530,7 +532,7 @@ export function apply(ctx: ClientContext): void {
   })
   ctx.effect(() => () => { gitWorktrees.dispose() }, 'ui-settings-plugins: git-worktrees')
   ctx.effect(
-    () => ctx.remote.$on('settings/document-updated', () => { gitWorktrees.face.refresh() }),
+    () => ctx.remote.$on('settings/document-updated', () => { void gitWorktrees.refresh() }),
     'ui-settings-plugins: git-worktrees refresh',
   )
   ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
@@ -538,7 +540,7 @@ export function apply(ctx: ClientContext): void {
     key: 'git-worktrees',
     order: 14,
     locale: NS,
-    inject: () => gitWorktrees.face,
+    inject: () => gitWorktrees.inject(),
   }, GitWorktreesCard))
   pluginCard(WEB_SEARCH_NS, 30, () => webSearch.inject(), WebSearchCard)
   pluginCard(BROWSER_NS, 40, () => browser.inject(), BrowserCard)

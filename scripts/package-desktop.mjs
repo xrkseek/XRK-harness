@@ -309,6 +309,15 @@ function ensureProduceArtifacts() {
   );
   if ((stubs.status ?? 1) !== 0) process.exit(stubs.status ?? 1);
 
+  // Refresh build/icon.{png,ico} from logo-plate before electron-builder.
+  process.stdout.write("package-desktop: prepare:icons…\n");
+  const prepIcons = spawnSync(
+    "pnpm",
+    ["--filter", "@xrkseek/harness-desktop", "prepare:icons"],
+    { cwd: ROOT, stdio: "inherit", shell: true },
+  );
+  if ((prepIcons.status ?? 1) !== 0) process.exit(prepIcons.status ?? 1);
+
   // Always refresh host-bundle so workspace Face/pipe fixes are not skipped by a
   // stale deploy tree from an earlier package run.
   process.stdout.write("package-desktop: prepare-host-bundle…\n");

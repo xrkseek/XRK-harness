@@ -71,7 +71,11 @@ export const DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES = [
 
 /** electron-builder product identity (apps/desktop/electron-builder.config.mjs). */
 export const DESKTOP_BUILDER_CONFIG = {
-  appId: "com.xrkseek.harness",
+  // Fresh AUMID (not com.xrkseek.harness): Windows caches taskbar icons by
+  // AppUserModelID. That old id was polluted by monorepo `electron.exe` pins
+  // (TaskBar\\Electron.lnk) — Electron's own default format is
+  // `electron.app.$1` (shell/common/application_info_win.cc).
+  appId: "com.xrkseek.XRKHarness",
   productName: "XRK Harness",
   artifactName: "xrk-harness-${version}-${os}-${arch}.${ext}",
   configFile: "electron-builder.config.mjs",

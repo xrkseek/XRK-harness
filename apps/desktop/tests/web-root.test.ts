@@ -98,13 +98,14 @@ describe("resolveDesktopWebRoot", () => {
 });
 
 describe("desktop brand icons", () => {
-  it("ships build/icon.png and build/icon.ico from the product plate", () => {
+  it("ships build/icon.png and build/icon.ico from the product plate", async () => {
     // Icons are gitignored under apps/desktop/build/; generate from logo-plate.
-    spawnSync(
+    const prepared = spawnSync(
       process.execPath,
       [path.join(DESKTOP_APP_ROOT, "scripts", "prepare-brand-icons.mjs")],
-      { cwd: path.resolve(DESKTOP_APP_ROOT, "..", ".."), stdio: "pipe" },
+      { cwd: path.resolve(DESKTOP_APP_ROOT, "..", ".."), stdio: "pipe", encoding: "utf8" },
     );
+    expect(prepared.status).toBe(0);
     const build = resolveDesktopBuildResourcesDir(DESKTOP_APP_ROOT);
     expect(resolveDesktopWindowIconPath({ platform: "win32", desktopAppRoot: DESKTOP_APP_ROOT })).toBe(
       path.join(build, "icon.ico"),
@@ -115,5 +116,77 @@ describe("desktop brand icons", () => {
     expect(resolveDesktopWindowIconPath({ platform: "linux", desktopAppRoot: DESKTOP_APP_ROOT })).toBe(
       path.join(build, "icon.png"),
     );
+    // Rounded plate: keep transparent corners (do not flatten onto cream).
+    // prepare:icons stdout + PNG magic; corner alpha via the same sharp loader
+    // path as scripts/prepare-brand-icons.mjs (devDependency may be hoisted).
+    expect(prepared.stdout ?? "").toContain("rounded alpha");
+    const iconPng = path.join(build, "icon.png");
+    expect(existsSync(iconPng)).toBe(true);
+    const { createRequire } = await import("node:module");
+    const { readdirSync } = await import("node:fs");
+    const repoRoot = path.resolve(DESKTOP_APP_ROOT, "..", "..");
+    let sharp: typeof import("sharp") | undefined;
+    for (const pkg of [
+      path.join(DESKTOP_APP_ROOT, "package.json"),
+      path.join(repoRoot, "package.json"),
+    ]) {
+      try {
+        sharp = createRequire(pkg)("sharp");
+        break;
+      } catch {
+        // try next
+      }
+    }
+    if (!sharp) {
+      const pnpm = path.join(repoRoot, "node_modules", ".pnpm");
+      for (const entry of readdirSync(pnpm)) {
+        if (!entry.startsWith("sharp@")) continue;
+        const mod = path.join(pnpm, entry, "node_modules", "sharp");
+        if (existsSync(path.join(mod, "package.json"))) {
+          sharp = createRequire(path.join(mod, "package.json"))(mod);
+          break;
+        }
+      }
+    }
+    expect(sharp).toBeDefined();
+    const { data, info } = await sharp!(iconPng)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    expect(info.width).toBeGreaterThan(0);
+    expect(data[3]).toBeLessThan(16);
+  });
+
+  it("prefers app-root build/ (GRM) over resources/icons", () => {
+    const resources = mkdtempSync(path.join(tmpdir(), "xrk-desktop-icons-"));
+    const icons = path.join(resources, "icons");
+    const asarBuild = path.join(resources, "app.asar", "build");
+    mkdirSync(icons, { recursive: true });
+    mkdirSync(asarBuild, { recursive: true });
+    writeFileSync(path.join(icons, "icon.ico"), "packaged-ico");
+    writeFileSync(path.join(asarBuild, "icon.ico"), "asar-ico");
+    expect(
+      resolveDesktopWindowIconPath({
+        platform: "win32",
+        resourcesPath: resources,
+        appPath: path.join(resources, "app.asar"),
+        desktopAppRoot: path.join(resources, "missing-monorepo"),
+      }),
+    ).toBe(path.join(asarBuild, "icon.ico"));
+  });
+
+  it("falls back to resources/icons when build/ missing", () => {
+    const resources = mkdtempSync(path.join(tmpdir(), "xrk-desktop-icons-fb-"));
+    const icons = path.join(resources, "icons");
+    mkdirSync(icons, { recursive: true });
+    writeFileSync(path.join(icons, "icon.ico"), "packaged-ico");
+    expect(
+      resolveDesktopWindowIconPath({
+        platform: "win32",
+        resourcesPath: resources,
+        appPath: path.join(resources, "app.asar"),
+        desktopAppRoot: path.join(resources, "missing-monorepo"),
+      }),
+    ).toBe(path.join(icons, "icon.ico"));
   });
 });

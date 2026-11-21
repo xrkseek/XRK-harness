@@ -166,15 +166,18 @@ export function createElectronBuilderConfig(
     (existsSync(localElectronMarker) ? localElectronDist : undefined);
 
   return {
-    appId: "com.xrkseek.harness",
+    // Must match DESKTOP_BUILDER_CONFIG.appId (package-targets.ts).
+    appId: "com.xrkseek.XRKHarness",
     productName: "XRK Harness",
     // Unsigned builds carry a suffix so a shared file can never pass for a release artifact.
     artifactName: `xrk-harness-\${version}-\${os}-\${arch}${unsigned ? "-unsigned" : ""}.\${ext}`,
     directories: { output: artifacts, buildResources },
     ...(electronDist ? { electronDist } : {}),
-    // Prefer .ico on Windows (rcedit); PNG is the shared brand source / mac fallback.
-    icon: packagesWindows ? iconIco : iconPng,
+    // Default icon source; win/nsis override with icon.ico below.
+    icon: iconPng,
     asar: true,
+    // Brand icons stay in asar (`build/icon.*`) like git-repository-manager
+    // `assets/icon.ico` — BrowserWindow.icon accepts the asar path string.
     // electron / electron-builder are pack-time only (devDependencies). Never
     // nest another Electron runtime under app.asar.unpacked (0.7.5 bloat ~+110MB).
     files: [
@@ -199,6 +202,8 @@ export function createElectronBuilderConfig(
         to: "web",
         filter: ["**/*"],
       },
+      // Brand icons ship in asar via `files` (`build/icon.*`); no second copy
+      // under resources/icons (BrowserWindow.icon accepts the asar path string).
     ],
     afterPack: async (context) => {
       const resourcesDir = context.packager.getResourcesDir(context.appOutDir);

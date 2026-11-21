@@ -102,7 +102,7 @@ const SNAPSHOT = {
 } as unknown as Snapshot
 
 describe('PluginInventorySettingsTab', () => {
-  it('exposes a clickable git-worktrees switch for main-session / subagent collaboration', async () => {
+  it('lists git-worktrees under Built-in / runtime without a list switch', async () => {
     const setEnabled = vi.fn(async () => {})
     const snapshot = {
       ...SNAPSHOT,
@@ -112,24 +112,32 @@ describe('PluginInventorySettingsTab', () => {
           moduleName: 'git-worktrees',
           enabled: false,
           fiberPhase: null,
-          managed: true,
+          // Product optional: Plugins config card owns the switch.
+          managed: false,
           kind: 'process',
         },
         ...SNAPSHOT.entries,
       ],
     } as unknown as Snapshot
-    render(<PluginInventorySettingsTab {...props(async () => snapshot, { setEnabled })} />)
+    const { container } = render(
+      <PluginInventorySettingsTab {...props(async () => snapshot, { setEnabled })} />,
+    )
     await waitFor(() => {
-      expect(screen.getByRole('switch', { name: en.gitWorktreesSwitch })).toBeTruthy()
+      expect(screen.getByText('git-worktrees')).toBeTruthy()
     })
-    expect(screen.getByText(en.gitWorktreesTitle)).toBeTruthy()
-    expect(screen.getByText(en.gitWorktreesHint)).toBeTruthy()
-    const sw = screen.getByRole('switch', { name: en.gitWorktreesSwitch })
-    expect(sw.getAttribute('aria-checked')).toBe('false')
-    fireEvent.click(sw)
-    await waitFor(() => {
-      expect(setEnabled).toHaveBeenCalledWith('git-worktrees', true)
-    })
+    expect(screen.getByText(en.groupBuiltin)).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: en.gitWorktreesSwitch })).toBeNull()
+    expect(setEnabled).not.toHaveBeenCalled()
+    // Install form sits between Installed / custom and Built-in / runtime.
+    const install = container.querySelector('[data-plugin-install]')
+    const builtin = Array.from(container.querySelectorAll('span')).find(
+      (el) => el.textContent === en.groupBuiltin,
+    )
+    expect(install).toBeTruthy()
+    expect(builtin).toBeTruthy()
+    expect(
+      Boolean(install!.compareDocumentPosition(builtin!) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true)
   })
 
   it('renders runtime status only for enabled plugins and pins custom actions', async () => {
@@ -429,7 +437,9 @@ describe('PluginInventorySettingsTab', () => {
     expect((screen.getByLabelText(en.installPlaceholder) as HTMLInputElement).value)
       .toBe(en.installGuidePackageExample)
 
-    fireEvent.change(screen.getByLabelText(en.registryLabel), { target: { value: 'npmmirror' } })
+    // Portaled Menu (native <select> fails under Settings overflow/transform on phone).
+    fireEvent.click(screen.getByRole('button', { name: en.registryLabel }))
+    fireEvent.click(screen.getByRole('menuitem', { name: en.registryNpmmirror }))
     fireEvent.click(screen.getByRole('button', { name: en.install }))
     await waitFor(() => {
       expect(install).toHaveBeenCalledWith(

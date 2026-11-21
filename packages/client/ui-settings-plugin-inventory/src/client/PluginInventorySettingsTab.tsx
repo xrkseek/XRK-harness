@@ -36,6 +36,12 @@ import {
   shouldShowPluginUpdateBadge,
   type PluginSourceClass,
 } from './plugin-source.ts'
+import {
+  canOfferPluginUpdate,
+  classifyPluginSource,
+  isPhoneGuestEngineEntry,
+  type PluginSourceClass,
+} from './plugin-source.ts'
 import css from './PluginInventorySettingsTab.module.css'
 
 export type { PluginInstallLog } from './plugin-install-ui-session.ts'
@@ -433,6 +439,7 @@ export function PluginInventorySettingsTab({
   const storedRegistry = useMemo(() => readStoredRegistry(), [])
   const [registryChoice, setRegistryChoice] = useState<InstallRegistryChoice>(storedRegistry.choice)
   const [registryCustom, setRegistryCustom] = useState(storedRegistry.custom)
+  const [registryMenuOpen, setRegistryMenuOpen] = useState(false)
   const [installProxy, setInstallProxy] = useState(() => readStoredProxy())
 
   const installExamples = [
@@ -835,6 +842,204 @@ export function PluginInventorySettingsTab({
     </>
   )
 
+  const registryLabelOf = (choice: InstallRegistryChoice): string => {
+    switch (choice) {
+      case 'npm':
+        return t('registryNpm')
+      case 'npmmirror':
+        return t('registryNpmmirror')
+      case 'custom':
+        return t('registryCustom')
+      default:
+        return t('registryDefault')
+    }
+  }
+
+  /** Sits between Installed / custom and Built-in / runtime (not under builtins). */
+  const installPanel = (
+    <div className={css.installSlot} data-plugin-install>
+      <form
+        className={css.installRow}
+        onSubmit={(event) => {
+          event.preventDefault()
+          void runInstall()
+        }}
+      >
+        <label className={css.installField}>
+          <span className={css.visuallyHidden}>{t('installPlaceholder')}</span>
+          <input
+            type="text"
+            value={installSpec}
+            placeholder={t('installPlaceholder')}
+            aria-label={t('installPlaceholder')}
+            disabled={installBusy}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => {
+              setInstallSpec(event.currentTarget.value)
+              clearPluginInstallSettledUi()
+            }}
+          />
+        </label>
+        <button
+          type="submit"
+          className={css.installButton}
+          disabled={installBusy || installSpec.trim().length === 0}
+        >
+          {installBusy ? t('actionBusy') : t('install')}
+        </button>
+      </form>
+      <div className={css.registryRow}>
+        <div className={css.registryField}>
+          <span className={css.registryLabel}>{t('registryLabel')}</span>
+          <Menu
+            open={registryMenuOpen && !installBusy}
+            onClose={() => { setRegistryMenuOpen(false) }}
+            items={[
+              { id: 'default', label: t('registryDefault') },
+              { id: 'npm', label: t('registryNpm') },
+              { id: 'npmmirror', label: t('registryNpmmirror') },
+              { id: 'custom', label: t('registryCustom') },
+            ]}
+            selectedId={registryChoice}
+            portal
+            align="start"
+            onSelect={(id) => {
+              const next = id as InstallRegistryChoice
+              setRegistryMenuOpen(false)
+              setRegistryChoice(next)
+              persistRegistry(next, registryCustom)
+            }}
+            anchor={(
+              <button
+                type="button"
+                className={css.registrySelect}
+                disabled={installBusy}
+                aria-haspopup="listbox"
+                aria-expanded={registryMenuOpen && !installBusy}
+                aria-label={t('registryLabel')}
+                onClick={() => {
+                  if (!installBusy) setRegistryMenuOpen((open) => !open)
+                }}
+              >
+                <span>{registryLabelOf(registryChoice)}</span>
+                <IconChevronDownOutlineRegular size={12} aria-hidden="true" />
+              </button>
+            )}
+          />
+        </div>
+        {registryChoice === 'custom'
+          ? (
+            <label className={css.registryCustomField}>
+              <span className={css.visuallyHidden}>{t('registryCustomPlaceholder')}</span>
+              <input
+                type="url"
+                value={registryCustom}
+                placeholder={t('registryCustomPlaceholder')}
+                aria-label={t('registryCustomPlaceholder')}
+                disabled={installBusy}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(event) => {
+                  const next = event.currentTarget.value
+                  setRegistryCustom(next)
+                  persistRegistry('custom', next)
+                }}
+              />
+            </label>
+          )
+          : null}
+      </div>
+      <div className={css.registryRow}>
+        <label className={css.registryField}>
+          <span className={css.registryLabel}>{t('installProxyLabel')}</span>
+          <input
+            className={css.proxyInput}
+            type="url"
+            value={installProxy}
+            placeholder={t('installProxyPlaceholder')}
+            aria-label={t('installProxyLabel')}
+            disabled={installBusy}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => {
+              const next = event.currentTarget.value
+              setInstallProxy(next)
+              persistProxy(next)
+            }}
+          />
+        </label>
+      </div>
+      <p className={css.installHint}>{t('installProxyHint')}</p>
+      <p className={css.installHint}>{t('installHint')}</p>
+      {sidebarMissing ? installFeedback : null}
+      {pendingRecommended.map((item) => (
+        <div
+          key={item.spec}
+          className={css.recommendRow}
+          data-plugin-recommend={item.spec}
+        >
+          <div className={css.recommendCopy}>
+            <strong>{t('installRecommended', { name: item.spec })}</strong>
+            <span>{t(item.hintKey)}</span>
+          </div>
+          <button
+            type="button"
+            className={css.recommendButton}
+            disabled={installBusy || busyId !== null}
+            aria-label={t('installRecommendedAria', { name: item.spec })}
+            onClick={() => { void runRecommendedInstall(item.spec) }}
+          >
+            {installBusy && activeSpec === item.spec
+              ? t('actionBusy')
+              : t('install')}
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className={css.guideToggle}
+        aria-expanded={installGuideOpen}
+        onClick={() => { setInstallGuideOpen((open) => !open) }}
+      >
+        <IconChevronDownOutlineRegular
+          className={installGuideOpen ? css.guideChevronOpen : css.guideChevron}
+        />
+        {t(installGuideOpen ? 'installGuideHide' : 'installGuideShow')}
+      </button>
+      {installGuideOpen
+        ? (
+          <div className={css.installGuide}>
+            <ol className={css.guideList}>
+              {installExamples.map((item) => (
+                <li key={item.example} className={css.guideItem}>
+                  <div className={css.guideCopy}>
+                    <strong>{item.title}</strong>
+                    <code className={css.guideExample}>{item.example}</code>
+                    <span className={css.guideHint}>{item.hint}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={css.guideFill}
+                    aria-label={t('installGuideFillAria', { example: item.example })}
+                    onClick={() => {
+                      setInstallSpec(item.example)
+                      clearPluginInstallSettledUi()
+                    }}
+                  >
+                    {t('installGuideFill')}
+                  </button>
+                </li>
+              ))}
+            </ol>
+            <p className={css.guideSafety} role="note">{t('installGuideSafety')}</p>
+          </div>
+        )
+        : null}
+      {!sidebarMissing ? installFeedback : null}
+    </div>
+  )
+
   return (
     <div ref={rootRef} className={css.section} aria-busy={state.status === 'loading' || refreshing}>
       {state.status === 'loading' ? <p className={css.status}>{t('loading')}</p> : null}
@@ -924,7 +1129,6 @@ export function PluginInventorySettingsTab({
             : null}
           {(() => {
             const listEntries = filteredEntries
-            if (listEntries.length === 0) return null
             const engineRows = listEntries.filter((entry) => isPhoneGuestEngineEntry(entry))
             const managedRows = listEntries.filter(
               (entry) => entry.managed === true && !isPhoneGuestEngineEntry(entry),
@@ -943,39 +1147,37 @@ export function PluginInventorySettingsTab({
             const toRows = (entries: typeof listEntries): RenderRow[] =>
               entries.map((entry) => ({ kind: 'entry' as const, entry }))
 
-            const sections: {
+            // Install sits between Installed / custom and Built-in / runtime
+            // (not under the builtin list). Empty search still keeps the form.
+            const managedSection: {
               readonly label: string | null
               readonly hint: string | null
               readonly rows: RenderRow[]
-            }[] = showGroups
-              ? [
-                {
-                  label: t('groupInstalled'),
-                  hint: t('groupInstalledHint'),
-                  rows: toRows(managedRows),
-                },
-                {
-                  label: t('groupBuiltin'),
-                  hint: null,
-                  rows: [
-                    ...(engineRows.length > 0
-                      ? [{ kind: 'phone-runtime' as const, parts: engineRows }]
-                      : []),
-                    ...toRows(builtinRows),
-                  ],
-                },
-              ]
-              : [{
-                label: null,
-                hint: managedRows.length > 0 ? t('groupInstalledHint') : null,
+            } | null = managedRows.length > 0
+              ? {
+                label: showGroups ? t('groupInstalled') : null,
+                hint: t('groupInstalledHint'),
+                rows: toRows(managedRows),
+              }
+              : null
+            const builtinSection: {
+              readonly label: string | null
+              readonly hint: string | null
+              readonly rows: RenderRow[]
+            } | null = (builtinRows.length > 0 || engineRows.length > 0)
+              ? {
+                label: showGroups || managedRows.length > 0 ? t('groupBuiltin') : null,
+                hint: null,
                 rows: [
-                  ...toRows(managedRows),
                   ...(engineRows.length > 0
                     ? [{ kind: 'phone-runtime' as const, parts: engineRows }]
                     : []),
                   ...toRows(builtinRows),
                 ],
-              }]
+              }
+              : null
+
+            void 0
 
             const renderEntryCard = (entry: PluginInventoryEntry) => {
                 const isMcp = entry.kind === 'mcp' || entry.entryId.startsWith('mcp:')
@@ -1438,32 +1640,41 @@ export function PluginInventorySettingsTab({
               )
             }
 
-            return (
-            <ul className={css.cards}>
-              {sections.flatMap((section) => [
-                  ...(section.label !== null
-                    ? [(
-                      <li key={`section:${section.label}`} className={css.groupHeading} role="presentation">
-                        <span className={css.groupHeadingLabel}>{section.label}</span>
-                        {section.hint !== null
-                          ? <p className={css.groupHeadingHint}>{section.hint}</p>
-                          : null}
+            const renderSectionList = (
+              section: NonNullable<typeof managedSection>,
+              keyPrefix: string,
+            ): ReactNode => (
+              <ul key={keyPrefix} className={css.cards}>
+                {section.label !== null
+                  ? (
+                    <li key={`section:${section.label}`} className={css.groupHeading} role="presentation">
+                      <span className={css.groupHeadingLabel}>{section.label}</span>
+                      {section.hint !== null
+                        ? <p className={css.groupHeadingHint}>{section.hint}</p>
+                        : null}
+                    </li>
+                  )
+                  : section.hint !== null
+                    ? (
+                      <li key={`${keyPrefix}:hint`} className={css.groupHeading} role="presentation">
+                        <p className={css.groupHeadingHint}>{section.hint}</p>
                       </li>
-                    )]
-                    : section.hint !== null
-                      ? [(
-                        <li key="section:managed-hint" className={css.groupHeading} role="presentation">
-                          <p className={css.groupHeadingHint}>{section.hint}</p>
-                        </li>
-                      )]
-                      : []),
-                  ...section.rows.map((row) => (
-                    row.kind === 'phone-runtime'
-                      ? renderPhoneRuntime(row.parts)
-                      : renderEntryCard(row.entry)
-                  )),
-                ])}
-            </ul>
+                    )
+                    : null}
+                {section.rows.map((row) => (
+                  row.kind === 'phone-runtime'
+                    ? renderPhoneRuntime(row.parts)
+                    : renderEntryCard(row.entry)
+                ))}
+              </ul>
+            )
+
+            return (
+              <>
+                {managedSection !== null ? renderSectionList(managedSection, 'managed') : null}
+                {installPanel}
+                {builtinSection !== null ? renderSectionList(builtinSection, 'builtin') : null}
+              </>
             )
           })()}
               </div>
@@ -1580,169 +1791,6 @@ export function PluginInventorySettingsTab({
               ) : null}
             </section>
           ) : null}
-
-          <div className={css.installPanel} data-plugin-install>
-          <form
-            className={css.installRow}
-            onSubmit={(event) => {
-              event.preventDefault()
-              void runInstall()
-            }}
-          >
-            <label className={css.installField}>
-              <span className={css.visuallyHidden}>{t('installPlaceholder')}</span>
-              <input
-                type="text"
-                value={installSpec}
-                placeholder={t('installPlaceholder')}
-                aria-label={t('installPlaceholder')}
-                disabled={installBusy}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(event) => {
-                  setInstallSpec(event.currentTarget.value)
-                  clearPluginInstallSettledUi()
-                }}
-              />
-            </label>
-            <button
-              type="submit"
-              className={css.installButton}
-              disabled={installBusy || installSpec.trim().length === 0}
-            >
-              {installBusy ? t('actionBusy') : t('install')}
-            </button>
-          </form>
-          <div className={css.registryRow}>
-            <label className={css.registryField}>
-              <span className={css.registryLabel}>{t('registryLabel')}</span>
-              <select
-                className={css.registrySelect}
-                value={registryChoice}
-                disabled={installBusy}
-                aria-label={t('registryLabel')}
-                onChange={(event) => {
-                  const next = event.currentTarget.value as InstallRegistryChoice
-                  setRegistryChoice(next)
-                  persistRegistry(next, registryCustom)
-                }}
-              >
-                <option value="default">{t('registryDefault')}</option>
-                <option value="npm">{t('registryNpm')}</option>
-                <option value="npmmirror">{t('registryNpmmirror')}</option>
-                <option value="custom">{t('registryCustom')}</option>
-              </select>
-            </label>
-            {registryChoice === 'custom'
-              ? (
-                <label className={css.registryCustomField}>
-                  <span className={css.visuallyHidden}>{t('registryCustomPlaceholder')}</span>
-                  <input
-                    type="url"
-                    value={registryCustom}
-                    placeholder={t('registryCustomPlaceholder')}
-                    aria-label={t('registryCustomPlaceholder')}
-                    disabled={installBusy}
-                    autoComplete="off"
-                    spellCheck={false}
-                    onChange={(event) => {
-                      const next = event.currentTarget.value
-                      setRegistryCustom(next)
-                      persistRegistry('custom', next)
-                    }}
-                  />
-                </label>
-              )
-              : null}
-          </div>
-          <div className={css.registryRow}>
-            <label className={css.registryField}>
-              <span className={css.registryLabel}>{t('installProxyLabel')}</span>
-              <input
-                className={css.proxyInput}
-                type="url"
-                value={installProxy}
-                placeholder={t('installProxyPlaceholder')}
-                aria-label={t('installProxyLabel')}
-                disabled={installBusy}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(event) => {
-                  const next = event.currentTarget.value
-                  setInstallProxy(next)
-                  persistProxy(next)
-                }}
-              />
-            </label>
-          </div>
-          <p className={css.installHint}>{t('installProxyHint')}</p>
-          <p className={css.installHint}>{t('installHint')}</p>
-          {sidebarMissing ? installFeedback : null}
-          {pendingRecommended.map((item) => (
-            <div
-              key={item.spec}
-              className={css.recommendRow}
-              data-plugin-recommend={item.spec}
-            >
-              <div className={css.recommendCopy}>
-                <strong>{t('installRecommended', { name: item.spec })}</strong>
-                <span>{t(item.hintKey)}</span>
-              </div>
-              <button
-                type="button"
-                className={css.recommendButton}
-                disabled={installBusy || busyId !== null}
-                aria-label={t('installRecommendedAria', { name: item.spec })}
-                onClick={() => { void runRecommendedInstall(item.spec) }}
-              >
-                {installBusy && activeSpec === item.spec
-                  ? t('actionBusy')
-                  : t('install')}
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            className={css.guideToggle}
-            aria-expanded={installGuideOpen}
-            onClick={() => { setInstallGuideOpen((open) => !open) }}
-          >
-            <IconChevronDownOutlineRegular
-              className={installGuideOpen ? css.guideChevronOpen : css.guideChevron}
-            />
-            {t(installGuideOpen ? 'installGuideHide' : 'installGuideShow')}
-          </button>
-          {installGuideOpen
-            ? (
-              <div className={css.installGuide}>
-                <ol className={css.guideList}>
-                  {installExamples.map((item) => (
-                    <li key={item.example} className={css.guideItem}>
-                      <div className={css.guideCopy}>
-                        <strong>{item.title}</strong>
-                        <code className={css.guideExample}>{item.example}</code>
-                        <span className={css.guideHint}>{item.hint}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className={css.guideFill}
-                        aria-label={t('installGuideFillAria', { example: item.example })}
-                        onClick={() => {
-                          setInstallSpec(item.example)
-                          clearPluginInstallSettledUi()
-                        }}
-                      >
-                        {t('installGuideFill')}
-                      </button>
-                    </li>
-                  ))}
-                </ol>
-                <p className={css.guideSafety} role="note">{t('installGuideSafety')}</p>
-              </div>
-            )
-            : null}
-          {!sidebarMissing ? installFeedback : null}
-          </div>
 
         </div>
       ) : null}
