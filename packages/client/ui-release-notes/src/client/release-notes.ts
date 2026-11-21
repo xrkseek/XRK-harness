@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.4',
+    date: '2026-11-21',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '主会话 Git worktree 设置卡不再因库存刷新消失；MCP 工作区选择改 Menu。',
+        en: 'Main-session Git worktree Settings card stays mounted; MCP workspace picker uses Menu.',
+      },
+      {
+        zh: '门禁校验侧栏公告与 CLI 同号；check 探测 Node、跳过 gitignore 联调树。',
+        en: 'Check gates sidebar notes to the CLI version; probes Node PATH; skips gitignored local extension trees.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.4（接 @latest；0.8.3 未发 npm）。完整清单见 docs/releases/v0.8.4.md。',
+        en: 'Desktop / npm / phone align to 0.8.4 (@latest; 0.8.3 skipped npm). Full list: docs/releases/v0.8.4.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.3',
     date: '2026-11-21',
     title: {

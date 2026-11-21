@@ -10,8 +10,9 @@
 | --- | -------------------------------------------------------- | -------------------- | --------------------------------------------------------- |
 | 1   | `tsc -b --pretty false`                                  | ~2s                  | 类型 / 项目引用断裂 |
 | 2   | `eslint <kernel paths>`                                  | ~30s 冷 / ~5s 缓存   | 风格与不安全模式（**不含** 产品壳 `packages/client`、打包 `product-web`） |
-| 3   | `vitest run`                                             | ~10s                 | 行为回归（仅 `*.test.ts`；**不含** client `.client.spec.*`） |
-| 4   | `vitest run --config vitest.kernel.config.ts --coverage` | ~15s                 | `@xrkseek/kernel` 行/分支/函数/语句 **≥ 90%** |
+| 3   | `verify-release-notes-version` + locale / plug 闸        | ~1s                  | 侧栏 `RELEASE_NOTES[0]` ≠ `apps/cli` 版本；i18n / 第一方 plug 漂移 |
+| 4   | `vitest run`                                             | ~10s                 | 行为回归（仅 `*.test.ts`；**不含** client `.client.spec.*`） |
+| 5   | `vitest run --config vitest.kernel.config.ts --coverage` | ~15s                 | `@xrkseek/kernel` 行/分支/函数/语句 **≥ 90%** |
 
 Client 浏览器半部（`packages/client/**/*.client.spec.ts(x)`）已由 `vitest.client.config.ts` + `pnpm test:client` 接线；**有意未进** `pnpm check`（分期变绿）。对话相关子集：`pnpm test:ui-conversation`。产品壳硬刷：`pnpm test:web`。
 

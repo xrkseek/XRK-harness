@@ -142,6 +142,7 @@ describe('bundled release notes', () => {
       expect(change.en.trim()).not.toBe('')
     }
     expect(RELEASE_NOTES.some((note) => note.version === '0.1.0')).toBe(false)
-    expect(latestReleaseVersion()).toBe('0.7.21')
+    // Must track RELEASE_NOTES[0] — do not pin a historical patch here.
+    expect(latestReleaseVersion()).toBe(RELEASE_NOTES[0]!.version)
   })
 })

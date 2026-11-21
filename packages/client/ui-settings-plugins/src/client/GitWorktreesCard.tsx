@@ -16,7 +16,9 @@ export type GitWorktreesCardProps =
 export function GitWorktreesCard(props: GitWorktreesCardProps) {
   const { t } = props
   const state = props.useGitWorktreesCard((snapshot) => snapshot)
-  if (!state.available) return null
+  // Always mount: product optional lives on Plugins → configuration (not the
+  // inventory list). Hiding on !available made the card vanish between MCP and
+  // Web Search when inventory refresh lagged or missed the row.
   return (
     <PluginCard
       t={t}
@@ -24,11 +26,11 @@ export function GitWorktreesCard(props: GitWorktreesCardProps) {
       descriptionKey="gitWorktreesDescription"
       state={{
         available: true,
-        writable: !state.busy,
+        writable: state.available && !state.busy,
         dirty: false,
         invalid: false,
         saving: state.busy,
-        failed: state.failed,
+        failed: state.failed || !state.available,
       }}
       masterSwitch={booleanMasterSwitch(state.enabled, (value) => {
         props.setEnabled(value)

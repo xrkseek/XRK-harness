@@ -46,6 +46,8 @@ export class GitWorktreesCardController {
   private disposed = false
 
   constructor(private readonly inventory: InventoryRemote) {
+    // Show immediately; refresh fills enabled from inventory.
+    this.available = true
     this.store = createSnapshotStore(this.projection())
     void this.refresh()
   }
@@ -80,18 +82,22 @@ export class GitWorktreesCardController {
       const result = await this.inventory.list()
       if (this.disposed) return
       if (!result.ok || !Array.isArray(result.value?.entries)) {
+        // Keep the card mounted; switch stays non-writable until list works.
         this.available = false
+        this.failed = true
         this.publish()
         return
       }
       const row = result.value.entries.find((e) => e.entryId === GIT_WORKTREES_ENTRY_ID)
-      this.available = row !== undefined
+      // Product optional: card stays available even if the row is briefly absent.
+      this.available = true
       this.enabled = row?.enabled === true
-      this.failed = false
+      this.failed = row === undefined
       this.publish()
     } catch {
       if (this.disposed) return
       this.available = false
+      this.failed = true
       this.publish()
     }
   }

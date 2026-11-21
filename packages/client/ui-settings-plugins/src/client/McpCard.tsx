@@ -7,6 +7,7 @@ import {
   IconTrashOutlineRegular,
 } from '@xrkseek/client-ui-primitives'
 import { PluginCard } from './PluginCard.tsx'
+import { SelectField } from './fields.tsx'
 import { booleanMasterSwitch } from './plugin-master-switch.ts'
 import type { McpCardFace, McpRowStatus, McpServerRow } from './mcp-card-controller.ts'
 import type {} from './slot-contract.ts'
@@ -133,22 +134,18 @@ export function McpCard(props: McpCardProps) {
           ? <p className={css.empty}>{t('mcpWorkspaceEmpty')}</p>
           : (
             <>
-              <label className={css.pasteLabel} htmlFor="plugin-config-mcp-ws">
-                {t('mcpWorkspaceSelect')}
-              </label>
-              <select
+              <SelectField
                 id="plugin-config-mcp-ws"
-                className={css.paste}
-                disabled={disabled}
+                label={t('mcpWorkspaceSelect')}
+                hint=""
                 value={state.selectedWorkspaceId}
-                onChange={(event) => { props.selectWorkspace(event.target.value) }}
-              >
-                {state.workspaceOptions.map(opt => (
-                  <option key={opt.workspaceId} value={opt.workspaceId}>
-                    {opt.title}
-                  </option>
-                ))}
-              </select>
+                disabled={disabled}
+                options={state.workspaceOptions.map((opt) => ({
+                  value: opt.workspaceId,
+                  label: opt.title,
+                }))}
+                onChange={(value) => { props.selectWorkspace(value) }}
+              />
               {state.rows.length > 0
                 ? (
                   <div className={css.block} aria-label={t('mcpDenyGlobalHeading')}>

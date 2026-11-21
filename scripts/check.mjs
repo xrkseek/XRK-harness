@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,16 +15,48 @@ if (!Number.isFinite(major) || major < 26) {
   process.exit(1);
 }
 
+/**
+ * Directory of the first non-Cursor-helper `node` on PATH (Windows).
+ * Do not hard-code a drive letter — Node may live on nvm/fnm/other disks.
+ */
+function resolveSystemNodeDir(env) {
+  if (process.platform !== "win32") return null;
+  try {
+    const probed = spawnSync("where.exe", ["node"], {
+      encoding: "utf8",
+      env,
+      windowsHide: true,
+    });
+    const lines = String(probed.stdout ?? "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .filter(
+        (line) =>
+          !/cursor[\\/].*helpers[\\/]node\.exe$/i.test(line),
+      );
+    if (lines[0]) return path.dirname(lines[0]);
+  } catch {
+    // fall through
+  }
+  const programFiles = env.ProgramFiles;
+  if (typeof programFiles === "string" && programFiles.length > 0) {
+    const candidate = path.join(programFiles, "nodejs");
+    if (existsSync(path.join(candidate, "node.exe"))) return candidate;
+  }
+  return null;
+}
+
 /** Keep forked Vitest workers on Node ≥26 while preserving Windows system tools. */
 function childEnv() {
   const env = { ...process.env };
   if (process.platform !== "win32") return env;
 
-  const systemNode = "C:\\Program Files\\nodejs";
+  const systemNode = resolveSystemNodeDir(env);
   const systemRoot = env.SystemRoot ?? "C:\\Windows";
   const programFiles = env.ProgramFiles ?? "C:\\Program Files";
   const essentials = [
-    systemNode,
+    ...(systemNode ? [systemNode] : []),
     path.join(programFiles, "Git", "cmd"),
     path.join(systemRoot, "System32"),
     path.join(systemRoot, "System32", "Wbem"),
@@ -41,6 +74,10 @@ function childEnv() {
       segments.push(dir);
       seen.add(dir.toLowerCase());
     }
+  }
+  if (!systemNode) {
+    env.PATH = segments.join(";");
+    return env;
   }
   const rest = segments.filter(
     (segment) => segment.toLowerCase() !== systemNode.toLowerCase(),
@@ -148,6 +185,17 @@ runNode(path.join(ROOT, "node_modules/eslint/bin/eslint.js"), [
     [
       "--experimental-strip-types",
       path.join(ROOT, "scripts/verify-first-party-plug.ts"),
+    ],
+    { stdio: "inherit", cwd: ROOT, env: childEnv() },
+  );
+  if (r.status !== 0) process.exit(r.status ?? 1);
+}
+{
+  const r = spawnSync(
+    NODE,
+    [
+      "--experimental-strip-types",
+      path.join(ROOT, "scripts/verify-release-notes-version.ts"),
     ],
     { stdio: "inherit", cwd: ROOT, env: childEnv() },
   );

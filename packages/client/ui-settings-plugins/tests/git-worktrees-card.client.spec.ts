@@ -25,4 +25,20 @@ describe('GitWorktreesCardController', () => {
     expect(face.hooks.gitWorktreesCard.getSnapshot().enabled).toBe(false)
     ctrl.dispose()
   })
+
+  it('stays available when inventory omits the row (Plugins config card)', async () => {
+    const list = vi.fn(async () => ({
+      ok: true as const,
+      value: { entries: [] },
+    }))
+    const setEnabled = vi.fn(async () => ({ ok: true as const }))
+    const ctrl = new GitWorktreesCardController({ list, setEnabled })
+    const face = ctrl.inject()
+    expect(face.hooks.gitWorktreesCard.getSnapshot().available).toBe(true)
+    await vi.waitFor(() => {
+      expect(face.hooks.gitWorktreesCard.getSnapshot().failed).toBe(true)
+    })
+    expect(face.hooks.gitWorktreesCard.getSnapshot().available).toBe(true)
+    ctrl.dispose()
+  })
 })

@@ -1,10 +1,14 @@
 /**
  * First-party extensions author against XRK Plug only.
  *
- * Scans extensions/* (except the inbound community adapter) for author-path
- * markers that belong on community packages, not first-party / gold samples.
+ * Scans **tracked** extensions/* (except the inbound community adapter) for
+ * author-path markers that belong on community packages, not first-party /
+ * gold samples. Local-only trees under `/extensions/*` (gitignore deny-by-
+ * default, e.g. xrkh-better-sidebar checkouts) are skipped so `pnpm check`
+ * stays green for maintainers who install those packages for local wiring.
  */
 
+import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
@@ -13,6 +17,16 @@ const EXTENSIONS = resolve(ROOT, 'extensions')
 
 /** Built-in inbound adapter — may mention community markers. */
 const ALLOWED_DIRS = new Set(['dsh-compat'])
+
+/** True when git would ignore this path (local-only extensions checkout). */
+function isGitIgnored(relPath: string): boolean {
+  const r = spawnSync('git', ['check-ignore', '-q', '--', relPath], {
+    cwd: ROOT,
+    stdio: 'ignore',
+    windowsHide: true,
+  })
+  return r.status === 0
+}
 
 const SKIP_DIR_NAMES = new Set([
   'node_modules',
@@ -97,10 +111,13 @@ function main(): void {
   const tops = readdirSync(EXTENSIONS).filter((name) => {
     if (ALLOWED_DIRS.has(name)) return false
     try {
-      return statSync(join(EXTENSIONS, name)).isDirectory()
+      if (!statSync(join(EXTENSIONS, name)).isDirectory()) return false
     } catch {
       return false
     }
+    // Deny-by-default `/extensions/*`: skip local checkout trees that are not force-tracked.
+    if (isGitIgnored(`extensions/${name}`)) return false
+    return true
   })
 
   if (tops.length < 3) {

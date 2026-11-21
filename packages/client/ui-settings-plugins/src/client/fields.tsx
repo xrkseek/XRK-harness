@@ -144,6 +144,7 @@ export function SelectField(props: {
   options: readonly SelectOption[]
   onChange: (value: string) => void
 }) {
+  const hint = props.hint.trim()
   return (
     <div className={css.field}>
       <label className={css.label} htmlFor={props.id}>{props.label}</label>
@@ -155,7 +156,7 @@ export function SelectField(props: {
         options={props.options}
         onChange={props.onChange}
       />
-      <p className={css.hint}>{props.hint}</p>
+      {hint.length > 0 ? <p className={css.hint}>{hint}</p> : null}
     </div>
   )
 }
