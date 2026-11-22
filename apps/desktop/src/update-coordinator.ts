@@ -162,7 +162,16 @@ export class DesktopUpdateCoordinator {
     return this.downloadOperation;
   }
 
+  private clearProgress(): void {
+    this.lastPercent = -1;
+  }
+
   private async doCheck(): Promise<DesktopUpdateState> {
+    // Fresh check must not inherit a prior download's percent or a resolved
+    // downloadOperation — otherwise a later feed version can flip to `ready`
+    // without fetching its bytes (cached Promise from the previous prefetch).
+    this.clearProgress();
+    this.downloadOperation = undefined;
     this.publish({ phase: "checking" });
     try {
       if (!this.enabled()) {
@@ -172,11 +181,13 @@ export class DesktopUpdateCoordinator {
       const result = await this.updater.checkForUpdates();
       if (result === null) {
         this.availableVersion = undefined;
+        this.downloadOperation = undefined;
         return this.publish({ phase: "idle" });
       }
       const version = result.updateInfo?.version?.trim();
       if (version === undefined || version.length === 0) {
         this.availableVersion = undefined;
+        this.downloadOperation = undefined;
         return this.publish({ phase: "idle" });
       }
       const newer =
@@ -193,7 +204,6 @@ export class DesktopUpdateCoordinator {
       const available = this.publish({
         phase: "available",
         version: this.availableVersion,
-        ...(this.lastPercent > 0 ? { percent: this.lastPercent } : {}),
       });
       /* Prefetch the package; only flip to ready when the bytes are fully here.
        * Install stays disabled until ready so the UI cannot quitAndInstall mid-download. */
@@ -217,17 +227,22 @@ export class DesktopUpdateCoordinator {
         .catch((error: unknown) => {
           this.downloadOperation = undefined;
           if (this.installOperation !== undefined) return;
+          // Drop the retained version so Install cannot quitAndInstall on a
+          // failed prefetch without a fresh successful check.
+          const failedVersion = this.availableVersion;
+          this.availableVersion = undefined;
+          this.clearProgress();
           this.publish({
             phase: "error",
-            ...(this.availableVersion !== undefined
-              ? { version: this.availableVersion }
-              : {}),
+            ...(failedVersion !== undefined ? { version: failedVersion } : {}),
             message: error instanceof Error ? error.message : String(error),
           });
         });
       return available;
     } catch (error) {
       this.availableVersion = undefined;
+      this.downloadOperation = undefined;
+      this.clearProgress();
       return this.publish({
         phase: "error",
         message: error instanceof Error ? error.message : String(error),
@@ -276,6 +291,8 @@ export class DesktopUpdateCoordinator {
       this.downloadOperation = undefined;
       return installing;
     } catch (error) {
+      this.downloadOperation = undefined;
+      this.clearProgress();
       return this.publish({
         phase: "error",
         version,

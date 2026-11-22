@@ -196,22 +196,40 @@ export function ContextMenuHost({
       event.preventDefault();
       restoreRef.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      // Snapshot placement at the gesture — not after an async clipboard probe
+      // (scroll / selection drift would park the card far from the handles).
+      const placement = resolveContextMenuPlacement(hit);
+      const labels = resolveLabels(t);
       const ticket = ++probeRef.current;
-      void probeContextMenuClipboard().then((clipboard) => {
-        // A newer right-click (or a close) overtook this probe.
+      const openWith = (clipboard: Awaited<ReturnType<typeof probeContextMenuClipboard>>): void => {
         if (ticket !== probeRef.current) return;
-        const placement = resolveContextMenuPlacement(hit);
         setRequest({
           hit,
           entries: buildContextMenuEntries({
             hit,
-            labels: resolveLabels(t),
+            labels,
             clipboard,
             actions: wiredActions,
           }),
           side: placement.side,
           anchor: placement.rect,
         });
+      };
+      // Paste enablement only matters on editables; selection-only cards
+      // (Copy + Translate) must not wait on a clipboard round-trip.
+      if (!hit.isEditable) {
+        openWith({ hasText: false, hasFiles: false });
+        return;
+      }
+      // Scroll while probing: cancel — a late open would sit on stale coords.
+      const cancelOnScroll = (): void => {
+        probeRef.current++;
+        window.removeEventListener("scroll", cancelOnScroll, true);
+      };
+      window.addEventListener("scroll", cancelOnScroll, true);
+      void probeContextMenuClipboard().then((clipboard) => {
+        window.removeEventListener("scroll", cancelOnScroll, true);
+        openWith(clipboard);
       });
     };
     document.addEventListener("contextmenu", onContextMenu);
@@ -227,6 +245,49 @@ export function ContextMenuHost({
     restoreRef.current = null;
     if (restore !== null && restore.isConnected) restore.focus();
   }, []);
+
+  // Dismiss on *reader* scroll only. Stick-to-bottom / edge-scroll /
+  // keyboard re-pin also fire `scroll` — closing on those yanked the menu
+  // while Copy/Translate was still on screen. Arm from wheel/touchmove, but
+  // only for a short window: a wheel that never scrolls must not leave a
+  // latch that a later floor re-pin can trip.
+  useEffect(() => {
+    if (request === null) return;
+    let readerArmed = false;
+    let armTimer = 0;
+    const disarm = (): void => {
+      readerArmed = false;
+      if (armTimer !== 0) {
+        window.clearTimeout(armTimer);
+        armTimer = 0;
+      }
+    };
+    const fromMenu = (event: Event): boolean => {
+      const list = listRef.current;
+      const target = event.target;
+      return list !== null && target instanceof Node && list.contains(target);
+    };
+    const armReader = (event: Event): void => {
+      if (fromMenu(event)) return;
+      readerArmed = true;
+      if (armTimer !== 0) window.clearTimeout(armTimer);
+      armTimer = window.setTimeout(disarm, 80);
+    };
+    const onScroll = (): void => {
+      if (!readerArmed) return;
+      disarm();
+      close();
+    };
+    window.addEventListener("wheel", armReader, { capture: true, passive: true });
+    window.addEventListener("touchmove", armReader, { capture: true, passive: true });
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      disarm();
+      window.removeEventListener("wheel", armReader, true);
+      window.removeEventListener("touchmove", armReader, true);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [request, close]);
 
   // Arrow keys walk the rows the way a native menu does; Menu itself only
   // owns Escape and outside-click dismissal.

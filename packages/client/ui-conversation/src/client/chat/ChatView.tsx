@@ -62,10 +62,29 @@ import { TurnNavigator } from './TurnNavigator.tsx'
 import { mergeTurnRailItems, slideTurnRailWindow, type TurnRailItem } from './turn-rail-items.ts'
 import { formatRunDuration } from './message-chrome.ts'
 import { openerKeysFromRail, userRoundLabelKind } from './round-label.ts'
-import { useSelectionEdgeScroll } from './use-selection-edge-scroll.ts'
+import {
+  isSelectionScrollGestureActive,
+  useSelectionEdgeScroll,
+} from './use-selection-edge-scroll.ts'
 import css from './ChatView.module.css'
 
-const FOLLOW_THRESHOLD = 24
+/**
+ * Stick-to-bottom hysteresis (asymmetric on purpose):
+ * - ENTER: reclaim follow only when this close to the floor (harder to latch).
+ * - LEAVE: drop follow once past this (easier to unpin than a single band).
+ * A light flick that left the reader ~20px off the floor used to stay latched
+ * at 24/24 and yank on the next stream/dock growth.
+ */
+const FOLLOW_ENTER_PX = 8
+const FOLLOW_LEAVE_PX = 24
+/** Chrome / active-turn "near floor" probes use the leave band. */
+const FOLLOW_THRESHOLD = FOLLOW_LEAVE_PX
+
+/** Next atBottom latch from distance-to-floor (viewport px). */
+function followAtBottom(wasAtBottom: boolean, distance: number): boolean {
+  if (wasAtBottom) return distance <= FOLLOW_LEAVE_PX + 1
+  return distance <= FOLLOW_ENTER_PX + 1
+}
 /** Idle waiting copy pool (`turnStatus.0` …); one pick stays for the whole turn. */
 const TURN_STATUS_PHRASES = [
   'turnStatus.0', 'turnStatus.1', 'turnStatus.2', 'turnStatus.3',
@@ -1092,7 +1111,8 @@ export function ChatView({
   landOnRowRef.current = (local, el, row, turn) => {
     el.scrollTop += flowTop(row, el) - 24
     observedTopRef.current = el.scrollTop
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD + 1
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    const isAtBottom = followAtBottom(false, distance)
     atBottomRef.current = isAtBottom
     setAtBottom(isAtBottom)
     setActiveTurn(turn)
@@ -1152,7 +1172,8 @@ export function ChatView({
         const row = anchorElement(local, saved.anchorKey)
         if (row !== null) el.scrollTop += flowTop(row, el) - saved.anchorTop
         observedTopRef.current = el.scrollTop
-        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD + 1
+        const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+        const isAtBottom = followAtBottom(false, distance)
         atBottomRef.current = isAtBottom
         setAtBottom(isAtBottom)
         const normalized = isAtBottom ? null : scrollPosition(local, el, anchorProbeRef.current)
@@ -1197,7 +1218,11 @@ export function ChatView({
     followSigRef.current = followSig
     // Follow new flow content while pinned; do NOT re-pin on every render
     // merely because atBottomRef is true (scroll threshold → setState → snap).
-    if (appendedUser || appendedSteering || (tipMoved && atBottomRef.current)) {
+    // Selection drag owns the port — never yank the highlight under the finger.
+    if (
+      !isSelectionScrollGestureActive()
+      && (appendedUser || appendedSteering || (tipMoved && atBottomRef.current))
+    ) {
       toBottom(el)
       return
     }
@@ -1215,14 +1240,30 @@ export function ChatView({
     // (every programmatic write records itself there). Wheel / touch /
     // scrollbar / keyboard all share that test — no per-device listeners.
     const floor = Math.max(0, el.scrollHeight - el.clientHeight)
-    const nearFloor = floor - el.scrollTop <= FOLLOW_THRESHOLD + 1
+    const distance = floor - el.scrollTop
     const movedByReader = Math.abs(el.scrollTop - Math.min(observedTopRef.current, floor)) > 0.5
-    // Floor geometry always wins. Enough space (floor≈0) and shrink-clamps /
-    // fold collapses that land on the floor must clear a stale !atBottom —
-    // otherwise the sticky back-to-bottom control stays mounted and rides the
-    // collapsing column upward. Owning follow while short of the floor still
-    // re-pins below.
-    if (nearFloor) {
+    const selecting = isSelectionScrollGestureActive()
+    const nextBottom = followAtBottom(atBottomRef.current, distance)
+    // Selection edge-scroll owns the port: never reclaim / snap follow under
+    // the finger (ledger writes still update observedTop via writeFoldScroll).
+    if (selecting) {
+      observedTopRef.current = el.scrollTop
+      lastScrollHeightRef.current = el.scrollHeight
+      if (atBottomRef.current !== nextBottom) {
+        atBottomRef.current = nextBottom
+        setAtBottom(nextBottom)
+        if (nextBottom) {
+          anchorRef.current = null
+          chatScroll.save(null)
+        }
+      }
+      scheduleActiveTurn()
+      return
+    }
+    // Floor geometry with hysteresis. Enough space (floor≈0) and shrink-clamps
+    // that land on the floor still clear a stale !atBottom so the sticky
+    // back-to-bottom control does not ride the collapsing column upward.
+    if (nextBottom) {
       const wasAway = !atBottomRef.current
       observedTopRef.current = el.scrollTop
       lastScrollHeightRef.current = el.scrollHeight
@@ -1231,7 +1272,7 @@ export function ChatView({
         setAtBottom(true)
         anchorRef.current = null
       }
-      // Reader edged into the threshold: refresh chrome without snapping the
+      // Reader edged into the enter band: refresh chrome without snapping the
       // remaining distance (see "entering the at-bottom threshold" test).
       if (wasAway || movedByReader) {
         chatScroll.save(null)
@@ -1290,11 +1331,13 @@ export function ChatView({
     // Mid-column disclosure expands suppress the floor pin so the header the
     // reader just opened stays on screen (mobile short viewports).
     if (isExpandFollowSuppressed()) return
+    // Selection edge-scroll / handle drag: growth must not steal the port.
+    if (isSelectionScrollGestureActive()) return
     const floor = Math.max(0, el.scrollHeight - el.clientHeight)
     const distance = floor - el.scrollTop
     // Shrink with no scroll event (in-view fold collapse) must still clear a
-    // stale !atBottom when enough space returns — same rule as onScroll.
-    if (distance <= FOLLOW_THRESHOLD + 1 && !atBottomRef.current) {
+    // stale !atBottom when enough space returns — same hysteresis as onScroll.
+    if (followAtBottom(atBottomRef.current, distance) && !atBottomRef.current) {
       observedTopRef.current = el.scrollTop
       atBottomRef.current = true
       setAtBottom(true)
@@ -1304,7 +1347,7 @@ export function ChatView({
       atBottom: atBottomRef.current,
       distanceFromBottom: distance,
       growth,
-      threshold: FOLLOW_THRESHOLD,
+      threshold: FOLLOW_ENTER_PX,
     })) return
     el.scrollTop = el.scrollHeight
     observedTopRef.current = el.scrollTop
@@ -1334,6 +1377,10 @@ export function ChatView({
       const nextClient = scrollport.clientHeight
       const shrunk = nextClient < prevClientHeight - 0.5
       prevClientHeight = nextClient
+      if (isSelectionScrollGestureActive()) {
+        activeTurnRef.current?.()
+        return
+      }
       if (shrunk && atBottomRef.current) {
         scrollport.scrollTop = scrollport.scrollHeight
         observedTopRef.current = scrollport.scrollTop
@@ -1369,11 +1416,12 @@ export function ChatView({
       const delta = inset - prevInset
       prevInset = inset
       if (delta === 0) return
+      if (isSelectionScrollGestureActive()) return
       const local = listRef.current
       if (local === null) return
       const el = scrollerOf(local)
       const floor = Math.max(0, el.scrollHeight - el.clientHeight)
-      const nearFloor = floor - el.scrollTop <= FOLLOW_THRESHOLD + Math.max(0, delta) + 1
+      const nearFloor = floor - el.scrollTop <= FOLLOW_LEAVE_PX + Math.max(0, delta) + 1
       if (!atBottomRef.current && !nearFloor) return
       el.scrollTop = el.scrollHeight
       observedTopRef.current = el.scrollTop
@@ -1552,7 +1600,10 @@ export function ChatView({
     observedTopRef.current = scrollport.scrollTop
     lastScrollHeightRef.current = scrollport.scrollHeight
     const floor = Math.max(0, scrollport.scrollHeight - scrollport.clientHeight)
-    const isAtBottom = floor - scrollport.scrollTop <= FOLLOW_THRESHOLD + 1
+    const isAtBottom = followAtBottom(
+      atBottomRef.current,
+      floor - scrollport.scrollTop,
+    )
     if (atBottomRef.current === isAtBottom) return
     atBottomRef.current = isAtBottom
     setAtBottom(isAtBottom)

@@ -31,6 +31,7 @@ export {
   expandScrollerOf,
   isExpandFollowSuppressed,
   registerExpandScrollWriter,
+  writeConversationScroll,
   settleExpandPreserve,
   useExpandScrollPreserve,
 } from './expand-scroll-preserve.ts'

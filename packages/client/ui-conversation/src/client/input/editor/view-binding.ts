@@ -1,6 +1,7 @@
 /** DOM and keymap bindings installed by the InputBar's existing effects. */
 import type { MouseEvent, MutableRefObject, RefObject } from 'react'
 import type { LexicalEditor } from 'lexical'
+import { writeConversationScroll } from '@xrkseek/client-ui-primitives'
 import type { ComposerKeyboard } from '../../contract/draft-editor.ts'
 import type { ComposerBarProps } from '../../contract/slots.ts'
 import type { BusyEnterBehavior } from '../../contract/composer-submission.ts'
@@ -71,9 +72,10 @@ export function dismissSoftKeyboard(editor: LexicalEditor): void {
   const top = scrollport instanceof HTMLElement ? scrollport.scrollTop : null
   root.blur()
   if (!(scrollport instanceof HTMLElement) || top === null) return
-  scrollport.scrollTop = top
+  // Ledger write: raw scrollTop restore looked like reader motion / closed menus.
+  writeConversationScroll(scrollport, top)
   if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(() => { scrollport.scrollTop = top })
+    requestAnimationFrame(() => { writeConversationScroll(scrollport, top) })
   }
 }
 
@@ -92,7 +94,7 @@ export function installDraftWheel(scrollRef: RefObject<HTMLDivElement>): (() => 
     const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 1
     if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atEnd)) return
     e.preventDefault()
-    host.scrollTop += e.deltaY
+    writeConversationScroll(host, host.scrollTop + e.deltaY)
   }
   el.addEventListener('wheel', onWheel, { passive: false })
   return () => { el.removeEventListener('wheel', onWheel) }

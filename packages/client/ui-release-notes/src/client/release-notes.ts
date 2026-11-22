@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.8',
+    date: '2026-11-22',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '划词贴边跟滚只在拖动手柄时触发；复制后轻扫不再甩到顶/底；右键菜单贴按压行。',
+        en: 'Selection edge-scroll only while dragging handles; no whip after copy; context menu hugs the pressed line.',
+      },
+      {
+        zh: 'Desktop 更新状态 pill 悬停不再变成「安装并重启」；下载完成前不可安装，失败可重试。',
+        en: 'Desktop update pills no longer hover to Install; install waits for ready; failures stay retryable.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.8。完整清单见 docs/releases/v0.8.8.md。',
+        en: 'Desktop / npm / phone align to 0.8.8. Full list: docs/releases/v0.8.8.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.7',
     date: '2026-11-22',
     title: {

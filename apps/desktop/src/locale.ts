@@ -14,6 +14,9 @@ export const en = {
   updateAvailable: "An update is available",
   updateDetail:
     "XRK Harness Desktop {version}\n\nThis release includes its matching Host and Web dist. The application will restart after installation.",
+  updateDownloading: "Downloading update {version}…",
+  updateDownloadingDetail:
+    "The package is still downloading. Install and Restart will be available when the download finishes.",
   installAndRestart: "Install and Restart",
   later: "Later",
   updateFailedTitle: "Update Failed",
@@ -35,6 +38,8 @@ export const zh = {
   updateAvailable: "发现可用更新",
   updateDetail:
     "XRK Harness Desktop {version}\n\n新版本绑定匹配的 Host 与 Web dist，安装后将重新启动。",
+  updateDownloading: "正在下载更新 {version}…",
+  updateDownloadingDetail: "安装包仍在下载。下载完成后才可「安装并重启」。",
   installAndRestart: "安装并重启",
   later: "稍后",
   updateFailedTitle: "更新失败",
@@ -53,6 +58,9 @@ export const ja = {
   updateAvailable: "利用可能な更新があります",
   updateDetail:
     "XRK Harness Desktop {version}\n\nこのリリースには対応する Host と Web dist が含まれます。インストール後にアプリが再起動します。",
+  updateDownloading: "更新 {version} をダウンロード中…",
+  updateDownloadingDetail:
+    "パッケージをダウンロードしています。完了後に「インストールして再起動」できます。",
   installAndRestart: "インストールして再起動",
   later: "後で",
   updateFailedTitle: "更新に失敗しました",

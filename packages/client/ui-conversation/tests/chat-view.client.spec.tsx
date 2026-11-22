@@ -2301,11 +2301,11 @@ describe('ChatView', () => {
     const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
     Object.defineProperty(scroller, 'scrollHeight', { value: 1000, writable: true })
     Object.defineProperty(scroller, 'clientHeight', { value: 300, writable: true })
-    // Inside FOLLOW_THRESHOLD (24) but not flush with the floor — the chrome
-    // re-render from setAtBottom must not force scrollTop to scrollHeight.
-    readerScroll(scroller, 690) // distance-to-bottom = 10
+    // Inside FOLLOW_ENTER (8) but not flush — chrome re-render from setAtBottom
+    // must not force scrollTop to scrollHeight.
+    readerScroll(scroller, 695) // distance-to-bottom = 5
     expect(view.queryByLabelText('回到底部')).toBeNull()
-    expect(scroller.scrollTop).toBe(690)
+    expect(scroller.scrollTop).toBe(695)
   })
 
   it('under data-conversation-scroll, bottom-follow targets the host scrollport', () => {

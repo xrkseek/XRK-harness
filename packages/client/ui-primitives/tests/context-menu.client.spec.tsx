@@ -149,6 +149,57 @@ describe("ContextMenuHost", () => {
     expect(screen.queryByRole("menuitem", { name: "Paste" })).toBeNull();
   });
 
+  it("opens selected prose without waiting on the clipboard probe", async () => {
+    // No navigator.clipboard — editable opens still probe; prose must not.
+    renderHost(<p data-testid="prose">instant open</p>);
+    const prose = screen.getByTestId("prose");
+    selectContents(prose);
+    fireEvent.contextMenu(prose, { clientX: 40, clientY: 60 });
+    expect(screen.getByRole("menu")).toBeDefined();
+  });
+
+  it("stays open on programmatic scroll (stick-to-bottom must not dismiss)", async () => {
+    renderHost(<p data-testid="prose">scroll dismiss</p>);
+    const prose = screen.getByTestId("prose");
+    selectContents(prose);
+    await rightClick(prose);
+    expect(screen.getByRole("menu")).toBeDefined();
+    fireEvent.scroll(window);
+    expect(screen.getByRole("menu")).toBeDefined();
+  });
+
+  it("closes when the reader scrolls (wheel then scroll)", async () => {
+    renderHost(<p data-testid="prose">reader scroll dismiss</p>);
+    const prose = screen.getByTestId("prose");
+    selectContents(prose);
+    await rightClick(prose);
+    expect(screen.getByRole("menu")).toBeDefined();
+    fireEvent.wheel(window, { deltaY: 40 });
+    fireEvent.scroll(window);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("does not keep a wheel latch that a later stick-to-bottom scroll can trip", async () => {
+    renderHost(<p data-testid="prose">stale wheel latch</p>);
+    const prose = screen.getByTestId("prose");
+    selectContents(prose);
+    await rightClick(prose);
+    expect(screen.getByRole("menu")).toBeDefined();
+    vi.useFakeTimers();
+    try {
+      // Wheel with no follow-up scroll (overscroll / absorbed delta).
+      fireEvent.wheel(window, { deltaY: 40 });
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+      });
+      // Later programmatic floor re-pin must not inherit the expired arm.
+      fireEvent.scroll(window);
+      expect(screen.getByRole("menu")).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("runs the row gesture and closes when a row is clicked", async () => {
     const copy = vi.fn();
     renderHost(composer(), { ...fakeActions(), copy });

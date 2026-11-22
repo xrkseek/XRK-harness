@@ -101,7 +101,8 @@ describe("createLocalSubprocess", () => {
       expect(result.stderr).toContain("BOOM");
       expect(result.killed).toBe(false);
       // 2s grace + margin; well under the grandchild's 5s pipe hold.
-      expect(Date.now() - startedAt).toBeLessThan(4_500);
+      // Loaded CI can land ~4.6s; stay clearly below the 5s pipe hold.
+      expect(Date.now() - startedAt).toBeLessThan(4_800);
     },
     20_000,
   );

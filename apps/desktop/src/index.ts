@@ -257,6 +257,7 @@ export {
 export {
   installDesktopApplicationMenu,
   presentDesktopUpdateCheckDialog,
+  waitForDesktopUpdatePrefetch,
   publishDesktopUpdateState,
   runDesktopManualUpdateCheck,
 } from "./desktop-update-shell.js";

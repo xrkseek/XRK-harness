@@ -47,6 +47,16 @@ export function registerExpandScrollWriter(write: WriteScroll | null): void {
   writeScrollHook = write
 }
 
+/**
+ * Programmatic scroll through ChatView's ledger when registered; otherwise a
+ * raw `scrollTop` write. Selection edge-scroll / focus re-pins must use this
+ * so onScroll does not treat the motion as a reader flick (or snap toBottom).
+ */
+export function writeConversationScroll(scrollport: HTMLElement, top: number): void {
+  if (writeScrollHook !== null) writeScrollHook(scrollport, top)
+  else scrollport.scrollTop = top
+}
+
 /** Whether ChatView should skip a floor re-pin for the current growth. */
 export function isExpandFollowSuppressed(): boolean {
   return pending !== null || performance.now() < suppressUntil

@@ -81,7 +81,10 @@ export class DesktopUpdateSchedule {
     if (this.disposed) {
       throw new Error("xrk desktop update: polling is disposed");
     }
-    if (this.pending !== undefined && !manual) return this.pending;
+    // Share in-flight work for both auto and manual (menu / footer). The old
+    // `&& !manual` branch started a second schedule check while polling was
+    // already running, double-bumping activeChecks and racing complete().
+    if (this.pending !== undefined) return this.pending;
     if (!force && this.now() < this.nextCheck) return this.updates.state;
     clearTimeout(this.timer);
     this.timer = undefined;

@@ -69,6 +69,31 @@ describe("DesktopUpdateSchedule", () => {
     schedule.dispose();
   });
 
+  it("shares in-flight work when a manual check joins an automatic one", async () => {
+    let resolveCheck!: (state: DesktopUpdateState) => void;
+    const pending = new Promise<DesktopUpdateState>((resolve) => {
+      resolveCheck = resolve;
+    });
+    const updates = {
+      state: { phase: "idle" } as DesktopUpdateState,
+      check: vi.fn(async () => pending),
+    };
+    const schedule = new DesktopUpdateSchedule(
+      updates,
+      { intervalMs: 60_000, maxBackoffMs: 120_000, jitter: 0 },
+      () => 0,
+      () => 0,
+    );
+    // Auto first (pending set), then manual must join — not start a second check.
+    const auto = schedule.check(false, true);
+    const manual = schedule.check(true, true);
+    resolveCheck({ phase: "idle" });
+    await expect(auto).resolves.toEqual({ phase: "idle" });
+    await expect(manual).resolves.toEqual({ phase: "idle" });
+    expect(updates.check).toHaveBeenCalledOnce();
+    schedule.dispose();
+  });
+
   it("returns current state when not due", async () => {
     const updates = {
       state: { phase: "idle" } as DesktopUpdateState,
@@ -111,7 +136,7 @@ describe("desktop update shell helpers", () => {
     expect(dead.webContents.send).not.toHaveBeenCalled();
   });
 
-  it("offers install when an update is available", async () => {
+  it("does not offer install while prefetch is still available", async () => {
     const locale = resolveDesktopLocale("en");
     const dialog = {
       showMessageBox: vi.fn(async () => ({ response: 0 })),
@@ -122,7 +147,32 @@ describe("desktop update shell helpers", () => {
         locale,
         dialog,
       }),
+    ).resolves.toBe("dismissed");
+    expect(dialog.showMessageBox).toHaveBeenCalledOnce();
+    const options = dialog.showMessageBox.mock.calls[0]?.[1] as {
+      buttons: string[];
+      message: string;
+    };
+    expect(options.buttons).toEqual(["OK"]);
+    expect(options.message).toMatch(/Downloading update 1\.2\.0/u);
+  });
+
+  it("offers install only when the update is ready", async () => {
+    const locale = resolveDesktopLocale("en");
+    const dialog = {
+      showMessageBox: vi.fn(async () => ({ response: 0 })),
+    };
+    await expect(
+      presentDesktopUpdateCheckDialog({
+        state: { phase: "ready", version: "1.2.0", percent: 100 },
+        locale,
+        dialog,
+      }),
     ).resolves.toBe("install");
     expect(dialog.showMessageBox).toHaveBeenCalledOnce();
+    const options = dialog.showMessageBox.mock.calls[0]?.[1] as {
+      buttons: string[];
+    };
+    expect(options.buttons[0]).toMatch(/Install and Restart/u);
   });
 });

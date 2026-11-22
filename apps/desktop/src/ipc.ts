@@ -53,7 +53,7 @@ export interface DesktopUpdateState {
     | "error";
   readonly version?: string;
   readonly message?: string;
-  /** Download percent 0–100 while `phase` is `installing`. */
+  /** Download percent 0–100 while prefetching (`available`) or installing. */
   readonly percent?: number;
 }
 

@@ -120,7 +120,7 @@ describe('DesktopReleaseFooter', () => {
     expect(screen.getByLabelText('v0.7.0-rc.1')).toBeTruthy()
   })
 
-  it('uses the Host reconnect chip for an available update', async () => {
+  it('opens the install sheet from a ready update chip without hover-swapping labels', async () => {
     const check = vi.fn(async () => ({ phase: 'available' as const, version: '0.5.14' }))
     const snapshot = vi.fn(async () => ({ phase: 'ready' as const, version: '0.5.14', percent: 100 }))
     const install = vi.fn(async () => undefined)
@@ -131,12 +131,66 @@ describe('DesktopReleaseFooter', () => {
     }
     render(<DesktopReleaseFooter t={interpolate} />)
     const available = await screen.findByRole('button', { name: 'Update 0.5.14' })
-    expect(available.className).toContain('warning')
+    expect(available.className).toMatch(/statusReady/)
+    expect(available.textContent).not.toMatch(/Install and restart/)
     fireEvent.click(available)
     expect(check).not.toHaveBeenCalled()
     expect(screen.getByRole('dialog', { name: 'Software update' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Install and restart' }))
     expect(install).toHaveBeenCalledOnce()
+  })
+
+  it('surfaces a failed update as an error chip instead of the idle version pill', async () => {
+    const check = vi.fn(async () => ({ phase: 'idle' as const }))
+    ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
+      version: async () => '0.5.13',
+      updates: {
+        check,
+        snapshot: async () => ({
+          phase: 'error' as const,
+          version: '0.5.20',
+          message: 'feed closed',
+        }),
+        install: vi.fn(),
+        subscribe: () => () => undefined,
+      },
+    }
+    render(<DesktopReleaseFooter t={interpolate} />)
+    const failed = await screen.findByRole('button', {
+      name: 'Could not check or install the update',
+    })
+    expect(failed.textContent).toMatch(/Could not check or install the update/)
+    // Error chip must retry (not stick forever); a successful check returns to idle copy.
+    fireEvent.click(failed)
+    expect(check).toHaveBeenCalledOnce()
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Software update' }).textContent).toMatch(
+        /You are on the latest version/,
+      )
+    })
+  })
+
+  it('keeps checking label stable (no Install hover swap via ConnectionIndicator)', async () => {
+    let resolveCheck!: (state: { phase: 'idle' }) => void
+    const check = vi.fn(() => new Promise<{ phase: 'idle' }>((resolve) => {
+      resolveCheck = resolve
+    }))
+    ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
+      version: async () => '0.5.13',
+      updates: {
+        check,
+        snapshot: async () => ({ phase: 'idle' as const }),
+        install: vi.fn(),
+        subscribe: () => () => undefined,
+      },
+    }
+    render(<DesktopReleaseFooter t={interpolate} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Check for updates v0.5.13' }))
+    const checking = await screen.findByRole('button', { name: 'Checking for updates' })
+    expect(checking.textContent).toMatch(/Checking for updates/)
+    expect(checking.textContent).not.toMatch(/Install and restart/)
+    expect(checking.querySelector('[class*="hoverLabel"]')).toBeNull()
+    resolveCheck({ phase: 'idle' })
   })
 
   it('keeps Install disabled until the download reaches ready', async () => {
@@ -212,14 +266,14 @@ describe('DesktopReleaseFooter', () => {
   })
 
   it('shows download progress in the in-app dialog', async () => {
-    let push: ((state: { phase: 'installing'; version: string; percent: number }) => void) | undefined
+    let push: ((state: { phase: string; version: string; percent: number }) => void) | undefined
     ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
       version: async () => '0.5.13',
       updates: {
         check: vi.fn(),
-        snapshot: async () => ({ phase: 'available' as const, version: '0.5.14' }),
+        snapshot: async () => ({ phase: 'available' as const, version: '0.5.14', percent: 0 }),
         install: vi.fn(async () => undefined),
-        subscribe: (listener: (state: { phase: 'installing'; version: string; percent: number }) => void) => {
+        subscribe: (listener: (state: { phase: string; version: string; percent: number }) => void) => {
           push = listener
           return () => undefined
         },
@@ -227,9 +281,33 @@ describe('DesktopReleaseFooter', () => {
     }
     render(<DesktopReleaseFooter t={interpolate} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Update 0.5.14' }))
-    push?.({ phase: 'installing', version: '0.5.14', percent: 42 })
+    push?.({ phase: 'available', version: '0.5.14', percent: 42 })
     const bar = await screen.findByRole('progressbar', { name: '42%' })
     expect(bar.getAttribute('aria-valuenow')).toBe('42')
+  })
+
+  it('shows installing copy instead of a download meter after quitAndInstall starts', async () => {
+    let push: ((state: { phase: string; version: string; percent?: number }) => void) | undefined
+    ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
+      version: async () => '0.5.13',
+      updates: {
+        check: vi.fn(),
+        snapshot: async () => ({ phase: 'ready' as const, version: '0.5.14', percent: 100 }),
+        install: vi.fn(async () => undefined),
+        subscribe: (listener: (state: { phase: string; version: string; percent?: number }) => void) => {
+          push = listener
+          return () => undefined
+        },
+      },
+    }
+    render(<DesktopReleaseFooter t={interpolate} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Update 0.5.14' }))
+    push?.({ phase: 'installing', version: '0.5.14', percent: 100 })
+    const dialog = await screen.findByRole('dialog', { name: 'Software update' })
+    expect(dialog.textContent).toMatch(/Installing and restarting/)
+    expect(dialog.textContent).not.toMatch(/Downloading/)
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Installing and restarting…' })).toBeTruthy()
   })
 })
 

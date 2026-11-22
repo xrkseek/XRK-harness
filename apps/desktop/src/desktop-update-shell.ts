@@ -49,8 +49,35 @@ export function publishDesktopUpdateState(
 }
 
 /**
+ * Wait until prefetch leaves `available` (ready / error / idle / installing).
+ * `check()` resolves at `available` before bytes finish — Install must not be
+ * offered until `ready`.
+ */
+export async function waitForDesktopUpdatePrefetch(
+  coordinator: Pick<DesktopUpdateCoordinator, "state">,
+  options?: { readonly pollMs?: number; readonly now?: () => number; readonly sleep?: (ms: number) => Promise<void> },
+): Promise<DesktopUpdateState> {
+  const pollMs = options?.pollMs ?? 50;
+  const now = options?.now ?? Date.now;
+  const sleep =
+    options?.sleep
+    ?? ((ms: number) => new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    }));
+  const deadline = now() + 30 * 60 * 1000;
+  for (;;) {
+    const state = coordinator.state;
+    if (state.phase !== "available") return state;
+    if (now() >= deadline) return state;
+    await sleep(pollMs);
+  }
+}
+
+/**
  * Present check / available / error dialogs for a manual check.
  * Returns true when the user chose Install and Restart.
+ *
+ * Only `ready` offers Install — `available` means prefetch is still running.
  */
 export async function presentDesktopUpdateCheckDialog(options: {
   readonly state: DesktopUpdateState;
@@ -81,7 +108,20 @@ export async function presentDesktopUpdateCheckDialog(options: {
     });
     return "dismissed";
   }
-  if (state.phase === "available" || state.phase === "ready") {
+  if (state.phase === "available") {
+    await dialog.showMessageBox(parentWindow, {
+      type: "info",
+      title: m.updateTitle,
+      message: formatDesktopMessage(m.updateDownloading, {
+        version: state.version,
+      }),
+      detail: m.updateDownloadingDetail,
+      buttons: ["OK"],
+      defaultId: 0,
+    });
+    return "dismissed";
+  }
+  if (state.phase === "ready") {
     const result = await dialog.showMessageBox(parentWindow, {
       type: "info",
       title: m.updateTitle,
@@ -131,7 +171,7 @@ export function installDesktopApplicationMenu(options: {
 }
 
 /**
- * Manual check path: schedule/coordinator check → dialog → optional install.
+ * Manual check path: schedule/coordinator check → wait for prefetch → dialog → optional install.
  */
 export async function runDesktopManualUpdateCheck(options: {
   readonly coordinator: DesktopUpdateCoordinator;
@@ -140,7 +180,10 @@ export async function runDesktopManualUpdateCheck(options: {
   readonly dialog: DesktopUpdateDialogBox;
   readonly parentWindow?: unknown;
 }): Promise<DesktopUpdateState> {
-  const state = await options.check();
+  let state = await options.check();
+  if (state.phase === "available") {
+    state = await waitForDesktopUpdatePrefetch(options.coordinator);
+  }
   const choice = await presentDesktopUpdateCheckDialog({
     state,
     locale: options.locale,

@@ -514,6 +514,9 @@
      flashed a horizontal gutter and jittered pin-to-bottom. `.heroGlow` also
      bleeds by construction (1051/776 of the hero box). */
   overflow-x: clip;
+  /* Browser scroll-anchoring fights stick-to-bottom / fold compensation and
+     can jump the port independently of the observed-top ledger. */
+  overflow-anchor: none;
   /* Reserved unconditionally: the composer seat rides this box's content box in
      Chat and its padding box under a view's composer overlay, so an `auto`
      gutter moves the input card sideways by the bar's width whenever the two

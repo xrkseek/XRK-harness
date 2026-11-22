@@ -1212,10 +1212,16 @@ describe('running and lock semantics', () => {
     expect((textarea).value).toBe('typed')
   })
 
-  it('wheel over a non-overflowing draft forwards to the conversation host', () => {
+  it('wheel over a non-overflowing draft forwards to the conversation host', async () => {
+    const { registerExpandScrollWriter } = await import('@xrkseek/client-ui-primitives')
     const host = document.createElement('div')
     host.setAttribute('data-conversation-scroll', '')
     Object.defineProperty(host, 'scrollTop', { value: 40, writable: true, configurable: true })
+    const ledger: number[] = []
+    registerExpandScrollWriter((scrollport, top) => {
+      ledger.push(top)
+      scrollport.scrollTop = top
+    })
     const { view, textarea } = bench()
     host.appendChild(view.container)
     document.body.appendChild(host)
@@ -1223,7 +1229,9 @@ describe('running and lock semantics', () => {
       const wheeled = fireEvent.wheel(textarea, { deltaY: 30 })
       expect(wheeled).toBe(false) // preventDefault
       expect(host.scrollTop).toBe(70)
+      expect(ledger).toEqual([70])
     } finally {
+      registerExpandScrollWriter(null)
       host.remove()
     }
   })

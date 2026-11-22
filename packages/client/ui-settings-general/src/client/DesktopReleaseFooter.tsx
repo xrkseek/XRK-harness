@@ -3,9 +3,18 @@
  * Desktop: opens the in-app update sheet when `xrkDesktop` is present.
  * Web: read-only Host package version from `host.describe`.
  * Hidden while reconnect chrome owns the same seat, and on the collapsed rail.
+ *
+ * Do NOT reuse ConnectionIndicator here: that control always swaps the visible
+ * label to `reconnectLabel` on hover — wiring install copy into a checking /
+ * downloading phase made "正在检查更新" flip to "安装并重启" before any
+ * update was confirmed or downloaded.
  */
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, ConnectionIndicator, Modal } from '@xrkseek/client-ui-primitives'
+import {
+  Button,
+  IconLoadingOutlineRegular,
+  Modal,
+} from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import css from './DesktopReleaseFooter.module.css'
 
@@ -48,6 +57,34 @@ function shortVersion(raw: string): string {
   const trimmed = raw.trim()
   if (trimmed === '') return ''
   return trimmed.startsWith('v') || trimmed.startsWith('V') ? trimmed.slice(1) : trimmed
+}
+
+/** Status pill: one label, optional spinner — no hover text swap. */
+function UpdateStatusChip(props: {
+  readonly label: string
+  readonly ariaLabel: string
+  readonly tone: 'progress' | 'ready'
+  readonly busy?: boolean
+  readonly onClick: () => void
+}): ReactNode {
+  const { label, ariaLabel, tone, busy = false, onClick } = props
+  return (
+    <button
+      type="button"
+      className={tone === 'ready' ? css.statusReady : css.statusProgress}
+      aria-label={ariaLabel}
+      onClick={onClick}
+    >
+      {busy
+        ? (
+          <span className={css.statusIcon} aria-hidden="true">
+            <IconLoadingOutlineRegular size={14} />
+          </span>
+        )
+        : null}
+      <span className={css.statusLabel}>{label}</span>
+    </button>
+  )
 }
 
 /** Compact version pill; Desktop adds update check / install dialog. */
@@ -100,11 +137,15 @@ export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterPro
   const available = state.phase === 'available' || ready
   const installing = state.phase === 'installing'
   const checking = state.phase === 'checking'
-  const downloading = installing || (state.phase === 'available' && !ready)
-  const shown = available && state.version ? shortVersion(state.version) : installed
+  // Prefetch only — `installing` is quitAndInstall, not another download bar.
+  const downloading = state.phase === 'available'
+  const shown = (available || installing) && state.version
+    ? shortVersion(state.version)
+    : installed
   const availableLabel = t('release.available', { version: shown })
   const checkingLabel = t('release.checking')
   const installLabel = t('release.install')
+  const installingLabel = t('release.installing')
   const checkLabel = t('release.check', { version: installed })
   const percent = clampPercent(state.percent)
   /** Install only after prefetch finished (coordinator phase `ready`). */
@@ -113,7 +154,10 @@ export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterPro
   const openSheet = () => {
     setOpen(true)
     if (!bridge) return
-    if (available || installing) return
+    // idle → start check. error → retry check (chip would otherwise stick on
+    // failed forever until a background schedule happens to succeed).
+    // available/ready/installing/checking already own the sheet content.
+    if (state.phase !== 'idle' && state.phase !== 'error') return
     setState({ phase: 'checking' })
     void bridge.updates.check().then((next) => {
       setState(next)
@@ -143,6 +187,8 @@ export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterPro
   let body: ReactNode
   if (state.phase === 'error') {
     body = <p className={css.copy}>{state.message?.trim() || t('release.failed')}</p>
+  } else if (installing) {
+    body = <p className={css.copy}>{installingLabel}</p>
   } else if (downloading) {
     body = (
       <>
@@ -168,38 +214,64 @@ export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterPro
     body = <p className={css.copy}>{t('release.current', { version: installed })}</p>
   }
 
-  const chip = checking || installing
-    ? (
-      <ConnectionIndicator
-        state="connecting"
-        disconnectedLabel={availableLabel}
-        reconnectLabel={installLabel}
-        connectingLabel={installing ? t('release.downloading', { version: shown }) : checkingLabel}
-        phaseLabel={installing ? t('release.progress', { percent }) : checkingLabel}
-        recoveredLabel={versionLabel}
-        reconnectActionLabel={checkLabel}
-        restartActionLabel={checkingLabel}
-        onReconnect={openSheet}
+  let chip: ReactNode
+  if (checking) {
+    chip = (
+      <UpdateStatusChip
+        tone="progress"
+        busy
+        label={checkingLabel}
+        ariaLabel={checkingLabel}
+        onClick={openSheet}
       />
     )
-    : available
-      ? (
-        <ConnectionIndicator
-          state="disconnected"
-          disconnectedLabel={availableLabel}
-          reconnectLabel={installLabel}
-          connectingLabel={checkingLabel}
-          recoveredLabel={versionLabel}
-          reconnectActionLabel={availableLabel}
-          restartActionLabel={checkingLabel}
-          onReconnect={openSheet}
-        />
-      )
-      : (
-        <button type="button" className={css.hit} onClick={openSheet} aria-label={checkLabel}>
-          <span className={css.version} title={versionLabel}>{versionLabel}</span>
-        </button>
-      )
+  } else if (installing) {
+    chip = (
+      <UpdateStatusChip
+        tone="progress"
+        busy
+        label={installingLabel}
+        ariaLabel={installingLabel}
+        onClick={openSheet}
+      />
+    )
+  } else if (state.phase === 'available') {
+    // Prefetch in flight — never advertise Install until phase `ready`.
+    chip = (
+      <UpdateStatusChip
+        tone="progress"
+        busy
+        label={t('release.downloading', { version: shown })}
+        ariaLabel={availableLabel}
+        onClick={openSheet}
+      />
+    )
+  } else if (ready) {
+    chip = (
+      <UpdateStatusChip
+        tone="ready"
+        label={availableLabel}
+        ariaLabel={availableLabel}
+        onClick={openSheet}
+      />
+    )
+  } else if (state.phase === 'error') {
+    // Must not fall through to the idle version pill — that hid real failures.
+    chip = (
+      <UpdateStatusChip
+        tone="ready"
+        label={t('release.failed')}
+        ariaLabel={t('release.failed')}
+        onClick={openSheet}
+      />
+    )
+  } else {
+    chip = (
+      <button type="button" className={css.hit} onClick={openSheet} aria-label={checkLabel}>
+        <span className={css.version} title={versionLabel}>{versionLabel}</span>
+      </button>
+    )
+  }
 
   return (
     <>
@@ -217,6 +289,7 @@ export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterPro
             <Button variant="outline" disabled={installing} onClick={closeSheet}>
               {t('release.later')}
             </Button>
+            {/* Show Install during prefetch too — disabled until phase `ready`. */}
             {available || installing
               ? (
                 <Button

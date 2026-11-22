@@ -18,6 +18,7 @@ import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   IconPaperclipOutlineRegular, IconPlusOutlineRegular, IconWarningOutlineRegular, Toast, Tooltip,
+  writeConversationScroll,
 } from '@xrkseek/client-ui-primitives'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
@@ -241,10 +242,14 @@ export const InputBar = memo(function InputBar({
       const target = seat instanceof HTMLElement ? seat : card
       const scrollport = card.closest('[data-conversation-scroll]')
       const reveal = (): void => {
-        if (scrollport instanceof HTMLElement) {
+        // Don't steal a live text selection / context-menu target on focus.
+        const live = window.getSelection()
+        if (live !== null && !live.isCollapsed) return
+          if (scrollport instanceof HTMLElement) {
           const floor = scrollport.scrollHeight - scrollport.clientHeight
-          if (floor - scrollport.scrollTop <= 48) {
-            scrollport.scrollTop = scrollport.scrollHeight
+          // Match ChatView FOLLOW_LEAVE_PX (24): only re-pin when already near floor.
+          if (floor - scrollport.scrollTop <= 24) {
+            writeConversationScroll(scrollport, scrollport.scrollHeight)
           }
         }
         target.scrollIntoView({ block: 'nearest', inline: 'nearest' })

@@ -258,6 +258,100 @@ describe("DesktopUpdateCoordinator", () => {
     });
     expect(coordinator.state.message).toMatch(/feed closed/u);
     expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    await expect(coordinator.install()).rejects.toThrow(/no verified update/u);
+  });
+
+  it("does not reuse a prior downloadOperation for a newer feed version", async () => {
+    const downloadUpdate = vi.fn(async () => []);
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi
+        .fn()
+        .mockResolvedValueOnce({
+          isUpdateAvailable: true,
+          updateInfo: { version: "1.1.0" },
+        })
+        .mockResolvedValueOnce({
+          isUpdateAvailable: true,
+          updateInfo: { version: "1.2.0" },
+        }),
+      downloadUpdate,
+      quitAndInstall: vi.fn(),
+    } satisfies DesktopAppUpdater;
+    const coordinator = new DesktopUpdateCoordinator({
+      publish: (state) => state,
+      updater,
+      enabled: () => true,
+    });
+    await coordinator.check();
+    await vi.waitFor(() => {
+      expect(coordinator.state.phase).toBe("ready");
+      expect(coordinator.state.version).toBe("1.1.0");
+    });
+    expect(downloadUpdate).toHaveBeenCalledOnce();
+    await coordinator.check();
+    await vi.waitFor(() => {
+      expect(coordinator.state.phase).toBe("ready");
+      expect(coordinator.state.version).toBe("1.2.0");
+    });
+    expect(downloadUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not carry a prior download percent into the next check", async () => {
+    const states: DesktopUpdateState[] = [];
+    let progress: ((percent: number) => void) | undefined;
+    let round = 0;
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => {
+        round += 1;
+        if (round === 1) {
+          return {
+            isUpdateAvailable: true,
+            updateInfo: { version: "1.1.0" },
+          };
+        }
+        return {
+          isUpdateAvailable: true,
+          updateInfo: { version: "1.2.0" },
+        };
+      }),
+      downloadUpdate: vi.fn(async () => {
+        if (round === 1) {
+          progress?.(40);
+          throw new Error("feed closed");
+        }
+        progress?.(5);
+      }),
+      quitAndInstall: vi.fn(),
+      onDownloadProgress: (listener: (percent: number) => void) => {
+        progress = listener;
+        return () => {
+          progress = undefined;
+        };
+      },
+    } satisfies DesktopAppUpdater;
+    const coordinator = new DesktopUpdateCoordinator({
+      publish: (state) => {
+        states.push(state);
+        return state;
+      },
+      updater,
+      enabled: () => true,
+    });
+    await coordinator.check();
+    await vi.waitFor(() => {
+      expect(coordinator.state.phase).toBe("error");
+    });
+    states.length = 0;
+    await coordinator.check();
+    expect(states[0]).toEqual({ phase: "checking" });
+    expect(states.find((row) => row.phase === "available")).toEqual({
+      phase: "available",
+      version: "1.2.0",
+    });
   });
 
   it("queues install behind an in-flight check", async () => {
