@@ -1211,39 +1211,44 @@ export function ChatView({
     /* v8 ignore next -- ref-null guard: the handler only fires while mounted. */
     if (local === null) return
     const el = scrollerOf(local)
-    // Only reader input may make raw scroll geometry change follow ownership:
-    // a delivered position that deviates from the observed-top ledger (every
-    // programmatic write records itself there synchronously). This covers
-    // wheel, touch, scrollbar, and keyboard alike without naming devices.
-    // Browser shrink-clamps land exactly on the floor min and delayed
-    // programmatic deliveries land on the ledger itself, so both preserve
-    // the current ownership state.
+    // Reader input = delivered top that diverges from the observed-top ledger
+    // (every programmatic write records itself there). Wheel / touch /
+    // scrollbar / keyboard all share that test — no per-device listeners.
     const floor = Math.max(0, el.scrollHeight - el.clientHeight)
+    const nearFloor = floor - el.scrollTop <= FOLLOW_THRESHOLD + 1
     const movedByReader = Math.abs(el.scrollTop - Math.min(observedTopRef.current, floor)) > 0.5
-    const isAtBottom = movedByReader
-      ? floor - el.scrollTop <= FOLLOW_THRESHOLD + 1
-      : atBottomRef.current
-    // Programmatic pins (streaming ResizeObserver follow) fire scroll events
-    // that match the ledger. Re-entering toBottom every frame re-ran setState /
-    // chatScroll.save for no geometry change — only re-pin when a shrink clamp
-    // left us short of the floor while we still own follow.
-    if (!movedByReader && isAtBottom) {
-      if (floor - el.scrollTop > FOLLOW_THRESHOLD + 1) {
-        toBottom(el)
-      } else {
-        observedTopRef.current = el.scrollTop
-        lastScrollHeightRef.current = el.scrollHeight
+    // Floor geometry always wins. Enough space (floor≈0) and shrink-clamps /
+    // fold collapses that land on the floor must clear a stale !atBottom —
+    // otherwise the sticky back-to-bottom control stays mounted and rides the
+    // collapsing column upward. Owning follow while short of the floor still
+    // re-pins below.
+    if (nearFloor) {
+      const wasAway = !atBottomRef.current
+      observedTopRef.current = el.scrollTop
+      lastScrollHeightRef.current = el.scrollHeight
+      if (wasAway) {
+        atBottomRef.current = true
+        setAtBottom(true)
+        anchorRef.current = null
+      }
+      // Reader edged into the threshold: refresh chrome without snapping the
+      // remaining distance (see "entering the at-bottom threshold" test).
+      if (wasAway || movedByReader) {
+        chatScroll.save(null)
+        scheduleActiveTurn()
       }
       return
     }
-    atBottomRef.current = isAtBottom
+    if (!movedByReader && atBottomRef.current) {
+      toBottom(el)
+      return
+    }
+    atBottomRef.current = false
     // Avoid re-rendering ChatView on every wheel tick while the follow chrome
     // state is unchanged (Vercel rerender-use-ref-transient-values).
-    setAtBottom(current => (current === isAtBottom ? current : isAtBottom))
-    const position = isAtBottom ? null : scrollPosition(local, el, anchorProbeRef.current)
-    if (isAtBottom) {
-      anchorRef.current = null
-    } else if (anchorRef.current !== null && position !== null) {
+    setAtBottom(current => (current === false ? current : false))
+    const position = scrollPosition(local, el, anchorProbeRef.current)
+    if (anchorRef.current !== null && position !== null) {
       anchorRef.current = { key: position.anchorKey, top: position.anchorTop }
     }
     // Continuous save (unmount happens after ref detach, so saving there is
@@ -1251,8 +1256,7 @@ export function ChatView({
     // NOTE: this stays synchronous. Deferring it to rAF was tried and breaks
     // the anchored-prepend / remount restore semantics the tests lock down
     // (jsdom has no elementsFromPoint, so the fallback sweep IS the path there).
-    if (isAtBottom) chatScroll.save(null)
-    else if (position !== null) chatScroll.save(position)
+    if (position !== null) chatScroll.save(position)
     observedTopRef.current = el.scrollTop
     scheduleActiveTurn()
   }
@@ -1288,6 +1292,14 @@ export function ChatView({
     if (isExpandFollowSuppressed()) return
     const floor = Math.max(0, el.scrollHeight - el.clientHeight)
     const distance = floor - el.scrollTop
+    // Shrink with no scroll event (in-view fold collapse) must still clear a
+    // stale !atBottom when enough space returns — same rule as onScroll.
+    if (distance <= FOLLOW_THRESHOLD + 1 && !atBottomRef.current) {
+      observedTopRef.current = el.scrollTop
+      atBottomRef.current = true
+      setAtBottom(true)
+      chatScroll.save(null)
+    }
     if (!shouldFollowContentGrowth({
       atBottom: atBottomRef.current,
       distanceFromBottom: distance,
@@ -1532,24 +1544,31 @@ export function ChatView({
   // write through here so the observed-top ledger records it; otherwise the
   // scroll handler reads the restored offset as reader input and drops follow.
   // The same writer serves mid-column disclosure expands (expand-scroll-preserve).
+  // Ledger write for fold compensation + expand-scroll-preserve. Expand settle
+  // lands here without a later onScroll (fold onSettled can run first), so
+  // nearFloor / away chrome must update from geometry in this write.
   const writeFoldScroll = useCallback((scrollport: HTMLElement, top: number): void => {
     scrollport.scrollTop = top
     observedTopRef.current = scrollport.scrollTop
+    lastScrollHeightRef.current = scrollport.scrollHeight
     const floor = Math.max(0, scrollport.scrollHeight - scrollport.clientHeight)
     const isAtBottom = floor - scrollport.scrollTop <= FOLLOW_THRESHOLD + 1
-    if (atBottomRef.current !== isAtBottom) {
-      atBottomRef.current = isAtBottom
-      setAtBottom(isAtBottom)
+    if (atBottomRef.current === isAtBottom) return
+    atBottomRef.current = isAtBottom
+    setAtBottom(isAtBottom)
+    if (isAtBottom) {
+      anchorRef.current = null
+      chatScroll.save(null)
     }
-  }, [])
+  }, [chatScroll])
   useEffect(() => {
     registerExpandScrollWriter(writeFoldScroll)
     return () => { registerExpandScrollWriter(null) }
   }, [writeFoldScroll])
   // A fold moves every row below it, compensated or not, so the persisted
   // reading anchor has to be re-sampled even when `scrollTop` itself stayed
-  // put. Reusing the scroll handler keeps the follow latch and the saved
-  // position on the same code path they always take.
+  // put. onScroll also clears nearFloor chrome after in-view collapses that
+  // never call writeFoldScroll.
   const handleFoldSettled = useCallback((): void => { onScrollRef.current() }, [])
   const columnRows: ReactNode[] = []
   const seenSendRpc = new Set<string>()

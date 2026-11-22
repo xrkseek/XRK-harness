@@ -81,8 +81,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         en: 'Phone disclosure rows keep type icons (›/∨ trail only); workbench refresh no longer re-downloads the same file.',
       },
       {
-        zh: '划词/右键更稳；手机下载标题「文件已保存」；表情球不再偶发只剩眼镜。',
-        en: 'Selection/context menus steadier; phone download title “File saved”; presence ball no longer loses its sphere body.',
+        zh: '划词/右键更稳；折叠后「回到底部」不再粘中间；手机下载「文件已保存」；表情球不再只剩眼镜。',
+        en: 'Selection menus steadier; back-to-bottom no longer sticks mid-fold; phone “File saved”; presence sphere body stays.',
       },
       {
         zh: 'Desktop / npm / 手机对齐 0.8.7。完整清单见 docs/releases/v0.8.7.md。',

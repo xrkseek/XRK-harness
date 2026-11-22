@@ -2182,6 +2182,46 @@ describe('ChatView', () => {
     expect(scroller.scrollTop).toBe(900)
   })
 
+  it('enough space after shrink clears a stale back-to-bottom control', () => {
+    const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    const metrics = installScrollMetrics(scroller, 1_000, 300)
+    readerScroll(scroller, 100)
+    expect(view.getByLabelText('回到底部')).toBeTruthy()
+
+    // Fold collapse / content fits again: floor drops to 0. Geometry must
+    // clear !atBottom — the sticky control must not keep riding the column.
+    metrics.setLayout(300, 100)
+    fireEvent.scroll(scroller)
+    expect(scroller.scrollTop).toBe(0)
+    expect(view.queryByLabelText('回到底部')).toBeNull()
+  })
+
+  it('ResizeObserver shrink with enough space clears back-to-bottom without a scroll event', () => {
+    let notify: (() => void) | undefined
+    class ResizeObserverStub {
+      constructor(callback: ResizeObserverCallback) {
+        notify = () => { callback([], this as unknown as ResizeObserver) }
+      }
+
+      observe = vi.fn()
+      disconnect = vi.fn()
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+    const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    const metrics = installScrollMetrics(scroller, 1_000, 300)
+    readerScroll(scroller, 100)
+    expect(view.getByLabelText('回到底部')).toBeTruthy()
+
+    // In-view fold collapse often shrinks height without a scroll delivery.
+    metrics.setLayout(300, 0)
+    act(() => { notify?.() })
+    expect(view.queryByLabelText('回到底部')).toBeNull()
+  })
+
   it('uses the last delivered top when compositor scrolling precedes scroll delivery', () => {
     const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
     const view = render(<h.ChatView {...h.props} />)
