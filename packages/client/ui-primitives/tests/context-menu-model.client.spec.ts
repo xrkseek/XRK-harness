@@ -140,6 +140,22 @@ describe('context menu rows', () => {
       .toContain('paste-plain')
   })
 
+  it('coarse pointer + editable selection: Copy only (no Delete / edit block)', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('pointer: coarse'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+      onchange: null,
+    }))
+    const selected = textareaWithSelection(0, 5)
+    expect(rowsOf(hitOn(selected), { hasText: true, hasFiles: false })).toEqual(['copy'])
+    vi.unstubAllGlobals()
+  })
+
   it('offers copy alone on selected prose, and copy-link beside a link', () => {
     const paragraph = document.createElement('p')
     const anchor = document.createElement('a')

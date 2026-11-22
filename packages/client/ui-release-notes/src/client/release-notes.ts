@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.9',
+    date: '2026-11-22',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '顶栏概况不被表情球长卡片盖住；去掉 Host 为绝对 FAB 硬垫的 100px。',
+        en: 'Overview stays clear of the full Presence chip; Host no longer hard-pads 100px for absolute FABs.',
+      },
+      {
+        zh: '手机划词菜单只留复制（+翻译），更贴选区上方；侧栏桌面开关进顶栏流式。',
+        en: 'Phone selection menu is Copy (+ Translate) only and hugs above the line; sidebar desktop toggles are in-flow.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.9。完整清单见 docs/releases/v0.8.9.md。',
+        en: 'Desktop / npm / phone align to 0.8.9. Full list: docs/releases/v0.8.9.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.8',
     date: '2026-11-22',
     title: {

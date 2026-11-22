@@ -96,10 +96,10 @@ describe('resolveContextMenuPlacement', () => {
     const hit = readContextMenuHit(event)
     const placement = resolveContextMenuPlacement(hit)
     expect(placement.side).toBe('top')
-    // Centered on finger X (80 − 148/2); inflated by handle clearance (32).
+    // Centered on finger X (80 − 148/2); inflated by handle clearance (10).
     expect(placement.rect.x).toBe(80 - 74)
-    expect(placement.rect.top).toBe(240 - 32)
-    expect(placement.rect.height).toBe(40 + 64)
+    expect(placement.rect.top).toBe(240 - 10)
+    expect(placement.rect.height).toBe(40 + 20)
     expect(placement.rect.width).toBe(148)
   })
 
@@ -128,9 +128,9 @@ describe('resolveContextMenuPlacement', () => {
     const placement = resolveContextMenuPlacement(hit)
     expect(placement.side).toBe('top')
     expect(placement.rect.x).toBe(90 - 74)
-    // Nearest line top 360 − handle clearance 32 — not union top 200.
-    expect(placement.rect.top).toBe(360 - 32)
-    expect(placement.rect.height).toBe(40 + 64)
+    // Nearest line top 360 − handle clearance 10 — not union top 200.
+    expect(placement.rect.top).toBe(360 - 10)
+    expect(placement.rect.height).toBe(40 + 20)
   })
 
   it('coarse pointer + tall selection: ignores off-screen lines when a visible line exists', () => {
@@ -157,7 +157,7 @@ describe('resolveContextMenuPlacement', () => {
     Object.defineProperty(event, 'target', { value: prose })
     const hit = readContextMenuHit(event)
     const placement = resolveContextMenuPlacement(hit)
-    expect(placement.rect.top).toBe(200 - 32)
+    expect(placement.rect.top).toBe(200 - 10)
   })
 
   it('coarse pointer + selection near the top: flips below', () => {
@@ -201,7 +201,7 @@ describe('resolveContextMenuPlacement', () => {
     const placement = resolveContextMenuPlacement(hit)
     // Line center X = 140; card left = 140 − 74.
     expect(placement.rect.x).toBe(140 - 74)
-    expect(placement.rect.top).toBe(300 - 32)
+    expect(placement.rect.top).toBe(300 - 10)
   })
 
   it('coarse pointer without selection: falls back to the pointer', () => {

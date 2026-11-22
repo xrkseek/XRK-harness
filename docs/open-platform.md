@@ -28,7 +28,7 @@ XRK-Harness 把扩展面收成 **XRK Plug**（`@xrkseek/plug`）：进程半部�
 1. **侧宽**：`ctx.layout.reserveSide(px)`（`0` = 关）→ 壳整框 `margin-right`，并戳 `data-xrk-layout-side`  
 2. **底高**：`ctx.layout.reserveBottom(px)`（`0` = 关）→ 对话列 `padding-bottom`，并戳 `data-xrk-layout-bottom`  
 3. **读壳已占**：`ctx.layout.insets` 或 `--xrk-layout-inset-*` / `XRK_PLUG.layoutAttrs`  
-4. **顶栏右缝**：Host PresenceDock 在 `header.utilities`；浮动 FAB 由**插件**自己画。侧栏打开时 Host 凭 `data-xrk-layout-side` 给顶栏留 `padding-right`、球收成 icon-only——**不**绑定某一插件 id。未装工作台插件时无 FAB、无额外 padding（正常空态，不是异常）。  
+4. **顶栏右缝**：Host PresenceDock 在 `header.utilities`。桌面工作台开关优先挂同一 utilities（流式占位）；浮动 FAB 若仍用，由**插件**自画并自管 clearance——**Host 不为 FAB 硬垫 `padding-right`**。侧栏打开时球可凭 `data-xrk-layout-side` 收成 icon-only（与垫距无关）。未装工作台插件时无 FAB、无额外 padding（正常空态，不是异常）。  
 5. **地板**：`xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`；视口不够则 push `0`（浮层）  
 6. **手机**：`insets.phone` 时壳强制底/侧为 `0`；概况开时收 FAB / 抽屉  
 7. **键盘**：宽屏 `--xrk-keyboard-inset = 0`；Flutter 薄壳自管  
@@ -115,7 +115,7 @@ Third parties must **not** patch the Host for yield, and must **not** assume a c
 1. **Side width:** `ctx.layout.reserveSide(px)` (`0` = closed) → shell frame `margin-right` + `data-xrk-layout-side`  
 2. **Bottom height:** `ctx.layout.reserveBottom(px)` (`0` = closed) → conversation `padding-bottom` + `data-xrk-layout-bottom`  
 3. **Read shell occupancy:** `ctx.layout.insets` or `--xrk-layout-inset-*` / `XRK_PLUG.layoutAttrs`  
-4. **Header right seam:** Host PresenceDock lives in `header.utilities`; floating FABs are **plugin-owned**. When the side is reserved, Host pads the header and collapses the ball to icon-only via `data-xrk-layout-side` — **not** a first-party plugin id. With no workbench plugin: no FABs, no extra padding (empty is normal, not an error).  
+4. **Header right seam:** Host PresenceDock lives in `header.utilities`. Prefer in-flow workbench toggles on the same utilities seat; floating FABs — if used — are **plugin-owned** and own their own clearance (**Host does not hard-pad `padding-right` for FABs**). When the side is reserved, the ball may collapse to icon-only via `data-xrk-layout-side` (independent of pad). With no workbench plugin: no FABs, no extra padding (empty is normal, not an error).  
 5. **Floor:** `xrkPlugPushFloor({ shellOccupied: xrkPlugShellOccupied(insets) })`; push `0` (float) when the viewport is too narrow  
 6. **Phone:** `insets.phone` forces bottom/side to `0`; hide FABs / drawers when Overview is open  
 7. **Keyboard:** wide `--xrk-keyboard-inset = 0`; Flutter thin shells own the inset  

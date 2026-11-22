@@ -88,31 +88,13 @@
   container-type: inline-size;
 }
 
-/* Toggle cluster / side workbench on the conversation right seam — pad so
-   in-flow 概况 / PresenceDock stay clear of bottom+side FABs pinned at
-   `right: 10px` (+ Overview/workbench insets). Prefer Host
-   `data-xrk-layout-side` (any reserveSide plugin). Also pad while the cluster
-   is mounted (`[data-xrkh-toggle-cluster]`, side open or closed): dual FAB
-   ≈ 60px + 10px inset; 100px leaves ~30px air. No workbench plugin → no
-   cluster → no extra pad. */
-:global(html[data-xrk-layout-side]) .header,
-:global(html:has([data-xrkh-panel-host][data-xrkh-side-open])) .header,
-:global(html:has([data-xrkh-toggle-cluster])) .header {
-  padding-right: 100px;
-}
-
-/* Phone: single side FAB (bottom toggle is desktop-only). */
-@media (max-width: 767px) {
-  :global(html[data-xrk-layout-side]) .header,
-  :global(html:has([data-xrkh-panel-host][data-xrkh-side-open])) .header,
-  :global(html:has([data-xrkh-toggle-cluster])) .header {
-    padding-right: max(
-      44px,
-      env(safe-area-inset-right, 0px),
-      var(--ds-safe-right, 0px)
-    );
-  }
-}
+/* Header right pad is NOT Host-owned. Desktop workbench controls belong in
+   `header.utilities` (in-flow); absolute FABs — if a plugin still draws them —
+   own their own clearance. Host used to pad 100px on `data-xrk-layout-side` /
+   first-party toggle-cluster attrs; that forced every community layout into
+   one absolute-FAB shape and left a gutter when toggles moved in-flow.
+   Side yield remains `reserveSide` → frame `margin-right` only. PresenceDock
+   still collapses to icon-only while side is reserved (separate from pad). */
 
 .header::after {
   content: '';
@@ -217,29 +199,32 @@
   cursor: default;
 }
 
+/* Status / Jobs: never shrink or clip away (概况 must stay hittable). Title
+   crumbs yield first. Sit above Presence's absolute chip (seat z-index 0). */
 .headerActions {
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
-  min-width: 0;
   max-width: min(280px, 48%);
-  /* Clip rather than paint over tabs when jobs + lineage refuse to shrink. */
-  overflow: hidden;
-  z-index: 1;
+  position: relative;
+  z-index: 3;
 }
 
+/* Presence + plugin in-flow controls. Pack start so excess spills right
+   (window edge), never left over headerActions. Presence seat max-width
+   100% so siblings (workbench toggles) keep a seat. */
 .headerUtilities {
   display: flex;
   flex: 0 1 auto;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
   margin-left: 12px;
   min-width: 0;
-  /* Icon-only presence is 36px; full chip caps at 220. Keep the seat from
-     stealing the crumbs/jobs half of a squeezed title row. */
-  max-width: min(220px, 36%);
+  max-width: min(320px, 55%);
+  position: relative;
+  z-index: 0;
 }
 
 .headerUtilities:empty {

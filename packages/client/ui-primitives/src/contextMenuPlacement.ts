@@ -17,8 +17,9 @@
 import { hasContextMenuSelection } from "./context-menu.ts";
 import type { ContextMenuHit } from "./context-menu.ts";
 
-/** Clearance so mobile selection handles stay outside the card. */
-const HANDLE_CLEARANCE_PX = 32;
+/** Clearance so mobile selection handles stay just outside the card.
+ * Keep tight — large pad floated the menu far above the pressed line. */
+const HANDLE_CLEARANCE_PX = 10;
 
 /**
  * Rough card height for room checks before the list is measured.

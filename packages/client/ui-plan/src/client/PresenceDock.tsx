@@ -139,9 +139,10 @@ function usePhonePresenceSlot(overviewOpen: boolean): HTMLElement | null {
  * Side workbench reserved. Prefer Host `data-xrk-layout-side` from
  * `ctx.layout.reserveSide` (any floating workbench plugin). Fallbacks:
  * first-party `data-xrkh-side-open`, then `--xrkh-workbench-width`.
- * When open, FABs own the header right seam — chip collapses to icon-only.
- * With no workbench plugin, reserveSide stays 0 and this stays false (no
- * empty chrome / false icon-only).
+ * When open, the side column owns horizontal room — chip collapses to
+ * icon-only so in-flow header.utilities (Presence + plugin toggles) stay
+ * readable. With no workbench plugin, reserveSide stays 0 and this stays
+ * false (no empty chrome / false icon-only).
  */
 function readSideWorkbenchOpen(): boolean {
   if (typeof document === 'undefined') return false

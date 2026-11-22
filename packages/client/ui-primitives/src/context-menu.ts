@@ -311,39 +311,54 @@ export function buildContextMenuEntries(options: {
   if (hit.isEditable) {
     const selected = hasContextMenuSelection(hit);
     const canPaste = clipboard.hasText || clipboard.hasFiles;
-    entries.push(
-      row("undo", labels.undo, !contextMenuHistoryEnabled(hit, "undo"), () => {
-        actions.undo(hit);
-      }),
-      row("redo", labels.redo, !contextMenuHistoryEnabled(hit, "redo"), () => {
-        actions.redo(hit);
-      }),
-      separator("edit-separator"),
-      row("cut", labels.cut, !selected, () => {
-        actions.cut(hit);
-      }),
-      row("copy", labels.copy, !selected, () => {
-        actions.copy(hit);
-      }),
-      row("paste", labels.paste, !canPaste, () => {
-        actions.paste(hit, false);
-      }),
-      row("delete", labels.delete, !selected, () => {
-        actions.remove(hit);
-      }),
-      separator("clip-separator"),
-      row("select-all", labels.selectAll, false, () => {
-        actions.selectAll(hit);
-      }),
-    );
-    // Plain-text paste has no discoverable shortcut once the browser menu is
-    // gone, and pasted code should not drag formatting into the composer.
-    if (canPaste) {
+    // Phone long-press with a live selection: Copy (+ Translate below) only.
+    // Full edit rows (incl. Delete) belong on fine pointers / caret menus —
+    // Delete-over-selection on coarse felt like a stray「选中删除」over prose.
+    const coarseSelection =
+      selected
+      && typeof matchMedia === "function"
+      && matchMedia("(pointer: coarse)").matches;
+    if (coarseSelection) {
       entries.push(
-        row("paste-plain", labels.pastePlainText, false, () => {
-          actions.paste(hit, true);
+        row("copy", labels.copy, false, () => {
+          actions.copy(hit);
         }),
       );
+    } else {
+      entries.push(
+        row("undo", labels.undo, !contextMenuHistoryEnabled(hit, "undo"), () => {
+          actions.undo(hit);
+        }),
+        row("redo", labels.redo, !contextMenuHistoryEnabled(hit, "redo"), () => {
+          actions.redo(hit);
+        }),
+        separator("edit-separator"),
+        row("cut", labels.cut, !selected, () => {
+          actions.cut(hit);
+        }),
+        row("copy", labels.copy, !selected, () => {
+          actions.copy(hit);
+        }),
+        row("paste", labels.paste, !canPaste, () => {
+          actions.paste(hit, false);
+        }),
+        row("delete", labels.delete, !selected, () => {
+          actions.remove(hit);
+        }),
+        separator("clip-separator"),
+        row("select-all", labels.selectAll, false, () => {
+          actions.selectAll(hit);
+        }),
+      );
+      // Plain-text paste has no discoverable shortcut once the browser menu is
+      // gone, and pasted code should not drag formatting into the composer.
+      if (canPaste) {
+        entries.push(
+          row("paste-plain", labels.pastePlainText, false, () => {
+            actions.paste(hit, true);
+          }),
+        );
+      }
     }
   } else if (hit.selectionText !== "") {
     entries.push(
