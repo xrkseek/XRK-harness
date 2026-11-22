@@ -8,6 +8,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -20,9 +21,72 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOOLS_ID = "xrk-phone-bridge-tools";
 export const PROMPT_ID = "xrk-phone-bridge-prompt";
 export const CLIENT_ID = "xrk-phone-bridge";
-export const CLIENT_VERSION = "0.7.25";
+export const CLIENT_VERSION = "0.8.9";
 export const CLIENT_INJECT = Object.freeze(["@xrkseek/client-runtime"]);
 export const SKILL_ID = "xrk-phone";
+
+/** npm `name` when published scoped (`@xrkseek/xrk-phone-bridge`); else CLIENT_ID. */
+function packageInstallName() {
+  try {
+    const pkg = JSON.parse(readFileSync(join(HERE, "package.json"), "utf8"));
+    if (pkg && typeof pkg.name === "string" && pkg.name.trim()) {
+      return pkg.name.trim();
+    }
+  } catch {
+    // fall through
+  }
+  return CLIENT_ID;
+}
+
+/**
+ * Drop a phantom unscoped client row left over from older materialize + scoped
+ * `plugin add` (double ModuleLoader / settings.section registration).
+ */
+function prunePhantomClientHalf(pluginsRoot, phantomId) {
+  const invPath = join(pluginsRoot, ".xrk-plugins.json");
+  if (existsSync(invPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(invPath, "utf8"));
+      if (raw?.packages && typeof raw.packages === "object" && phantomId in raw.packages) {
+        const packages = { ...raw.packages };
+        delete packages[phantomId];
+        writeFileSync(
+          invPath,
+          JSON.stringify(
+            { rev: typeof raw.rev === "number" ? raw.rev : 1, packages },
+            null,
+            2,
+          ) + "\n",
+          "utf8",
+        );
+      }
+    } catch {
+      // leave inventory alone
+    }
+  }
+  const bootPath = join(pluginsRoot, "web", "boot.json");
+  if (existsSync(bootPath)) {
+    try {
+      const boot = JSON.parse(readFileSync(bootPath, "utf8"));
+      if (Array.isArray(boot.entries)) {
+        const entries = boot.entries.filter((e) => e && e.id !== phantomId);
+        if (entries.length !== boot.entries.length) {
+          writeFileSync(
+            bootPath,
+            JSON.stringify({ ...boot, entries }, null, 2) + "\n",
+            "utf8",
+          );
+        }
+      }
+    } catch {
+      // leave boot alone
+    }
+  }
+  rmSync(join(pluginsRoot, "web", "plugins", phantomId), {
+    recursive: true,
+    force: true,
+  });
+}
 
 /** Same binder guest uses: skill first, then phone_*. Only shown while a phone is online. */
 const PROMPT_SECTION = [
@@ -177,10 +241,27 @@ export function materializePhoneSkill(xrkHome) {
 /**
  * Stage Settings client.js under web/plugins and register in inventory + boot.
  * Same overlay path community client packages use — no Host patches.
+ *
+ * When installed as `@xrkseek/xrk-phone-bridge`, Host `plugin add` already
+ * stages `xrk.client` under that scoped id. Do not also invent unscoped
+ * `xrk-phone-bridge` — that double-loads ModuleLoader + settings.section.
  */
 function materializeClientHalf(pluginsRoot) {
   const clientSrc = join(HERE, "client.js");
   if (!existsSync(clientSrc)) return;
+
+  const installName = packageInstallName();
+  const hostStaged = join(
+    pluginsRoot,
+    "web",
+    "plugins",
+    ...installName.split("/").filter(Boolean),
+    "client.js",
+  );
+  if (installName !== CLIENT_ID && existsSync(hostStaged)) {
+    prunePhantomClientHalf(pluginsRoot, CLIENT_ID);
+    return;
+  }
 
   const destDir = join(pluginsRoot, "web", "plugins", CLIENT_ID);
   mkdirSync(destDir, { recursive: true });
@@ -234,7 +315,10 @@ function materializeClientHalf(pluginsRoot) {
     try {
       const boot = JSON.parse(readFileSync(bootPath, "utf8"));
       if (Array.isArray(boot.entries)) {
-        entries = boot.entries.filter((e) => e && e.id !== CLIENT_ID);
+        // Drop self + scoped twin so only one Settings client boots.
+        entries = boot.entries.filter(
+          (e) => e && e.id !== CLIENT_ID && e.id !== installName,
+        );
       }
     } catch {
       entries = [];

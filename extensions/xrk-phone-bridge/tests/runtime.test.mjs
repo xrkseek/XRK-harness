@@ -416,6 +416,7 @@ describe("phone bridge runtime", () => {
       expect(out.skillId).toBe("xrk-phone");
       expect(existsSync(join(plugins, TOOLS_ID, "xrk.plugin.json"))).toBe(true);
       expect(existsSync(join(plugins, PROMPT_ID, "plugin.mjs"))).toBe(true);
+      // No Host-staged scoped client yet → materialize still stages unscoped Settings half.
       expect(existsSync(join(plugins, "web", "plugins", "xrk-phone-bridge", "client.js"))).toBe(
         true,
       );
@@ -436,6 +437,89 @@ describe("phone bridge runtime", () => {
         readFileSync(join(plugins, PROMPT_ID, "xrk.plugin.json"), "utf8"),
       );
       expect(promptManifest.kind).toBe("prompt");
+    } finally {
+      rmSync(plugins, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("materialize skips unscoped client when scoped Host stage already exists", async () => {
+    const plugins = mkdtempSync(join(tmpdir(), "xrk-pb-scoped-"));
+    const home = mkdtempSync(join(tmpdir(), "xrk-pb-home-"));
+    try {
+      const scopedDir = join(plugins, "web", "plugins", "@xrkseek", "xrk-phone-bridge");
+      mkdirSync(scopedDir, { recursive: true });
+      writeFileSync(join(scopedDir, "client.js"), "/* host staged */\n", "utf8");
+      writeFileSync(
+        join(plugins, ".xrk-plugins.json"),
+        JSON.stringify(
+          {
+            rev: 1,
+            packages: {
+              "@xrkseek/xrk-phone-bridge": {
+                name: "@xrkseek/xrk-phone-bridge",
+                version: "0.7.26",
+                kind: "both",
+                source: "@xrkseek/xrk-phone-bridge",
+                installedAt: "2026-01-01T00:00:00.000Z",
+                clientInject: ["@xrkseek/client-runtime"],
+              },
+              "xrk-phone-bridge": {
+                name: "xrk-phone-bridge",
+                version: "0.7.25",
+                kind: "both",
+                source: "xrk-phone-bridge",
+                installedAt: "2026-01-01T00:00:00.000Z",
+                clientInject: ["@xrkseek/client-runtime"],
+              },
+            },
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      mkdirSync(join(plugins, "web", "plugins", "xrk-phone-bridge"), { recursive: true });
+      writeFileSync(
+        join(plugins, "web", "plugins", "xrk-phone-bridge", "client.js"),
+        "/* phantom */\n",
+        "utf8",
+      );
+      writeFileSync(
+        join(plugins, "web", "boot.json"),
+        JSON.stringify(
+          {
+            rev: "stale",
+            entries: [
+              {
+                id: "@xrkseek/xrk-phone-bridge",
+                url: "/plugins/@xrkseek/xrk-phone-bridge/client.js",
+                rev: "0.7.26",
+                inject: ["@xrkseek/client-runtime"],
+              },
+              {
+                id: "xrk-phone-bridge",
+                url: "/plugins/xrk-phone-bridge/client.js",
+                rev: "0.7.25",
+                inject: ["@xrkseek/client-runtime"],
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+
+      await materializeBridgePlugins({ pluginsDir: plugins, xrkHome: home });
+
+      expect(existsSync(join(plugins, "web", "plugins", "xrk-phone-bridge"))).toBe(false);
+      const inv = JSON.parse(readFileSync(join(plugins, ".xrk-plugins.json"), "utf8"));
+      expect(inv.packages["xrk-phone-bridge"]).toBeUndefined();
+      expect(inv.packages["@xrkseek/xrk-phone-bridge"]).toBeTruthy();
+      const boot = JSON.parse(readFileSync(join(plugins, "web", "boot.json"), "utf8"));
+      expect(boot.entries.map((e) => e.id)).toEqual(["@xrkseek/xrk-phone-bridge"]);
+      expect(existsSync(join(scopedDir, "client.js"))).toBe(true);
     } finally {
       rmSync(plugins, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });

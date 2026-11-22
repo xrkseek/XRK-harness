@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/xrk-phone-bridge",
-  "version": "0.7.26",
+  "version": "0.8.9",
   "description": "Remote phone_* bridge (host HTTP + Settings whitelist + materialize tools/prompt/xrk-phone skill)",
   "type": "module",
   "files": [
