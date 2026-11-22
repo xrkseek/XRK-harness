@@ -49,6 +49,11 @@ export function formatPeerCollabCompletionNotice(input: {
   if (input.outcomeLine?.trim()) {
     bits.push(`Outcome: ${input.outcomeLine.trim()}`);
   }
+  // Informational only: models that treat every handoff as "must reply"
+  // reopen the peer with thread_message and loop (向日葵↔经理 zip).
+  bits.push(
+    "Informational — do not thread_message back unless you have a new ask. Courtesy acks cause ping-pong.",
+  );
   const body = input.answer.trim();
   if (body) {
     bits.push("", body);

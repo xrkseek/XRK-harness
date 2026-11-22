@@ -152,7 +152,24 @@
     svg.appendChild(fxBack);
 
     var bodyG = el('g', {});
-    var head = el('path', { d: ringPath(headRing), fill: 'url(#' + id + 'g)', stroke: 'none', 'stroke-width': '2' });
+    /* Phone APK / Android WebView: ancestor CSS opacity (or opacity transitions)
+     * can drop `fill: url(#radialGradient)` while solid fills and <image> kit
+     * layers still paint — users see glasses/outfit with no sphere body.
+     * Prefer a solid body fill on those carriers; Desktop keeps the gradient. */
+    var solidBodyFill = false;
+    try {
+      var shell = globalThis.XrkShell;
+      if (shell && typeof shell.postMessage === 'function') solidBodyFill = true;
+      else if (typeof navigator !== 'undefined' && /; wv\)/i.test(String(navigator.userAgent || ''))) {
+        solidBodyFill = true;
+      }
+    } catch (_shellErr) { /* keep gradient */ }
+    var head = el('path', {
+      d: ringPath(headRing),
+      fill: solidBodyFill ? (opts.color || '#E8A87C') : ('url(#' + id + 'g)'),
+      stroke: 'none',
+      'stroke-width': '2',
+    });
     bodyG.appendChild(head);
 
     function buildEye(k) {
@@ -533,7 +550,11 @@
       stopA.setAttribute('stop-color', shade(color, 0.22));
       stopB.setAttribute('stop-color', color);
       stopC.setAttribute('stop-color', shade(color, -0.12));
-      if (curSketch > 0.5) head.style.stroke = 'var(--sketch-ink, ' + shade(color, -0.6) + ')';
+      if (curSketch > 0.5) {
+        head.style.stroke = 'var(--sketch-ink, ' + shade(color, -0.6) + ')';
+      } else if (solidBodyFill) {
+        head.setAttribute('fill', color);
+      }
       paintKit();
     }
 
@@ -1558,7 +1579,7 @@
           head.style.stroke = 'var(--sketch-ink, ' + shade(b.color, -0.6) + ')';
           head.setAttribute('stroke-opacity', '0.85');
         } else {
-          head.setAttribute('fill', 'url(#' + id + 'g)');
+          head.setAttribute('fill', solidBodyFill ? (b.color || curBodyColor || '#E8A87C') : ('url(#' + id + 'g)'));
           head.style.stroke = '';
         }
       }

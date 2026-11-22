@@ -120,7 +120,6 @@
 }
 
 .leading {
-  position: relative; /* .chevronHover overlay anchor */
   flex: none;
   width: 16px;
   height: 16px;
@@ -135,28 +134,13 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* Hover preview on the expandable row: the idle icon crossfades (100ms) into
-   a down chevron before the row is opened 閳?same overlay as ToolRow. */
-.iconIdle {
-  display: inline-flex;
-  opacity: 1;
-  transition: opacity 100ms ease;
-}
-
-.chevronHover {
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  opacity: 0;
-  transition: opacity 100ms ease;
-}
-
-.root:hover .iconIdle {
-  opacity: 0;
-}
-
-.root:hover .chevronHover {
-  opacity: 1;
+.trailChevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  margin-right: 4px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .title {

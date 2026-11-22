@@ -389,11 +389,11 @@ describe('ToolRow', () => {
     expect(running.container.querySelector('[data-voice="seat"][data-lane="act"][data-state="running"]')).not.toBeNull()
   })
 
-  it('row click expands: chevron leading, summary kept inline, body in the scrolling card', () => {
+  it('row click expands: type icon stays leading, trail chevron, summary inline, body in card', () => {
     const view = render(<ToolRow {...rowProps} />)
     fireEvent.click(view.getByRole('button'))
-    expect(view.queryByTestId('tool-icon')).toBeNull()
-    expect(view.container.querySelector('svg')).not.toBeNull()
+    expect(view.queryByTestId('tool-icon')).not.toBeNull()
+    expect(view.container.querySelector('[class*="trailChevron"]')).not.toBeNull()
     expect(view.getByText('List files')).toBeTruthy()
     expect(view.getByText(/"a": 1/)).toBeTruthy()
     expect(view.container.querySelector('[class*="ioCard"]')).not.toBeNull()
@@ -408,9 +408,9 @@ describe('ToolRow', () => {
     expect(runningView.container.querySelector('[data-state="running"]')).not.toBeNull()
     const errorView = render(<ToolRow {...rowProps} state="error" />)
     expect(errorView.container.querySelector('[data-testid="tool-icon"]')).toBeNull()
-    // The dot rides the idle slot, so an expandable error row keeps the
-    // icon→chevron hover preview instead of losing it with the icon.
-    expect(errorView.container.querySelector('[class*="chevronHover"]')).not.toBeNull()
+    // Leading is the StateDot; expand cue is the trailing chevron (no hover swap).
+    expect(errorView.container.querySelector('[class*="trailChevron"]')).not.toBeNull()
+    expect(errorView.container.querySelector('[class*="chevronHover"]')).toBeNull()
   })
 
   it('non-expandable rows render a passive leading slot and no row button', () => {

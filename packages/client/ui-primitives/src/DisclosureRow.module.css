@@ -1,4 +1,10 @@
-/* Shared disclosure header: [16px leading] gap 6 [title 14/24]. */
+/* Shared disclosure header: [16px type icon] gap 6 [title] [12px chevron] …
+ *
+ * Type icon is always the leading mark (思考 / 命令 / tool identity).
+ * Trailing chevron carries expand state (› collapsed, ∨ open). Never swap
+ * the type icon for a chevron — phone used to force that and every row
+ * looked like the same 「∨」.
+ */
 
 .root {
   display: flex;
@@ -69,45 +75,13 @@ button.leading {
   cursor: pointer;
 }
 
-.iconIdle {
-  display: inline-flex;
-  opacity: 1;
-  transition: opacity var(--ds-motion-instant) var(--ds-ease-out);
-}
-
-.chevronHover {
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  opacity: 0;
-  transition: opacity var(--ds-motion-instant) var(--ds-ease-out);
-}
-
-.row:hover .iconIdle,
-.row:focus-within .iconIdle {
-  opacity: 0;
-}
-
-.row:hover .chevronHover,
-.row:focus-within .chevronHover {
-  opacity: 1;
-}
-
-/* Touch / coarse pointers never hover — keep the chevron as the expand cue. */
-@media (hover: none), (pointer: coarse) {
-  .root:not([data-open]) .iconIdle {
-    opacity: 0;
-  }
-
-  .root:not([data-open]) .chevronHover {
-    opacity: 1;
-  }
-}
-
-/* Open: chevron points up. Leading swaps icon→chevron on toggle, so this is
-   a static cue (not a mid-flight rotate); transform stays compositor-cheap. */
-.root[data-open] .leading > svg {
-  transform: rotate(180deg);
+.trailChevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  margin-right: 4px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .title {
@@ -115,11 +89,4 @@ button.leading {
   font-size: 14px;
   line-height: 24px;
   color: var(--dsw-alias-label-secondary);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .iconIdle,
-  .chevronHover {
-    transition: none;
-  }
 }

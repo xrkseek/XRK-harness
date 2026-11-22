@@ -200,19 +200,20 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
           onClick={toggleOpen}
         >
           <span className={css.noticeLeading} aria-hidden>
-            <span className={css.noticeGlyph}>
-              {noticeIcon(provenance, chrome.lane)}
-            </span>
+            {noticeIcon(provenance, chrome.lane)}
+          </span>
+          <span className={css.noticeTitle}>{title}</span>
+          {expandable ? (
             <span
               className={css.noticeDisclosure}
               data-context-disclosure={headerOpen ? 'expanded' : 'collapsed'}
+              aria-hidden
             >
               {headerOpen
-                ? <IconChevronDownOutlineRegular size={14} />
-                : <IconChevronRightOutlineRegular size={14} />}
+                ? <IconChevronDownOutlineRegular size={12} />
+                : <IconChevronRightOutlineRegular size={12} />}
             </span>
-          </span>
-          <span className={css.noticeTitle}>{title}</span>
+          ) : null}
           {showSource ? (
             <>
               <span className={css.sep} aria-hidden />
@@ -227,7 +228,7 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
           ) : null}
         </button>
         {headerOpen && expandable ? (
-          <div className={css.body} data-context-injection-body data-context-form={rendered ?? undefined}>
+          <div className={css.body} data-context-injection-body data-selectable-text="" data-context-form={rendered ?? undefined}>
             {body}
           </div>
         ) : null}

@@ -76,7 +76,7 @@ export function GenericCommandCard({ node, t, runningSummary }: GenericCommandCa
           </>
         )}
       >
-        <pre className={css.body} data-error={state === 'error' || undefined}>{body}</pre>
+        <pre className={css.body} data-selectable-text="" data-error={state === 'error' || undefined}>{body}</pre>
       </DisclosureRow>
     </div>
   )

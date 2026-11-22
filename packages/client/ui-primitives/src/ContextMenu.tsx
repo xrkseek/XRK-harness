@@ -10,6 +10,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ReactNode } from "react";
 import { Menu } from "./Menu.tsx";
 import type { MenuEntry } from "./Menu.tsx";
+import menuCss from "./Menu.module.css";
 import { Toast } from "./Toast.tsx";
 import { domContextMenuActions } from "./contextMenuGestures.ts";
 import {
@@ -23,6 +24,7 @@ import type {
   ContextMenuHit,
   ContextMenuLabels,
 } from "./context-menu.ts";
+import { resolveContextMenuPlacement } from "./contextMenuPlacement.ts";
 import { translateSelectionText } from "./selection-translate.ts";
 
 /**
@@ -85,6 +87,8 @@ function resolveLabels(t: ContextMenuHostProps["t"]): ContextMenuLabels {
 interface OpenRequest {
   readonly hit: ContextMenuHit;
   readonly entries: readonly ContextMenuEntry[];
+  readonly side: "top" | "bottom";
+  readonly anchor: DOMRect;
 }
 
 /** Map the model onto the shared Menu primitive's entry shape. */
@@ -196,6 +200,7 @@ export function ContextMenuHost({
       void probeContextMenuClipboard().then((clipboard) => {
         // A newer right-click (or a close) overtook this probe.
         if (ticket !== probeRef.current) return;
+        const placement = resolveContextMenuPlacement(hit);
         setRequest({
           hit,
           entries: buildContextMenuEntries({
@@ -204,6 +209,8 @@ export function ContextMenuHost({
             clipboard,
             actions: wiredActions,
           }),
+          side: placement.side,
+          anchor: placement.rect,
         });
       });
     };
@@ -264,7 +271,7 @@ export function ContextMenuHost({
   }, [request]);
 
   const getAnchorRect = useCallback((): DOMRect | null => {
-    return request === null ? null : new DOMRect(request.hit.x, request.hit.y, 0, 0);
+    return request === null ? null : request.anchor;
   }, [request]);
 
   const onSelect = (id: string): void => {
@@ -285,6 +292,8 @@ export function ContextMenuHost({
           anchor={null}
           items={toMenuEntries(request.entries)}
           portal
+          side={request.side}
+          listClassName={menuCss.contextMenu}
           listRef={listRef}
           getAnchorRect={getAnchorRect}
           onSelect={onSelect}

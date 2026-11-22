@@ -97,7 +97,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * (default viewport-fit). Use a shorter cap so tall lists don't cover the UI.
  * @returns anchor wrapper with the conditional list.
  */
-export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, outsideIgnoreRef, listRef: listRefProp, footer, header, listMaxHeight, className }: {
+export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, outsideIgnoreRef, listRef: listRefProp, footer, header, listMaxHeight, className, listClassName }: {
   open: boolean
   anchor: ReactNode
   items: readonly MenuEntry[]
@@ -118,6 +118,8 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   getAnchorRect?: () => DOMRect | null
   outsideIgnoreRef?: RefObject<HTMLElement | null>
   className?: string
+  /** Extra class on the portaled/in-flow list card (ContextMenuHost density). */
+  listClassName?: string
 }) {
   const rootRef = useRef<HTMLSpanElement>(null)
   const ownListRef = useRef<HTMLDivElement>(null)
@@ -383,7 +385,7 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   const list = open && (
     <div
       ref={listRef}
-      className={clsx(css.list, dense && css.denseList, compact && css.compactList, scrollable && css.scrollable, portal && css.portal, side === 'top' && !portal && css.sideTop, align === 'end' && !portal && css.alignEnd)}
+      className={clsx(css.list, dense && css.denseList, compact && css.compactList, scrollable && css.scrollable, portal && css.portal, side === 'top' && !portal && css.sideTop, align === 'end' && !portal && css.alignEnd, listClassName)}
       style={listStyle}
       role="menu"
       // DSH MenuSurface stamped `data-menu-material="translucent"` — glass /

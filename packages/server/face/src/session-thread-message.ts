@@ -76,13 +76,23 @@ export function formatPeerCollabPrompt(input: {
   readonly fromSessionId: string;
   readonly fromThreadTitle?: string;
   readonly message: string;
+  /**
+   * When true (wait:true), the peer is blocked on this turn's assistant text.
+   * When false (wait:false / fire-and-forget), do not oblige a reply — that
+   * framing caused courtesy acks to ping-pong via thread_message forever.
+   */
+  readonly awaitingReply?: boolean;
 }): string {
   const pin = input.fromThreadTitle?.trim()
     ? ` (主线 「${input.fromThreadTitle.trim()}」)`
     : "";
+  const awaiting = input.awaitingReply !== false;
+  const duty = awaiting
+    ? "Your next assistant message is the reply they wait for. Do not spawn a subagent for this unless they asked you to."
+    : "Inbound note — they are not waiting on a reply. Do not thread_message / workspace_session_prompt back unless you have a new ask; courtesy acks cause ping-pong.";
   return [
     `[会话协作] From session ${input.fromSessionId}${pin}.`,
-    "Your next assistant message is the reply they wait for. Do not spawn a subagent for this unless they asked you to.",
+    duty,
     "",
     input.message.trim(),
   ].join("\n");

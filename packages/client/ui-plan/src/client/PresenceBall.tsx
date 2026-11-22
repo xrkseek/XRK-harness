@@ -431,7 +431,7 @@ const SCRIPT_BASE = '/presence/emotion-ball'
 /** Worker host first; SVG stack loads via EmotionBall.loadLegacySvg when needed. */
 const SCRIPT_ORDER = ['presence-worker-host.js'] as const
 /** Bump when worker / canvas render path changes so cached scripts reload. */
-const PRESENCE_BALL_REV = '44'
+const PRESENCE_BALL_REV = '45'
 
 /** User click pulse — playful set, then hand back to auto. */
 const CLICK_IDS = ['10', '13', '03', '33', '14', '11', '19', '07'] as const
@@ -1001,8 +1001,9 @@ export const PresenceBall = memo(function PresenceBall({
         <div ref={mountRef} className={css.mount} data-ready={ready ? '' : undefined} aria-hidden />
         {/* 装扮贴图不再走 DOM 绝对定位层：三槽贴图都进引擎（hatG/specsG/heldG），
             按轮廓与眼球锚点逐帧布局，才跟得上呼吸/转头/情绪形变。 */}
-        {/* Spinner stays mounted and fades out under the ball. Unmounting it on
-            ready punched an empty frame between the wait and the 280ms fade-in. */}
+        {/* Spinner stays mounted and fades out under the ball. Do not fade the
+            SVG host with CSS opacity — Android WebView drops url(#gradient)
+            body fills while kit images still show. */}
         <div
           className={css.loading}
           data-hidden={ready || error ? '' : undefined}

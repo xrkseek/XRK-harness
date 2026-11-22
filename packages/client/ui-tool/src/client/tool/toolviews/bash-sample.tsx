@@ -7,8 +7,8 @@
 // settle without terminal material use the bounded generic IN/OUT fallback —
 // both are expand-gated exactly like
 // ToolRow's unified interaction: collapsed by default, the whole summary row
-// is the toggle (click / Enter / Space, icon→chevron hover preview; the
-// summary stays inline while open),
+// is the toggle (click / Enter / Space; type icon stays leading, trail ›/∨
+// carries expand state — no hover swap that phones force to 「∨」),
 // and the expanded card scrolls only its OUTPUT surface (banner is not a
 // second scrollport; maxLines Infinity — no middle collapse). An error row's
 // collapsed summary is the failure's first line in the error color.
@@ -19,6 +19,7 @@ import clsx from 'clsx'
 import {
   IconApiOutlineRegular,
   IconChevronDownOutlineRegular,
+  IconChevronRightOutlineRegular,
   InspectAction,
   StateDot,
   TerminalBlock,
@@ -92,16 +93,11 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
     event.preventDefault()
     runToggle()
   }
-  const leading = open
-    ? <IconChevronDownOutlineRegular className={css.chevron} />
-    : expandable
-      ? (
-        <>
-          <span className={css.iconIdle}>{leadingFor(state)}</span>
-          <IconChevronDownOutlineRegular className={clsx(css.chevron, css.chevronHover)} />
-        </>
-      )
-      : leadingFor(state)
+  const trail = expandable
+    ? (open
+      ? <IconChevronDownOutlineRegular className={clsx(css.chevron, css.trailChevron)} />
+      : <IconChevronRightOutlineRegular className={clsx(css.chevron, css.trailChevron)} />)
+    : null
   return (
     <div className={css.card}>
       <div
@@ -117,11 +113,12 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
         onClick={expandable ? runToggle : undefined}
         onKeyDown={expandable ? toggleFromKeyboard : undefined}
       >
-        <span className={css.leading}>{leading}</span>
+        <span className={css.leading}>{leadingFor(state)}</span>
         {status !== null && <span className={css.visuallyHidden}>{status}</span>}
         <span className={css.title}>
           {localizeToolTitle(toolName, model.variant, model.title, t)}
         </span>
+        {trail}
         <span className={css.sep} aria-hidden />
         {/* The terminal presenter's description is the contractual
             above-card summary; a failure's first line outranks both. */}

@@ -9,7 +9,7 @@
   'use strict';
 
   var EB = (globalThis.EmotionBall = globalThis.EmotionBall || {});
-  var REV = '44';
+  var REV = '45';
   var SCRIPT_BASE = '/presence/emotion-ball/';
   var IDLE_MS = 15000;
   var worker = null;

@@ -257,6 +257,7 @@ export function bindSessionThreadTools(
         : undefined;
       const rpcId = `tool-th-msg-${sessionId}-${targetId}`;
       const seqAtSend = readSessionEvents(runtime.store, targetId).length;
+      const wait = a.wait !== false;
       const prompted = await dispatchFaceMethod(
         runtime,
         "session.prompt",
@@ -274,6 +275,7 @@ export function bindSessionThreadTools(
                 fromSessionId: sessionId,
                 ...(fromTitle ? { fromThreadTitle: fromTitle } : {}),
                 message,
+                awaitingReply: wait,
               }),
             },
           ],
@@ -282,7 +284,6 @@ export function bindSessionThreadTools(
       if (!prompted.result.ok) {
         return { content: formatToolError(prompted.result.error), isError: true };
       }
-      const wait = a.wait !== false;
       // One channel with subagent courier×handoff: arm always; sync success clears.
       armPeerCollabAfterPrompt({
         runtime,

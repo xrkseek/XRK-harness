@@ -148,13 +148,14 @@ describe("FacePeerCollabWaiters", () => {
 
 describe("peer collab notice copy", () => {
   it("formats completion and stop notices", () => {
-    expect(
-      formatPeerCollabCompletionNotice({
-        peerSessionId: "s1",
-        answer: "done",
-        outcomeLine: "ok",
-      }),
-    ).toContain("[会话协作] Session s1 finished a turn.");
+    const done = formatPeerCollabCompletionNotice({
+      peerSessionId: "s1",
+      answer: "done",
+      outcomeLine: "ok",
+    });
+    expect(done).toContain("[会话协作] Session s1 finished a turn.");
+    expect(done).toContain("Informational");
+    expect(done).toContain("ping-pong");
     expect(
       formatPeerCollabStopHandoffNotice({
         peerSessionId: "s1",

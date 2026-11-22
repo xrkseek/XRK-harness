@@ -1,7 +1,10 @@
 import { type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { useExpandScrollPreserve } from './expand-scroll-preserve.ts'
-import { IconChevronDownOutlineRegular } from './icons/index.tsx'
+import {
+  IconChevronDownOutlineRegular,
+  IconChevronRightOutlineRegular,
+} from './icons/index.tsx'
 import css from './DisclosureRow.module.css'
 
 /** Shared 24px disclosure chrome for compact flow rows. */
@@ -13,7 +16,10 @@ export interface DisclosureRowProps {
   onToggle: () => void
   /** Makes the complete title row the disclosure target. */
   expandOnRowClick?: boolean | undefined
-  /** Replaces the collapsed icon with a chevron while the row is hovered. */
+  /**
+   * @deprecated No-op. Type icon stays visible; expand state is the trailing
+   * chevron (› collapsed / ∨ open). Kept so older call sites type-check.
+   */
   previewChevron?: boolean | undefined
   /** Keeps `collapsedContent` inline while open. */
   keepContentWhenOpen?: boolean | undefined
@@ -34,6 +40,11 @@ export interface DisclosureRowProps {
 
 /**
  * Render one disclosure header and its controlled expanded content.
+ *
+ * Leading = type icon always (思考 / 命令 / tool). Trailing chevron carries
+ * expand state: › collapsed, ∨ open. Do not replace the type icon with a
+ * chevron — that made every phone row look like the same 「∨」.
+ *
  * @param props - Visual content, controlled state, and interaction policy.
  * @returns the disclosure row.
  */
@@ -44,7 +55,6 @@ export function DisclosureRow({
   expandable,
   onToggle,
   expandOnRowClick = false,
-  previewChevron = expandable,
   keepContentWhenOpen = false,
   preserveScrollOnExpand = true,
   collapsedContent,
@@ -72,17 +82,14 @@ export function DisclosureRow({
     event.preventDefault()
     runToggle()
   }
-  const collapsedLeading = previewChevron
+
+  const trailChevron = expandable
     ? (
-      <>
-        <span className={css.iconIdle}>{icon}</span>
-        <IconChevronDownOutlineRegular className={clsx(chevronClassName, css.chevronHover)} />
-      </>
+      open
+        ? <IconChevronDownOutlineRegular className={clsx(chevronClassName, css.trailChevron)} />
+        : <IconChevronRightOutlineRegular className={clsx(chevronClassName, css.trailChevron)} />
     )
-    : icon
-  const leading = open
-    ? <IconChevronDownOutlineRegular className={chevronClassName} />
-    : collapsedLeading
+    : null
 
   return (
     <div ref={rootRef} className={clsx(css.root, className)} data-open={open || undefined}>
@@ -105,14 +112,15 @@ export function DisclosureRow({
               aria-expanded={open}
               onClick={toggleFromLeading}
             >
-              {leading}
+              {icon}
             </button>
           ) : (
             <span className={clsx(css.leading, leadingClassName)}>
-              {leading}
+              {icon}
             </span>
           )}
           <span className={clsx(css.title, titleClassName)}>{title}</span>
+          {trailChevron}
           {(keepContentWhenOpen || !open) && collapsedContent}
         </div>
       </div>

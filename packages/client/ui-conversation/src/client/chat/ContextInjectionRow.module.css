@@ -69,45 +69,26 @@
 
 .noticeLeading {
   flex: none;
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
   height: 16px;
   margin-right: 8px;
   color: var(--dsw-alias-label-secondary);
 }
 
-.noticeGlyph,
+/* Trailing expand cue (› / ∨) — type glyph stays in .noticeLeading. */
 .noticeDisclosure {
+  flex: none;
   display: inline-flex;
-  grid-area: 1 / 1;
   align-items: center;
   justify-content: center;
-}
-
-.noticeDisclosure {
-  opacity: 0;
-}
-
-.noticeHeader:hover .noticeGlyph,
-.noticeHeader:focus-visible .noticeGlyph {
-  opacity: 0;
-}
-
-.noticeHeader:hover .noticeDisclosure,
-.noticeHeader:focus-visible .noticeDisclosure {
-  opacity: 1;
-}
-
-/* Touch / coarse pointers never hover — keep the chevron as the expand cue. */
-@media (hover: none), (pointer: coarse) {
-  .noticeGlyph {
-    opacity: 0;
-  }
-
-  .noticeDisclosure {
-    opacity: 1;
-  }
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  margin-right: 4px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .noticeTitle {

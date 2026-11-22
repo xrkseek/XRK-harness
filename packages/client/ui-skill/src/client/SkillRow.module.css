@@ -57,30 +57,13 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.iconIdle {
-  display: inline-flex;
-  opacity: 1;
-  transition: opacity var(--ds-motion-instant) var(--ds-ease-out);
-}
-
-.chevronHover {
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  opacity: 0;
-  transition: opacity var(--ds-motion-instant) var(--ds-ease-out);
-}
-
-.row:hover .iconIdle {
-  opacity: 0;
-}
-
-.row:hover .chevronHover {
-  opacity: 1;
-}
-
-.card[data-open] .leading > svg {
-  transform: rotate(180deg);
+.trailChevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  margin-right: 4px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .title {
@@ -182,10 +165,5 @@
     animation: none;
     display: none;
     will-change: auto;
-  }
-
-  .iconIdle,
-  .chevronHover {
-    transition: none;
   }
 }

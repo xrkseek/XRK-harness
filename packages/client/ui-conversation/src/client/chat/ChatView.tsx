@@ -62,6 +62,7 @@ import { TurnNavigator } from './TurnNavigator.tsx'
 import { mergeTurnRailItems, slideTurnRailWindow, type TurnRailItem } from './turn-rail-items.ts'
 import { formatRunDuration } from './message-chrome.ts'
 import { openerKeysFromRail, userRoundLabelKind } from './round-label.ts'
+import { useSelectionEdgeScroll } from './use-selection-edge-scroll.ts'
 import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
@@ -965,6 +966,11 @@ export function ChatView({
 
   const listRef = useRef<HTMLDivElement | null>(null)
   const columnRef = useRef<HTMLDivElement | null>(null)
+  const conversationScroller = useCallback((): HTMLElement | null => {
+    const local = listRef.current
+    return local === null ? null : scrollerOf(local)
+  }, [])
+  useSelectionEdgeScroll(conversationScroller)
   const atBottomRef = useRef(true)
   const [atBottom, setAtBottom] = useState(true)
   const [activeTurn, setActiveTurn] = useState<number | null>(

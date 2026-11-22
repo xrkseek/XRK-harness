@@ -65,6 +65,11 @@ export type {
 } from './context-menu.ts'
 export { domContextMenuActions } from './contextMenuGestures.ts'
 export {
+  isCoarsePointer,
+  resolveContextMenuPlacement,
+} from './contextMenuPlacement.ts'
+export type { ContextMenuPlacement } from './contextMenuPlacement.ts'
+export {
   SELECTION_TRANSLATE_AUTO_CHAIN,
   SELECTION_TRANSLATE_PROVIDERS,
   translateSelectionText,

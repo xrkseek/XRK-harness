@@ -384,6 +384,24 @@
   }
 }
 
+/* Selection / right-click card: shorter than dropdown menus so Copy+Translate
+ * does not bury mobile selection handles under two 44px rows. */
+.contextMenu {
+  min-width: 148px;
+  padding: 2px;
+  border-radius: 10px;
+}
+
+.contextMenu .item {
+  min-height: 32px;
+  padding: 5px 10px;
+  border-radius: 7px;
+}
+
+.contextMenu .separator {
+  margin: 2px 6px;
+}
+
 @media (max-width: 767px) {
   .item,
   .denseList .item {
@@ -397,6 +415,13 @@
     padding: 8px 10px;
     font-size: 14px;
     line-height: 20px;
+  }
+
+  /* Keep context menus denser than general phone dropdowns. */
+  .contextMenu .item {
+    min-height: 36px;
+    padding: 6px 10px;
+    touch-action: manipulation;
   }
 
   /* Phone popovers: use most of the viewport — 360px felt like a stub sheet. */

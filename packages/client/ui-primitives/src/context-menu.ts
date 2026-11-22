@@ -355,7 +355,10 @@ export function buildContextMenuEntries(options: {
 
   const selectedText = hit.selectionText.trim();
   if (selectedText && actions.translate) {
-    if (entries.length > 0) entries.push(separator("translate-separator"));
+    // Short selection toolbar (Copy + Translate): skip the hairline — it only
+    // makes the phone card taller over the selection handles. Keep a separator
+    // when the menu already has a fuller edit block above.
+    if (entries.length > 1) entries.push(separator("translate-separator"));
     entries.push(
       row("translate", labels.translate, false, () => {
         actions.translate!(hit);

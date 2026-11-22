@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.7',
+    date: '2026-11-22',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '手机折叠行恢复类型图标（›/∨ 只在右侧）；工作台刷新不再重复下载同一文件。',
+        en: 'Phone disclosure rows keep type icons (›/∨ trail only); workbench refresh no longer re-downloads the same file.',
+      },
+      {
+        zh: '划词/右键更稳；手机下载标题「文件已保存」；表情球不再偶发只剩眼镜。',
+        en: 'Selection/context menus steadier; phone download title “File saved”; presence ball no longer loses its sphere body.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.7。完整清单见 docs/releases/v0.8.7.md。',
+        en: 'Desktop / npm / phone align to 0.8.7. Full list: docs/releases/v0.8.7.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.6',
     date: '2026-11-21',
     title: {

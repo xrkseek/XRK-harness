@@ -4,7 +4,11 @@
 
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
-  IconChevronDownOutlineRegular, IconSkillOutlineRegular, InspectAction, StateDot,
+  IconChevronDownOutlineRegular,
+  IconChevronRightOutlineRegular,
+  IconSkillOutlineRegular,
+  InspectAction,
+  StateDot,
 } from '@xrkseek/client-ui-primitives'
 import type { ToolCallViewProps } from '@xrkseek/client-ui-tool/client'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
@@ -86,17 +90,11 @@ function leadingFor(state: SkillRowState): ReactNode {
   }
 }
 
-/** Leading disclosure slot: state icon at rest, chevron on hover or while open. */
-function disclosureLeading(state: SkillRowState, open: boolean, expandable: boolean): ReactNode {
-  if (open) return <IconChevronDownOutlineRegular className={css.chevron} />
-  const icon = leadingFor(state)
-  if (!expandable) return icon
-  return (
-    <>
-      <span className={css.iconIdle}>{icon}</span>
-      <IconChevronDownOutlineRegular className={`${css.chevron} ${css.chevronHover}`} />
-    </>
-  )
+/** Expand cue beside the title; type / state icon stays in the leading slot. */
+function trailChevron(open: boolean): ReactNode {
+  return open
+    ? <IconChevronDownOutlineRegular className={`${css.chevron} ${css.trailChevron}`} />
+    : <IconChevronRightOutlineRegular className={`${css.chevron} ${css.trailChevron}`} />
 }
 
 /** Visually hidden state copy for the colour-only lifecycle cues. */
@@ -136,7 +134,6 @@ export function SkillRow({ block, inspect, t }: SkillRowProps) {
     onClick: toggleExpand,
     onKeyDown: toggleFromKeyboard,
   } : {}
-  const leading = disclosureLeading(model.state, open, expandable)
   return (
     <div className={css.card} data-tool="skill" data-state={model.state} data-open={open || undefined}>
       <div
@@ -144,9 +141,10 @@ export function SkillRow({ block, inspect, t }: SkillRowProps) {
         data-expandable={expandable || undefined}
         {...disclosureProps}
       >
-        <span className={css.leading}>{leading}</span>
+        <span className={css.leading}>{leadingFor(model.state)}</span>
         {status !== null ? <span className={css.visuallyHidden}>{status}</span> : null}
         <span className={css.title}>Skill</span>
+        {expandable ? trailChevron(open) : null}
         <span className={css.separator} aria-hidden />
         <span className={model.errorSummary === null ? css.summary : `${css.summary} ${css.errorSummary}`}>
           {summary}

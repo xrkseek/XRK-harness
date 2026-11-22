@@ -77,7 +77,12 @@
 .mount {
   /* The bitmap is this box, centred so a size trim grows evenly on all four
    * sides. 100% of the stage is 1/1.2 of this box, which leaves exactly enough
-   * room for the 120% end of the trim — the box never grows, nothing is clipped. */
+   * room for the 120% end of the trim — the box never grows, nothing is clipped.
+   *
+   * Never fade this host with CSS `opacity`: Android WebView (phone APK SVG
+   * path) drops `fill: url(#radialGradient)` when an ancestor opacity-animates,
+   * so the sphere body vanishes while solid kit fills / overlay images remain
+   * (glasses + outfit only). Loading chrome is the spinner overlay below. */
   position: absolute;
   left: 50%;
   top: 50%;
@@ -85,15 +90,8 @@
   height: calc(83.3333% * var(--ball-size, 1));
   transform: translate(-50%, -50%);
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
   overflow: visible;
   contain: layout style;
-  isolation: isolate;
-}
-
-.mount[data-ready] {
-  opacity: 1;
 }
 
 .mount :global(svg) {
@@ -200,10 +198,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mount {
-    transition: none;
-  }
-
   .loading {
     transition: none;
   }

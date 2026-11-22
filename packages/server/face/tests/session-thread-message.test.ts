@@ -68,16 +68,30 @@ describe("peerThreadMessageProblem", () => {
 });
 
 describe("formatPeerCollabPrompt", () => {
-  it("names the sender and asks the peer to answer in this turn", () => {
+  it("names the sender and asks the peer to answer when awaiting a reply", () => {
     const text = formatPeerCollabPrompt({
       fromSessionId: "sess_a",
       fromThreadTitle: "0.5.12 发版",
       message: "Need the changelog draft.",
+      awaitingReply: true,
     });
     expect(text).toContain("sess_a");
     expect(text).toContain("0.5.12 发版");
     expect(text).toContain("Need the changelog draft.");
     expect(text).toContain("会话协作");
     expect(text).toContain("Do not spawn a subagent");
+    expect(text).toContain("reply they wait for");
+  });
+
+  it("does not oblige a reply on fire-and-forget (wait:false)", () => {
+    const text = formatPeerCollabPrompt({
+      fromSessionId: "sess_a",
+      message: "FYI empty workspace.",
+      awaitingReply: false,
+    });
+    expect(text).toContain("FYI empty workspace.");
+    expect(text).not.toContain("reply they wait for");
+    expect(text).toContain("not waiting on a reply");
+    expect(text).toContain("ping-pong");
   });
 });

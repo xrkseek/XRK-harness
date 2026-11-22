@@ -162,9 +162,11 @@ describe('context menu rows', () => {
       clipboard: { hasText: false, hasFiles: false },
       actions: { ...actions, translate },
     })
-    expect(
-      entries.filter(e => e.kind === 'row').map(e => (e.kind === 'row' ? e.id : '')),
-    ).toEqual(['copy', 'translate'])
+    // Short selection toolbar: Copy + Translate with no hairline between them.
+    expect(entries.map(e => (e.kind === 'row' ? e.id : e.kind))).toEqual([
+      'copy',
+      'translate',
+    ])
     const row = entries.find(e => e.kind === 'row' && e.id === 'translate')
     expect(row?.kind === 'row').toBe(true)
     if (row?.kind === 'row') row.run()

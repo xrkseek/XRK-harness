@@ -158,6 +158,16 @@ describe('presence ball mount geometry', () => {
     expect(block).toMatch(/width:\s*calc\(83\.3333%\s*\*\s*var\(--ball-size,\s*1\)\)/)
   })
 
+  /* Android WebView + phone SVG path: ancestor opacity (incl. fade-in) drops
+   * `fill: url(#radialGradient)` while solid kit fills / overlay images stay —
+   * users see glasses/outfit with no sphere body. Loading fade belongs on the
+   * spinner overlay, never on `.mount`. */
+  it('never opacity-fades the SVG mount host', () => {
+    const block = cssBlock(ballCss, '.mount {')
+    expect(block).not.toMatch(/(^|[\s;{])opacity\s*:/)
+    expect(ballCss).not.toMatch(/\.mount\[data-ready\]\s*\{[^}]*opacity/)
+  })
+
   /* A compact override that reintroduces left/right/top/bottom would shift the
    * box by half its own size on top of the centring transform — the exact way
    * the pair shipped a cropped corner instead of a ball. */

@@ -162,7 +162,7 @@ export function ReasoningRow({
       >
         {/* Two adjacent text nodes, no whitespace between: the frozen half keeps
             an identical string across frames, so only the live tail mutates. */}
-        <div className={css.thinkBody}>{body.frozen}{body.live}</div>
+        <div className={css.thinkBody} data-selectable-text="">{body.frozen}{body.live}</div>
       </DisclosureRow>
     </div>
   )
