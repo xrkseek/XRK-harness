@@ -132,6 +132,7 @@
 | **已收** | 图 offload 中途改 wire | turn 开局先 `ensureDurableImageOffloads`（一步内再跑仍幂等） |
 | **已收** | 会话命中率不可见 | `costUsage.cacheHitRate`（`billedPromptTokens` / `cacheHitRate`） |
 | **已收** | `tools[]` 系列顺序冻结（expand 尾追加） | `stabilizeToolsForSeries` + `tools-baseline`：首 wire 仍 lex/`toolOrder`；同系列 expand / Direct 增只 **append** 尾部；空 tools（max-steps）不清锚；compaction / 换路由 / 删会话清锚；Host 重启从最新 `request/header.tools` hydrate |
+| **已收** | `tools[]` 站立声明字节冻结 | 同系列 survivor 复用上次 wire 的 **description + parameters**（防 `dynamicSchema` / 文案抖动整段 miss）；新工具仍用 live schema 尾追加；compact / 换路由才重基线 |
 | **已收** | 记忆热更新不改 message-0 | 开局 freeze 在 system；磁盘变动只尾部 `<external_curated_memory>` fragment（digest 门控）；`foldChat` 不 last-wins 搬家 |
 | **已收** | Messages `toolUpdate`（能力门控） | `conversationUpdates.toolUpdate` 仅 `anthropic-messages`；`projectToolDeclarations` → `defer_loading` + 请求级 `toolAdditions`；Anthropic 适配器发 system `tool_addition` + beta；Chat Completions **不**声明该字段。品牌 `deepseek-messages`（Flash catalog `addition-only`）。Anthropic 中段 system 不再误折进顶层 |
 | **部分** | follow-up time 进 system workspaceBlocks | 默认 ≥60s 才刷新；in-history 下以 **delta** 挂尾，不改 message-0；仍占尾部 uncached |
@@ -140,4 +141,4 @@
 
 **Compact 的 cache 代价：** soft-budget / overflow / `/compact` 都会 `breakSeriesBaseline` + `breakToolsBaseline`——换窗后下一请求重基线，提供方前缀命中从接近 0 再爬。Flash 默认软压 **300k**（窗 1M）；压得越勤，账单上 miss 段越长。见 [session-compaction.md](./session-compaction.md)。
 
-**动手顺序（成本）：** ① 禁 `tools[]` 活表 ✅ → ② 跨回合 series baseline ✅ → ③ expand 回灌 + recipe inject ✅ → ④ standing plan / fragment·slash digest / early offload / hydrate / system delta ✅ → ⑤ **`tools[]` 尾追加冻结** ✅ → ⑥ **Messages `toolUpdate` 能力门控** ✅ → ⑦ Status 看 `costUsage.cacheHitRate`。
+**动手顺序（成本）：** ① 禁 `tools[]` 活表 ✅ → ② 跨回合 series baseline ✅ → ③ expand 回灌 + recipe inject ✅ → ④ standing plan / fragment·slash digest / early offload / hydrate / system delta ✅ → ⑤ **`tools[]` 尾追加冻结** ✅ → ⑥ **standing 声明字节冻结** ✅ → ⑦ **Messages `toolUpdate` 能力门控** ✅ → ⑧ Status 看 `costUsage.cacheHitRate`。

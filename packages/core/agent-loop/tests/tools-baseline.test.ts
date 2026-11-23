@@ -21,18 +21,41 @@ function llm(
   };
 }
 
+function wire(
+  ...names: string[]
+): { name: string; description: string; parameters: Record<string, unknown> }[] {
+  return names.map((name) => ({
+    name,
+    description: `desc:${name}`,
+    parameters: { type: "object", properties: { [name]: { type: "string" } } },
+  }));
+}
+
 beforeEach(() => {
   clearToolsBaselineAnchors();
 });
 
 describe("tools-baseline anchors", () => {
-  it("recalls remembered wire order and updates on further remember", () => {
+  it("recalls remembered wire tools and updates on further remember", () => {
     const a = llm({ id: "ds" });
     expect(recallToolsBaseline("s1", a)).toBeUndefined();
-    rememberToolsBaseline("s1", a, ["read_file", "write_file"]);
-    expect(recallToolsBaseline("s1", a)).toEqual(["read_file", "write_file"]);
-    rememberToolsBaseline("s1", a, ["read_file", "write_file", "mcp__x"]);
-    expect(recallToolsBaseline("s1", a)).toEqual([
+    rememberToolsBaseline("s1", a, wire("read_file", "write_file"));
+    expect(recallToolsBaseline("s1", a)?.map((t) => t.name)).toEqual([
+      "read_file",
+      "write_file",
+    ]);
+    expect(recallToolsBaseline("s1", a)?.[0]?.description).toBe(
+      "desc:read_file",
+    );
+    rememberToolsBaseline("s1", a, [
+      ...wire("read_file", "write_file"),
+      {
+        name: "mcp__x",
+        description: "desc:mcp__x",
+        parameters: {},
+      },
+    ]);
+    expect(recallToolsBaseline("s1", a)?.map((t) => t.name)).toEqual([
       "read_file",
       "write_file",
       "mcp__x",
@@ -44,18 +67,18 @@ describe("tools-baseline anchors", () => {
       id: "ds",
       peekRoute: () => ({ provider: "deepseek", model: "flash" }) as never,
     });
-    rememberToolsBaseline("s1", flash, ["a", "b"]);
+    rememberToolsBaseline("s1", flash, wire("a", "b"));
     const other = llm({
       id: "ds",
       peekRoute: () => ({ provider: "deepseek", model: "v4-pro" }) as never,
     });
     expect(recallToolsBaseline("s1", other)).toBeUndefined();
-    rememberToolsBaseline("s1", flash, ["a", "b"]);
+    rememberToolsBaseline("s1", flash, wire("a", "b"));
     breakToolsBaseline("s1");
     expect(recallToolsBaseline("s1", flash)).toBeUndefined();
   });
 
-  it("hydrates the latest post-compaction request/header tools order", () => {
+  it("hydrates the latest post-compaction request/header tools wire", () => {
     const a = llm({ id: "ds" });
     const events: SessionEvent[] = [
       {
@@ -65,8 +88,8 @@ describe("tools-baseline anchors", () => {
         reason: "initial",
         header: {
           tools: [
-            { name: "old_a", description: "", parameters: {} },
-            { name: "old_b", description: "", parameters: {} },
+            { name: "old_a", description: "old", parameters: {} },
+            { name: "old_b", description: "old", parameters: {} },
           ],
           config: { provider: "ds", model: "flash" },
         },
@@ -85,8 +108,8 @@ describe("tools-baseline anchors", () => {
         reason: "change",
         header: {
           tools: [
-            { name: "read_file", description: "", parameters: {} },
-            { name: "write_file", description: "", parameters: {} },
+            { name: "read_file", description: "r", parameters: { a: 1 } },
+            { name: "write_file", description: "w", parameters: { b: 2 } },
           ],
           config: { provider: "ds", model: "flash" },
         },
@@ -98,20 +121,30 @@ describe("tools-baseline anchors", () => {
         reason: "change",
         header: {
           tools: [
-            { name: "read_file", description: "", parameters: {} },
-            { name: "write_file", description: "", parameters: {} },
-            { name: "mcp__codegraph", description: "", parameters: {} },
+            { name: "read_file", description: "r", parameters: { a: 1 } },
+            { name: "write_file", description: "w", parameters: { b: 2 } },
+            {
+              name: "mcp__codegraph",
+              description: "mcp",
+              parameters: { c: 3 },
+            },
           ],
           config: { provider: "ds", model: "flash" },
         },
       },
     ];
-    expect(hydrateToolsBaselineFromLog("s1", a, events)).toEqual([
+    const hydrated = hydrateToolsBaselineFromLog("s1", a, events);
+    expect(hydrated?.map((t) => t.name)).toEqual([
       "read_file",
       "write_file",
       "mcp__codegraph",
     ]);
-    expect(recallToolsBaseline("s1", a)).toEqual([
+    expect(hydrated?.[0]).toEqual({
+      name: "read_file",
+      description: "r",
+      parameters: { a: 1 },
+    });
+    expect(recallToolsBaseline("s1", a)?.map((t) => t.name)).toEqual([
       "read_file",
       "write_file",
       "mcp__codegraph",
@@ -120,7 +153,7 @@ describe("tools-baseline anchors", () => {
 
   it("forgetSessionProcessCaches clears tools baseline", () => {
     const a = llm({ id: "ds" });
-    rememberToolsBaseline("s1", a, ["a"]);
+    rememberToolsBaseline("s1", a, wire("a"));
     forgetSessionProcessCaches("s1");
     expect(recallToolsBaseline("s1", a)).toBeUndefined();
   });

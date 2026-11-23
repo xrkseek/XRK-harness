@@ -829,13 +829,10 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
       readSessionEvents(input.store, input.sessionId),
     );
   }
-  /** Ordered tools[] names for prefix-stable expand (turn + cross-turn). */
-  let toolsBaselineNames: readonly string[] | undefined = recallToolsBaseline(
-    input.sessionId,
-    input.llm,
-  );
-  if (toolsBaselineNames === undefined) {
-    toolsBaselineNames = hydrateToolsBaselineFromLog(
+  /** Ordered tools[] wire (order + schema) for prefix-stable expand. */
+  let toolsBaselineWire = recallToolsBaseline(input.sessionId, input.llm);
+  if (toolsBaselineWire === undefined) {
+    toolsBaselineWire = hydrateToolsBaselineFromLog(
       input.sessionId,
       input.llm,
       readSessionEvents(input.store, input.sessionId),
@@ -1097,14 +1094,16 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           built.seriesBaselineSystem,
         );
       }
-      // Freeze tools[] order for the series: expand / Direct add appends at
-      // the tail so the standing tools prefix stays byte-stable for KV cache.
-      const priorNames = toolsBaselineNames;
+      // Freeze tools[] order + standing schemas for the series: expand /
+      // Direct add appends at the tail; survivors keep prior desc/params so
+      // dynamicSchema jitter cannot bust SenseNova / compat prefix cache.
+      const priorWire = toolsBaselineWire;
       const stableTools = stabilizeToolsForSeries(
         built.tools,
-        priorNames,
+        priorWire,
         input.assemble?.toolOrder,
       );
+      const priorNames = priorWire?.map((t) => t.name);
       // Capability gate: defer_loading + activations only when llm.toolUpdate
       // is set (Messages). Chat Completions / Gemini keep plain tools[].
       const projected = projectToolDeclarations({
@@ -1119,12 +1118,12 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
       }
       // Max-steps disables tools (empty list) — do not wipe the series anchor.
       if (projected.tools.length > 0) {
-        toolsBaselineNames = projected.tools.map((t) => t.name);
-        rememberToolsBaseline(
-          input.sessionId,
-          input.llm,
-          toolsBaselineNames,
-        );
+        toolsBaselineWire = projected.tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        }));
+        rememberToolsBaseline(input.sessionId, input.llm, toolsBaselineWire);
       }
       return {
         ...built,
@@ -1313,7 +1312,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
                 compactAttempts += 1;
                 // Compaction breaks the cached prefix → re-baseline system + tools.
                 seriesBaselineSystem = undefined;
-                toolsBaselineNames = undefined;
+                toolsBaselineWire = undefined;
                 breakSeriesBaseline(input.sessionId);
                 breakToolsBaseline(input.sessionId);
                 // Assembled system changed — force request/header (auto path
@@ -1437,7 +1436,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
     // so the streak does not latch on an unchanged context.
     const rebuildAfterContextChange = async (): Promise<void> => {
       seriesBaselineSystem = undefined;
-      toolsBaselineNames = undefined;
+      toolsBaselineWire = undefined;
       breakSeriesBaseline(input.sessionId);
       breakToolsBaseline(input.sessionId);
       req = await buildReq();
@@ -1604,7 +1603,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           }
           if (!did.compacted) throw original;
           seriesBaselineSystem = undefined;
-          toolsBaselineNames = undefined;
+          toolsBaselineWire = undefined;
           breakSeriesBaseline(input.sessionId);
           breakToolsBaseline(input.sessionId);
           return retryAfterWindowChange();

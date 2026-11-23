@@ -74,7 +74,8 @@
   width: 2px;
   height: 2px;
   border-radius: 1px;
-  margin: 0 8px;
+  /* Equal to DisclosureRow title↔› gap (6px each side of ·). */
+  margin: 0 6px;
   background: var(--dsw-alias-label-caption);
 }
 

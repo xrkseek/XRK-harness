@@ -65,7 +65,7 @@ npm install -g @xrkseek/harness-cli@latest
 xrkh web
 ```
 
-`@latest` 当前为 **v0.8.11**（`0.8.x` 补丁）。上一 npm 补丁 `0.8.10`、上一正式线 `0.7.22`、回退钉 `0.3.11` 仍可精确安装。
+`@latest` 当前为 **v0.8.12**（`0.8.x` 补丁）。上一 npm 补丁 `0.8.11`、上一正式线 `0.7.22`、回退钉 `0.3.11` 仍可精确安装。
 
 默认 **harness** preset（含 `web_search` / `web_fetch`）。仅要 fs 烟测时加 `--preset minimal`。
 
@@ -108,7 +108,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 多厂商 LLM Registry | **能跑** |
 | 社区 client（自研兼容器） | **能跑**（IM WS/sidecar · Vision · 记忆 · GenUI npm · TongFlow；`xrkh doctor`） |
 | 产品网页与浏览器 E2E | **能跑**（Playwright **17/17**；`pnpm test:web` 不进 `pnpm check`） |
-| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（当前 **v0.8.11** = `@latest`；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
+| 对外 CLI 包 `@xrkseek/harness-cli` | **能跑**（当前 **v0.8.12** = `@latest`；主 bin **`xrkh`**，亦 **`xrk-harness`**） |
 
 完整说明：[docs/status.md](./docs/status.md)。
 
@@ -124,7 +124,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | 自己写工具 / 进程插件 / **开放平台** | [open-platform](./docs/open-platform.md) · [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) · [client-plugin-development](./docs/client-plugin-development.md) |
 | 排障 | [troubleshooting](./docs/troubleshooting.md) |
 | 短要点总览 | [learn](./docs/learn.md) |
-| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.8.11](./docs/releases/v0.8.11.md) = `@latest` · 上一 npm [v0.8.10](./docs/releases/v0.8.10.md) · 上一正式线 [v0.7.22](./docs/releases/v0.7.22.md) · 回退钉 [v0.3.11](./docs/releases/v0.3.11.md)） |
+| 版本发行说明 | [releases](./docs/releases/)（当前 [v0.8.12](./docs/releases/v0.8.12.md) = `@latest` · 上一 npm [v0.8.11](./docs/releases/v0.8.11.md) · 上一正式线 [v0.7.22](./docs/releases/v0.7.22.md) · 回退钉 [v0.3.11](./docs/releases/v0.3.11.md)） |
 | 全部专题索引 | [docs/README.md](./docs/README.md) |
 
 ## 仓库里有什么
@@ -226,7 +226,7 @@ npm install -g @xrkseek/harness-cli@latest
 xrkh web
 ```
 
-`@latest` is currently **v0.8.11** (`0.8.x` patch). Previous npm patch `0.8.10`, prior formal line `0.7.22`, and rollback pin `0.3.11` remain installable by exact pin.
+`@latest` is currently **v0.8.12** (`0.8.x` patch). Previous npm patch `0.8.11`, prior formal line `0.7.22`, and rollback pin `0.3.11` remain installable by exact pin.
 
 The default preset is **harness** (includes `web_search` / `web_fetch`). For an fs-only smoke test, add `--preset minimal`.
 
@@ -269,7 +269,7 @@ Optional: copy `.xrk/.credentials.yaml.example`, or use a brand `apiKeyEnv` (e.g
 | Multi-provider LLM Registry | **Working** |
 | Community clients (first-party adapter) | **Working** (IM WS/sidecar · vision · memory · GenUI npm · TongFlow; `xrkh doctor`) |
 | Product web & browser E2E | **Working** (Playwright **17/17**; `pnpm test:web` not in `pnpm check`) |
-| Public CLI package `@xrkseek/harness-cli` | **Working** (current **v0.8.11** = `@latest`; primary bin **`xrkh`**, also **`xrk-harness`**) |
+| Public CLI package `@xrkseek/harness-cli` | **Working** (current **v0.8.12** = `@latest`; primary bin **`xrkh`**, also **`xrk-harness`**) |
 
 Full matrix: [docs/status.md](./docs/status.md).
 
@@ -285,7 +285,7 @@ Full matrix: [docs/status.md](./docs/status.md).
 | Author tools / process plugins / **open platform** | [open-platform](./docs/open-platform.md) · [tool-pipeline](./docs/tool-pipeline.md) · [plugin-development](./docs/plugin-development.md) · [client-plugin-development](./docs/client-plugin-development.md) |
 | Troubleshoot | [troubleshooting](./docs/troubleshooting.md) |
 | Short digest | [learn](./docs/learn.md) |
-| Release notes | [releases](./docs/releases/) (current [v0.8.11](./docs/releases/v0.8.11.md) = `@latest` · previous npm [v0.8.10](./docs/releases/v0.8.10.md) · prior formal [v0.7.22](./docs/releases/v0.7.22.md) · rollback pin [v0.3.11](./docs/releases/v0.3.11.md)) |
+| Release notes | [releases](./docs/releases/) (current [v0.8.12](./docs/releases/v0.8.12.md) = `@latest` · previous npm [v0.8.11](./docs/releases/v0.8.11.md) · prior formal [v0.7.22](./docs/releases/v0.7.22.md) · rollback pin [v0.3.11](./docs/releases/v0.3.11.md)) |
 | Full index | [docs/README.md](./docs/README.md) |
 
 ## Repository layout

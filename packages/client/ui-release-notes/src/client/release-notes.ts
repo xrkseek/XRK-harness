@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.12',
+    date: '2026-11-23',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '同系列 tools 声明字节冻结：description/parameters 不再被 dynamicSchema 抖动打掉前缀缓存。',
+        en: 'Standing tools[] schema freeze: description/parameters no longer bust prefix cache on dynamicSchema jitter.',
+      },
+      {
+        zh: '过程 / 终端 / 思考 / 工具折叠行：标题 — › — · 等距（手机与桌面）。',
+        en: 'Process / terminal / think / tool fold rows: equal title — › — · gaps (phone and desktop).',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.12。完整清单见 docs/releases/v0.8.12.md。',
+        en: 'Desktop / npm / phone align to 0.8.12. Full list: docs/releases/v0.8.12.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.11',
     date: '2026-11-23',
     title: {

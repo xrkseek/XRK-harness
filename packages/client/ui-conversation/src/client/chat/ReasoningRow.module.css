@@ -48,8 +48,8 @@
   flex: none;
   width: 2px;
   height: 2px;
-  /* Hug the trailing ›; keep normal air before the summary text. */
-  margin: 0 8px 0 4px;
+  /* Equal to DisclosureRow title↔› gap (6px each side of ·). */
+  margin: 0 6px;
   border-radius: 1px;
   background: var(--dsw-alias-label-caption);
 }

@@ -2,7 +2,7 @@
 
 > **读者**：全员（对外说话以本页为准）
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。能力矩阵自 **v0.5.21** 起主路径均为能跑；npm **`@latest` 当前为 v0.8.11**（上一 npm 补丁 **v0.8.10**；上一正式线 **v0.7.22**；回退钉 **v0.3.11**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。能力矩阵自 **v0.5.21** 起主路径均为能跑；npm **`@latest` 当前为 v0.8.12**（上一 npm 补丁 **v0.8.11**；上一正式线 **v0.7.22**；回退钉 **v0.3.11**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
 
 XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在会话、工具管道、子代理与壳交互上的长处；落点以本仓契约与代码为准。
 
@@ -150,7 +150,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 快捷键查看 / 搜索 / 自定义 / 恢复 | `Ctrl+/`（⌘+/）ShortcutsPanel：查看 + 搜索 + 点按改键 + 单条/全部恢复默认（`localStorage` `xrk.shortcuts.v1` 仅存覆盖；发送/换行固定） | **能跑** |
 | 定时任务运行记录 | `cron/executions.jsonl` 有界账本（≤1000）+ `cronjob` action=`runs`；重启保留 | **能跑** |
 | 时间上下文注入 | `XRK_TIME_CONTEXT_REFRESH_MS`（默认 60s）；follow-up 经 workspace block 刷新 | **能跑** |
-| 提供方 KV 前缀（成本） | `conversationUpdates`（openai-chat / responses / anthropic 默认 `in-history`；Flash 目录声明；Gemini 默认不开）+ `series-baseline` + **`tools-baseline`（expand 尾追加）**；Messages 另可 `toolUpdate`（仅 `anthropic-messages` / `deepseek-messages` Flash）；OpenCode 另带 session 头与 UA；**向日葵免费** Host `x-session-id` → sidecar 粘上游 `x-opencode-session`；slash/recipe inject；expand 回灌；soft-budget 强制 header；记忆 live fragment 尾部 | **能跑**（见 [session-optimize](./session-optimize.md) §5） |
+| 提供方 KV 前缀（成本） | `conversationUpdates`（openai-chat / responses / anthropic 默认 `in-history`；Flash 目录声明；Gemini 默认不开）+ `series-baseline` + **`tools-baseline`（尾追加 + standing 声明字节冻结）**；Messages 另可 `toolUpdate`（仅 `anthropic-messages` / `deepseek-messages` Flash）；OpenCode 另带 session 头与 UA；**向日葵免费** Host `x-session-id` → sidecar 粘上游 `x-opencode-session`；slash/recipe inject；expand 回灌；soft-budget 强制 header；记忆 live fragment 尾部 | **能跑**（见 [session-optimize](./session-optimize.md) §5） |
 | 归档筛选 / 置顶 | 侧栏三态 `ArchiveViewMode`（已归档行有标识，`⋯` 为取消归档）；归档把日志分离到 `sessions-archive.db`（减轻热库）；Settings 归档页只列已归档（无摘要也可删 / 可删全部；隐藏 `origin=subagent`）；点开已归档行 / prompt·fork·truncate·rename·cwd·审批·checkpoint restore 会先 restore；置顶也会解档委派子会话；归档 / 永久删除会级联工具委派子会话（fork 独立）；启动串行修复（孤儿子树含孙代 → 多余 blank → 归档 offload → 一次 reclaim）并清 `sessionOrder` 幽灵槽；create/fork 失败整路径 wipe（不留 membership 幽灵）；删**项目**工作区会把释放会话送进归档集；删 **agent-home** 只解组身份会话（干员「未分组」，不归档）；`session.delete` 仅已归档；Face `pinnedSessionIds` + `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed` | **能跑** |
 | 模型切换等待提示 | 切换中「准备中 · 减少等待…」+ 键盘 paneFocus / 搜索虚拟高亮 + `<mark>` 命中 + cell `:focus-visible` | **能跑** |
 | Desktop 首屏与 Host 并行 | `xrk-app://` 产品页立刻开 HARNESS 开屏；Host ready 后挂 Fetch 桥（不 remount） | **能跑**（见 [host-face](./host-face.md)） |
@@ -204,7 +204,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.8.11** 当前 `@latest`（上一补丁 **v0.8.10**；上一正式线 **v0.7.22**；回退钉 **v0.3.11**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.8.12** 当前 `@latest`（上一补丁 **v0.8.11**；上一正式线 **v0.7.22**；回退钉 **v0.3.11**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
 | **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
@@ -228,7 +228,7 @@ core* / 能力叶 → kernel | protocol | compose
 
 > **Audience**: Everyone (this page is the public capability truth)
 
-Three states: **Working / Unstable / Not done**. Aligned with code. Main-path matrix has been Working since **v0.5.21**; npm **`@latest` is currently v0.8.11** (previous patch **v0.8.10**; prior formal line **v0.7.22**; rollback pin **v0.3.11**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
+Three states: **Working / Unstable / Not done**. Aligned with code. Main-path matrix has been Working since **v0.5.21**; npm **`@latest` is currently v0.8.12** (previous patch **v0.8.11**; prior formal line **v0.7.22**; rollback pin **v0.3.11**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
 
 XRK-Harness is an independently developed stack. It absorbs strengths from Codex and peer agent harnesses in session, tool pipeline, subagent, and shell UX; contracts and code in this repo are authoritative.
 
@@ -376,7 +376,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Keyboard-shortcut view / search / customize / reset | `Ctrl+/` (⌘+/) ShortcutsPanel: view + search + click-to-rebind + per-row / reset-all (device-local `localStorage` `xrk.shortcuts.v1` overrides only; submit/newline fixed) | **Working** |
 | Scheduled-task run history | `cron/executions.jsonl` bounded ledger (≤1000) + `cronjob` action=`runs`; survives restart | **Working** |
 | Time-context injection | `XRK_TIME_CONTEXT_REFRESH_MS` (default 60s); follow-ups refresh via workspace block | **Working** |
-| Provider KV prefix (cost) | `conversationUpdates` (openai-chat / responses / anthropic default `in-history`; Flash catalog; Gemini off by default) + `series-baseline` + **`tools-baseline` (append-only expand)**; Messages may declare `toolUpdate` (`anthropic-messages` / `deepseek-messages` Flash only); OpenCode also sends session headers + UA; **sunflower-free** Host `x-session-id` → sidecar sticky upstream `x-opencode-session`; slash/recipe inject; expand hydrate; soft-budget forces header; curated-memory live fragment at tail | **Working** (see [session-optimize](./session-optimize.md) §5) |
+| Provider KV prefix (cost) | `conversationUpdates` (openai-chat / responses / anthropic default `in-history`; Flash catalog; Gemini off by default) + `series-baseline` + **`tools-baseline` (append-only + standing schema freeze)**; Messages may declare `toolUpdate` (`anthropic-messages` / `deepseek-messages` Flash only); OpenCode also sends session headers + UA; **sunflower-free** Host `x-session-id` → sidecar sticky upstream `x-opencode-session`; slash/recipe inject; expand hydrate; soft-budget forces header; curated-memory live fragment at tail | **Working** (see [session-optimize](./session-optimize.md) §5) |
 | Archive filter / pin | Sidebar `ArchiveViewMode` tri-state (archived rows badged; `⋯` is Unarchive); archive offloads logs to `sessions-archive.db`; Settings archive page lists archived only (missing summary still deletable / delete-all; hides `origin=subagent`); opening an archived row / prompt·fork·truncate·rename·cwd·approval·checkpoint restore restores hot first; pin also unarchives delegated children; archive / permanent delete cascade tool-delegated children (forks stay independent); boot repairs serially (orphan subtrees incl. grandchildren → excess blanks → archive offload → one reclaim) and scrubs ghost `sessionOrder` slots; create/fork failure uses full wipe (no membership ghosts); project workspace delete parks released sessions into archive; agent-home delete ungroups identity sessions (干员「未分组」, not archive); `session.delete` archived-only; Face `pinnedSessionIds` + pin/unpin + `host/pinned-sessions-changed` | **Working** |
 | Model-switch waiting hint | in-menu "Preparing · reduced wait…" + keyboard paneFocus / search virtual highlight + `<mark>` hit + cell `:focus-visible` | **Working** |
 | Desktop first paint ∥ Host | `xrk-app://` product page paints HARNESS splash immediately; Host ready wires Fetch bridge (no remount) | **Working** (see [host-face](./host-face.md)) |
@@ -415,7 +415,7 @@ Against upstream [v0.2.0-rc.2](https://github.com/deepseek-ai/deepseek-harness/r
 
 | Level | What you can do | Prerequisites |
 | --- | --- | --- |
-| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.8.11** is the current `@latest` (previous patch **v0.8.10**; prior formal line **v0.7.22**; rollback pin **v0.3.11**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
+| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.8.12** is the current `@latest` (previous patch **v0.8.11**; prior formal line **v0.7.22**; rollback pin **v0.3.11**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
 | **B — Browser soak** | `pnpm test:web` (not part of `pnpm check`) | Chromium; full `apps/web/dist` |
 | **C — Publish** | npmjs + GitHub Release (`@xrkseek/harness-cli`) | `pnpm release`; see [publishing.md](./publishing.md) |
 

@@ -240,6 +240,13 @@ export function orderToolsForWire(
   return [...pick(before), ...middle, ...pick(after)];
 }
 
+/** Prior `tools[]` wire rows used as a series prefix anchor (order + schema). */
+export type ToolsWireBaseline = readonly {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Record<string, unknown>;
+}[];
+
 /**
  * Keep `tools[]` prefix stable across a request series (provider KV cache).
  *
@@ -249,24 +256,34 @@ export function orderToolsForWire(
  * reshuffling survivors — so `tool_search` expand / Direct add no longer
  * lexicographically inserts into the middle and busts the entire tools prefix.
  *
+ * Survivors also reuse the prior **description + parameters** bytes. Live
+ * `dynamicSchema` / copy edits on standing tools would otherwise rewrite the
+ * tools JSON and bust SenseNova / OpenAI-compat prefix cache even when order
+ * is frozen (measured: one description mutate → cached_tokens 0).
+ *
  * Messages routes may further mark newcomers with `deferLoading` via
  * `projectToolDeclarations` when `llm.toolUpdate` is declared.
  */
 export function stabilizeToolsForSeries(
   tools: AssembledRequest["tools"],
-  priorNames?: readonly string[],
+  priorWire?: ToolsWireBaseline,
   toolOrder?: readonly string[],
 ): AssembledRequest["tools"] {
   const fresh = orderToolsForWire(tools, toolOrder);
-  if (!priorNames || priorNames.length === 0) return fresh;
+  if (!priorWire || priorWire.length === 0) return fresh;
   const byName = new Map(fresh.map((t) => [t.name, t] as const));
   const kept: Array<AssembledRequest["tools"][number]> = [];
   const seen = new Set<string>();
-  for (const name of priorNames) {
-    const t = byName.get(name);
-    if (!t || seen.has(name)) continue;
-    kept.push(t);
-    seen.add(name);
+  for (const prior of priorWire) {
+    const live = byName.get(prior.name);
+    if (!live || seen.has(prior.name)) continue;
+    kept.push({
+      name: prior.name,
+      description: prior.description,
+      parameters: prior.parameters,
+      ...(live.deferLoading === true ? { deferLoading: true as const } : {}),
+    });
+    seen.add(prior.name);
   }
   const added = fresh.filter((t) => !seen.has(t.name));
   return [...kept, ...added];

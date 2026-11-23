@@ -1,10 +1,9 @@
 /* Shared disclosure header:
- *   [16px type icon] gap 6 [title] 0.5em [12px ›/∨] [optional summary…]
+ *   [16px type icon] gap 6 [title] 6px [12px ›/∨] 6px [·] 6px [summary…]
  *
- * Same chrome for 思考 / 过程 / 命令: type icon + short title + spaced
- * chevron. Never swap the type icon for a chevron (phone used to, and every
- * row looked like the same 「∨」). Never grow the title — activity rides
- * the summary seat so › stays right after「过程」/「思考」.
+ * Equal air between title · › · · · summary (call-site sep also 6px).
+ * Same chrome for 思考 / 过程 / 命令 / 终端. Never swap the type icon for a
+ * chevron. Never grow the title — activity rides the summary seat.
  */
 
 .root {
@@ -80,9 +79,8 @@ button.leading {
   flex: none;
   width: 12px;
   height: 12px;
-  /* Title (「过程」/「思考」) needs air before ›; the sep dot after › is
-     close — call-site separators use a smaller left margin. */
-  margin-left: 0.75em;
+  /* Match call-site · margins: title —6px— › —6px— · —6px— summary. */
+  margin-left: 6px;
   margin-right: 0;
   color: var(--dsw-alias-label-tertiary);
 }

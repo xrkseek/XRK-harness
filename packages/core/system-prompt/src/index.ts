@@ -43,6 +43,7 @@ export {
   stabilizeToolsForSeries,
   TOOL_ORDER_REST,
   type AssembledRequest,
+  type ToolsWireBaseline,
   type SkeletonSystemInput,
   type SkeletonUserInput,
   type ThreeLayerInput,

@@ -274,12 +274,15 @@ describe("outbound pipeline", () => {
   });
 
   it("stabilizeToolsForSeries appends expands at the tail (no mid-list insert)", () => {
-    const prior = ["alpha", "zeta"];
+    const prior = [
+      { name: "alpha", description: "A", parameters: { n: 1 } },
+      { name: "zeta", description: "Z", parameters: { n: 2 } },
+    ];
     const next = stabilizeToolsForSeries(
       [
-        { name: "mcp__x", description: "", parameters: {} },
-        { name: "zeta", description: "", parameters: {} },
-        { name: "alpha", description: "", parameters: {} },
+        { name: "mcp__x", description: "new", parameters: {} },
+        { name: "zeta", description: "Z-live", parameters: { n: 99 } },
+        { name: "alpha", description: "A-live", parameters: { n: 98 } },
       ],
       prior,
     );
@@ -287,13 +290,37 @@ describe("outbound pipeline", () => {
     expect(next.map((t) => t.name)).toEqual(["alpha", "zeta", "mcp__x"]);
   });
 
+  it("stabilizeToolsForSeries freezes survivor description+parameters bytes", () => {
+    const prior = [
+      { name: "alpha", description: "A", parameters: { n: 1 } },
+      { name: "zeta", description: "Z", parameters: { n: 2 } },
+    ];
+    const next = stabilizeToolsForSeries(
+      [
+        { name: "zeta", description: "Z-mutated", parameters: { n: 99 } },
+        { name: "alpha", description: "A-mutated", parameters: { n: 98 } },
+        { name: "mcp__x", description: "fresh", parameters: { x: true } },
+      ],
+      prior,
+    );
+    expect(next).toEqual([
+      { name: "alpha", description: "A", parameters: { n: 1 } },
+      { name: "zeta", description: "Z", parameters: { n: 2 } },
+      { name: "mcp__x", description: "fresh", parameters: { x: true } },
+    ]);
+  });
+
   it("stabilizeToolsForSeries drops removals without reshuffling survivors", () => {
     const next = stabilizeToolsForSeries(
       [
-        { name: "zeta", description: "", parameters: {} },
-        { name: "alpha", description: "", parameters: {} },
+        { name: "zeta", description: "Z", parameters: {} },
+        { name: "alpha", description: "A", parameters: {} },
       ],
-      ["alpha", "mid", "zeta"],
+      [
+        { name: "alpha", description: "A", parameters: {} },
+        { name: "mid", description: "M", parameters: {} },
+        { name: "zeta", description: "Z", parameters: {} },
+      ],
     );
     expect(next.map((t) => t.name)).toEqual(["alpha", "zeta"]);
   });
