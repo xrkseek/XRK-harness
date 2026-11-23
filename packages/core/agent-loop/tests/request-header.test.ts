@@ -65,7 +65,7 @@ describe("maybeAppendRequestHeader", () => {
     ).toHaveLength(1);
   });
 
-  it("auto path skips system-only churn; explicit reason still logs system rewrite", () => {
+  it("auto path logs slim system-only rewrite; fold keeps prior tools", () => {
     const store = createMemorySessionStore();
     const sessionId = store.create().id;
     const llm = createRoutingLlmAdapter({
@@ -73,6 +73,13 @@ describe("maybeAppendRequestHeader", () => {
       getSelection: () => ({ provider: "deepseek", model: "deepseek-v4-flash" }),
       resolveAdapter: () => createReplayAdapter([{ content: "ok" }]),
     });
+    const tools = [
+      {
+        name: "bash",
+        description: "shell",
+        parameters: { type: "object" },
+      },
+    ];
 
     maybeAppendRequestHeader({
       store,
@@ -81,13 +88,7 @@ describe("maybeAppendRequestHeader", () => {
       llm,
       now: () => 1000,
       system: "base system",
-      tools: [
-        {
-          name: "bash",
-          description: "shell",
-          parameters: { type: "object" },
-        },
-      ],
+      tools,
     });
     maybeAppendRequestHeader({
       store,
@@ -95,6 +96,20 @@ describe("maybeAppendRequestHeader", () => {
       turnId: "turn_1",
       llm,
       now: () => 1001,
+      system: "base system\n+inject noise",
+      tools,
+    });
+    const headers = store
+      .get(sessionId)
+      .events.filter((e) => e.type === "request/header");
+    expect(headers).toHaveLength(2);
+    expect(headers[1]).toMatchObject({
+      reason: "change",
+      header: { system: "base system\n+inject noise" },
+    });
+    // Slim row omits tools[] — must not look like a registry wipe.
+    expect(headers[1]?.header.tools).toBeUndefined();
+    expect(foldRequestHeader(store.get(sessionId).events)).toMatchObject({
       system: "base system\n+inject noise",
       tools: [
         {
@@ -105,8 +120,12 @@ describe("maybeAppendRequestHeader", () => {
       ],
     });
     expect(
-      store.get(sessionId).events.filter((e) => e.type === "request/header"),
-    ).toHaveLength(1);
+      store.get(sessionId).events.filter(
+        (e) =>
+          e.type === "user/message" &&
+          e.source?.kind === "tool-registry",
+      ),
+    ).toHaveLength(0);
 
     maybeAppendRequestHeader({
       store,
@@ -116,29 +135,16 @@ describe("maybeAppendRequestHeader", () => {
       now: () => 1002,
       reason: "change",
       system: "after compact",
-      tools: [
-        {
-          name: "bash",
-          description: "shell",
-          parameters: { type: "object" },
-        },
-      ],
+      tools,
     });
-    const headers = store
+    const afterExplicit = store
       .get(sessionId)
       .events.filter((e) => e.type === "request/header");
-    expect(headers).toHaveLength(2);
-    expect(headers[1]).toMatchObject({
+    expect(afterExplicit).toHaveLength(3);
+    expect(afterExplicit[2]).toMatchObject({
       reason: "change",
       header: { system: "after compact" },
     });
-    expect(
-      store.get(sessionId).events.filter(
-        (e) =>
-          e.type === "user/message" &&
-          e.source?.kind === "tool-registry",
-      ),
-    ).toHaveLength(0);
   });
 
   it("emits tool-registry inject on name add/remove; skips schema-only", () => {

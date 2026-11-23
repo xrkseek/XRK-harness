@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, flushSession, isStandingPlanMessage, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, promotedUserMessageSource, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, deriveAutoCompactMaxTokens, resolveSoftBudgetCeiling, resolveSoftBudgetTriggerTokens, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, flushSession, isStandingPlanMessage, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, pruneToolResultContent, promotePendingSteers, promotedUserMessageSource, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, deriveAutoCompactMaxTokens, resolveSoftBudgetCeiling, resolveSoftBudgetTriggerTokens, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -1786,9 +1786,12 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           ? { savedPath: outcome.outputPaths[0] }
           : {}),
       });
+      // Char-prune at write so soft-budget never rewrites early callIds later
+      // (in-place surface edits bust provider KV prefixes mid-series).
+      const pruned = pruneToolResultContent(bound.content);
       const settledResult = {
         ...outcome.result,
-        content: bound.content,
+        content: pruned.content,
       };
       append(input.store, input.sessionId, {
         type: "tool/result",

@@ -139,16 +139,21 @@ export function maybeAppendRequestHeader(input: {
     if (prev) lastHeaderBySession.set(input.sessionId, prev);
   }
 
+  let slimSystemOnly = false;
   if (prev) {
-    // Auto step path: assembled system often churns every tool loop (inject /
-    // workspace noise) while route+tools stay fixed — that used to write a
-    // ~100KB `request/header` per step and balloon sessions.db / resident RAM.
-    // Explicit `reason` (overflow compact · resume callers) still compares the
-    // full snapshot so a real system rewrite is logged.
-    const same = input.reason === undefined
-      ? requestHeaderRouteEquals(prev, snap)
-      : requestHeaderEquals(prev, snap);
-    if (same) return;
+    // Explicit `reason` (overflow compact · resume) compares the full snapshot.
+    // Auto path: skip only when route+tools+system are unchanged. System-only
+    // deltas used to be swallowed to avoid re-writing ~100KB tools[] every step
+    // — that also hid prefix-cache cliffs. Log a slim header (config+system,
+    // no tools); foldRequestHeader merges standing schemas from the prior row.
+    if (input.reason !== undefined) {
+      if (requestHeaderEquals(prev, snap)) return;
+    } else {
+      const routeSame = requestHeaderRouteEquals(prev, snap);
+      const systemSame = (prev.system ?? "") === (snap.system ?? "");
+      if (routeSame && systemSame) return;
+      slimSystemOnly = routeSame && !systemSame;
+    }
   }
 
   // coldEvents is set whenever prev was missing after the cache probe (fold
@@ -160,18 +165,45 @@ export function maybeAppendRequestHeader(input: {
       : logHasTurnEnd(coldEvents ?? [])
         ? "resume"
         : "initial");
+  const header = slimSystemOnly
+    ? {
+        config: snap.config,
+        ...(snap.system?.trim() ? { system: snap.system } : {}),
+        ...(snap.adapterDefaults
+          ? { adapterDefaults: snap.adapterDefaults }
+          : {}),
+      }
+    : snap;
   input.store.append(input.sessionId, {
     type: "request/header",
     ts: input.now(),
     turnId: input.turnId,
     reason,
-    header: snap,
+    header,
   });
-  lastHeaderBySession.set(input.sessionId, snap);
+  lastHeaderBySession.set(input.sessionId, {
+    config: snap.config,
+    ...(snap.system !== undefined
+      ? { system: snap.system }
+      : prev?.system !== undefined
+        ? { system: prev.system }
+        : {}),
+    ...(snap.tools !== undefined
+      ? { tools: snap.tools }
+      : prev?.tools !== undefined
+        ? { tools: prev.tools }
+        : {}),
+    ...(snap.adapterDefaults !== undefined
+      ? { adapterDefaults: snap.adapterDefaults }
+      : prev?.adapterDefaults !== undefined
+        ? { adapterDefaults: prev.adapterDefaults }
+        : {}),
+  });
 
   // Name-set delta only (not schema-only). Skip the first header of a session
   // view — there is no prior standing set for the model to reconcile against.
-  if (!prev) return;
+  // Slim system-only rows omit tools — do not treat that as a full remove.
+  if (!prev || slimSystemOnly || snap.tools === undefined) return;
   const { added, removed } = diffToolRegistryNames(prev.tools, snap.tools);
   if (added.length === 0 && removed.length === 0) return;
   const headerSeq = input.store.get(input.sessionId).events.length - 1;

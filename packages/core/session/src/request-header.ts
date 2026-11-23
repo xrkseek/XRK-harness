@@ -63,20 +63,48 @@ export function requestHeaderEquals(
 
 /**
  * Latest canonical request envelope after folding header events.
- * Each `request/header` replaces the prior snapshot (not a patch), so the
- * newest wins — scan from the tail so a multi-million-event session does not
- * walk every assistant/tool chunk just to rediscover the last header.
+ *
+ * Scan from the tail. Each field is taken from the newest header that carries
+ * it so a slim system-only `request/header` (no `tools`) keeps the prior
+ * standing schemas — needed for cache-audit logging without rewriting ~100KB
+ * tool JSON on every persona/time delta.
  */
 export function foldRequestHeader(
   events: readonly SessionEvent[],
 ): RequestHeaderSnapshot | undefined {
+  let config: LlmRequestConfig | undefined;
+  let system: string | undefined;
+  let tools: readonly RequestHeaderToolSchema[] | undefined;
+  let adapterDefaults:
+    | {
+        readonly reasoningEffort?: boolean;
+        readonly maxTokens?: boolean;
+      }
+    | undefined;
+  let saw = false;
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i];
-    if (event !== undefined && event.type === "request/header") {
-      return canonicalRequestHeader(event);
+    if (event === undefined || event.type !== "request/header") continue;
+    saw = true;
+    const h = canonicalRequestHeader(event);
+    if (config === undefined) config = h.config;
+    if (system === undefined && h.system !== undefined) system = h.system;
+    if (tools === undefined && h.tools !== undefined && h.tools.length > 0) {
+      tools = h.tools;
     }
+    if (adapterDefaults === undefined && h.adapterDefaults) {
+      adapterDefaults = h.adapterDefaults;
+    }
+    // Common case: one full header → all fields on the first hit.
+    if (config !== undefined && tools !== undefined) break;
   }
-  return undefined;
+  if (!saw || config === undefined) return undefined;
+  return {
+    config,
+    ...(system !== undefined ? { system } : {}),
+    ...(tools !== undefined ? { tools } : {}),
+    ...(adapterDefaults !== undefined ? { adapterDefaults } : {}),
+  };
 }
 
 export function canonicalRequestHeader(

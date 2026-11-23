@@ -85,6 +85,10 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         en: 'Process / terminal / think / tool fold rows: equal title — › — · gaps (phone and desktop).',
       },
       {
+        zh: '工具结果写入时剪枝；system 抖动只写瘦身 request/header，前缀缓存更稳、排障更清楚。',
+        en: 'Write-time tool-result prune; system-only slim request/header — stabler prefix cache, clearer audits.',
+      },
+      {
         zh: 'Desktop / npm / 手机对齐 0.8.12。完整清单见 docs/releases/v0.8.12.md。',
         en: 'Desktop / npm / phone align to 0.8.12. Full list: docs/releases/v0.8.12.md.',
       },

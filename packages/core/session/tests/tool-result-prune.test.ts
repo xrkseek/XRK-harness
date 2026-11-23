@@ -6,6 +6,7 @@ import {
   foldSurfaceTokens,
   priceCurrentSurfaceWindow,
   pruneOversizedToolResults,
+  pruneToolResultContent,
   pruneToolResultText,
   TOOL_RESULT_PRUNE_HEAD_CHARS,
   TOOL_RESULT_PRUNE_THRESHOLD_CHARS,
@@ -25,6 +26,29 @@ describe("tool-result prune", () => {
 
   it("leaves short results alone", () => {
     expect(pruneToolResultText("short")).toBeUndefined();
+  });
+
+  it("pruneToolResultContent short-circuits soft-budget rewrite", () => {
+    const big = "W".repeat(TOOL_RESULT_PRUNE_THRESHOLD_CHARS + 80);
+    const first = pruneToolResultContent(big);
+    expect(first.pruned).toBe(true);
+    expect(typeof first.content).toBe("string");
+    expect(String(first.content).length).toBeLessThan(big.length);
+
+    const store = createMemorySessionStore();
+    const session = store.create();
+    store.append(session.id, {
+      type: "tool/result",
+      ts: 1,
+      turnId: "t",
+      stepId: "s",
+      result: { toolCallId: "c1", name: "bash", content: first.content },
+    });
+    // Already under threshold — soft-budget pass must be a no-op (no rewrite).
+    expect(pruneOversizedToolResults(store, session.id).pruned).toBe(0);
+    expect(
+      store.get(session.id).events.filter((e) => e.type === "tool/result"),
+    ).toHaveLength(1);
   });
 
   it("counts Unicode code points (not UTF-16 units)", () => {

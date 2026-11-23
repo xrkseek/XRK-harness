@@ -155,7 +155,9 @@ export {
   TOOL_RESULT_PRUNE_TAIL_CHARS,
   TOOL_RESULT_PRUNE_THRESHOLD_CHARS,
   pruneOversizedToolResults,
+  pruneToolResultContent,
   pruneToolResultText,
+  type ToolResultContentPruneOptions,
   type ToolResultPruneOptions,
   type ToolResultPruneResult,
 } from "./tool-result-prune.js";

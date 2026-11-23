@@ -135,10 +135,12 @@
 | **已收** | `tools[]` 站立声明字节冻结 | 同系列 survivor 复用上次 wire 的 **description + parameters**（防 `dynamicSchema` / 文案抖动整段 miss）；新工具仍用 live schema 尾追加；compact / 换路由才重基线 |
 | **已收** | 记忆热更新不改 message-0 | 开局 freeze 在 system；磁盘变动只尾部 `<external_curated_memory>` fragment（digest 门控）；`foldChat` 不 last-wins 搬家 |
 | **已收** | Messages `toolUpdate`（能力门控） | `conversationUpdates.toolUpdate` 仅 `anthropic-messages`；`projectToolDeclarations` → `defer_loading` + 请求级 `toolAdditions`；Anthropic 适配器发 system `tool_addition` + beta；Chat Completions **不**声明该字段。品牌 `deepseek-messages`（Flash catalog `addition-only`）。Anthropic 中段 system 不再误折进顶层 |
+| **已收** | soft-budget 晚 prune 回写早期 tool 结果砸前缀 | `pruneToolResultContent` 在 `tool/result` **写入时**做码点剪枝；软压 `pruneOversizedToolResults` 仅兜底（已短表面 no-op） |
+| **已收** | system 抖动不记 header → 缓存排障盲区 | auto 路径 system-only 变更写 **瘦身** `request/header`（config+system，不重写 tools[]）；`foldRequestHeader` 从旧行合并 standing schemas |
 | **部分** | follow-up time 进 system workspaceBlocks | 默认 ≥60s 才刷新；in-history 下以 **delta** 挂尾，不改 message-0；仍占尾部 uncached |
 | **定位差异** | DSH 系统节点进 session 日志 | 本仓 system 每请求装配 + 进程内 anchor；不靠日志 system 节点 |
 | **刻意不做** | 全 deferred / 完整 `toolHistory` 会话折叠 | Direct 工具体验优先；本仓用 series tools-baseline + 能力门控投影，不照搬 DSH developer 消息全量 fold |
 
 **Compact 的 cache 代价：** soft-budget / overflow / `/compact` 都会 `breakSeriesBaseline` + `breakToolsBaseline`——换窗后下一请求重基线，提供方前缀命中从接近 0 再爬。Flash 默认软压 **300k**（窗 1M）；压得越勤，账单上 miss 段越长。见 [session-compaction.md](./session-compaction.md)。
 
-**动手顺序（成本）：** ① 禁 `tools[]` 活表 ✅ → ② 跨回合 series baseline ✅ → ③ expand 回灌 + recipe inject ✅ → ④ standing plan / fragment·slash digest / early offload / hydrate / system delta ✅ → ⑤ **`tools[]` 尾追加冻结** ✅ → ⑥ **standing 声明字节冻结** ✅ → ⑦ **Messages `toolUpdate` 能力门控** ✅ → ⑧ Status 看 `costUsage.cacheHitRate`。
+**动手顺序（成本）：** ① 禁 `tools[]` 活表 ✅ → ② 跨回合 series baseline ✅ → ③ expand 回灌 + recipe inject ✅ → ④ standing plan / fragment·slash digest / early offload / hydrate / system delta ✅ → ⑤ **`tools[]` 尾追加冻结** ✅ → ⑥ **standing 声明字节冻结** ✅ → ⑦ **Messages `toolUpdate` 能力门控** ✅ → ⑧ Status 看 `costUsage.cacheHitRate` → ⑨ **写入时 tool-result 剪枝** ✅ → ⑩ **system-only 瘦身 header** ✅。

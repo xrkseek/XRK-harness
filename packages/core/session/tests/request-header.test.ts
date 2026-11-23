@@ -41,6 +41,49 @@ describe("foldRequestHeader", () => {
     });
   });
 
+  it("merges slim system-only header with prior tools", () => {
+    const events: SessionEvent[] = [
+      {
+        type: "request/header",
+        ts: 1,
+        turnId: "t1",
+        reason: "initial",
+        header: {
+          config: { provider: "opencode-go", model: "beam-free" },
+          system: "persona v1",
+          tools: [
+            {
+              name: "bash",
+              description: "shell",
+              parameters: { type: "object" },
+            },
+          ],
+        },
+      },
+      {
+        type: "request/header",
+        ts: 2,
+        turnId: "t1",
+        reason: "change",
+        header: {
+          config: { provider: "opencode-go", model: "beam-free" },
+          system: "persona v1\n\ntime: later",
+        },
+      },
+    ];
+    expect(foldRequestHeader(events)).toEqual({
+      config: { provider: "opencode-go", model: "beam-free" },
+      system: "persona v1\n\ntime: later",
+      tools: [
+        {
+          name: "bash",
+          description: "shell",
+          parameters: { type: "object" },
+        },
+      ],
+    });
+  });
+
   it("finds the latest header without walking trailing non-header noise from the front", () => {
     const events: SessionEvent[] = [
       {

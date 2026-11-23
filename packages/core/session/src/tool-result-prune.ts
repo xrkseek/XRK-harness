@@ -1,7 +1,13 @@
 /**
  * Truncate oversized model-visible `tool/result` surfaces (DSH-aligned).
- * Appends a replacement `tool/result` for the same callId; log keeps the
- * original. `deriveMessages` / surface pricing fold to the latest per callId.
+ *
+ * Prefer {@link pruneToolResultContent} at **write time** so the first durable
+ * surface is already short — deferred soft-budget rewrites of early callIds
+ * bust provider KV prefixes (measured: cacheRead cliff after late prune).
+ *
+ * {@link pruneOversizedToolResults} remains the soft-budget / overflow safety
+ * net for older logs and non-loop writers: it appends a replacement for the
+ * same callId; `deriveMessages` / surface pricing fold to the latest.
  */
 
 import { readSessionEvents } from "./seq.js";
@@ -30,6 +36,12 @@ export interface ToolResultPruneOptions {
 
 export interface ToolResultPruneResult {
   readonly pruned: number;
+}
+
+export interface ToolResultContentPruneOptions {
+  readonly thresholdChars?: number;
+  readonly headChars?: number;
+  readonly tailChars?: number;
 }
 
 function contentPlainText(content: MessageContent): string | undefined {
@@ -62,6 +74,21 @@ export function pruneToolResultText(
   const head = units.slice(0, headChars).join("");
   const tail = units.slice(-tailChars).join("");
   return `${head}\n\n…[${omitted} chars omitted]…\n\n${tail}`;
+}
+
+/**
+ * Write-time char prune for a single tool result body (after spill/bound).
+ * Mixed / non-text content passes through unchanged.
+ */
+export function pruneToolResultContent(
+  content: MessageContent,
+  options: ToolResultContentPruneOptions = {},
+): { readonly content: MessageContent; readonly pruned: boolean } {
+  const plain = contentPlainText(content);
+  if (plain === undefined) return { content, pruned: false };
+  const next = pruneToolResultText(plain, options);
+  if (next === undefined) return { content, pruned: false };
+  return { content: next, pruned: true };
 }
 
 function latestToolResultByCallId(

@@ -79,7 +79,7 @@ compaction: {
 | `summary-only` | 跳过 prune，直接 LLM 摘要 |
 | `off` | 关闭软压自动路径；**上游上下文溢出仍会**按 prune→summary 恢复一次（`/compact` 仍可用） |
 
-`minimal` 仍 `{}`（仅 overflow，无主动软压；默认 `prune-summary`）。软压触发时按上表选阶段。Provider overflow：软压选 `off` 时仍强制一轮 prune→summary；其它策略与软压同族。剪枝用 Unicode **码点**（`thresholdChars=8192` · `head=4096` · `tail=1024`）；日志保留原文，`deriveMessages` 按 callId 取最新表面。
+`minimal` 仍 `{}`（仅 overflow，无主动软压；默认 `prune-summary`）。软压触发时按上表选阶段。Provider overflow：软压选 `off` 时仍强制一轮 prune→summary；其它策略与软压同族。剪枝用 Unicode **码点**（`thresholdChars=8192` · `head=4096` · `tail=1024`）。agent-loop 在 `tool/result` **写入时**先 `pruneToolResultContent`（模型可见表面已短，避免软压再回写早期 callId 砸提供方前缀缓存）；软压/overflow 的 `pruneOversizedToolResults` 仍作兜底——对已短表面 no-op，对旧日志仍可按 callId 追加替换表面，`deriveMessages` 取最新。
 
 
 ### Face `/compact`
@@ -222,7 +222,7 @@ compaction: {
 | `summary-only` | Skip prune; LLM summary only |
 | `off` | Disable soft-budget auto path; **provider context overflow still** recovers once via prune→summary (`/compact` still works) |
 
-`minimal` stays `{}` (overflow only; no proactive soft pressure; default `prune-summary`). Soft pressure uses the table above; provider overflow always gets one prune→summary pass even when soft strategy is `off`. Thresholds use Unicode **code points** (`thresholdChars=8192` · `head=4096` · `tail=1024`); the log keeps originals; `deriveMessages` takes the latest surface per callId.
+`minimal` stays `{}` (overflow only; no proactive soft pressure; default `prune-summary`). Soft pressure uses the table above; provider overflow always gets one prune→summary pass even when soft strategy is `off`. Thresholds use Unicode **code points** (`thresholdChars=8192` · `head=4096` · `tail=1024`). The agent-loop applies `pruneToolResultContent` when appending `tool/result` so the model-visible surface is already short (avoids soft-budget rewriting early callIds and busting provider prefix cache); soft/overflow `pruneOversizedToolResults` remains a safety net — no-op on already-short surfaces, still appends a replacement per callId for older logs; `deriveMessages` takes the latest surface.
 
 ### Face `/compact`
 
