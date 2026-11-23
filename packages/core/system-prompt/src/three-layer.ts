@@ -7,6 +7,8 @@ export interface AssembledRequest {
     name: string;
     description: string;
     parameters: Record<string, unknown>;
+    /** Wire-only; Messages `defer_loading` when llm.toolUpdate is set. */
+    deferLoading?: true;
   }[];
 }
 
@@ -236,6 +238,38 @@ export function orderToolsForWire(
       return t;
     });
   return [...pick(before), ...middle, ...pick(after)];
+}
+
+/**
+ * Keep `tools[]` prefix stable across a request series (provider KV cache).
+ *
+ * First wire of a series uses {@link orderToolsForWire}. Later wires keep every
+ * still-present prior name in the same order and **append** newcomers at the
+ * end (lex / toolOrder among themselves). Removals drop their slot without
+ * reshuffling survivors — so `tool_search` expand / Direct add no longer
+ * lexicographically inserts into the middle and busts the entire tools prefix.
+ *
+ * Messages routes may further mark newcomers with `deferLoading` via
+ * `projectToolDeclarations` when `llm.toolUpdate` is declared.
+ */
+export function stabilizeToolsForSeries(
+  tools: AssembledRequest["tools"],
+  priorNames?: readonly string[],
+  toolOrder?: readonly string[],
+): AssembledRequest["tools"] {
+  const fresh = orderToolsForWire(tools, toolOrder);
+  if (!priorNames || priorNames.length === 0) return fresh;
+  const byName = new Map(fresh.map((t) => [t.name, t] as const));
+  const kept: Array<AssembledRequest["tools"][number]> = [];
+  const seen = new Set<string>();
+  for (const name of priorNames) {
+    const t = byName.get(name);
+    if (!t || seen.has(name)) continue;
+    kept.push(t);
+    seen.add(name);
+  }
+  const added = fresh.filter((t) => !seen.has(t.name));
+  return [...kept, ...added];
 }
 
 /**

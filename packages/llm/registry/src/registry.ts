@@ -1,15 +1,22 @@
-import type { LlmAdapter } from "@xrkseek/llm";
+import type { LlmAdapter, SystemPromptUpdate, ToolUpdate } from "@xrkseek/llm";
 import { createAnthropicAdapter } from "@xrkseek/llm-anthropic";
 import {
   createDeepSeekAdapter,
   isOfficialDeepSeekBaseUrl,
+  isOfficialDeepSeekMessagesBaseUrl,
   resolveDeepSeekInputModalities,
+  resolveDeepSeekToolUpdate,
 } from "@xrkseek/llm-deepseek";
 import { createGeminiAdapter } from "@xrkseek/llm-gemini";
 import { createOpenAiCompatibleAdapter } from "@xrkseek/llm-openai-compatible";
 import { createOpenAiResponsesAdapter } from "@xrkseek/llm-openai-responses";
 import { OPENAI_CHAT_BRANDS } from "./brands-openai-chat.js";
 import { R1_PROTOCOL_BRANDS } from "./brands-r1.js";
+import { conversationUpdates } from "./conversation-updates.js";
+import {
+  responsesPromptCacheKey,
+  sessionAffinityHeaders,
+} from "./session-affinity.js";
 import type {
   BrandEntry,
   ProtocolId,
@@ -31,26 +38,55 @@ export const DEFAULT_REGISTRY_BRANDS: readonly BrandEntry[] = [
   ...R1_PROTOCOL_BRANDS,
 ];
 
-/**
- * OpenCode Zen / Go ask for a stable conversation id in `x-opencode-session`
- * (Go documents it; Zen free-tier and routing benefit from the same header).
- */
-function isOpenCodeBinding(binding: ProviderBinding): boolean {
-  if (binding.provider === "opencode" || binding.provider === "opencode-go") {
-    return true;
-  }
-  return /opencode\.ai\/(?:zen(?:\/go)?|inference)\b/i.test(binding.baseUrl);
+type AdapterExtras = {
+  readonly sessionId?: string;
+  readonly headers?: Record<string, string>;
+  readonly systemPromptUpdate?: SystemPromptUpdate | false;
+  readonly toolUpdate?: ToolUpdate | false;
+};
+
+/** Merge session affinity + caller headers (caller wins on key clash). */
+function mergeSessionHeaders(
+  binding: ProviderBinding,
+  extras?: AdapterExtras,
+): Record<string, string> | undefined {
+  const session = sessionAffinityHeaders(binding, extras?.sessionId);
+  const headers = {
+    ...(session ?? {}),
+    ...(extras?.headers ?? {}),
+  };
+  return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
-function openCodeSessionHeaders(
+/**
+ * Shared wire: session affinity headers + protocol `conversationUpdates`
+ * (system series + toolUpdate when the protocol can carry them).
+ */
+function sharedAdapterWire(
   binding: ProviderBinding,
-  sessionId?: string,
-): Record<string, string> | undefined {
-  if (!isOpenCodeBinding(binding)) return undefined;
-  const sid =
-    (typeof sessionId === "string" && sessionId.trim()) ||
-    `xrk-${binding.provider}`;
-  return { "x-opencode-session": sid };
+  extras?: AdapterExtras,
+): {
+  readonly headers?: Record<string, string>;
+  readonly systemPromptUpdate?: SystemPromptUpdate;
+  readonly toolUpdate?: ToolUpdate;
+} {
+  const headers = mergeSessionHeaders(binding, extras);
+  const updates = conversationUpdates({
+    protocol: binding.protocol,
+    ...(extras?.systemPromptUpdate !== undefined
+      ? { systemPromptUpdate: extras.systemPromptUpdate }
+      : {}),
+    ...(extras?.toolUpdate !== undefined
+      ? { toolUpdate: extras.toolUpdate }
+      : {}),
+  });
+  return {
+    ...(headers ? { headers } : {}),
+    ...(updates.systemPromptUpdate
+      ? { systemPromptUpdate: updates.systemPromptUpdate }
+      : {}),
+    ...(updates.toolUpdate ? { toolUpdate: updates.toolUpdate } : {}),
+  };
 }
 
 export interface ProviderRegistry {
@@ -71,10 +107,23 @@ export interface ProviderRegistry {
       model?: string;
       inputModalities?: readonly ("text" | "image")[];
       readImageRequest?: import("@xrkseek/llm-deepseek").DeepSeekReadImageRequest;
-      /** Harness session id → OpenCode `x-opencode-session` (Zen / Go). */
+      /**
+       * Harness session id → vendor affinity (`x-opencode-session` /
+       * `x-session-id`) and Responses `prompt_cache_key`.
+       */
       sessionId?: string;
-      /** Extra outbound headers (merged after OpenCode session header). */
+      /** Extra outbound headers (merged after session affinity). */
       headers?: Record<string, string>;
+      /**
+       * Catalog / Face override for series system placement.
+       * `false` forces leading-only; omit → protocol / compat default.
+       */
+      systemPromptUpdate?: SystemPromptUpdate | false;
+      /**
+       * Catalog / Face override for mid-conversation tool declarations.
+       * Only applied on `anthropic-messages`; `false` withholds; omit → none.
+       */
+      toolUpdate?: ToolUpdate | false;
       /**
        * This route advertises thinking levels, so a chosen one may travel as
        * `reasoning_effort` (OpenAI-compatible protocols only).
@@ -227,6 +276,10 @@ export function createProviderRegistry(
           binding.provider === "deepseek" &&
           isOfficialDeepSeekBaseUrl(binding.baseUrl)
         ) {
+          // Catalog owns systemPromptUpdate (Flash in-history / Pro withhold).
+          // Still attach session affinity headers for sticky gateways — do not
+          // let protocol-default conversationUpdates override Pro withhold.
+          const headers = mergeSessionHeaders(binding, extras);
           return createDeepSeekAdapter({
             id,
             baseUrl: binding.baseUrl,
@@ -234,19 +287,13 @@ export function createProviderRegistry(
             inputModalities: vision,
             ...(apiKey !== undefined ? { apiKey } : {}),
             ...(fetchImpl ? { fetch: fetchImpl } : {}),
+            ...(headers ? { headers } : {}),
             ...(extras?.readImageRequest
               ? { readImageRequest: extras.readImageRequest }
               : {}),
           });
         }
-        const openCodeHeaders = openCodeSessionHeaders(
-          binding,
-          extras?.sessionId,
-        );
-        const headers = {
-          ...(openCodeHeaders ?? {}),
-          ...(extras?.headers ?? {}),
-        };
+        const wire = sharedAdapterWire(binding, extras);
         return createOpenAiCompatibleAdapter({
           id,
           baseUrl: binding.baseUrl,
@@ -256,7 +303,7 @@ export function createProviderRegistry(
           inputModalities: vision,
           ...(apiKey !== undefined ? { apiKey } : {}),
           ...(fetchImpl ? { fetch: fetchImpl } : {}),
-          ...(Object.keys(headers).length > 0 ? { headers } : {}),
+          ...wire,
           ...(extras?.reasoningEffortWire === true
             ? { reasoningEffortWire: true as const }
             : {}),
@@ -264,6 +311,19 @@ export function createProviderRegistry(
       }
 
       if (binding.protocol === "anthropic-messages") {
+        // DeepSeek Messages Flash declares addition-only; Chat Completions brand
+        // never reaches here. Catalog fills only when Face/extras omit a value.
+        const catalogToolUpdate = isOfficialDeepSeekMessagesBaseUrl(
+          binding.baseUrl,
+        )
+          ? resolveDeepSeekToolUpdate(model)
+          : undefined;
+        const wire = sharedAdapterWire(binding, {
+          ...extras,
+          ...(extras?.toolUpdate === undefined && catalogToolUpdate
+            ? { toolUpdate: catalogToolUpdate }
+            : {}),
+        });
         return createAnthropicAdapter({
           id,
           baseUrl: binding.baseUrl,
@@ -272,10 +332,19 @@ export function createProviderRegistry(
           inputModalities: extras?.inputModalities ?? ["text", "image"],
           ...(apiKey !== undefined ? { apiKey } : {}),
           ...(fetchImpl ? { fetch: fetchImpl } : {}),
+          ...(binding.authMode === "bearer"
+            ? { authMode: "bearer" as const }
+            : {}),
+          ...wire,
         });
       }
 
       if (binding.protocol === "openai-responses") {
+        const wire = sharedAdapterWire(binding, extras);
+        const cacheKey = responsesPromptCacheKey(
+          binding.protocol,
+          extras?.sessionId,
+        );
         return createOpenAiResponsesAdapter({
           id,
           baseUrl: binding.baseUrl,
@@ -284,10 +353,13 @@ export function createProviderRegistry(
           inputModalities: extras?.inputModalities ?? ["text", "image"],
           ...(apiKey !== undefined ? { apiKey } : {}),
           ...(fetchImpl ? { fetch: fetchImpl } : {}),
+          ...wire,
+          ...(cacheKey ? { promptCacheKey: cacheKey } : {}),
         });
       }
 
       if (binding.protocol === "gemini-generate") {
+        const wire = sharedAdapterWire(binding, extras);
         return createGeminiAdapter({
           id,
           baseUrl: binding.baseUrl,
@@ -295,6 +367,7 @@ export function createProviderRegistry(
           inputModalities: extras?.inputModalities ?? ["text", "image"],
           ...(apiKey !== undefined ? { apiKey } : {}),
           ...(fetchImpl ? { fetch: fetchImpl } : {}),
+          ...wire,
         });
       }
 

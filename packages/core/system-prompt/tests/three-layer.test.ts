@@ -6,6 +6,7 @@ import {
   createToolPairStep,
   hasHumanUserText,
   isMetadataOnlyUserMessage,
+  stabilizeToolsForSeries,
   textOfContent,
   slashRecipeStep,
 } from "../src/index.js";
@@ -270,5 +271,30 @@ describe("outbound pipeline", () => {
         toolOrder: ["missing", " "],
       }),
     ).toThrow(/unknown tool/);
+  });
+
+  it("stabilizeToolsForSeries appends expands at the tail (no mid-list insert)", () => {
+    const prior = ["alpha", "zeta"];
+    const next = stabilizeToolsForSeries(
+      [
+        { name: "mcp__x", description: "", parameters: {} },
+        { name: "zeta", description: "", parameters: {} },
+        { name: "alpha", description: "", parameters: {} },
+      ],
+      prior,
+    );
+    // Lex alone would be [alpha, mcp__x, zeta] and bust the tools prefix.
+    expect(next.map((t) => t.name)).toEqual(["alpha", "zeta", "mcp__x"]);
+  });
+
+  it("stabilizeToolsForSeries drops removals without reshuffling survivors", () => {
+    const next = stabilizeToolsForSeries(
+      [
+        { name: "zeta", description: "", parameters: {} },
+        { name: "alpha", description: "", parameters: {} },
+      ],
+      ["alpha", "mid", "zeta"],
+    );
+    expect(next.map((t) => t.name)).toEqual(["alpha", "zeta"]);
   });
 });

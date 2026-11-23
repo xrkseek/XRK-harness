@@ -29,6 +29,18 @@ export {
   type CreateProviderRegistryOptions,
   type ProviderRegistry,
 } from "./registry.js";
+export {
+  conversationUpdates,
+  type ConversationCompat,
+  type ConversationUpdates,
+  type ConversationUpdatesInput,
+} from "./conversation-updates.js";
+export {
+  isCommandCodeBinding,
+  isOpenCodeBinding,
+  responsesPromptCacheKey,
+  sessionAffinityHeaders,
+} from "./session-affinity.js";
 export { resolveLlmFromEnv } from "./from-env.js";
 export {
   discoverOpenAiChatModels,

@@ -1,7 +1,7 @@
 /**
  * OpenAI-compatible DeepSeek Files API transport (DSH `dsh-v0.1.1-rc.2`).
  */
-import { LlmError } from "@xrkseek/llm";
+import { attributionHeaders, LlmError } from "@xrkseek/llm";
 import type { ImageMediaType } from "@xrkseek/protocol";
 import { deepSeekFileId, type DeepSeekFileId } from "./file-id.js";
 
@@ -147,6 +147,10 @@ export class DeepSeekFilesClient {
     try {
       const headers = new Headers(init.headers);
       headers.set("authorization", `Bearer ${this.apiKey}`);
+      // DSH files-api: every Files call carries product User-Agent.
+      for (const [name, value] of Object.entries(attributionHeaders())) {
+        headers.set(name, value);
+      }
       response = await this.fetchImpl(`${this.baseURL}${path}`, {
         ...init,
         headers,

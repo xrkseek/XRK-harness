@@ -7,10 +7,12 @@ import type {
   LlmChatRequest,
   LlmChatResponse,
   LlmStreamEvent,
+  SystemPromptUpdate,
 } from "@xrkseek/llm";
 import {
   ContextOverflowError,
   classifyCaughtStreamError,
+  mergeOutboundAttributionHeaders,
   mergeOutboundTraceHeaders,
   throwHttpLlmError,
   UnsupportedContentError,
@@ -52,6 +54,8 @@ export interface GeminiAdapterOptions {
   readonly enableStream?: boolean;
   readonly inputModalities?: readonly ("text" | "image")[];
   readonly maxRequestImageBytes?: number;
+  /** Left-stable system series (OpenCode / mid-convo system routes). */
+  readonly systemPromptUpdate?: SystemPromptUpdate;
 }
 
 type GemPart =
@@ -393,10 +397,12 @@ export function createGeminiAdapter(
       // key is already in URL when present.
     }
 
-    const headers: Record<string, string> = mergeOutboundTraceHeaders({
-      "content-type": "application/json",
-      ...options.headers,
-    });
+    const headers: Record<string, string> = mergeOutboundAttributionHeaders(
+      mergeOutboundTraceHeaders({
+        "content-type": "application/json",
+        ...options.headers,
+      }),
+    );
     const timeoutSignal =
       options.timeoutMs !== undefined && options.timeoutMs > 0
         ? AbortSignal.timeout(options.timeoutMs)
@@ -437,6 +443,9 @@ export function createGeminiAdapter(
   const adapter: LlmAdapter = {
     id,
     inputModalities: modalities,
+    ...(options.systemPromptUpdate !== undefined
+      ? { systemPromptUpdate: options.systemPromptUpdate }
+      : {}),
     async chat(request) {
       const res = await post(request, false);
       return parseGenerateContent(JSON.parse(await res.text()));

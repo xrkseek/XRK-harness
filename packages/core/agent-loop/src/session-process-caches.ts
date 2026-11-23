@@ -12,6 +12,10 @@ import {
   breakSeriesBaseline,
   clearSeriesBaselineAnchors,
 } from "./series-baseline.js";
+import {
+  breakToolsBaseline,
+  clearToolsBaselineAnchors,
+} from "./tools-baseline.js";
 import { clearTimeContextRefreshState } from "@xrkseek/core-system-prompt";
 
 /** Clear one session, or every session when `sessionId` is omitted (tests). */
@@ -19,9 +23,11 @@ export function forgetSessionProcessCaches(sessionId?: string): void {
   forgetRequestHeaderCache(sessionId);
   if (sessionId === undefined) {
     clearSeriesBaselineAnchors();
+    clearToolsBaselineAnchors();
     clearTimeContextRefreshState();
     return;
   }
   breakSeriesBaseline(sessionId);
+  breakToolsBaseline(sessionId);
   clearTimeContextRefreshState(sessionId);
 }

@@ -149,5 +149,17 @@ export function createRoutingLlmAdapter(
     },
   });
 
+  Object.defineProperty(adapter, "toolUpdate", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      try {
+        return resolveInner().toolUpdate;
+      } catch {
+        return undefined;
+      }
+    },
+  });
+
   return adapter;
 }

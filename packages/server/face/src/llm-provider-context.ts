@@ -426,12 +426,15 @@ export function readProviderApiKey(
   const envName = providerApiKeyEnv(runtime, provider);
   const key = provider.trim().toLowerCase();
   // OpenCode Go accepts the Zen key as env fallback.
+  // Command Code Provider API docs use CMD_API_KEY; brand env is COMMANDCODE_API_KEY.
   const envCandidates =
     key === "opencode-go"
       ? [envName, "OPENCODE_API_KEY"]
       : key === "opencode"
         ? [envName, "OPENCODE_API_KEY"]
-        : [envName];
+        : key === "commandcode"
+          ? [envName, "CMD_API_KEY"]
+          : [envName];
   for (const name of envCandidates) {
     if (!name) continue;
     const fromEnv = process.env[name]?.trim();

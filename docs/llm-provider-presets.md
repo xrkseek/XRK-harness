@@ -12,6 +12,7 @@
 | `deepseek` | DeepSeek | `https://api.deepseek.com` | `DEEPSEEK_API_KEY` |
 | `opencode` | OpenCode Zen | `https://opencode.ai/zen/v1` | `OPENCODE_API_KEY` |
 | `opencode-go` | OpenCode Go | `https://opencode.ai/zen/go/v1` | `OPENCODE_GO_API_KEY` |
+| `commandcode` | Command Code | `https://api.commandcode.ai/provider/v1` | `COMMANDCODE_API_KEY` |
 | `openrouter` | OpenRouter | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
 | `groq` | Groq | `https://api.groq.com/openai/v1` | `GROQ_API_KEY` |
 | `fireworks` | Fireworks | `https://api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
@@ -58,7 +59,13 @@ URL 以厂商文档为准；测例锁字符串。Settings 添加目录来自 Reg
 
 **与 `@earendil-works/pi-ai` 的关系**：添加供应商清单是本仓 `OPENAI_CHAT_BRANDS` / `R1_PROTOCOL_BRANDS` **硬编码**（对照 pi-ai 1.6.0 的 openai-completions 面手工同步），**不是**运行时 import pi 的 `models.generated`。升 pi stub 版本不会自动改这张表；发现新品牌时改 `packages/llm/registry/src/brands-openai-chat.ts` + 测例 + 本文。models.dev 只在发现模型时填空字段。
 
-`opencode`（Zen）密钥：`OPENCODE_API_KEY`（https://opencode.ai/zen）。`opencode-go` 密钥：`OPENCODE_GO_API_KEY`（环境变量可回退 `OPENCODE_API_KEY`）。Zen / Go 出站都会带 `x-opencode-session`（会话 id）；部分免费模型有地区或「仅 OpenCode 客户端」限制，403 会标成 `REGION` / `PROVIDER_DENIED`，UI 展示真因而非 invalid key。
+`opencode`（Zen）密钥：`OPENCODE_API_KEY`（https://opencode.ai/zen）。`opencode-go` 密钥：`OPENCODE_GO_API_KEY`（环境变量可回退 `OPENCODE_API_KEY`）。Zen / Go 出站按 [Go 文档](https://opencode.ai/docs/go/) 带稳定 `x-opencode-session`（兼 `x-session-id`）与产品 `User-Agent`；Custom 指到 `opencode.ai/zen` / `inference` 时同样识别。
+
+`commandcode` 密钥：`COMMANDCODE_API_KEY`（可回退 `CMD_API_KEY`；[Provider API](https://commandcode.ai/docs/provider-api)，GOAT+）。出站只带稳定 `x-session-id`（**不**发 `x-opencode-session`）；可选 ZDR 用额外头 `x-cmd-zdr: 1`。Custom 指到 `commandcode.ai` 时同样识别。
+
+前缀系列走协议级 `conversationUpdates`（openai-chat / responses / anthropic → `systemPromptUpdate: in-history`）。`toolUpdate` **仅**在 `anthropic-messages` 上生效（Chat Completions 目录声明会被丢掉）。有会话 id 时：通用 / Custom / 中转出站 `x-session-id`；Responses 协议另写会话级 `prompt_cache_key`（[OpenAI Prompt Caching](https://platform.openai.com/docs/guides/prompt-caching)）。Chat Completions **不**洒 `prompt_cache_key`。
+
+部分 OpenCode 免费模型有地区或「仅 OpenCode 客户端」限制，403 会标成 `REGION` / `PROVIDER_DENIED`，UI 展示真因而非 invalid key。
 
 非 openai-chat 网关（如 Bedrock / Vertex）用 Custom 自填 endpoint。
 
@@ -67,8 +74,11 @@ URL 以厂商文档为准；测例锁字符串。Settings 添加目录来自 Reg
 | id | protocol | baseUrl（默认） | apiKeyEnv |
 |----|----------|-----------------|-----------|
 | `anthropic` | `anthropic-messages` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
+| `deepseek-messages` | `anthropic-messages` | `https://api.deepseek.com/anthropic` | `DEEPSEEK_API_KEY` |
 | `gemini` | `gemini-generate` | `https://generativelanguage.googleapis.com/v1beta` | `GEMINI_API_KEY` |
 | `openai-responses` | `openai-responses` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
+
+`deepseek-messages` 走官方 Anthropic 兼容 Messages 口；Flash 目录声明 `toolUpdate: addition-only`（`defer_loading` + system `tool_addition`）。默认品牌 `deepseek` 仍是 Chat Completions（只靠 `tools-baseline` 尾追加，**不**发 Messages 专用字段）。
 
 `openai-completions` 是 Chat Completions 工厂别名（settings UI 名）；不是 legacy Completions 文本接口。自定义网关可把任意 brand 的 `api` 改成上表协议之一。
 
@@ -92,6 +102,7 @@ Subordinate to [llm-provider-registry.md](./llm-provider-registry.md). Entry dat
 | `deepseek` | DeepSeek | `https://api.deepseek.com` | `DEEPSEEK_API_KEY` |
 | `opencode` | OpenCode Zen | `https://opencode.ai/zen/v1` | `OPENCODE_API_KEY` |
 | `opencode-go` | OpenCode Go | `https://opencode.ai/zen/go/v1` | `OPENCODE_GO_API_KEY` |
+| `commandcode` | Command Code | `https://api.commandcode.ai/provider/v1` | `COMMANDCODE_API_KEY` |
 | `openrouter` | OpenRouter | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
 | `groq` | Groq | `https://api.groq.com/openai/v1` | `GROQ_API_KEY` |
 | `fireworks` | Fireworks | `https://api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
@@ -138,7 +149,13 @@ URLs follow vendor docs; tests lock the strings. The Settings add directory come
 
 **Relation to `@earendil-works/pi-ai`**: the add-provider directory is this repo's hardcoded `OPENAI_CHAT_BRANDS` / `R1_PROTOCOL_BRANDS` (manually synced against pi-ai 1.6.0 openai-completions providers). Bumping the pi stub does **not** auto-update this table — edit `packages/llm/registry/src/brands-openai-chat.ts` + tests + this doc. models.dev only fills blank capacity fields at discovery time.
 
-`opencode` (Zen) key: `OPENCODE_API_KEY` (https://opencode.ai/zen). `opencode-go` key: `OPENCODE_GO_API_KEY` (env may fall back to `OPENCODE_API_KEY`). Zen and Go outbound both send `x-opencode-session` (session id); some free models are geo- or client-restricted — those 403s map to `REGION` / `PROVIDER_DENIED`, and the UI shows the real cause instead of a fake invalid-key AUTH.
+`opencode` (Zen) key: `OPENCODE_API_KEY` (https://opencode.ai/zen). `opencode-go` key: `OPENCODE_GO_API_KEY` (env may fall back to `OPENCODE_API_KEY`). Zen and Go outbound follow the [Go docs](https://opencode.ai/docs/go/): a stable `x-opencode-session` (plus `x-session-id`) and a product `User-Agent`; custom bases under `opencode.ai/zen` / `inference` are detected the same way.
+
+`commandcode` key: `COMMANDCODE_API_KEY` (env may fall back to `CMD_API_KEY`; [Provider API](https://commandcode.ai/docs/provider-api), GOAT+). Outbound sends a stable `x-session-id` only (**never** `x-opencode-session`); optional ZDR via extra header `x-cmd-zdr: 1`. Custom bases under `commandcode.ai` are detected the same way.
+
+Prefix series uses protocol-level `conversationUpdates` (openai-chat / responses / anthropic → `systemPromptUpdate: in-history`). `toolUpdate` applies **only** on `anthropic-messages` (Chat Completions catalog flags are dropped). With a harness session id: generic / Custom / relay outbound gets `x-session-id`; Responses also sets a session-scoped `prompt_cache_key` ([OpenAI Prompt Caching](https://platform.openai.com/docs/guides/prompt-caching)). Chat Completions does **not** sprinkle `prompt_cache_key`.
+
+Some OpenCode free models are geo- or client-restricted — those 403s map to `REGION` / `PROVIDER_DENIED`, and the UI shows the real cause instead of a fake invalid-key AUTH.
 
 Gateways outside openai-chat (e.g. Bedrock / Vertex) use Custom with a self-supplied endpoint.
 
@@ -147,8 +164,11 @@ Gateways outside openai-chat (e.g. Bedrock / Vertex) use Custom with a self-supp
 | id | protocol | baseUrl (default) | apiKeyEnv |
 |----|----------|-------------------|-----------|
 | `anthropic` | `anthropic-messages` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
+| `deepseek-messages` | `anthropic-messages` | `https://api.deepseek.com/anthropic` | `DEEPSEEK_API_KEY` |
 | `gemini` | `gemini-generate` | `https://generativelanguage.googleapis.com/v1beta` | `GEMINI_API_KEY` |
 | `openai-responses` | `openai-responses` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
+
+`deepseek-messages` uses the official Anthropic-compatible Messages endpoint; Flash declares `toolUpdate: addition-only`. The default `deepseek` brand remains Chat Completions (`tools-baseline` only — no Messages-only fields).
 
 `openai-completions` is a Chat Completions factory alias (settings UI name); it is not the legacy Completions text API. Custom gateways may set any brand’s `api` to one of the protocols above.
 

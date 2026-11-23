@@ -69,13 +69,93 @@ describe("createProviderRegistry", () => {
       const init = fetchMock.mock.calls[0]![1] as RequestInit;
       const headers = init.headers as Record<string, string>;
       expect(headers["x-opencode-session"]).toBe(row.sessionId);
+      expect(headers["x-session-id"]).toBe(row.sessionId);
       expect(headers.authorization).toBe("Bearer oc_sk_test");
+      expect(headers["user-agent"]).toMatch(/^xrk-harness\//);
+      // openai-chat protocol default (not an OpenCode-only hardcode)
+      expect(adapter.systemPromptUpdate).toBe("in-history");
     }
   });
 
-  it("does not send x-opencode-session on unrelated brands", async () => {
+  it("applies conversationUpdates to openai / anthropic / custom; not gemini", () => {
     const reg = createProviderRegistry();
-    const binding = reg.resolve({ provider: "openai", model: "gpt-4o-mini" });
+    expect(
+      reg.createAdapter(reg.resolve({ provider: "openai", model: "gpt-4o-mini" }), {})
+        .systemPromptUpdate,
+    ).toBe("in-history");
+    expect(
+      reg.createAdapter(
+        reg.resolve({ provider: "anthropic", model: "claude-sonnet-4-20250514" }),
+        {},
+      ).systemPromptUpdate,
+    ).toBe("in-history");
+    expect(
+      reg.createAdapter(
+        reg.resolve({ provider: "gemini", model: "gemini-2.0-flash" }),
+        {},
+      ).systemPromptUpdate,
+    ).toBeUndefined();
+    expect(
+      reg.createAdapter(
+        reg.resolve({ provider: "openai", model: "m" }),
+        {},
+        { systemPromptUpdate: false },
+      ).systemPromptUpdate,
+    ).toBeUndefined();
+  });
+
+  it("sends x-opencode-session on Go inference Custom bases (Go docs)", async () => {
+    const reg = createProviderRegistry();
+    const sessionId = "sess-go-inference";
+    const binding = reg.resolve({
+      provider: "custom",
+      protocol: "anthropic-messages",
+      baseUrl: "https://opencode.ai/inference/go/anthropic",
+      model: "claude-sonnet-4",
+    });
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "hi" }],
+        }),
+        { status: 200 },
+      ),
+    );
+    const adapter = reg.createAdapter(
+      binding,
+      { apiKey: "oc_sk_test" },
+      {
+        fetch: fetchMock as unknown as typeof fetch,
+        sessionId,
+      },
+    );
+    expect(adapter.systemPromptUpdate).toBe("in-history");
+    await adapter.chat({
+      messages: [{ role: "user", content: "ping" }],
+    });
+    const headers = (fetchMock.mock.calls[0]![1] as RequestInit)
+      .headers as Record<string, string>;
+    expect(headers["x-opencode-session"]).toBe(sessionId);
+    expect(headers["user-agent"]).toMatch(/^xrk-harness\//);
+  });
+
+  it("sunflower-free sidecar brand: in-history + x-session-id (not x-opencode-session)", async () => {
+    // Plugin registers localhost Bun sidecar — generic affinity, not OpenCode brand.
+    // Sidecar remaps Host x-session-id → minted upstream x-opencode-session.
+    const reg = createProviderRegistry();
+    reg.registerBrand({
+      id: "sunflower-free",
+      displayName: "向日葵免费",
+      protocol: "openai-chat",
+      baseUrl: "http://127.0.0.1:9",
+      path: "/chat/completions",
+      authMode: "bearer",
+      defaultModel: "big-pickle",
+    });
+    const binding = reg.resolve({
+      provider: "sunflower-free",
+      model: "big-pickle",
+    });
     const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify({
@@ -86,18 +166,175 @@ describe("createProviderRegistry", () => {
     );
     const adapter = reg.createAdapter(
       binding,
-      { apiKey: "sk-test" },
+      { apiKey: "sidecar-key" },
       {
         fetch: fetchMock as unknown as typeof fetch,
-        sessionId: "sess-other",
+        sessionId: "sess-sunflower",
       },
     );
+    expect(adapter.systemPromptUpdate).toBe("in-history");
+    expect(adapter.toolUpdate).toBeUndefined();
     await adapter.chat({
       messages: [{ role: "user", content: "ping" }],
     });
-    const init = fetchMock.mock.calls[0]![1] as RequestInit;
-    const headers = init.headers as Record<string, string>;
+    const headers = (fetchMock.mock.calls[0]![1] as RequestInit)
+      .headers as Record<string, string>;
+    expect(headers["x-session-id"]).toBe("sess-sunflower");
     expect(headers["x-opencode-session"]).toBeUndefined();
+  });
+
+  it("attaches x-session-id on official DeepSeek without overriding Pro withhold", async () => {
+    const reg = createProviderRegistry();
+    const flash = reg.resolve({
+      provider: "deepseek",
+      model: "deepseek-flash",
+    });
+    const flashFetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { role: "assistant", content: "hi" } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    const flashAdapter = reg.createAdapter(
+      flash,
+      { apiKey: "sk" },
+      { fetch: flashFetch as unknown as typeof fetch, sessionId: "sess-ds" },
+    );
+    expect(flashAdapter.systemPromptUpdate).toBe("in-history");
+    await flashAdapter.chat({
+      messages: [{ role: "user", content: "ping" }],
+    });
+    const flashHeaders = (
+      flashFetch.mock.calls[0]![1] as RequestInit
+    ).headers as Record<string, string>;
+    expect(flashHeaders["x-session-id"]).toBe("sess-ds");
+    expect(flashHeaders["x-opencode-session"]).toBeUndefined();
+
+    const pro = reg.resolve({
+      provider: "deepseek",
+      model: "deepseek-v4-pro",
+    });
+    const proAdapter = reg.createAdapter(pro, { apiKey: "sk" });
+    expect(proAdapter.systemPromptUpdate).toBeUndefined();
+  });
+
+  it("sends x-session-id (not x-opencode-session) on openai / custom / commandcode", async () => {
+    const reg = createProviderRegistry();
+    for (const row of [
+      {
+        resolve: { provider: "openai" as const, model: "gpt-4o-mini" },
+        sessionId: "sess-openai",
+      },
+      {
+        resolve: {
+          provider: "custom" as const,
+          baseUrl: "https://relay.example/v1",
+          model: "m",
+        },
+        sessionId: "sess-custom",
+      },
+      {
+        resolve: {
+          provider: "commandcode" as const,
+          model: "deepseek/deepseek-v4-flash",
+        },
+        sessionId: "sess-cmd",
+      },
+      {
+        resolve: {
+          provider: "custom" as const,
+          baseUrl: "https://api.commandcode.ai/provider/v1",
+          model: "deepseek/deepseek-v4-flash",
+        },
+        sessionId: "sess-cmd-custom",
+      },
+    ]) {
+      const binding = reg.resolve(row.resolve);
+      const fetchMock = vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: "assistant", content: "hi" } }],
+          }),
+          { status: 200 },
+        ),
+      );
+      const adapter = reg.createAdapter(
+        binding,
+        { apiKey: "sk-test" },
+        {
+          fetch: fetchMock as unknown as typeof fetch,
+          sessionId: row.sessionId,
+        },
+      );
+      expect(adapter.systemPromptUpdate).toBe("in-history");
+      await adapter.chat({
+        messages: [{ role: "user", content: "ping" }],
+      });
+      const headers = (fetchMock.mock.calls[0]![1] as RequestInit)
+        .headers as Record<string, string>;
+      expect(headers["x-opencode-session"]).toBeUndefined();
+      expect(headers["x-session-id"]).toBe(row.sessionId);
+      expect(headers["user-agent"]).toMatch(/^xrk-harness\//);
+    }
+  });
+
+  it("sets Responses prompt_cache_key for openai and commandcode (not OpenCode-only)", async () => {
+    const reg = createProviderRegistry();
+    for (const row of [
+      {
+        resolve: {
+          provider: "openai-responses" as const,
+          model: "gpt-4o",
+        },
+        sessionId: "sess-resp-oai",
+      },
+      {
+        resolve: {
+          provider: "custom" as const,
+          protocol: "openai-responses" as const,
+          baseUrl: "https://api.commandcode.ai/provider/v1",
+          model: "deepseek/deepseek-v4-flash",
+        },
+        sessionId: "sess-resp-cmd",
+      },
+    ]) {
+      const binding = reg.resolve(row.resolve);
+      const fetchMock = vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            output: [
+              {
+                type: "message",
+                role: "assistant",
+                content: [{ type: "output_text", text: "hi" }],
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+      const adapter = reg.createAdapter(
+        binding,
+        { apiKey: "sk-test" },
+        {
+          fetch: fetchMock as unknown as typeof fetch,
+          sessionId: row.sessionId,
+        },
+      );
+      await adapter.chat({
+        messages: [{ role: "user", content: "ping" }],
+      });
+      const body = JSON.parse(
+        String((fetchMock.mock.calls[0]![1] as RequestInit).body),
+      ) as { prompt_cache_key?: string };
+      expect(body.prompt_cache_key).toBe(row.sessionId);
+      const headers = (fetchMock.mock.calls[0]![1] as RequestInit)
+        .headers as Record<string, string>;
+      expect(headers["x-session-id"]).toBe(row.sessionId);
+      expect(headers["x-opencode-session"]).toBeUndefined();
+    }
   });
 
   it("uses defaultProvider and brand defaultModel", () => {
@@ -205,12 +442,20 @@ describe("createProviderRegistry", () => {
     expect(ollama?.active).toBe(true);
   });
 
-  it("resolves R1 protocols: anthropic · gemini · responses", () => {
+  it("resolves R1 protocols: anthropic · deepseek-messages · gemini · responses", () => {
     const reg = createProviderRegistry();
     const anth = reg.resolve({ provider: "anthropic" });
     expect(anth.protocol).toBe("anthropic-messages");
     expect(anth.factoryKind).toBe("anthropic");
     expect(anth.path).toBe("/v1/messages");
+
+    const dsMsg = reg.resolve({ provider: "deepseek-messages" });
+    expect(dsMsg.protocol).toBe("anthropic-messages");
+    expect(dsMsg.baseUrl).toBe("https://api.deepseek.com/anthropic");
+    expect(dsMsg.factoryKind).toBe("anthropic");
+    const dsAdapter = reg.createAdapter(dsMsg, { apiKey: "k" });
+    expect(dsAdapter.toolUpdate).toBe("addition-only");
+    expect(dsAdapter.systemPromptUpdate).toBe("in-history");
 
     const gem = reg.resolve({ provider: "gemini" });
     expect(gem.protocol).toBe("gemini-generate");

@@ -73,6 +73,120 @@ describe("anthropic adapter", () => {
     ]);
   });
 
+  it("keeps mid-convo system in messages[] (does not fold into top-level)", async () => {
+    let body: Record<string, unknown> | undefined;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+        { status: 200 },
+      );
+    });
+    const llm = createAnthropicAdapter({
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+      enableStream: false,
+      systemPromptUpdate: "in-history",
+    });
+    await llm.chat({
+      messages: [
+        { role: "system", content: "baseline" },
+        { role: "user", content: "hi" },
+        { role: "assistant", content: "yo" },
+        { role: "system", content: "delta only" },
+      ],
+    });
+    expect(body?.system).toEqual([
+      {
+        type: "text",
+        text: "baseline",
+        cache_control: { type: "ephemeral" },
+      },
+    ]);
+    const messages = body?.messages as { role: string; content: unknown }[];
+    expect(messages.at(-1)).toEqual({
+      role: "system",
+      content: "delta only",
+    });
+  });
+
+  it("emits tool_addition + defer_loading only when toolUpdate is declared", async () => {
+    let body: Record<string, unknown> | undefined;
+    let headers: Record<string, string> | undefined;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      headers = init?.headers as Record<string, string>;
+      return new Response(
+        JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+        { status: 200 },
+      );
+    });
+    const withUpdate = createAnthropicAdapter({
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+      enableStream: false,
+      toolUpdate: "addition-only",
+    });
+    await withUpdate.chat({
+      messages: [{ role: "user", content: "hi" }],
+      tools: [
+        { name: "alpha", description: "a", parameters: {} },
+        {
+          name: "zeta",
+          description: "z",
+          parameters: {},
+          deferLoading: true,
+        },
+      ],
+      toolAdditions: ["zeta"],
+    });
+    const tools = body?.tools as Record<string, unknown>[];
+    expect(tools[0]).not.toHaveProperty("defer_loading");
+    expect(tools[1]).toMatchObject({ name: "zeta", defer_loading: true });
+    // cache_control stays on last immediate tool
+    expect(tools[0]).toMatchObject({ cache_control: { type: "ephemeral" } });
+    expect(tools[1]).not.toHaveProperty("cache_control");
+    const messages = body?.messages as { role: string; content: unknown }[];
+    expect(messages.at(-1)).toEqual({
+      role: "system",
+      content: [
+        {
+          type: "tool_addition",
+          tool: { type: "tool_reference", name: "zeta" },
+        },
+      ],
+    });
+    expect(headers?.["anthropic-beta"]).toContain(
+      "mid-conversation-tool-changes-2026-07-01",
+    );
+
+    body = undefined;
+    headers = undefined;
+    const without = createAnthropicAdapter({
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+      enableStream: false,
+    });
+    await without.chat({
+      messages: [{ role: "user", content: "hi" }],
+      tools: [
+        {
+          name: "zeta",
+          description: "z",
+          parameters: {},
+          deferLoading: true,
+        },
+      ],
+      toolAdditions: ["zeta"],
+    });
+    const plainTools = body?.tools as Record<string, unknown>[];
+    expect(plainTools[0]).not.toHaveProperty("defer_loading");
+    expect(body?.messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "hi" }] },
+    ]);
+    expect(headers?.["anthropic-beta"]).toBeUndefined();
+  });
+
   it("sets ephemeral cache_control on system and last tool", async () => {
     let body: Record<string, unknown> | undefined;
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {

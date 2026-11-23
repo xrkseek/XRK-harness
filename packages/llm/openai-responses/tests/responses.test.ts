@@ -37,6 +37,36 @@ describe("openai-responses adapter", () => {
     expect(out.content).toBe("ok");
   });
 
+  it("sends prompt_cache_key when configured (Responses cache routing)", async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as {
+        prompt_cache_key?: string;
+      };
+      expect(body.prompt_cache_key).toBe("sess-cache-1");
+      return new Response(
+        JSON.stringify({
+          output: [
+            {
+              type: "message",
+              content: [{ type: "output_text", text: "ok" }],
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+    const llm = createOpenAiResponsesAdapter({
+      baseUrl: "https://opencode.ai/inference/go/openai/v1",
+      apiKey: "sk",
+      model: "gpt-5",
+      promptCacheKey: "sess-cache-1",
+      fetch: fetchMock as unknown as typeof fetch,
+      enableStream: false,
+    });
+    await llm.chat({ messages: [{ role: "user", content: "hi" }] });
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
   it("maps Responses usage (incl. cached_tokens) into TokenUsage", async () => {
     const llm = createOpenAiResponsesAdapter({
       baseUrl: "https://api.openai.com/v1",

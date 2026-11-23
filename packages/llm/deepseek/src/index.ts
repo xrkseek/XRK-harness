@@ -107,6 +107,30 @@ export function resolveDeepSeekSystemPromptUpdate(
 }
 
 /**
+ * Catalog `toolUpdate` for Messages routes only (DSH Flash = addition-only).
+ * Chat Completions adapters must not declare this — no defer_loading wire.
+ */
+export function resolveDeepSeekToolUpdate(
+  model: string,
+): "addition-only" | undefined {
+  const id = model.trim();
+  if (id === DEEPSEEK_FLASH_MODEL) return "addition-only";
+  if ((DEEPSEEK_LEGACY_FLASH_ALIASES as readonly string[]).includes(id)) {
+    return "addition-only";
+  }
+  return undefined;
+}
+
+/** True when baseURL is the official DeepSeek Anthropic-compatible Messages root. */
+export function isOfficialDeepSeekMessagesBaseUrl(baseUrl: string): boolean {
+  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  return (
+    trimmed === "https://api.deepseek.com/anthropic" ||
+    trimmed === "http://api.deepseek.com/anthropic"
+  );
+}
+
+/**
  * Resolve adapter modalities (DSH catalog semantics).
  * Explicit override wins; Flash / Vision Exp are text+image on any host; other
  * models on the official host stay text-only; custom gateways default to text+image.

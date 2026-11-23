@@ -40,6 +40,7 @@ export {
   VOLATILE_OPEN,
   VOLATILE_CLOSE,
   orderToolsForWire,
+  stabilizeToolsForSeries,
   TOOL_ORDER_REST,
   type AssembledRequest,
   type SkeletonSystemInput,

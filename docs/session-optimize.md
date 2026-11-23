@@ -46,7 +46,7 @@
 | 遥测 / 标题 | `forwardOptional` · `basicRedactionRule` · seq=`readEvents.length` · 委托子跳过 title fallback |
 | Checkpoint / fork 血缘 | restore `chatSeq`/`chatAhead`/`truncateChat` · `FaceForkLink.atSeq` |
 | 基线已修（原体检 §2） | fork blank hint · archive hint 整行 · trimBeforeSeqCut · 任意轮分支 UI · FTS 双索引 · 投影 evict · shadow `reclaim` |
-| 提供方 KV 前缀 | `tools[]` 禁活表 · `tool_search` 稳定 · `series-baseline`(+hydrate) · standing plan 尾部(+peel) · fragment/slash digest · 无 fragment last-wins 搬家 · system append delta · buildReq image offload · `costUsage.cacheHitRate` · process-cache · recipe inject · expand 回灌 · deferred 跳过 dynamicSchema（见 §5） |
+| 提供方 KV 前缀 | `tools[]` 禁活表 · **`tools-baseline` 尾追加** · `tool_search` 稳定 · `series-baseline`(+hydrate) · standing plan 尾部(+peel) · fragment/slash digest · 无 fragment last-wins 搬家 · 记忆 live fragment · system append delta · buildReq image offload · `costUsage.cacheHitRate` · process-cache · recipe inject · expand 回灌 · deferred 跳过 dynamicSchema（见 §5） |
 
 假差距 / 定位差异（摘要）：live/persisted 枚举 · SOURCE_CONFLICT · Format V3 链 · 四分叉 derive · attempt settlement · `source.kind=provider` · 元数据必须进 sessions 表 · compaction 锁对。
 
@@ -108,7 +108,9 @@
 
 | 判定 | 项 | 证据 / 落点 |
 |---|---|---|
-| **假差距** | 系统提示 in-history 追加（步内） | `placeSystemOnWire` + Flash `systemPromptUpdate` |
+| **假差距** | 系统提示 in-history 追加（步内） | `placeSystemOnWire` + `conversationUpdates`（openai-chat / responses / anthropic 协议默认；Flash 目录声明；Gemini 默认不开） |
+| **已收** | OpenCode / Command Code / 通用网关缓存路由 | 协议级 `conversationUpdates` + `series-baseline`；`session-affinity`：OpenCode=`x-opencode-session`(+`x-session-id`)，Command Code/Custom/中转=`x-session-id` only，Responses 全路由会话级 `prompt_cache_key`；产品 `User-Agent`；DeepSeek Files 同带 UA；**官方 DeepSeek Chat 也挂 `x-session-id`**（不盖 Pro withhold） |
+| **已收** | 向日葵免费 OpenCode 会话粘性 | Host→sidecar 已有 `x-session-id`；sidecar 现认 `x-session-id` / `x-xrk-session`（不再只靠正文哈希——压缩后不会换上游 session）；sidecar 再写上游 `x-opencode-session` 等；`openai-chat` → `systemPromptUpdate: in-history` + `tools-baseline` |
 | **假差距** | 动态上下文当 user 快照 | `additional_context` fragments（非改 system 前缀） |
 | **已收** | `dynamicSchema` 灌 sibling / 名册 | `session-tool-copy` 指针化；活 ids → board / 工具结果 |
 | **已收** | `tool_search` 描述塞 deferred catalog | 描述字节稳定；`list`/`*`/空查询浏览目录；关键词才 expand（体验不减） |
@@ -129,11 +131,13 @@
 | **已收** | Host 重启丢 series baseline | `hydrateSeriesBaselineFromLog`：最新 compaction 后首条 `request/header.system` |
 | **已收** | 图 offload 中途改 wire | turn 开局先 `ensureDurableImageOffloads`（一步内再跑仍幂等） |
 | **已收** | 会话命中率不可见 | `costUsage.cacheHitRate`（`billedPromptTokens` / `cacheHitRate`） |
-| **真缺口** | `toolUpdate` / defer_loading | 本仓零命中；`tool_search` expand / Direct 工具增删仍整表重发 tools 段 |
+| **已收** | `tools[]` 系列顺序冻结（expand 尾追加） | `stabilizeToolsForSeries` + `tools-baseline`：首 wire 仍 lex/`toolOrder`；同系列 expand / Direct 增只 **append** 尾部；空 tools（max-steps）不清锚；compaction / 换路由 / 删会话清锚；Host 重启从最新 `request/header.tools` hydrate |
+| **已收** | 记忆热更新不改 message-0 | 开局 freeze 在 system；磁盘变动只尾部 `<external_curated_memory>` fragment（digest 门控）；`foldChat` 不 last-wins 搬家 |
+| **已收** | Messages `toolUpdate`（能力门控） | `conversationUpdates.toolUpdate` 仅 `anthropic-messages`；`projectToolDeclarations` → `defer_loading` + 请求级 `toolAdditions`；Anthropic 适配器发 system `tool_addition` + beta；Chat Completions **不**声明该字段。品牌 `deepseek-messages`（Flash catalog `addition-only`）。Anthropic 中段 system 不再误折进顶层 |
 | **部分** | follow-up time 进 system workspaceBlocks | 默认 ≥60s 才刷新；in-history 下以 **delta** 挂尾，不改 message-0；仍占尾部 uncached |
 | **定位差异** | DSH 系统节点进 session 日志 | 本仓 system 每请求装配 + 进程内 anchor；不靠日志 system 节点 |
-| **刻意不做** | 全 deferred / Messages `toolHistory` 照搬 | 伤 Direct 工具体验；DeepSeek Chat Completions 无 addition-only 半残 |
+| **刻意不做** | 全 deferred / 完整 `toolHistory` 会话折叠 | Direct 工具体验优先；本仓用 series tools-baseline + 能力门控投影，不照搬 DSH developer 消息全量 fold |
 
-**Compact 的 cache 代价：** soft-budget / overflow / `/compact` 都会 `breakSeriesBaseline`——换窗后下一请求重基线，提供方前缀命中从接近 0 再爬。Flash 默认软压 **300k**（窗 1M）；压得越勤，账单上 miss 段越长。见 [session-compaction.md](./session-compaction.md)。
+**Compact 的 cache 代价：** soft-budget / overflow / `/compact` 都会 `breakSeriesBaseline` + `breakToolsBaseline`——换窗后下一请求重基线，提供方前缀命中从接近 0 再爬。Flash 默认软压 **300k**（窗 1M）；压得越勤，账单上 miss 段越长。见 [session-compaction.md](./session-compaction.md)。
 
-**动手顺序（成本）：** ① 禁 `tools[]` 活表 ✅ → ② 跨回合 series baseline ✅ → ③ expand 回灌 + recipe inject ✅ → ④ standing plan / fragment·slash digest / early offload / hydrate / system delta ✅ → ⑤ DeepSeek `toolUpdate: addition-only`（大件）→ ⑥ Status 看 `costUsage.cacheHitRate`。
+**动手顺序（成本）：** ① 禁 `tools[]` 活表 ✅ → ② 跨回合 series baseline ✅ → ③ expand 回灌 + recipe inject ✅ → ④ standing plan / fragment·slash digest / early offload / hydrate / system delta ✅ → ⑤ **`tools[]` 尾追加冻结** ✅ → ⑥ **Messages `toolUpdate` 能力门控** ✅ → ⑦ Status 看 `costUsage.cacheHitRate`。

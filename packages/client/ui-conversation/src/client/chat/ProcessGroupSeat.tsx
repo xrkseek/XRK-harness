@@ -144,8 +144,9 @@ type GroupProps = {
 
 /**
  * Open-run detail beside「过程」(live tool name, or taxonomy when settled but
- * still expanded). Folded chrome uses {@link foldedTitle} instead — Cursor
- * style is a single activity line, not "Process · N steps".
+ * still expanded). Folded chrome keeps the same title and puts
+ * {@link foldedTitle} in the summary seat so the expand chevron sits after
+ * 「过程」, not after「…思考 N 次」.
  */
 function openDetail(
   summary: ProcessGroupSummary,
@@ -170,7 +171,7 @@ function openDetail(
   return parts.join(' · ')
 }
 
-/** Folded header title: "Explored 6 files, 1 search". */
+/** Folded summary seat (beside「过程」): "Explored 6 files, 1 search". */
 function foldedTitle(summary: ProcessGroupSummary, t: ChatViewSlotProps['t']): string {
   return formatProcessActivity(
     countProcessActivity(summary.toolCallNames, summary.reasoning),
@@ -256,27 +257,19 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   // shimmer forever even after its Turn closed.
   const live = entry.summary.running
     || (!settled && entry.summary.tools === 0 && entry.summary.reasoning > 0)
-  // Folded + live: keep「过程」as the title and put the in-flight tool in the
-  // summary seat (same shape as open) — a title of bare `bash` read as a
-  // tool-row expand, not a process fold.
-  // Folded + settled: activity line ("Explored N files…").
-  // Open:「过程」+ live/settled detail beside it.
+  // Title is always「过程」so the expand chevron sits right after those two
+  // characters. Activity / live tool / outcome ride the summary seat — never
+  // promote「思考 N 次」into the title (› after「次」read as wrong).
   const showLiveChrome = live && (folded || liveProcessDetail)
   const liveLabel = entry.summary.runningTool
     ?? (entry.summary.running ? t('row.running') : t('think.title'))
   const outcome = foldedOutcome(entry.summary, t)
-  const headerTitle = folded && !showLiveChrome
+  const foldedActivity = folded && !showLiveChrome
     ? foldedTitle(entry.summary, t)
-    : t('chat.process.title')
-  // Folded + settled: prefer「已停止/失败」beside the activity line so a
-  // collapsed run still surfaces abort/error (Host screenshot: 已停止 hidden
-  // inside the fold body). Folded + live: keep the in-flight tool name.
-  const openSummary = folded
-    ? (showLiveChrome ? liveLabel : outcome)
-    : openDetail(entry.summary, detailTitles, liveProcessDetail, t)
-  const titleClassName = folded && !showLiveChrome
-    ? css.processGroupFoldedTitle
     : undefined
+  const openSummary = folded
+    ? (showLiveChrome ? liveLabel : foldedActivity)
+    : openDetail(entry.summary, detailTitles, liveProcessDetail, t)
   /**
    * What has already run, kept beside the in-flight tool on a folded live run.
    *
@@ -293,8 +286,15 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
       && entry.summary.tools + entry.summary.reasoning > 1
       ? foldedTitle(entry.summary, t)
       : undefined
+  // Folded + settled: keep「已停止/失败」after the activity line.
+  const foldedOutcomeLabel =
+    folded && !showLiveChrome ? outcome : undefined
   const processActivity = dshProcessActivity(live, entry.summary)
   const dropFoldedMembers = folded && foldedRowsLeaveDom()
+  const hasCollapsedChrome =
+    openSummary !== undefined
+    || liveActivity !== undefined
+    || foldedOutcomeLabel !== undefined
 
   return (
     <div
@@ -316,15 +316,15 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
     >
       <DisclosureRow
         icon={<IconChecklistOutlineRegular />}
-        title={headerTitle}
+        title={t('chat.process.title')}
+        titleClassName={css.processGroupTitle}
         open={!folded}
         expandable
         expandOnRowClick
         keepContentWhenOpen
         preserveScrollOnExpand={false}
         onToggle={onToggle}
-        titleClassName={titleClassName}
-        collapsedContent={openSummary === undefined && liveActivity === undefined
+        collapsedContent={!hasCollapsedChrome
           ? undefined
           : (
           <>
@@ -334,13 +334,14 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
                 <span
                   className={[
                     showLiveChrome ? css.processGroupSummaryLive : css.processGroupSummary,
+                    foldedActivity !== undefined ? css.processGroupFoldedTitle : '',
                     // 后面还跟着累计活动行时，按内容宽度排；`flex: 1` 会把
                     // 「过程 · bash」和「2 条命令…」之间撑出一大段空白。
-                    liveActivity === undefined ? '' : css.processGroupSummaryLiveInline,
-                    !showLiveChrome && outcome !== undefined ? css.processGroupOutcome : '',
+                    liveActivity === undefined && foldedOutcomeLabel === undefined
+                      ? ''
+                      : css.processGroupSummaryLiveInline,
                   ].filter(Boolean).join(' ')}
                   data-process-summary=""
-                  data-process-outcome={outcome !== undefined && !showLiveChrome ? '' : undefined}
                 >
                   {openSummary}
                 </span>
@@ -354,6 +355,17 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
                   data-process-activity-line=""
                 >
                   {liveActivity}
+                </span>
+              </>
+            )}
+            {foldedOutcomeLabel === undefined ? null : (
+              <>
+                <span className={css.processGroupSep} aria-hidden />
+                <span
+                  className={`${css.processGroupSummary} ${css.processGroupOutcome}`}
+                  data-process-outcome=""
+                >
+                  {foldedOutcomeLabel}
                 </span>
               </>
             )}

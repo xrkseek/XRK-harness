@@ -7,6 +7,7 @@ import {
   noteTimeContextInjected,
   parseTimeContextRefreshMs,
   shouldRefreshTimeContext,
+  stabilizeToolsForSeries,
   type AssembledRequest,
 } from "@xrkseek/core-system-prompt";
 import {
@@ -28,6 +29,7 @@ import {
   isProviderFinishError,
   isUnsupportedContentError,
   isUnsupportedReasoningEffortError,
+  projectToolDeclarations,
   resolveTurnTraceContext,
   runWithTraceContext,
   type LlmAdapter,
@@ -88,6 +90,12 @@ import {
   recallSeriesBaseline,
   rememberSeriesBaseline,
 } from "./series-baseline.js";
+import {
+  breakToolsBaseline,
+  hydrateToolsBaselineFromLog,
+  recallToolsBaseline,
+  rememberToolsBaseline,
+} from "./tools-baseline.js";
 import { placeSystemOnWire } from "./place-system-on-wire.js";
 
 /** Context for a turn's persona (tool catalog after materialize / filter). */
@@ -394,7 +402,11 @@ function contentHasAttachmentBlocks(content: MessageContent): boolean {
 
 function toLlmRequest(
   input: RunTurnInput,
-  req: { messages: ChatMessage[]; tools: AssembledRequest["tools"] },
+  req: {
+    messages: ChatMessage[];
+    tools: AssembledRequest["tools"];
+    toolAdditions?: readonly string[];
+  },
 ): LlmChatRequest {
   let reasoningEffort: string | undefined;
   try {
@@ -413,15 +425,34 @@ function toLlmRequest(
   if (!llmAllowsImage(input.llm)) {
     messages = projectImagesForTextModel(messages);
   }
+  // toolAdditions / deferLoading only when the adapter declared toolUpdate.
+  const canToolUpdate = input.llm.toolUpdate !== undefined;
+  const additions =
+    canToolUpdate && req.toolAdditions?.length
+      ? req.toolAdditions
+      : undefined;
+  const tools = req.tools.length
+    ? canToolUpdate
+      ? req.tools
+      : req.tools.map(({ deferLoading: _d, ...t }) => t)
+    : undefined;
   return {
     messages,
-    ...(req.tools.length ? { tools: req.tools } : {}),
+    ...(tools ? { tools } : {}),
+    ...(additions ? { toolAdditions: additions } : {}),
     ...(input.signal ? { signal: input.signal } : {}),
     ...(input.resolveImage && llmAllowsImage(input.llm)
       ? { resolveImage: input.resolveImage }
       : {}),
     ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
   };
+}
+
+/** Durable request/header tools — capability flags are wire-only. */
+function headerToolsFromWire(
+  tools: AssembledRequest["tools"],
+): AssembledRequest["tools"] {
+  return tools.map(({ deferLoading: _d, ...t }) => t);
 }
 
 /** Let Face WS Ping fire during a tight reasoning / tool-call delta burst. */
@@ -798,6 +829,18 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
       readSessionEvents(input.store, input.sessionId),
     );
   }
+  /** Ordered tools[] names for prefix-stable expand (turn + cross-turn). */
+  let toolsBaselineNames: readonly string[] | undefined = recallToolsBaseline(
+    input.sessionId,
+    input.llm,
+  );
+  if (toolsBaselineNames === undefined) {
+    toolsBaselineNames = hydrateToolsBaselineFromLog(
+      input.sessionId,
+      input.llm,
+      readSessionEvents(input.store, input.sessionId),
+    );
+  }
 
   let userText = input.userText;
   let userContent: MessageContent = input.userContent ?? input.userText;
@@ -1054,7 +1097,42 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           built.seriesBaselineSystem,
         );
       }
-      return built;
+      // Freeze tools[] order for the series: expand / Direct add appends at
+      // the tail so the standing tools prefix stays byte-stable for KV cache.
+      const priorNames = toolsBaselineNames;
+      const stableTools = stabilizeToolsForSeries(
+        built.tools,
+        priorNames,
+        input.assemble?.toolOrder,
+      );
+      // Capability gate: defer_loading + activations only when llm.toolUpdate
+      // is set (Messages). Chat Completions / Gemini keep plain tools[].
+      const projected = projectToolDeclarations({
+        tools: stableTools,
+        ...(priorNames !== undefined ? { priorNames } : {}),
+        ...(input.llm.toolUpdate !== undefined
+          ? { toolUpdate: input.llm.toolUpdate }
+          : {}),
+      });
+      if (projected.rebuilt) {
+        breakToolsBaseline(input.sessionId);
+      }
+      // Max-steps disables tools (empty list) — do not wipe the series anchor.
+      if (projected.tools.length > 0) {
+        toolsBaselineNames = projected.tools.map((t) => t.name);
+        rememberToolsBaseline(
+          input.sessionId,
+          input.llm,
+          toolsBaselineNames,
+        );
+      }
+      return {
+        ...built,
+        tools: projected.tools,
+        ...(projected.activations.length > 0 && input.llm.toolUpdate
+          ? { toolAdditions: projected.activations }
+          : {}),
+      };
     };
 
     let req = await buildReq();
@@ -1233,9 +1311,11 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
                 });
                 if (!did.compacted) break;
                 compactAttempts += 1;
-                // Compaction breaks the cached prefix → re-baseline system at head.
+                // Compaction breaks the cached prefix → re-baseline system + tools.
                 seriesBaselineSystem = undefined;
+                toolsBaselineNames = undefined;
                 breakSeriesBaseline(input.sessionId);
+                breakToolsBaseline(input.sessionId);
                 // Assembled system changed — force request/header (auto path
                 // otherwise skips when route+tools are unchanged).
                 forceRequestHeader = true;
@@ -1298,7 +1378,9 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
       now,
       ...(forceRequestHeader ? { reason: "change" as const } : {}),
       ...(req.system?.trim() ? { system: req.system } : {}),
-      ...(req.tools.length ? { tools: req.tools } : {}),
+      ...(req.tools.length
+        ? { tools: headerToolsFromWire(req.tools) }
+        : {}),
     });
 
     let response!: LlmChatResponse;
@@ -1355,7 +1437,9 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
     // so the streak does not latch on an unchanged context.
     const rebuildAfterContextChange = async (): Promise<void> => {
       seriesBaselineSystem = undefined;
+      toolsBaselineNames = undefined;
       breakSeriesBaseline(input.sessionId);
+      breakToolsBaseline(input.sessionId);
       req = await buildReq();
       assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
       maybeAppendRequestHeader({
@@ -1366,7 +1450,9 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
         now,
         reason: "change",
         ...(req.system?.trim() ? { system: req.system } : {}),
-        ...(req.tools.length ? { tools: req.tools } : {}),
+        ...(req.tools.length
+          ? { tools: headerToolsFromWire(req.tools) }
+          : {}),
       });
     };
     const forceCompactAfterEmpty = async (): Promise<boolean> => {
@@ -1471,7 +1557,9 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
             now,
             reason: "change",
             ...(req.system?.trim() ? { system: req.system } : {}),
-            ...(req.tools.length ? { tools: req.tools } : {}),
+            ...(req.tools.length
+              ? { tools: headerToolsFromWire(req.tools) }
+              : {}),
           });
           // Same retry budget as the step that hit overflow — bare invokeLlm
           // used to drop TRANSPORT/SERVER after a successful compact.
@@ -1516,7 +1604,9 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           }
           if (!did.compacted) throw original;
           seriesBaselineSystem = undefined;
+          toolsBaselineNames = undefined;
           breakSeriesBaseline(input.sessionId);
+          breakToolsBaseline(input.sessionId);
           return retryAfterWindowChange();
         };
 
@@ -1930,6 +2020,13 @@ export {
   recallSeriesBaseline,
   rememberSeriesBaseline,
 } from "./series-baseline.js";
+export {
+  breakToolsBaseline,
+  clearToolsBaselineAnchors,
+  hydrateToolsBaselineFromLog,
+  recallToolsBaseline,
+  rememberToolsBaseline,
+} from "./tools-baseline.js";
 export {
   placeSystemOnWire,
   systemAppendAfterBaseline,

@@ -7,10 +7,12 @@ import type {
   LlmChatRequest,
   LlmChatResponse,
   LlmStreamEvent,
+  SystemPromptUpdate,
 } from "@xrkseek/llm";
 import {
   ContextOverflowError,
   classifyCaughtStreamError,
+  mergeOutboundAttributionHeaders,
   mergeOutboundTraceHeaders,
   throwHttpLlmError,
   UnsupportedContentError,
@@ -52,6 +54,14 @@ export interface OpenAiResponsesAdapterOptions {
   readonly enableStream?: boolean;
   readonly inputModalities?: readonly ("text" | "image")[];
   readonly maxRequestImageBytes?: number;
+  /** Left-stable system series (OpenCode / mid-convo system routes). */
+  readonly systemPromptUpdate?: SystemPromptUpdate;
+  /**
+   * OpenAI Responses `prompt_cache_key` — stable per conversation for
+   * cache routing (OpenAI prompt-caching docs). Registry sets this from
+   * the harness session id on every Responses route.
+   */
+  readonly promptCacheKey?: string;
 }
 
 type InputPart =
@@ -415,10 +425,14 @@ export function createOpenAiResponsesAdapter(
         parameters: t.parameters,
       }));
     }
-    const headers: Record<string, string> = mergeOutboundTraceHeaders({
-      "content-type": "application/json",
-      ...options.headers,
-    });
+    const cacheKey = options.promptCacheKey?.trim();
+    if (cacheKey) body.prompt_cache_key = cacheKey;
+    const headers: Record<string, string> = mergeOutboundAttributionHeaders(
+      mergeOutboundTraceHeaders({
+        "content-type": "application/json",
+        ...options.headers,
+      }),
+    );
     const key = options.apiKey?.trim();
     if (key) headers.authorization = `Bearer ${key}`;
 
@@ -457,6 +471,9 @@ export function createOpenAiResponsesAdapter(
   const adapter: LlmAdapter = {
     id,
     inputModalities: modalities,
+    ...(options.systemPromptUpdate !== undefined
+      ? { systemPromptUpdate: options.systemPromptUpdate }
+      : {}),
     async chat(request) {
       const res = await post(request, false);
       return parseResponse(JSON.parse(await res.text()));

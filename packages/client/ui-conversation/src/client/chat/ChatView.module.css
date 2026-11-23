@@ -278,13 +278,19 @@
    Folded rows unmount: the snapshot owns their data, and the paging probe
    skipped `[hidden]` subtrees already, so no anchor identity is lost while
    the DOM and heap stop carrying every hidden tool row of a long Turn.
-   Header chrome comes from shared `DisclosureRow`; separator + summary
-   match ReasoningRow / ToolRow so "过程" never sits flush against detail. */
+   Header chrome matches Think / Command: icon · 「过程」 · › · summary.
+   Title stays「过程」folded or open — never replace it with the activity line. */
+.processGroupTitle {
+  flex: none;
+  font-weight: 400;
+}
+
 .processGroupSep {
   flex: none;
   width: 2px;
   height: 2px;
-  margin: 0 8px;
+  /* Hug the trailing ›; keep normal air before the summary text. */
+  margin: 0 8px 0 4px;
   border-radius: 1px;
   background: var(--dsw-alias-label-caption);
 }
@@ -335,15 +341,16 @@
   opacity: 0.85;
 }
 
-/* Folded activity line (Cursor-style): the title *is* the summary, muted.
-   Beat DisclosureRow `.title { flex: none }` so long lines ellipsis. */
+/* Folded activity in the summary seat (title stays「过程」; › sits after it).
+   Shrink + ellipsis when the line is wider than the column — never grow, or
+   「过程」and the counts drift apart. */
 :global([data-process-group]) .processGroupFoldedTitle {
   color: var(--dsw-alias-label-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
 }
 
 /* Live text sweep — open summary *and* folded title while a tool is in flight. */

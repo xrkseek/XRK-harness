@@ -330,11 +330,12 @@ const FORWARD_HEADERS = [
 ] as const;
 
 /**
- * 从对话前缀推一个稳定的会话键。
+ * Fallback session key from the first user message digest.
  *
- * Host 的 adapter 不知道我们要的会话粒度，所以退而求其次：同一段对话的第一条
- * user 消息 + 我们自己追加的 persona，在整段会话里是稳定的，换会话才变。
- * 拿不到就退化成进程级单会话（保守：宁可共用一个，也不要每请求新造）。
+ * Prefer Host `x-session-id` / `x-xrk-session` via `resolveSidecarSessionKey`.
+ * Digest is only for probe / raw clients that omit those headers. Compaction
+ * rewrites early user text — relying on digest alone would rotate the upstream
+ * OpenCode session and cliff both KV cache and free-tier quota.
  */
 export function deriveSessionKey(body: ChatBody): string | undefined {
   const messages = Array.isArray(body.messages) ? body.messages : [];
@@ -347,6 +348,23 @@ export function deriveSessionKey(body: ChatBody): string | undefined {
     .digest("hex")
     .slice(0, 16);
   return `xrkh-${digest}`;
+}
+
+/**
+ * Prefer Host-stable session ids over body-derived keys (cache + quota).
+ * @param headers - incoming request headers
+ * @param body - chat body (fallback digest only)
+ */
+export function resolveSidecarSessionKey(
+  headers: Headers,
+  body: ChatBody,
+): string | undefined {
+  const explicit =
+    headers.get("x-xrk-session")?.trim() ||
+    headers.get("x-session-id")?.trim() ||
+    "";
+  if (explicit) return explicit;
+  return deriveSessionKey(body);
 }
 
 /**
@@ -720,11 +738,8 @@ export function startSidecar(options: SidecarOptions = {}): SidecarHandle {
         typeof body.model === "string" ? body.model.trim() : "";
       const viaKilo = modelId.length > 0 && kiloIds.has(modelId);
 
-      // 会话键：优先 Host 显式注入的 xrkh session id；没有就从对话前缀自推
-      // （见 `deriveSessionKey`）——配额按 session 计，所有会话共用一个上游
-      // session 会互相打满。
-      const sessionKey =
-        req.headers.get("x-xrk-session") ?? deriveSessionKey(body);
+      // 会话键：优先 Host 注入的稳定会话 id（见 `resolveSidecarSessionKey`）。
+      const sessionKey = resolveSidecarSessionKey(req.headers, body);
       const sid = pool.get(sessionKey);
 
       let upstream: Response;

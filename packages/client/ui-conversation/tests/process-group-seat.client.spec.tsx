@@ -588,19 +588,18 @@ describe('ProcessGroupSeat', () => {
     expect(view.container.querySelector('[data-process-outcome]')?.textContent).toBe('row.failed')
   })
 
-  it('uses a Cursor-style activity line as the folded title', async () => {
+  it('keeps「过程」as title and puts the activity line in the summary seat', async () => {
     const view = renderSeat(group(true))
     await vi.waitFor(() => {
       expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
     })
-    // Folded chrome replaces「过程 · N 步」with verb + counts — no tool names,
-    // no process title prefix, and no summary seat beside the title.
+    // Title stays「过程」so › sits after those two chars; activity rides summary.
+    expect(view.container.textContent).toContain('chat.process.title')
     expect(view.container.textContent).toContain('chat.process.summary.explored')
     expect(view.container.textContent).toContain('chat.process.summary.commands')
     expect(view.container.textContent).toContain('chat.process.summary.thoughts')
-    expect(view.container.textContent).not.toContain('chat.process.title')
     expect(view.container.textContent).not.toContain('bash')
-    expect(summary(view.container)).toBeNull()
+    expect(summary(view.container)?.textContent).toContain('chat.process.summary.explored')
   })
 
   it('keeps the activity line beside the live tool on a folded multi-step run', async () => {
@@ -665,7 +664,7 @@ describe('ProcessGroupSeat', () => {
 
   it('keeps step counts on an open quiet-mode header', () => {
     // Quiet modes drop the taxonomy while the run is still open; once folded
-    // the title becomes the activity line (same for every mode).
+    // the activity line rides the summary seat (title stays「过程」).
     const view = renderSeat(
       group(false, { running: true, runningTool: 'bash', toolCallNames: ['bash'] }),
       { detailTitles: false, liveProcessDetail: false },
@@ -736,9 +735,12 @@ describe('ProcessGroupSeat', () => {
     await vi.waitFor(() => {
       expect(view.container.querySelector('[data-process-running]')).toBeNull()
     })
+    // Settled fold: title stays「过程」; activity moves into the summary seat
+    // (same chrome as Think — icon · title · › · summary).
+    expect(view.container.textContent).toContain('chat.process.title')
     expect(view.container.textContent).toContain('chat.process.summary.commands')
     expect(view.container.textContent).not.toContain('bash')
-    expect(summary(view.container)).toBeNull()
+    expect(summary(view.container)?.textContent).toContain('chat.process.summary.commands')
     expect(view.container.innerHTML).not.toMatch(/processGroupSummaryLive/)
   })
 
@@ -787,6 +789,18 @@ describe('ProcessGroupSeat', () => {
     const row = view.container.querySelector('[data-disclosure-row]')
     expect(row?.textContent).toContain('chat.process.title')
     expect(row?.querySelector('[aria-hidden]')).not.toBeNull()
+    expect(summary(view.container)).not.toBeNull()
+  })
+
+  it('keeps icon · 过程 · › when folded (same chrome as Think)', async () => {
+    const view = renderSeat(group(true))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    const row = view.container.querySelector('[data-disclosure-row]')
+    expect(row?.textContent).toContain('chat.process.title')
+    // Trailing chevron is the expand cue after「过程」, not the type icon.
+    expect(row?.querySelector('[class*="trailChevron"], [class*="chevron"]')).not.toBeNull()
     expect(summary(view.container)).not.toBeNull()
   })
 })

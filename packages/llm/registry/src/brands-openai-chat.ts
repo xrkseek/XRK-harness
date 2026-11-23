@@ -46,6 +46,18 @@ export const OPENAI_CHAT_BRANDS: readonly BrandEntry[] = [
       "OPENCODE_API_KEY accepted as env fallback; outbound sends x-opencode-session",
   },
   {
+    id: "commandcode",
+    displayName: "Command Code",
+    protocol: "openai-chat",
+    baseUrl: "https://api.commandcode.ai/provider/v1",
+    path: "/chat/completions",
+    authMode: "bearer",
+    apiKeyEnv: "COMMANDCODE_API_KEY",
+    defaultModel: "deepseek/deepseek-v4-flash",
+    notes:
+      "Provider API (GOAT+); CMD_API_KEY accepted as env fallback; outbound x-session-id only — never x-opencode-session; optional x-cmd-zdr via extra headers",
+  },
+  {
     id: "openrouter",
     displayName: "OpenRouter",
     protocol: "openai-chat",

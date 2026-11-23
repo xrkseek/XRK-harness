@@ -13,6 +13,18 @@ export const R1_PROTOCOL_BRANDS: readonly BrandEntry[] = [
     defaultModel: "claude-sonnet-4-20250514",
   },
   {
+    id: "deepseek-messages",
+    displayName: "DeepSeek (Messages)",
+    protocol: "anthropic-messages",
+    baseUrl: "https://api.deepseek.com/anthropic",
+    path: "/v1/messages",
+    authMode: "api-key",
+    apiKeyEnv: "DEEPSEEK_API_KEY",
+    defaultModel: "deepseek-flash",
+    notes:
+      "Official Anthropic-compatible Messages API; Flash catalog toolUpdate=addition-only",
+  },
+  {
     id: "gemini",
     displayName: "Google Gemini",
     protocol: "gemini-generate",

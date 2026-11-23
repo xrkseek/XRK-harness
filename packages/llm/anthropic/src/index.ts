@@ -7,12 +7,15 @@ import type {
   LlmChatRequest,
   LlmChatResponse,
   LlmStreamEvent,
+  SystemPromptUpdate,
+  ToolUpdate,
 } from "@xrkseek/llm";
 import {
   finalizeLlmChatResponse,
   collectLlmStream,
   classifyCaughtStreamError,
   ContextOverflowError,
+  mergeOutboundAttributionHeaders,
   mergeOutboundTraceHeaders,
   throwHttpLlmError,
   UnsupportedContentError,
@@ -32,6 +35,9 @@ import {
 export const ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com";
 export const ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-4-20250514";
 export const ANTHROPIC_API_VERSION = "2023-06-01";
+/** DeepSeek Messages mid-conversation tool-changes beta (also accepted by Anthropic-compatible hosts). */
+export const ANTHROPIC_TOOL_CHANGES_BETA =
+  "mid-conversation-tool-changes-2026-07-01";
 
 const EPHEMERAL_CACHE = { type: "ephemeral" as const };
 
@@ -137,6 +143,18 @@ export interface AnthropicAdapterOptions {
   readonly inputModalities?: readonly ("text" | "image")[];
   readonly maxRequestImageBytes?: number;
   readonly anthropicVersion?: string;
+  /** Left-stable system series (OpenCode / mid-convo system routes). */
+  readonly systemPromptUpdate?: SystemPromptUpdate;
+  /**
+   * Mid-conversation tool declarations (`defer_loading` + `tool_addition`).
+   * DeepSeek Flash on Messages declares `'addition-only'`.
+   */
+  readonly toolUpdate?: ToolUpdate;
+  /**
+   * Auth header style. DeepSeek Messages accepts either; default `api-key`
+   * (`x-api-key`). Use `bearer` when the gateway expects `Authorization`.
+   */
+  readonly authMode?: "api-key" | "bearer";
 }
 
 type AnthMediaPart =
@@ -157,7 +175,20 @@ type AnthContent =
       is_error?: boolean;
     };
 
-type AnthMessage = { role: "user" | "assistant"; content: string | AnthContent[] };
+type AnthToolChangeBlock =
+  | {
+      type: "tool_addition";
+      tool: { type: "tool_reference"; name: string };
+    }
+  | {
+      type: "tool_removal";
+      tool: { type: "tool_reference"; name: string };
+    };
+
+type AnthMessage = {
+  role: "user" | "assistant" | "system";
+  content: string | AnthContent[] | AnthToolChangeBlock[];
+};
 
 function bytesToBase64(data: Uint8Array): string {
   return Buffer.from(data).toString("base64");
@@ -229,12 +260,23 @@ async function toAnthMessages(
 ): Promise<{ system?: string; messages: AnthMessage[] }> {
   let system: string | undefined;
   const out: AnthMessage[] = [];
+  // Leading system → top-level `system` (cacheable prefix). Mid-convo system
+  // (in-history delta) must stay in `messages[]` — folding every system into
+  // the header rewrites message 0 and busts the KV series (DeepSeek / Anthropic).
+  let sawNonSystem = false;
   for (const m of messages) {
     if (m.role === "system") {
-      const text = flattenText(m.content);
-      system = system ? `${system}\n${text}` : text;
+      const text =
+        typeof m.content === "string" ? m.content : flattenText(m.content);
+      if (!text.trim()) continue;
+      if (!sawNonSystem) {
+        system = system ? `${system}\n${text}` : text;
+      } else {
+        out.push({ role: "system", content: text });
+      }
       continue;
     }
+    sawNonSystem = true;
     if (m.role === "user") {
       out.push({
         role: "user",
@@ -526,6 +568,23 @@ export function createAnthropicAdapter(
       request.resolveImage,
       modalities,
     );
+    // Capability gate: defer_loading / tool_addition / beta only when the
+    // adapter declares toolUpdate (DSH: absent → full immediate tools[]).
+    const toolUpdate = options.toolUpdate;
+    const additions =
+      toolUpdate !== undefined
+        ? (request.toolAdditions?.filter((n) => n.trim()) ?? [])
+        : [];
+    if (additions.length > 0) {
+      // DeepSeek: tool_addition must be system-role (not user) or 400.
+      messages.push({
+        role: "system",
+        content: additions.map((name) => ({
+          type: "tool_addition" as const,
+          tool: { type: "tool_reference" as const, name },
+        })),
+      });
+    }
     const body: Record<string, unknown> = {
       model,
       max_tokens: maxTokens,
@@ -548,27 +607,46 @@ export function createAnthropicAdapter(
         : options.temperature;
     if (temperature !== undefined) body.temperature = temperature;
     if (request.tools?.length) {
-      const tools = request.tools.map((t, i) => {
+      let lastImmediate = -1;
+      for (let i = 0; i < request.tools.length; i++) {
+        if (request.tools[i]?.deferLoading !== true) lastImmediate = i;
+      }
+      const cacheIdx =
+        lastImmediate >= 0 ? lastImmediate : request.tools.length - 1;
+      body.tools = request.tools.map((t, i) => {
         const def: Record<string, unknown> = {
           name: t.name,
           description: t.description,
           input_schema: t.parameters,
         };
-        // Cache breakpoint on the last tool 鈥?tools block is sorted/stable.
-        if (i === request.tools!.length - 1) {
-          def.cache_control = EPHEMERAL_CACHE;
+        if (toolUpdate !== undefined && t.deferLoading === true) {
+          def.defer_loading = true;
         }
+        if (i === cacheIdx) def.cache_control = EPHEMERAL_CACHE;
         return def;
       });
-      body.tools = tools;
     }
-    const headers: Record<string, string> = mergeOutboundTraceHeaders({
-      "content-type": "application/json",
-      "anthropic-version": options.anthropicVersion ?? ANTHROPIC_API_VERSION,
-      ...options.headers,
-    });
+    const headers: Record<string, string> = mergeOutboundAttributionHeaders(
+      mergeOutboundTraceHeaders({
+        "content-type": "application/json",
+        "anthropic-version": options.anthropicVersion ?? ANTHROPIC_API_VERSION,
+        ...options.headers,
+      }),
+    );
+    if (additions.length > 0) {
+      const prior = headers["anthropic-beta"];
+      headers["anthropic-beta"] = prior
+        ? `${prior},${ANTHROPIC_TOOL_CHANGES_BETA}`
+        : ANTHROPIC_TOOL_CHANGES_BETA;
+    }
     const key = options.apiKey?.trim();
-    if (key) headers["x-api-key"] = key;
+    if (key) {
+      if (options.authMode === "bearer") {
+        headers.authorization = `Bearer ${key}`;
+      } else {
+        headers["x-api-key"] = key;
+      }
+    }
 
     const timeoutSignal =
       options.timeoutMs !== undefined && options.timeoutMs > 0
@@ -605,6 +683,12 @@ export function createAnthropicAdapter(
   const adapter: LlmAdapter = {
     id,
     inputModalities: modalities,
+    ...(options.systemPromptUpdate !== undefined
+      ? { systemPromptUpdate: options.systemPromptUpdate }
+      : {}),
+    ...(options.toolUpdate !== undefined
+      ? { toolUpdate: options.toolUpdate }
+      : {}),
     async chat(request) {
       if (enableStream && !request.signal?.aborted) {
         // Prefer non-stream JSON for chat() when stream is optional.

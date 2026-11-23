@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.11',
+    date: '2026-11-23',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'tools[] 尾追加冻结 + 会话粘性 + Messages toolUpdate：前缀缓存再收一轮。',
+        en: 'tools[] append-only freeze + session affinity + Messages toolUpdate — another prefix-cache pass.',
+      },
+      {
+        zh: '向日葵免费：Host 会话头粘上游 OpenCode session；压缩不再换配额键。',
+        en: 'Sunflower-free: Host session header sticks upstream OpenCode session; compaction no longer rotates the quota key.',
+      },
+      {
+        zh: '过程 / 思考折叠 chrome 统一为图标 · 标题 · › · 摘要。',
+        en: 'Process / think fold chrome unified to icon · title · › · summary.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.11。完整清单见 docs/releases/v0.8.11.md。',
+        en: 'Desktop / npm / phone align to 0.8.11. Full list: docs/releases/v0.8.11.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.10',
     date: '2026-11-23',
     title: {

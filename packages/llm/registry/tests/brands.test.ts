@@ -47,6 +47,13 @@ describe("OPENAI_CHAT_BRANDS", () => {
         authMode: "bearer",
         apiKeyEnv: "OPENCODE_GO_API_KEY",
       },
+      commandcode: {
+        protocol: "openai-chat",
+        baseUrl: "https://api.commandcode.ai/provider/v1",
+        path: "/chat/completions",
+        authMode: "bearer",
+        apiKeyEnv: "COMMANDCODE_API_KEY",
+      },
       openrouter: {
         protocol: "openai-chat",
         baseUrl: "https://openrouter.ai/api/v1",

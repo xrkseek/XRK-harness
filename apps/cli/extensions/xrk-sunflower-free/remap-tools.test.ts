@@ -7,6 +7,7 @@ import {
   buildUpstreamBody,
   remapDownstreamCompletionJson,
   remapDownstreamToolCall,
+  resolveSidecarSessionKey,
 } from "./sidecar.ts";
 
 describe("remapDownstreamToolCall", () => {
@@ -111,5 +112,37 @@ describe("remapDownstreamCompletionJson", () => {
     expect(parsed.choices[0]?.delta.tool_calls[0]?.function.name).toBe(
       "read_file",
     );
+  });
+});
+
+describe("resolveSidecarSessionKey", () => {
+  test("prefers Host x-session-id over body digest (KV + quota)", () => {
+    const body = {
+      messages: [{ role: "user", content: "hello world for digest" }],
+    };
+    expect(
+      resolveSidecarSessionKey(
+        new Headers({ "x-session-id": "sess-host-1" }),
+        body,
+      ),
+    ).toBe("sess-host-1");
+    expect(
+      resolveSidecarSessionKey(
+        new Headers({ "x-xrk-session": "probe-1" }),
+        body,
+      ),
+    ).toBe("probe-1");
+    // x-xrk-session wins when both present (probe / legacy)
+    expect(
+      resolveSidecarSessionKey(
+        new Headers({
+          "x-xrk-session": "probe-1",
+          "x-session-id": "sess-host-1",
+        }),
+        body,
+      ),
+    ).toBe("probe-1");
+    const derived = resolveSidecarSessionKey(new Headers(), body);
+    expect(derived?.startsWith("xrkh-")).toBe(true);
   });
 });

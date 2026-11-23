@@ -1,9 +1,8 @@
 /**
- * Cursor-style folded activity line for one process run.
+ * Folded activity line for one process run (summary seat beside「过程」).
  *
- * Collapsed chrome should read like "Explored 6 files, 1 search" — a verb +
- * counts over what ran — not a generic "Process · N steps" label. Categories
- * are derived from tool names the projection already collected.
+ * Collapsed chrome is icon · 「过程」 · › · this line — e.g. "Explored 6 files,
+ * 1 search". Categories come from tool names the projection already collected.
  */
 
 /** Buckets a folded process header can name. */
@@ -113,7 +112,7 @@ export type ProcessActivityTranslate = (
 ) => string
 
 /**
- * Build the folded header line (Cursor-style verb + counts).
+ * Build the folded summary line (verb + counts beside「过程」).
  * @param counts - activity buckets from tool names + reasoning.
  * @param t - locale seat.
  * @param fallbackSteps - when buckets are empty but the group still has

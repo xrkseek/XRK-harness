@@ -254,9 +254,14 @@ describe("deepseek adapter", () => {
     expect(parts.some((p) => (p as { type?: string }).type === "file")).toBe(
       true,
     );
-    expect(
-      fetchMock.mock.calls.some(([u]) => String(u).endsWith("/files")),
-    ).toBe(true);
+    const filesCall = fetchMock.mock.calls.find(([u]) =>
+      String(u).endsWith("/files"),
+    );
+    expect(filesCall).toBeDefined();
+    const filesHeaders = new Headers(
+      (filesCall![1] as RequestInit | undefined)?.headers,
+    );
+    expect(filesHeaders.get("user-agent")).toMatch(/^xrk-harness\//);
   });
 
   it("stream keeps tool identity across empty continuation deltas", async () => {

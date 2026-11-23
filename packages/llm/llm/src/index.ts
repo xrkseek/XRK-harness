@@ -6,14 +6,27 @@ import type {
 } from "@xrkseek/protocol";
 import { scrubChannelLeakText, scrubChannelLeakValue } from "./channel-leak.js";
 import { classifyCaughtLlmError, isLlmError } from "./failure.js";
+import type { LlmToolSchema, ToolUpdate } from "./tool-update.js";
+
+export type {
+  ToolUpdate,
+  LlmToolSchema,
+  ProjectedToolDeclarations,
+} from "./tool-update.js";
+export {
+  projectToolDeclarations,
+  protocolSupportsToolUpdate,
+} from "./tool-update.js";
 
 export interface LlmChatRequest {
   readonly messages: readonly ChatMessage[];
-  readonly tools?: readonly {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  }[];
+  readonly tools?: readonly LlmToolSchema[];
+  /**
+   * Ephemeral Messages activations for this request (not session-durable).
+   * Anthropic / DeepSeek Messages adapters emit system-role `tool_addition`
+   * blocks and the mid-conversation tool-changes beta header.
+   */
+  readonly toolAdditions?: readonly string[];
   readonly signal?: AbortSignal;
   /**
    * Per-request sampling temperature. When set, overrides the adapter factory
@@ -293,6 +306,12 @@ export interface LlmAdapter {
    * friendly). Omitted → always place system at the head of the request.
    */
   readonly systemPromptUpdate?: SystemPromptUpdate;
+  /**
+   * Mid-conversation tool declaration mode (DSH `ToolUpdate`).
+   * `'addition-only'` → defer new tools + `tool_addition` on Messages.
+   * Omitted → every request sends the full active tools[] (no defer).
+   */
+  readonly toolUpdate?: ToolUpdate;
   chat(request: LlmChatRequest): Promise<LlmChatResponse>;
   /**
    * Optional SSE / incremental stream. When present, agent-loop prefers this
@@ -472,6 +491,14 @@ export {
   runWithTraceContext,
   type W3cTraceContext,
 } from "./trace-context.js";
+
+export {
+  APP_IDENTITY,
+  attributionHeaders,
+  mergeOutboundAttributionHeaders,
+  userAgent,
+  type AppIdentity,
+} from "./attribution.js";
 
 
 export interface LlmRegistry {
