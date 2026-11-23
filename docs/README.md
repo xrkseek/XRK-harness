@@ -107,6 +107,7 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [community-plugins.md](./community-plugins.md) | 社区插件 Host 契约（可选；0.9 兼容器独立包） |
 | [community-plugin-compat.md](./community-plugin-compat.md) | 社区插件逐表面兼容矩阵（CC-mods 粒度） |
 | [sidebar-workbench.md](./sidebar-workbench.md) | 右侧工作台：Status · Host `/sidebar/*` · 第一方原生侧栏 |
+| [shell-performance.md](./shell-performance.md) | 壳动效性能：保留运动 · 钉宽裁切 · 常见优化 |
 | [im-gateway-sidecar.md](./im-gateway-sidecar.md) | IM Host↔sidecar 契约 · mock 样板（非厂商矩阵） |
 
 ### LLM
@@ -274,6 +275,7 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [community-plugins.md](./community-plugins.md) | Community Host contracts (optional; 0.9 compat package) |
 | [community-plugin-compat.md](./community-plugin-compat.md) | Per-surface community plugin compat matrix (CC-mods grain) |
 | [sidebar-workbench.md](./sidebar-workbench.md) | Right workbench: Status · Host `/sidebar/*` · first-party native sidebar |
+| [shell-performance.md](./shell-performance.md) | Shell motion performance: keep motion · pin-width clip · common patterns |
 | [im-gateway-sidecar.md](./im-gateway-sidecar.md) | IM Host↔sidecar contract · mock sample (not a vendor matrix) |
 
 ### LLM

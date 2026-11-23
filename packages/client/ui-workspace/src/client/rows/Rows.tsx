@@ -2,8 +2,8 @@
  * Workspace browser tree row components (figma Cell set 14:3080): pure presentational —
  * all data and callbacks arrive via props. Hover swaps (folder->chevron,
  * time->ellipsis, action buttons) are CSS-only. Row ... menus are visual-only
- * except workspace Rename/Delete and session Rename/Fork/Pin/Archive; the session
- * and workspace hover cards are suppressed while a menu is open.
+ * except workspace Rename/Delete and session Rename/Fork/Pin/Archive|Unarchive;
+ * the session and workspace hover cards are suppressed while a menu is open.
  */
 import { memo, useMemo, useState, type RefObject } from 'react'
 import clsx from 'clsx'
@@ -540,6 +540,8 @@ interface SessionNodeItemProps {
   onFork: (id: SessionNode['id']) => void
   /** Archive this session (row menu action; commits without a dialog). */
   onArchive: (id: SessionNode['id']) => void
+  /** Unarchive this session (row menu when the row is already archived). */
+  onUnarchive: (id: SessionNode['id']) => void
   /** Pin or unpin this session (row menu action). */
   onPinToggle: (id: SessionNode['id'], pinned: boolean) => void
   /** Present only on draggable rows (workspace-group sessions outside search). */
@@ -560,7 +562,7 @@ function sameSessionNode(a: SessionNode, b: SessionNode): boolean {
   return a.id === b.id && a.title === b.title && a.blank === b.blank
     && a.pendingInteraction === b.pendingInteraction && a.running === b.running
     && a.runningSubagentCount === b.runningSubagentCount && a.completed === b.completed
-    && a.pinned === b.pinned && a.updatedAt === b.updatedAt
+    && a.pinned === b.pinned && a.archived === b.archived && a.updatedAt === b.updatedAt
     && a.sideline === b.sideline && a.mainline === b.mainline && a.agentPreset === b.agentPreset
 }
 
@@ -593,7 +595,8 @@ function sameTimeBucket(updatedAt: number, aNow: number, bNow: number): boolean 
 function sessionRowPropsEqual(prev: SessionNodeItemProps, next: SessionNodeItemProps): boolean {
   if (prev.t !== next.t || prev.flat !== next.flat) return false
   if (prev.onOpen !== next.onOpen || prev.onRename !== next.onRename || prev.onFork !== next.onFork
-    || prev.onArchive !== next.onArchive || prev.onPinToggle !== next.onPinToggle) return false
+    || prev.onArchive !== next.onArchive || prev.onUnarchive !== next.onUnarchive
+    || prev.onPinToggle !== next.onPinToggle) return false
   if (!sameSessionNode(prev.node, next.node)) return false
   // The only use of currentId is `node.id === currentId` (class + aria).
   if ((prev.node.id === prev.currentId) !== (next.node.id === next.currentId)) return false
@@ -616,7 +619,8 @@ function sessionRowPropsEqual(prev: SessionNodeItemProps, next: SessionNodeItemP
  * @param props.onOpen - open a session by id.
  * @param props.onRename - open the session rename dialog (id + current title).
  * @param props.onFork - fork a session at its last completed turn.
- * @param props.onArchive - archive a session by id.
+ * @param props.onArchive - archive a live session by id.
+ * @param props.onUnarchive - restore an archived session by id.
  * @param props.onPinToggle - pin or unpin this session.
  * @param props.drag - optional draggable-row wiring.
  * @param props.flat - omit the empty status slot in the hierarchy-free flat list.
@@ -624,7 +628,7 @@ function sessionRowPropsEqual(prev: SessionNodeItemProps, next: SessionNodeItemP
  * @returns the session row.
  */
 export const SessionNodeItem = memo(function SessionNodeItem(
-  { node, currentId, now, onOpen, onRename, onFork, onArchive, onPinToggle, drag, flat = false, t }: SessionNodeItemProps,
+  { node, currentId, now, onOpen, onRename, onFork, onArchive, onUnarchive, onPinToggle, drag, flat = false, t }: SessionNodeItemProps,
 ) {
   const row = node
   const title = displayTitle(node, t)
@@ -643,21 +647,27 @@ export const SessionNodeItem = memo(function SessionNodeItem(
     },
     onEnd: () => { drag?.end() },
   })
-  // Archive hides the row through the registry-global archive set and never
-  // touches the session log, so it is not styled as destructive and needs no
-  // confirmation dialog. Pin leads the section; archive drops any pin.
-  // Rebuilt only when a dictionary or pin fact can change a row: the glyphs are
-  // module constants, so an unchanged menu costs no allocation.
-  const sessionMenuItems = useMemo<MenuItem[]>(() => [
-    { id: 'rename', label: t('rename'), icon: MENU_RENAME_ICON },
-    { id: 'fork', label: t('menu.fork'), icon: MENU_FORK_ICON },
-    {
-      id: 'pin',
-      label: t(row.pinned ? 'menu.unpinSession' : 'menu.pinSession'),
-      icon: MENU_PIN_ICON,
-    },
-    { id: 'archive', label: t('menu.archiveSession'), icon: MENU_ARCHIVE_ICON },
-  ], [row.pinned, t])
+  // Archive / unarchive are lifecycle toggles (not destructive). Pin leads the
+  // section; archive drops any pin. Archived rows swap the menu verb and badge.
+  const sessionMenuItems = useMemo<MenuItem[]>(() => {
+    const items: MenuItem[] = [
+      { id: 'rename', label: t('rename'), icon: MENU_RENAME_ICON },
+    ]
+    if (!row.archived) {
+      items.push({ id: 'fork', label: t('menu.fork'), icon: MENU_FORK_ICON })
+      items.push({
+        id: 'pin',
+        label: t(row.pinned ? 'menu.unpinSession' : 'menu.pinSession'),
+        icon: MENU_PIN_ICON,
+      })
+    }
+    items.push({
+      id: 'archive',
+      label: t(row.archived ? 'menu.unarchiveSession' : 'menu.archiveSession'),
+      icon: MENU_ARCHIVE_ICON,
+    })
+    return items
+  }, [row.archived, row.pinned, t])
   // Figma session cell: pad 8, status slot 16, then a 4px title gap.
   const ownRow = (
     <div
@@ -665,6 +675,7 @@ export const SessionNodeItem = memo(function SessionNodeItem(
       className={clsx(
         css.sessionRow, selected && css.selected, menuOpen && css.menuOpen,
         reorder.armed && css.sessionLongPress,
+        row.archived && css.sessionArchived,
         row.sideline && css.hasSideline,
         flat && !showStatus && css.flatSessionRowWithoutStatus,
         drag?.marker === 'before' && css.dropBefore, drag?.marker === 'after' && css.dropAfter,
@@ -722,11 +733,18 @@ export const SessionNodeItem = memo(function SessionNodeItem(
         </span>
       )}
       <span className={css.titleStack}>
-        <span
-          className={css.title}
-          title={row.mainline ? t('hint.mainline') : t('hint.sessionTitle')}
-        >
-          {title}
+        <span className={css.titleLine}>
+          <span
+            className={css.title}
+            title={row.mainline ? t('hint.mainline') : t('hint.sessionTitle')}
+          >
+            {title}
+          </span>
+          {row.archived ? (
+            <span className={css.archivedBadge} aria-label={t('badge.archived')}>
+              {t('badge.archived')}
+            </span>
+          ) : null}
         </span>
         {row.sideline ? (
           <span className={css.sideline} title={t('hint.sideline')}>
@@ -753,7 +771,10 @@ export const SessionNodeItem = memo(function SessionNodeItem(
               if (id === 'rename') onRename(node.id, row.title)
               if (id === 'fork') onFork(node.id)
               if (id === 'pin') onPinToggle(node.id, row.pinned)
-              if (id === 'archive') onArchive(node.id)
+              if (id === 'archive') {
+                if (row.archived) onUnarchive(node.id)
+                else onArchive(node.id)
+              }
             }}
             portal
             closeOnPointerLeave

@@ -81,7 +81,86 @@ describe("context-fragments", () => {
       fragmentId: "additional_context.note",
       fragmentKind: "additional_context",
     });
+    expect(typeof msg.source?.digest).toBe("string");
     expect(String(msg.content)).toContain("<external_note>ping</external_note>");
+  });
+
+  it("skips re-append when fragment digest is unchanged", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const pipeline = createContextFragmentPipeline();
+    pipeline.register(
+      createStaticAdditionalContextProvider({
+        id: "static",
+        phase: "turn-start",
+        entries: [{ key: "note", value: "same" }],
+      }),
+    );
+    await appendContextFragments({
+      store,
+      sessionId: session.id,
+      turnId: "turn-1",
+      now: () => 1,
+      pipeline,
+      phase: "turn-start",
+    });
+    await appendContextFragments({
+      store,
+      sessionId: session.id,
+      turnId: "turn-2",
+      now: () => 2,
+      pipeline,
+      phase: "turn-start",
+    });
+    const msgs = store
+      .get(session.id)
+      .events.filter((e) => e.type === "user/message");
+    expect(msgs).toHaveLength(1);
+  });
+
+  it("re-appends when fragment body changes (digest gate)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    let value = "v1";
+    const pipeline = createContextFragmentPipeline();
+    pipeline.register({
+      id: "dyn",
+      phases: ["turn-start"],
+      async produce() {
+        return [
+          createAdditionalContextFragment({
+            key: "note",
+            value,
+            phase: "turn-start",
+          }),
+        ];
+      },
+    });
+    await appendContextFragments({
+      store,
+      sessionId: session.id,
+      turnId: "turn-1",
+      now: () => 1,
+      pipeline,
+      phase: "turn-start",
+    });
+    value = "v2";
+    await appendContextFragments({
+      store,
+      sessionId: session.id,
+      turnId: "turn-2",
+      now: () => 2,
+      pipeline,
+      phase: "turn-start",
+    });
+    const msgs = store
+      .get(session.id)
+      .events.filter((e) => e.type === "user/message");
+    expect(msgs).toHaveLength(2);
+    const second = msgs[1];
+    if (second?.type !== "user/message") throw new Error("expected user/message");
+    expect(second.source).toMatchObject({ update: true });
+    expect(String(second.content)).toContain("v2");
   });
 
   it("fragmentsToPrepareContexts maps collect results", () => {

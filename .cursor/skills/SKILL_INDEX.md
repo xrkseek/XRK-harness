@@ -23,6 +23,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **改 loader / discover / inventory** | `xrk-plugin-dev` · [docs/plugin-loader.md](../../docs/plugin-loader.md) |
 | **改 preset 接线** | `xrk-plugin-dev` · [docs/profiles.md](../../docs/profiles.md) |
 | **Settings / 模型 / MCP 设置 UI** | rule `xrk-client-face-ui` |
+| **壳动效 / 概况·侧栏掉帧** | [docs/shell-performance.md](../../docs/shell-performance.md) · rule **`xrk-shell-motion`** |
 | **Overview / details soft faces（uSES #185）** | rule `xrk-overview-uses` |
 | **Face wire ↔ client Zod / session.list** | rule `xrk-face-client-wire` |
 | Session / meter / compaction | `xrk-meter-session` |

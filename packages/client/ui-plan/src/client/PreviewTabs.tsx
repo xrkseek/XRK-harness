@@ -33,7 +33,10 @@ import {
   resolveDelegateParentLook,
 } from './delegate-parent-look.ts'
 import { useDelegateStackFlip } from './use-delegate-stack-flip.ts'
-import { mergeTeamRosterLiveLook } from './team-live-look.ts'
+import {
+  companionChildMemberId,
+  mergeTeamRosterLiveLook,
+} from './team-live-look.ts'
 import {
   readTeamRosterLive,
   subscribeTeamRosterLive,
@@ -70,6 +73,11 @@ import {
   writeOverviewLoadCache,
   writeOverviewTodosCache,
 } from './overview-load-cache.ts'
+import {
+  resolveCompanionLook,
+  resolveCompanionLookWithLive,
+  warmCompanionLookFromPaint,
+} from './presence-look-cache.ts'
 import { overviewStatusPollMs } from './overview-status-poll.ts'
 import { EMPTY_PRESENCE_SESSION_CUES } from './presence-session-cues.ts'
 import { resolveDelegatePairGeometry } from './delegate-pair-geometry.ts'
@@ -2183,7 +2191,8 @@ export function PreviewTabs({
     () => 0,
   )
   // Member ids come from Face relationships only — never invent seed ids.
-  const childMemberId = status?.delegate?.childMemberId
+  // Same id resolution as PresenceDock — manager seat falls back to seed id.
+  const childMemberId = companionChildMemberId(status?.delegate)
   const parentMemberId = status?.delegate?.parentMemberId
   const liveChild = childMemberId ? readTeamRosterLive(childMemberId) : undefined
   const liveParent = parentMemberId ? readTeamRosterLive(parentMemberId) : undefined
@@ -2235,14 +2244,24 @@ export function PreviewTabs({
     childSeat,
     childLabelLive,
   )
-  const snapshotChildLook = status?.companionBall
-  const snapshotParentLook = status?.parentCompanionBall
+  const faceOrCachedChild = resolveCompanionLook(sessionId, status?.companionBall)
   const liveChildLook = liveChild?.appearance
   const liveParentLook = liveParent?.appearance
+  const snapshotChildLook = resolveCompanionLookWithLive(
+    sessionId,
+    status?.companionBall,
+    liveChildLook,
+  )
+  const snapshotParentLook = status?.parentCompanionBall
   const childMemberLook = useMemo(
     () => mergeTeamRosterLiveLook(snapshotChildLook ?? PENDING_MEMBER_LOOK, liveChildLook),
     [snapshotChildLook, liveChildLook],
   )
+  // Team hot-edit → look cache, so header / re-enter keep the new costume
+  // before Face poll (same stack as PresenceDock).
+  useEffect(() => {
+    warmCompanionLookFromPaint(sessionId, faceOrCachedChild ?? snapshotChildLook, liveChildLook)
+  }, [sessionId, faceOrCachedChild, snapshotChildLook, liveChildLook])
   const parentMemberLook = useMemo(
     () => (snapshotParentLook && !leftSeatLiveBossLook
       ? mergeTeamRosterLiveLook(snapshotParentLook, liveParentLook)
@@ -2874,7 +2893,7 @@ export function PreviewTabs({
               ref={delegatePairRef}
               className={css.delegatePair}
               data-collapsed={presenceRailCompact ? '' : undefined}
-              data-pending={!status?.companionBall ? '' : undefined}
+              data-pending={!snapshotChildLook ? '' : undefined}
               data-stack-count={String(delegateParentPaintChain.length)}
               style={delegateStagePx != null
                 ? { ['--xrk-delegate-stage' as string]: `${delegateStagePx}px` }

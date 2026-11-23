@@ -80,7 +80,7 @@ pnpm test:web              # 产品壳硬刷；不进 check
 | Face / HTTP | [host-face](./host-face.md) · [http-api](./http-api.md) | `packages/server/face` · `http` · `host` |
 | MCP | [modules/mcp](./modules/mcp.md) | `packages/mcp` |
 | LLM | [llm-provider-registry](./llm-provider-registry.md) | `packages/llm/*` |
-| 壳 | [host-face](./host-face.md) | `apps/web` · `packages/client` |
+| 壳 | [host-face](./host-face.md) · [shell-performance](./shell-performance.md) | `apps/web` · `packages/client` |
 | 全包索引 | [modules/](./modules/README.md) | |
 
 ## 交接检查清单
@@ -181,7 +181,7 @@ Standard: [audiences](./audiences.md). Textbooks use whole-document CN/EN halves
 | Face / HTTP | [host-face](./host-face.md) · [http-api](./http-api.md) | `packages/server/face` · `http` · `host` |
 | MCP | [modules/mcp](./modules/mcp.md) | `packages/mcp` |
 | LLM | [llm-provider-registry](./llm-provider-registry.md) | `packages/llm/*` |
-| Shell | [host-face](./host-face.md) | `apps/web` · `packages/client` |
+| Shell | [host-face](./host-face.md) · [shell-performance](./shell-performance.md) | `apps/web` · `packages/client` |
 | Full index | [modules/](./modules/README.md) | |
 
 ## Handoff checklist

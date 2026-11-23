@@ -67,6 +67,12 @@ export interface SessionStore {
    */
   reclaimStorage?(): boolean;
   /**
+   * Inbox-recover peek: only `prompt/*` + `user/message` rows, without
+   * hydrating the full resident log (avoids LRU thrash on Host boot).
+   * Memory stores omit this — callers fall back to {@link readEvents}.
+   */
+  readInboxRecoverEvents?(id: string): readonly SessionEvent[];
+  /**
    * Move a durable session log into the cold archive DB (lighten hot
    * `sessions.db`). Idempotent when already offloaded. Optional — memory
    * stores omit this (archive is registry-only).

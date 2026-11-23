@@ -350,6 +350,8 @@ function parseUserMessageSource(
       form: "fragment",
       fragmentId,
       fragmentKind,
+      ...(digest !== undefined ? { digest } : {}),
+      ...(raw.update === true ? { update: true } : {}),
       ...(budgetTruncations !== undefined ? { budgetTruncations } : {}),
     };
   }

@@ -16,6 +16,8 @@
   width: min(220px, 46vw);
   max-width: 100%;
   min-width: 36px;
+  /* Height 0 + absolute chip: must NOT overflow:hidden / contain:paint here —
+     that clips the ball out of the title row (idle seat is only a width reserve). */
   height: 0;
   /* Below conversation headerActions (概况). Absolute chip must not steal hits. */
   z-index: 0;
@@ -38,15 +40,13 @@
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  /* Follow the seat — never a second independent 220px that overflows left. */
-  width: 100%;
+  /* Pin chip geometry while the seat reservation eases (clip via .seat overflow).
+     Animating dock width in lockstep used to reflow PresenceBall every frame. */
+  width: min(220px, 46vw);
+  max-width: 100%;
   height: 48px;
   overflow: hidden;
   transform: translateY(-50%);
-  /* Seat width already eases; dock must follow or the chip snaps while the
-     reservation animates (reads as a jump on Overview open/close). */
-  transition: width var(--xrkh-sidebar-motion-duration, var(--ds-transition-duration-slow, 380ms))
-    var(--xrkh-sidebar-motion-ease, var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1)));
 }
 
 .dock :global([data-overview-presence]) {
@@ -185,7 +185,8 @@
   }
 
   .seat:not([data-phone-dock]) .dock {
-    width: 100%;
+    /* Follow the (narrower) seat; still no second width transition. */
+    width: min(132px, 38vw);
     height: 40px;
   }
 }

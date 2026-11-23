@@ -7,7 +7,13 @@
  * `source.kind: "context-fragment"`. Chat UI hides `additional_context` rows
  * (Codex keeps prompt-context fragments off transcript chrome). Standing
  * workspace inject stays on `@xrkseek/workspace`, not this pipeline.
+ *
+ * Append is digest-gated per `fragmentId` (same as skill-catalog): identical
+ * bodies are not re-logged every turn. Content updates append at the tail;
+ * deriveMessages keeps chronological order (no last-wins relocate) so the
+ * conversation prefix stays byte-stable for provider KV cache.
  */
+import { createHash } from "node:crypto";
 import {
   newUserMessageId,
   type MessageContent,
@@ -15,6 +21,35 @@ import {
   type UserMessageSource,
   type WorkspaceBudgetTruncation,
 } from "@xrkseek/protocol";
+
+/** Stable digest of a fragment body (Host change detection). */
+export function digestFragmentText(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex").slice(0, 16);
+}
+
+/** Last-wins digests from context-fragment `user/message` rows. */
+export function foldLatestFragmentDigests(
+  events: readonly SessionEvent[],
+): ReadonlyMap<string, string> {
+  const out = new Map<string, string>();
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev === undefined || ev.type !== "user/message" || !ev.source) continue;
+    if (ev.source.kind !== "context-fragment") continue;
+    const id = ev.source.fragmentId;
+    if (out.has(id)) continue;
+    const digest =
+      typeof ev.source.digest === "string" && ev.source.digest.trim()
+        ? ev.source.digest.trim()
+        : digestFragmentText(
+            typeof ev.content === "string"
+              ? ev.content
+              : JSON.stringify(ev.content),
+          );
+    out.set(id, digest);
+  }
+  return out;
+}
 
 /** Default char budget for one collect phase (all providers). */
 export const DEFAULT_FRAGMENT_BUDGET_CHARS = 8_000;
@@ -256,12 +291,16 @@ export function createContextFragmentPipeline(
 export function fragmentToUserMessageSource(
   fragment: ContextFragment,
   truncations?: readonly WorkspaceBudgetTruncation[],
+  options?: { readonly digest?: string; readonly update?: boolean },
 ): UserMessageSource {
+  const digest = options?.digest ?? digestFragmentText(fragment.text);
   return {
     kind: "context-fragment",
     form: "fragment",
     fragmentId: fragment.id,
     fragmentKind: fragment.kind,
+    digest,
+    ...(options?.update ? { update: true as const } : {}),
     ...(truncations && truncations.length > 0
       ? { budgetTruncations: truncations }
       : {}),
@@ -293,6 +332,12 @@ export function fragmentsToPrepareContexts(
 export async function appendContextFragments(input: {
   readonly store: {
     append(sessionId: string, event: SessionEvent): unknown;
+    get?(sessionId: string): { readonly events: readonly SessionEvent[] };
+    readEvents?(
+      sessionId: string,
+      fromSeq?: number,
+      toSeqExclusive?: number,
+    ): readonly SessionEvent[];
   };
   readonly sessionId: string;
   readonly turnId: string;
@@ -315,10 +360,20 @@ export async function appendContextFragments(input: {
       ? { budgetChars: input.budgetChars }
       : undefined,
   );
+  const log =
+    typeof input.store.readEvents === "function"
+      ? input.store.readEvents(input.sessionId)
+      : typeof input.store.get === "function"
+        ? input.store.get(input.sessionId).events
+        : [];
+  const previous = foldLatestFragmentDigests(log);
   const byId = new Map(
     collected.truncations.map((t) => [t.section, t] as const),
   );
   for (const frag of collected.fragments) {
+    const digest = digestFragmentText(frag.text);
+    const prior = previous.get(frag.id);
+    if (prior === digest) continue;
     const trunc = byId.get(frag.id);
     input.store.append(input.sessionId, {
       type: "user/message",
@@ -329,6 +384,7 @@ export async function appendContextFragments(input: {
       source: fragmentToUserMessageSource(
         frag,
         trunc ? [trunc] : undefined,
+        { digest, update: prior !== undefined },
       ),
     });
   }

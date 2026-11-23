@@ -326,6 +326,8 @@ type SessionTreeProps = Pick<
   onSessionRename: (sessionId: SessionNode['id'], currentTitle: string) => void
   /** Archive a session (row menu action; the row disappears on the state echo). */
   onSessionArchive: (sessionId: SessionNode['id']) => void
+  /** Unarchive a session (row menu when archive filter shows archived rows). */
+  onSessionUnarchive: (sessionId: SessionNode['id']) => void
   /** Pin or unpin a session (row menu action). */
   onSessionPinToggle: (sessionId: SessionNode['id'], pinned: boolean) => void
   /** Pin or unpin a workspace (row menu / pin button). */
@@ -358,8 +360,8 @@ type SessionTreeProps = Pick<
 function SessionTree({
   useSessions, startSession, open, forkSession, workspaces, archivedSessionIds, pinnedSessionIds,
   pinnedWorkspaceIds, archiveMode,
-  onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionPinToggle,
-  onWorkspacePinToggle,
+  onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionUnarchive,
+  onSessionPinToggle, onWorkspacePinToggle,
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
@@ -717,6 +719,7 @@ function SessionTree({
                     onRename={onSessionRename}
                     onFork={forkSession}
                     onArchive={onSessionArchive}
+                    onUnarchive={onSessionUnarchive}
                     onPinToggle={onSessionPinToggle}
                     drag={dragProps}
                     t={t}
@@ -746,7 +749,8 @@ function SessionTree({
 
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
-  useSessions, open, forkSession, onSessionRename, onSessionArchive, onSessionPinToggle,
+  useSessions, open, forkSession, onSessionRename, onSessionArchive, onSessionUnarchive,
+  onSessionPinToggle,
   archivedSessionIds, pinnedSessionIds, archiveMode,
   orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
   excludeSessionIds,
@@ -757,6 +761,7 @@ function FlatList({
   | 'forkSession'
   | 'onSessionRename'
   | 'onSessionArchive'
+  | 'onSessionUnarchive'
   | 'onSessionPinToggle'
   | 'archivedSessionIds'
   | 'pinnedSessionIds'
@@ -878,6 +883,7 @@ function FlatList({
               onRename={onSessionRename}
               onFork={forkSession}
               onArchive={onSessionArchive}
+              onUnarchive={onSessionUnarchive}
               onPinToggle={onSessionPinToggle}
               flat
               drag={{
@@ -993,6 +999,7 @@ export function WorkspaceBrowser({
   deleteWorkspace,
   insertWorkspaceBefore,
   archiveSession,
+  unarchiveSession,
   pinSession,
   unpinSession,
   pinWorkspace,
@@ -1314,6 +1321,11 @@ export function WorkspaceBrowser({
       console.warn('session archive rejected:', reason)
     })
   }, [archiveSession])
+  const onSessionUnarchive = useCallback((sessionId: SessionNode['id']): void => {
+    unarchiveSession(sessionId).catch((reason: unknown) => {
+      console.warn('session unarchive rejected:', reason)
+    })
+  }, [unarchiveSession])
   const onSessionPinToggle = useCallback((sessionId: SessionNode['id'], pinned: boolean): void => {
     ;(pinned ? unpinSession : pinSession)(sessionId).catch((reason: unknown) => {
       console.warn('session pin rejected:', reason)
@@ -1483,6 +1495,7 @@ export function WorkspaceBrowser({
         <FlatList
           useSessions={useSessions} open={open} forkSession={runFork}
           onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
+          onSessionUnarchive={onSessionUnarchive}
           onSessionPinToggle={onSessionPinToggle}
           archivedSessionIds={archivedSessionIds}
           pinnedSessionIds={pinnedSessionIds}
@@ -1501,6 +1514,7 @@ export function WorkspaceBrowser({
           useSessions={useSessions}
           onSessionRename={onSessionRename}
           onSessionArchive={onSessionArchive}
+          onSessionUnarchive={onSessionUnarchive}
           onSessionPinToggle={onSessionPinToggle}
           forkSession={runFork}
           workspaces={projectWorkspaces}
@@ -1565,6 +1579,7 @@ export function WorkspaceBrowser({
             useSessions={useSessions}
             onSessionRename={onSessionRename}
             onSessionArchive={onSessionArchive}
+            onSessionUnarchive={onSessionUnarchive}
             onSessionPinToggle={onSessionPinToggle}
             forkSession={runFork}
             workspaces={agentWorkspaces}

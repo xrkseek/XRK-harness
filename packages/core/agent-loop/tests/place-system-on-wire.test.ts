@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { placeSystemOnWire } from "../src/place-system-on-wire.js";
+import {
+  placeSystemOnWire,
+  systemAppendAfterBaseline,
+} from "../src/place-system-on-wire.js";
 
 describe("placeSystemOnWire", () => {
   const history = [
@@ -21,7 +24,10 @@ describe("placeSystemOnWire", () => {
     expect(placed.messages.slice(1)).toEqual(history);
   });
 
-  it("appends a changed system after history when baseline differs (in-history)", () => {
+  it("appends only the delta when the new system extends the baseline", () => {
+    expect(systemAppendAfterBaseline("PersonaA", "PersonaA\n\n## Extra")).toBe(
+      "## Extra",
+    );
     const placed = placeSystemOnWire({
       systemText: "PersonaA\n\n## Extra",
       history,
@@ -31,10 +37,20 @@ describe("placeSystemOnWire", () => {
     expect(placed.messages[0]?.content).toBe("PersonaA");
     expect(placed.messages.at(-1)).toEqual({
       role: "system",
-      content: "PersonaA\n\n## Extra",
+      content: "## Extra",
     });
     expect(placed.seriesBaselineSystem).toBe("PersonaA");
     expect(placed.messages.slice(1, -1)).toEqual(history);
+  });
+
+  it("appends the full text when the new system does not share the baseline prefix", () => {
+    const placed = placeSystemOnWire({
+      systemText: "PersonaB\n\nother",
+      history,
+      systemPromptUpdate: "in-history",
+      seriesBaselineSystem: "PersonaA",
+    });
+    expect(placed.messages.at(-1)?.content).toBe("PersonaB\n\nother");
   });
 
   it("rewrites the head when the adapter omits systemPromptUpdate", () => {

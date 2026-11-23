@@ -68,7 +68,7 @@ xrk-inject: false
 | **进程插件 / extensions** | [docs/plugin-development.md](./docs/plugin-development.md) · 笔记 **`xrk-plugin-dev`** · **`xrk-extensions`** |
 | **社区 Host / client** | [docs/community-plugins.md](./docs/community-plugins.md) · 笔记 **`xrk-community-plugins`** |
 | **产品 skill（插件教练）** | [`.agents/skills/`](./.agents/skills/) · 笔记 **`xrk-workspace-skills`** |
-| 壳 UI | [docs/host-face.md](./docs/host-face.md) · `apps/web` · `packages/client` |
+| 壳 UI | [docs/host-face.md](./docs/host-face.md) · [shell-performance](./docs/shell-performance.md) · `apps/web` · `packages/client`；笔记 rule **`xrk-shell-motion`** |
 | **Desktop / Web 事件载波** | [host-face](./docs/host-face.md)「Web / Desktop 载波」· 笔记 **`xrk-desktop-events`** |
 | 包落点 | [docs/modules/](./docs/modules/README.md) |
 | 门禁 | [docs/testing.md](./docs/testing.md) · [CONTRIBUTING.md](./CONTRIBUTING.md) |

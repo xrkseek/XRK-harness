@@ -78,6 +78,8 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 | `usageFromSessionEvent(event)` | Same sample, usage only |
 | `promptPressureTokens(usage)` | `input + cacheRead`（prompt 侧；不含 `cacheWrite` / output） |
 | `inputPressureTokens(usage)` | 优先 `totalTokens`（Codex 窗口占用）；否则同 `promptPressureTokens` |
+| `billedPromptTokens(usage)` | `input + cacheRead + cacheWrite`（账单 prompt 侧） |
+| `cacheHitRate(usage)` | `cacheRead / billedPrompt`（0..1；无 prompt 样本 → `null`）；Face `costUsage.cacheHitRate` |
 
 Surface / compaction window pricing lives in `@xrkseek/core-session` — see [session-compaction.md](./session-compaction.md).
 
@@ -174,6 +176,8 @@ Optional base field `ignorable?: true`: unknown `type` with the flag → `code: 
 | `usageFromSessionEvent(event)` | Same sample, usage only |
 | `promptPressureTokens(usage)` | `input + cacheRead` (prompt side; excludes `cacheWrite` / output) |
 | `inputPressureTokens(usage)` | Prefer `totalTokens` (Codex window occupancy); else same as `promptPressureTokens` |
+| `billedPromptTokens(usage)` | `input + cacheRead + cacheWrite` (billed prompt side) |
+| `cacheHitRate(usage)` | `cacheRead / billedPrompt` (0..1; no prompt sample → `null`); Face `costUsage.cacheHitRate` |
 
 Surface / compaction window pricing lives in `@xrkseek/core-session` — see [session-compaction.md](./session-compaction.md).
 

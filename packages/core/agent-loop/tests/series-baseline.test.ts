@@ -1,8 +1,10 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import type { LlmAdapter } from "@xrkseek/llm";
+import type { SessionEvent } from "@xrkseek/protocol";
 import {
   breakSeriesBaseline,
   clearSeriesBaselineAnchors,
+  hydrateSeriesBaselineFromLog,
   llmRouteKey,
   recallSeriesBaseline,
   rememberSeriesBaseline,
@@ -61,5 +63,39 @@ describe("series-baseline anchors", () => {
     rememberSeriesBaseline("s1", flash, "PersonaA");
     breakSeriesBaseline("s1");
     expect(recallSeriesBaseline("s1", flash)).toBeUndefined();
+  });
+
+  it("hydrates the first post-compaction request/header system after restart", () => {
+    const flash = llm({ id: "ds", systemPromptUpdate: "in-history" });
+    const events: SessionEvent[] = [
+      {
+        type: "request/header",
+        ts: 1,
+        turnId: "t0",
+        reason: "initial",
+        header: { system: "PersonaA", config: { provider: "ds", model: "flash" } },
+      },
+      {
+        type: "context/compaction",
+        ts: 2,
+        reason: "auto",
+        summary: "old",
+        recent: "",
+      },
+      {
+        type: "request/header",
+        ts: 3,
+        turnId: "t1",
+        reason: "change",
+        header: {
+          system: "PersonaB",
+          config: { provider: "ds", model: "flash" },
+        },
+      },
+    ];
+    expect(hydrateSeriesBaselineFromLog("s1", flash, events)).toBe("PersonaB");
+    expect(recallSeriesBaseline("s1", flash)).toBe("PersonaB");
+    // Second hydrate is a no-op when the in-memory anchor already matches.
+    expect(hydrateSeriesBaselineFromLog("s1", flash, events)).toBe("PersonaB");
   });
 });

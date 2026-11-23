@@ -175,6 +175,8 @@ export {
   TOOL_FS_NOT_OBSERVED,
 } from "./tools.js";
 export {
+  billedPromptTokens,
+  cacheHitRate,
   inputPressureTokens,
   parseTokenUsage,
   promptPressureTokens,

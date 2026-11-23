@@ -14,9 +14,14 @@
  * Anchor is process-local (provider cache is too). Route/model change clears it.
  * Face must call `breakSeriesBaseline` / `forgetSessionProcessCaches` on session
  * delete and log cut — not on resident LRU eviction (session may remount).
+ *
+ * After Host restart the Map is empty: {@link hydrateSeriesBaselineFromLog}
+ * recovers the series head from the first `request/header.system` after the
+ * latest compaction (or session start).
  */
 
 import type { LlmAdapter } from "@xrkseek/llm";
+import type { SessionEvent } from "@xrkseek/protocol";
 
 export type SeriesBaselineAnchor = {
   readonly baseline: string;
@@ -60,6 +65,37 @@ export function recallSeriesBaseline(
     return undefined;
   }
   return prior.baseline;
+}
+
+/**
+ * Recover the series head after Host restart from durable `request/header`
+ * rows. Uses the first header with a system body after the latest compaction
+ * (compaction breaks the series — the next header is the new head).
+ *
+ * @returns hydrated baseline, or undefined when nothing to recover
+ */
+export function hydrateSeriesBaselineFromLog(
+  sessionId: string,
+  llm: LlmAdapter,
+  events: readonly SessionEvent[],
+): string | undefined {
+  if (llm.systemPromptUpdate !== "in-history") return undefined;
+  const existing = recallSeriesBaseline(sessionId, llm);
+  if (existing !== undefined) return existing;
+
+  let afterCompact = 0;
+  for (let i = 0; i < events.length; i++) {
+    if (events[i]?.type === "context/compaction") afterCompact = i + 1;
+  }
+  for (let i = afterCompact; i < events.length; i++) {
+    const ev = events[i];
+    if (ev?.type !== "request/header") continue;
+    const system = ev.header.system?.trim();
+    if (!system) continue;
+    rememberSeriesBaseline(sessionId, llm, system);
+    return system;
+  }
+  return undefined;
 }
 
 /** Remember the wire head after a successful assemble (keep first baseline). */

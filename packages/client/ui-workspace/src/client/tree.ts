@@ -45,6 +45,8 @@ export interface SessionNode {
   completed: boolean
   /** In the registry-global pin set (leads its section). */
   pinned: boolean
+  /** In the registry-global archive set (visible only when archive filter allows). */
+  archived: boolean
   updatedAt: number
   /** Per-session 支线 caption (current work); independent of Overview ball chrome. */
   sideline?: string
@@ -354,6 +356,7 @@ function sessionNode(
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
     completed: s.completed === true,
     pinned: !archived.has(s.id) && pinned.has(s.id),
+    archived: archived.has(s.id),
     updatedAt: s.updatedAt,
     ...(s.sideline ? { sideline: s.sideline } : {}),
     ...(s.mainline ? { mainline: true } : {}),

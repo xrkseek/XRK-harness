@@ -1,8 +1,6 @@
 /**
- * Archived-session Settings page: the registry-global archive set joined with
- * the loaded Session summaries, newest archive first, filtered by one search
- * box, with per-row and bulk Unarchive / permanent Delete. An archive entry
- * whose Session is gone has no row and no action; the set itself stays host-owned.
+ * Settings → archived sessions: registry archive set (newest first), search,
+ * unarchive / permanent delete (including ids with no loaded summary).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, IconSearchOutlineRegular, Modal } from '@xrkseek/client-ui-primitives'
@@ -45,6 +43,7 @@ interface ArchivedRow {
 type DeletePlan =
   | { readonly kind: 'one'; readonly row: ArchivedRow }
   | { readonly kind: 'many'; readonly rows: readonly ArchivedRow[] }
+  | { readonly kind: 'all'; readonly rows: readonly ArchivedRow[] }
 
 /** Localized compact relative time of one row's last activity. */
 function timeLabel(updatedAt: number, now: number, t: Translate): string {
@@ -91,33 +90,46 @@ export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): Re
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const ungrouped = t('ungrouped')
+  const missingTitle = t('missingSummary')
   const summaries = sessions.byId
 
-  // Archive order is oldest first; the page lists the most recently archived
-  // Session first. A member with no loaded summary is not addressable here.
+  const activeRemain = useMemo(() => {
+    const archived = new Set(archivedSessionIds)
+    let n = 0
+    for (const id of Object.keys(summaries)) {
+      if (archived.has(id as SessionId)) continue
+      // Delegated workers are sidebar-hidden; do not count them as "live" leftovers.
+      if (summaries[id]?.origin === 'subagent') continue
+      n += 1
+    }
+    return n
+  }, [archivedSessionIds, summaries])
+
+  // Registry order is oldest-first; page lists newest first. Missing summary
+  // still gets a row so permanent delete can clear the registry entry.
+  // Hide origin=subagent rows — parent archive/delete cascades workers; listing
+  // them here duplicated noise without a human-facing title.
   const rows = useMemo<ArchivedRow[]>(() => {
     const owners = new Map<string, string>()
     for (const workspace of workspaces) {
       for (const id of workspace.sessionIds) owners.set(id, workspace.title)
     }
-    // Archived sessions are filtered out of workspace.sessionIds; fall back to
-    // cwd→path matching so the Settings row still names the owning workspace.
     return [...archivedSessionIds].reverse().flatMap((id) => {
       const summary = summaries[id]
-      if (summary === undefined) return []
+      if (summary?.origin === 'subagent') return []
       let workspace = owners.get(id) ?? ungrouped
-      if (workspace === ungrouped && summary.cwd !== undefined) {
+      if (workspace === ungrouped && summary?.cwd !== undefined) {
         const match = workspaces.find(item => item.path === summary.cwd)
         if (match !== undefined) workspace = match.title
       }
       return [{
         id,
-        title: summary.displayTitle,
+        title: summary?.displayTitle?.trim() || missingTitle,
         workspace,
-        updatedAt: summary.updatedAt,
+        updatedAt: summary?.updatedAt ?? 0,
       }]
     })
-  }, [archivedSessionIds, workspaces, summaries, ungrouped])
+  }, [archivedSessionIds, workspaces, summaries, ungrouped, missingTitle])
 
   const now = Date.now()
   const visible = rows.filter(row => matches(row, query.trim().toLowerCase()))
@@ -193,6 +205,19 @@ export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): Re
     })
   }
 
+  const deleteModalTitle = deletePlan?.kind === 'all'
+    ? t('delete.allTitle')
+    : deletePlan?.kind === 'many'
+      ? t('delete.bulkTitle')
+      : t('delete.title')
+  const deleteModalDescription = deletePlan === null
+    ? undefined
+    : deletePlan.kind === 'one'
+      ? t('delete.desc', { title: deletePlan.row.title })
+      : deletePlan.kind === 'all'
+        ? t('delete.allDesc', { n: deletePlan.rows.length })
+        : t('delete.bulkDesc', { n: deletePlan.rows.length })
+
   const bulkUnarchive = (): void => {
     if (busy || selectedVisible.length === 0) return
     setBusy(true)
@@ -212,18 +237,12 @@ export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): Re
     })
   }
 
-  const deleteModalTitle = deletePlan?.kind === 'many'
-    ? t('delete.bulkTitle')
-    : t('delete.title')
-  const deleteModalDescription = deletePlan === null
-    ? undefined
-    : deletePlan.kind === 'one'
-      ? t('delete.desc', { title: deletePlan.row.title })
-      : t('delete.bulkDesc', { n: deletePlan.rows.length })
-
   return (
     <div className={css.section}>
       <p className={css.hint}>{t('storageHint')}</p>
+      {activeRemain > 0 ? (
+        <p className={css.hint} role="status">{t('activeRemain', { n: activeRemain })}</p>
+      ) : null}
       <div className={css.search}>
         <IconSearchOutlineRegular aria-hidden="true" />
         <input
@@ -275,6 +294,35 @@ export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): Re
             >
               {t('bulk.delete')}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={css.deleteAction}
+              disabled={busy || rows.length === 0}
+              onClick={() => {
+                setActionError(null)
+                setDeletePlan({ kind: 'all', rows })
+              }}
+            >
+              {t('bulk.deleteAll')}
+            </Button>
+          </span>
+        </div>
+      ) : rows.length > 0 ? (
+        <div className={css.toolbar} role="toolbar" aria-label={t('bulk.toolbar')}>
+          <span className={css.toolbarActions}>
+            <Button
+              variant="outline"
+              size="sm"
+              className={css.deleteAction}
+              disabled={busy}
+              onClick={() => {
+                setActionError(null)
+                setDeletePlan({ kind: 'all', rows })
+              }}
+            >
+              {t('bulk.deleteAll')}
+            </Button>
           </span>
         </div>
       ) : null}
@@ -282,7 +330,6 @@ export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): Re
         <div className={css.deleteError} role="alert">{actionError}</div>
       ) : null}
       {!archived ? <p className={css.status}>{t('empty')}</p> : null}
-      {archived && rows.length === 0 ? <p className={css.status}>{t('unavailable')}</p> : null}
       {rows.length > 0 && visible.length === 0 ? <p className={css.status}>{t('emptySearch')}</p> : null}
       {visible.length > 0 ? (
         <ul className={css.list}>

@@ -103,6 +103,10 @@ export interface PersistentSessionStore extends SessionStore {
    */
   reclaimStorage(): boolean;
   /**
+   * Inbox-recover peek without hydrating the full resident log (Host boot).
+   */
+  readInboxRecoverEvents(id: string): readonly SessionEvent[];
+  /**
    * Move one session's durable rows from {@link SESSION_DB_FILENAME} into
    * {@link SESSION_ARCHIVE_DB_FILENAME}. Idempotent when already offloaded.
    * Reads (`get` / `list` / search) still see the id; mutates (`append`) throw.
@@ -159,15 +163,25 @@ const DB_NAME = "sessions.db";
 const ARCHIVE_DB_NAME = "sessions-archive.db";
 const DEFAULT_MAX_RESIDENT_SESSIONS = 8;
 /**
- * Reclaim freelist when it is both large and a big share of the file (deleted
- * sessions leave empty pages that still cost mmap / Working Set). Skip small
- * DBs and shared readers. Used on exclusive `close()` and after Face deletes.
+ * Reclaim freelist after deletes / offload / close. Gate is absolute free
+ * bytes **or** free ratio (large DBs rarely satisfy both).
  */
 const VACUUM_MIN_FREE_BYTES = 64 * 1024 * 1024;
 const VACUUM_MIN_FREE_RATIO = 0.2;
-/** Explicit reclaim after delete / archive offload: lower bar so bulk ops shrink sooner. */
+/** Explicit reclaim after delete / archive offload. */
 const VACUUM_EXPLICIT_MIN_FREE_BYTES = 16 * 1024 * 1024;
 const VACUUM_EXPLICIT_MIN_FREE_RATIO = 0.1;
+
+/** Inbox-recover peek types (never packed into chunk rows). */
+const INBOX_RECOVER_EVENT_TYPES = [
+  "prompt/admitted",
+  "prompt/promoted",
+  "prompt/withdrawn",
+  "user/message",
+] as const;
+const INBOX_RECOVER_EVENT_TYPE_SET: ReadonlySet<string> = new Set(
+  INBOX_RECOVER_EVENT_TYPES,
+);
 
 function deleteSessionRows(db: DatabaseSync, id: string): void {
   db.prepare("DELETE FROM search_fts WHERE session_id = ?").run(id);
@@ -268,6 +282,33 @@ function copySessionRows(
   }
 }
 
+/** Pure vacuum gate (exported for unit tests). */
+export function shouldVacuumFreelist(
+  freelist: number,
+  pageCount: number,
+  pageSize: number,
+  options: {
+    readonly minFreeBytes: number;
+    readonly minFreeRatio: number;
+  },
+): boolean {
+  if (
+    !Number.isFinite(freelist) ||
+    !Number.isFinite(pageCount) ||
+    !Number.isFinite(pageSize) ||
+    pageCount <= 0 ||
+    pageSize <= 0 ||
+    freelist <= 0
+  ) {
+    return false;
+  }
+  const freeBytes = freelist * pageSize;
+  const ratio = freelist / pageCount;
+  return (
+    freeBytes >= options.minFreeBytes || ratio >= options.minFreeRatio
+  );
+}
+
 function maybeVacuum(
   db: DatabaseSync,
   options: {
@@ -287,19 +328,7 @@ function maybeVacuum(
       (db.prepare("PRAGMA freelist_count").get() as { freelist_count: number })
         .freelist_count,
     );
-    if (
-      !Number.isFinite(pageSize) ||
-      !Number.isFinite(pageCount) ||
-      !Number.isFinite(freelist) ||
-      pageCount <= 0
-    ) {
-      return false;
-    }
-    const freeBytes = freelist * pageSize;
-    if (
-      freeBytes < options.minFreeBytes ||
-      freelist / pageCount < options.minFreeRatio
-    ) {
+    if (!shouldVacuumFreelist(freelist, pageCount, pageSize, options)) {
       return false;
     }
     db.exec("VACUUM");
@@ -307,6 +336,15 @@ function maybeVacuum(
   } catch {
     /* best-effort: never fail Host / Face on vacuum */
     return false;
+  }
+}
+
+/** Collapse FTS5 segments so deleted rows free pages before VACUUM. */
+function optimizeSearchFts(db: DatabaseSync): void {
+  try {
+    db.exec("INSERT INTO search_fts(search_fts) VALUES('optimize')");
+  } catch {
+    /* optional */
   }
 }
 
@@ -780,6 +818,47 @@ function loadSessionEvents(db: DatabaseSync, id: string): SessionEvent[] {
     } catch (error) {
       // Newer Harness may write pure-info rows with `ignorable: true`. Skipping
       // keeps the readable prefix intact; required unknowns still refuse load.
+      if (
+        error instanceof SessionEventParseError
+        && error.code === "unknown-ignorable"
+      ) {
+        continue;
+      }
+      throw new SessionLogUnreadableError(
+        id,
+        row.seq,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+  return events;
+}
+
+/**
+ * Load only Inbox-relevant durable singles (no packed chunk expansion, no
+ * resident install). Admit / promote / withdraw / user speech are never packed.
+ */
+function loadInboxRecoverEventsFromDb(
+  db: DatabaseSync,
+  id: string,
+): SessionEvent[] {
+  const placeholders = INBOX_RECOVER_EVENT_TYPES.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `SELECT seq, payload FROM events
+       WHERE session_id = ?
+         AND json_extract(payload, '$.type') IN (${placeholders})
+       ORDER BY seq ASC`,
+    )
+    .all(id, ...INBOX_RECOVER_EVENT_TYPES) as {
+      seq: number;
+      payload: string;
+    }[];
+  const events: SessionEvent[] = [];
+  for (const row of rows) {
+    try {
+      events.push(...parseStoragePayload(row.payload));
+    } catch (error) {
       if (
         error instanceof SessionEventParseError
         && error.code === "unknown-ignorable"
@@ -1559,6 +1638,9 @@ export function createPersistentSessionStore(
       if (shared) return false;
       assertWritable();
       flushPending();
+      // Collapse FTS shadow bloat before VACUUM so free pages actually appear.
+      optimizeSearchFts(db);
+      optimizeSearchFts(archiveDb);
       const hot = maybeVacuum(db, {
         minFreeBytes: VACUUM_EXPLICIT_MIN_FREE_BYTES,
         minFreeRatio: VACUUM_EXPLICIT_MIN_FREE_RATIO,
@@ -1568,6 +1650,18 @@ export function createPersistentSessionStore(
         minFreeRatio: VACUUM_EXPLICIT_MIN_FREE_RATIO,
       });
       return hot || cold;
+    },
+
+    readInboxRecoverEvents(id: string): readonly SessionEvent[] {
+      if (!sessionIds.has(id)) {
+        throw new Error(`session not found: ${id}`);
+      }
+      const cached = sessions.get(id);
+      if (cached !== undefined) {
+        return cached.filter((ev) => INBOX_RECOVER_EVENT_TYPE_SET.has(ev.type));
+      }
+      // Skip ensureLoaded — boot must not thrash the resident LRU.
+      return loadInboxRecoverEventsFromDb(sourceDbFor(id), id);
     },
 
     offloadToArchive(id: string): void {

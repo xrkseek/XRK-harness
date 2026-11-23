@@ -32,7 +32,7 @@ import {
 } from '@xrkseek/client-ui-primitives'
 import {
   computeColumns, latchWidthBreakpoint, phoneDrawerWidth, resolveShellTracks,
-  PHONE_EXPAND, PHONE_MAX, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_AUTO_EXPAND,
+  DETAILS_DEFAULT, PHONE_EXPAND, PHONE_MAX, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_AUTO_EXPAND,
   SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT,
 } from './columns.ts'
 import {
@@ -229,6 +229,8 @@ export function AppFrame({
   const frameRef = useRef<HTMLDivElement | null>(null)
   const detailsSessionRef = useRef<string | undefined>(undefined)
   const detailsParentRef = useRef<string | undefined>(undefined)
+  /** Last labeled sidebar width — used to freeze content during track easing. */
+  const sidebarOpenWidthRef = useRef(SIDEBAR_DEFAULT)
   const panelsDetailsRef = useRef(panels.details)
   panelsDetailsRef.current = panels.details
   /** Live AppFrame box width — may shrink when a workbench pushes `#root`. */
@@ -485,6 +487,19 @@ export function AppFrame({
   detailsCollapsedRef.current = detailsCollapsed
   const colsRef = useRef(solved)
   colsRef.current = solved
+  // Freeze Overview / sidebar content at open/rest width while grid tracks ease —
+  // intermediate template widths must not reflow heavy subtrees every frame.
+  const detailsAnimWidth = cols.details > 0
+    ? cols.details
+    : (panels.detailsLast > 0 ? panels.detailsLast : DETAILS_DEFAULT)
+  if (cols.sidebar > SIDEBAR_COLLAPSED) {
+    sidebarOpenWidthRef.current = cols.sidebar
+  } else if (panels.sidebar > SIDEBAR_COLLAPSED) {
+    sidebarOpenWidthRef.current = panels.sidebar
+  }
+  const sidebarAnimWidth = sidebarOpenWidthRef.current > 0
+    ? sidebarOpenWidthRef.current
+    : SIDEBAR_DEFAULT
 
   // Stamp Status availability for ConversationRoot phone title padding (menu
   // alone vs menu + Status chip). Cleared on blank / no Session.
@@ -753,7 +768,12 @@ export function AppFrame({
               ['--phone-drawer-width' as string]: `${drawerWidth}px`,
               ['--phone-drawer-shift' as string]: `${drawerShift}px`,
             }
-          : null),
+          : animating > 0
+            ? {
+                ['--xrk-details-anim-width' as string]: `${detailsAnimWidth}px`,
+                ['--xrk-sidebar-anim-width' as string]: `${sidebarAnimWidth}px`,
+              }
+            : null),
       }}
       data-sidebar-collapsed={(phone ? sidebarCollapsed : sidebarChromeCollapsed) || undefined}
       data-details-collapsed={detailsCollapsed || undefined}

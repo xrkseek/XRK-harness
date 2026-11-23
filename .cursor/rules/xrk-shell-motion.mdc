@@ -1,0 +1,31 @@
+---
+description: 产品壳动效性能红线（保留运动；轨道/座位缓动时钉宽，禁双份 width transition）
+globs:
+  - packages/client/ui-layout/**
+  - packages/client/ui-plan/**
+  - packages/client/ui-conversation/src/client/skeleton/**
+  - apps/desktop/src/**
+alwaysApply: false
+xrk-inject: false
+---
+
+# 壳运动 · 性能（笔记）
+
+教科书：[docs/shell-performance.md](../../docs/shell-performance.md)。
+
+## 做
+
+- **保留动效**：概况/侧栏滑动、座位收放、进出场 keyframes、时长曲线。
+- **轨道缓动时钉宽**：`[data-animating]` → `--xrk-details-anim-width` / `--xrk-sidebar-anim-width` + `overflow: hidden` + `contain`（`AppFrame`）。
+- **座位可缓宽、芯片钉宽**：Presence 座位 `transition: width`；芯片不跟着重排（`PresenceDock`）。座位是 `height:0` + 绝对定位芯片——**禁止**在 idle 座位上加 `overflow:hidden` / `contain:paint`（会把球裁没）。
+- 新浮层优先 `transform` / `opacity`；开栏后的重引擎可延后 hydrate。
+
+## 不做
+
+- 为「性能」删掉滑动 / 淡入淡出 / `data-animating`
+- 座位与芯片**两套** `width` transition（冗余且掉帧）
+- 无 Performance 对照就大改布局动画
+
+## 测
+
+`vitest.client.config.ts` → `ui-layout/tests/app-frame.client.spec.tsx`；手测开合概况与侧栏。

@@ -140,6 +140,15 @@ protocol.registerSchemesAsPrivileged([
 // npm id; unpackaged Electron defaults to "Electron".
 app.setName(DESKTOP_BUILDER_CONFIG.productName);
 
+// Isolate unpackaged Electron from the installed product before the
+// single-instance lock (Windows mutex keys off userData). `dev:desktop`
+// stamps ELECTRON_USER_DATA_DIR → `.desktop-build/development/electron-user-data`.
+const electronUserDataDir = process.env.ELECTRON_USER_DATA_DIR?.trim();
+if (electronUserDataDir) {
+  mkdirSync(electronUserDataDir, { recursive: true });
+  app.setPath("userData", electronUserDataDir);
+}
+
 // Windows: must call before creating windows. Electron's fallback AUMID is
 // `electron.app.<ProductName>` (application_info_win.cc). Share one id with
 // Start Menu / Desktop shortcuts — never with monorepo electron.exe (.dev).

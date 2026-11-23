@@ -142,6 +142,12 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
    */
   archiveSession: (sessionId: SessionId, options?: { force?: boolean }) => Promise<void>
   /**
+   * Restore a Session from the registry-global archive set (and hot DB when
+   * the log was offloaded). Used by the sidebar when archive filter shows
+   * archived rows.
+   */
+  unarchiveSession: (sessionId: SessionId) => Promise<void>
+  /**
    * Pin a Session to the front of the registry-global pin order (newest
    * first). Unarchives when needed.
    */

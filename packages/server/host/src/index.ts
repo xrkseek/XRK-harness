@@ -2709,6 +2709,8 @@ export function createHostManager(): HostManager {
       const faceRuntime = createFaceRuntime({
         store,
         resolveAgent,
+        // Heal orphan delegated subtrees / excess blanks / hot archived rows.
+        bootStoreRepair: true,
         workspaceRoot: config.runtime.workspaceRoot,
         ...(sshWorld
           ? {

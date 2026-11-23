@@ -1,7 +1,11 @@
 /**
  * DSH `costUsage` projection — per-session token buckets for dsh-cost-meter.
  */
-import { providerUsageSample, type SessionEvent } from "@xrkseek/protocol";
+import {
+  cacheHitRate,
+  providerUsageSample,
+  type SessionEvent,
+} from "@xrkseek/protocol";
 import type { ProjectionDefinition } from "../registry.js";
 import {
   bundledCostMeterPriceConfig,
@@ -24,6 +28,11 @@ export interface CostUsageProjection {
   cacheWrite: number;
   reasoning: number;
   cost: number;
+  /**
+   * Session-level cache-read share of billed prompt tokens (0..1), or null
+   * when no prompt-side usage yet. Prefix-cache health signal for cost meter.
+   */
+  cacheHitRate: number | null;
   byModel: Record<string, CostUsageBuckets>;
   byProviderModel: Record<string, CostUsageBuckets>;
 }
@@ -50,6 +59,7 @@ const ZERO_BUCKETS: CostUsageBuckets = {
 
 const ZERO: CostUsageProjection = {
   ...ZERO_BUCKETS,
+  cacheHitRate: null,
   byModel: {},
   byProviderModel: {},
 };
@@ -149,6 +159,11 @@ function projectionTotals(
     cacheWrite: totals.cacheWrite,
     reasoning: totals.reasoning,
     cost: totals.cost,
+    cacheHitRate: cacheHitRate({
+      input: totals.input,
+      cacheRead: totals.cacheRead,
+      cacheWrite: totals.cacheWrite,
+    }),
     byModel,
     byProviderModel,
   };
@@ -198,6 +213,11 @@ function parseCostUsageProjection(value: unknown): CostUsageProjection {
   const v = value as Record<string, unknown>;
   return {
     ...totals,
+    cacheHitRate: cacheHitRate({
+      input: totals.input,
+      cacheRead: totals.cacheRead,
+      cacheWrite: totals.cacheWrite,
+    }),
     byModel: parseBucketMap(v.byModel ?? {}, "costUsage.state.totals.byModel"),
     byProviderModel: parseBucketMap(
       v.byProviderModel ?? {},
@@ -309,13 +329,17 @@ export function createCostUsageProjectionUnit(): ProjectionDefinition<
         const v = value as Record<string, unknown>;
         const num = (k: string) =>
           typeof v[k] === "number" && Number.isFinite(v[k]) ? (v[k]) : 0;
+        const input = num("input");
+        const cacheRead = num("cacheRead");
+        const cacheWrite = num("cacheWrite");
         return {
-          input: num("input"),
+          input,
           output: num("output"),
-          cacheRead: num("cacheRead"),
-          cacheWrite: num("cacheWrite"),
+          cacheRead,
+          cacheWrite,
           reasoning: num("reasoning"),
           cost: num("cost"),
+          cacheHitRate: cacheHitRate({ input, cacheRead, cacheWrite }),
           byModel:
             v.byModel && typeof v.byModel === "object"
               ? (v.byModel as Record<string, CostUsageBuckets>)

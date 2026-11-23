@@ -17,6 +17,17 @@ import {
   type PresenceSettings,
 } from '../src/presence-settings.ts'
 import type { SettingsScope, SettingsScopeSnapshot } from '@xrkseek/client-runtime/client'
+import {
+  readOverviewLoadCache,
+  resetOverviewLoadCacheForTests,
+} from '../src/client/overview-load-cache.ts'
+import {
+  readPresenceLookCache,
+  resetPresenceLookCacheForTests,
+  writePresenceLookCache,
+} from '../src/client/presence-look-cache.ts'
+import * as previewLoad from '../src/client/preview-load.ts'
+import type { SessionStatusView } from '../src/client/preview-load.ts'
 
 function presenceScope(
   initial?: Partial<PresenceSettings>,
@@ -93,10 +104,26 @@ function useSessions(select: (s: {
   })
 }
 
-function renderDock() {
+/** Dock only reads a few Status fields — cast keeps the fixture tiny. */
+function dockStatus(
+  sessionId: SessionId,
+  companionBall?: SessionStatusView['companionBall'],
+): SessionStatusView {
+  return {
+    sessionId,
+    jobs: [],
+    subagents: { live: [], graph: { nodes: [], edges: [] } },
+    fleet: { health: 'ok' },
+    compaction: { phase: 'idle' },
+    delivery: { turnActive: false, queued: 0, steering: 0 },
+    ...(companionBall ? { companionBall } : {}),
+  } as SessionStatusView
+}
+
+function renderDock(sessionId: SessionId = SID) {
   return render(
     <PresenceDock
-      sessionId={SID}
+      sessionId={sessionId}
       presenceCues={{
         getSnapshot: () => EMPTY_CUES,
         subscribe: () => () => {},
@@ -110,52 +137,25 @@ function renderDock() {
 describe('PresenceDock', () => {
   afterEach(() => {
     cleanup()
+    resetOverviewLoadCacheForTests()
+    resetPresenceLookCacheForTests()
     document.documentElement.removeAttribute('data-xrk-layout-details')
     document.documentElement.removeAttribute('data-xrk-layout-phone')
     document.querySelector('[data-dsh-frame]')?.remove()
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
     // Reset to default-on so other specs see an enabled ball.
     bindPresenceSettingsRuntime(new PresenceSettingsRuntime(presenceScope()))
   })
 
   beforeEach(() => {
+    resetOverviewLoadCacheForTests()
+    resetPresenceLookCacheForTests()
     bindPresenceSettingsRuntime(new PresenceSettingsRuntime(presenceScope()))
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      json: async () => ({
-        result: {
-          ok: true,
-          value: {
-            sessionId: SID,
-            badge: 'harness',
-            permission: 'default',
-            plan: 'off',
-            theme: 'dark',
-            model: { provider: 'p', model: 'm' },
-            cwd: '/',
-            events: 0,
-            jobs: [],
-            subagents: {
-              live: [],
-              graph: { nodes: [], edges: [] },
-              quota: {
-                depth: 0, maxDepth: 3, active: 0, maxActive: 4, delegated: 0, slotsFree: 4,
-              },
-            },
-            teamTasks: [],
-            fleet: { health: 'ok', alerts: [] },
-            billing: { todayCost: 0, monthCost: 0, byProviderModel: [] },
-            timeline: { windowTokens: 0, shadowedTokens: 0, entries: [] },
-            compaction: { pipeline: 'idle', stages: [], phase: 'idle' },
-            delivery: {
-              turnActive: false, queued: 0, steering: 0,
-              compactBlockedByTurn: false, note: '',
-            },
-            channels: { process: [], im: [], note: '', alerts: [] },
-          },
-        },
-      }),
-    })))
+    vi.spyOn(previewLoad, 'loadSessionStatus').mockResolvedValue(
+      dockStatus(SID, { shape: 'flower5', color: 'gold' }),
+    )
   })
 
   it('shows a header-density compact ball when Overview is closed', async () => {
@@ -312,5 +312,91 @@ describe('PresenceDock', () => {
     expect(seat).toBeTruthy()
     expect(seat?.getAttribute('data-phase')).toBe('gone')
     expect(document.querySelector('[data-overview-presence]')).toBeNull()
+  })
+
+  it('writes companionBall into look + overview caches after Status returns', async () => {
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    frame.setAttribute('data-details-collapsed', '')
+    document.body.appendChild(frame)
+
+    renderDock()
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-presence-dock]')?.hasAttribute('data-pending')).toBe(false)
+      expect(readPresenceLookCache(SID)).toEqual({ shape: 'flower5', color: 'gold' })
+      expect(readOverviewLoadCache(SID)?.status?.companionBall).toEqual({
+        shape: 'flower5',
+        color: 'gold',
+      })
+    })
+  })
+
+  it('seeds companionBall from look cache while Face Status is still in flight', async () => {
+    writePresenceLookCache(SID, { shape: 'flower5', color: 'gold' })
+
+    let release!: (value: SessionStatusView) => void
+    const gate = new Promise<SessionStatusView>((resolve) => { release = resolve })
+    vi.spyOn(previewLoad, 'loadSessionStatus').mockReturnValue(gate)
+
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    frame.setAttribute('data-details-collapsed', '')
+    document.body.appendChild(frame)
+
+    renderDock()
+
+    await waitFor(() => {
+      const dock = document.querySelector('[data-presence-dock]')
+      expect(dock).toBeTruthy()
+      // Cache seed must paint the remembered costume immediately — not PENDING cream.
+      expect(dock?.hasAttribute('data-pending')).toBe(false)
+    })
+
+    release(dockStatus(SID, { shape: 'flower5', color: 'gold' }))
+  })
+
+  it('reloads Status for the new session after an in-flight poll is superseded', async () => {
+    const sidB = 's-dock-b' as SessionId
+    let resolveA!: (value: SessionStatusView) => void
+    const load = vi.spyOn(previewLoad, 'loadSessionStatus').mockImplementation(
+      (sessionId: string) => {
+        if (sessionId === SID && load.mock.calls.filter((c) => c[0] === SID).length === 1) {
+          return new Promise<SessionStatusView>((resolve) => { resolveA = resolve })
+        }
+        return Promise.resolve(
+          dockStatus(sessionId as SessionId, { shape: 'petal', color: 'sky' }),
+        )
+      },
+    )
+
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    frame.setAttribute('data-details-collapsed', '')
+    document.body.appendChild(frame)
+
+    const view = renderDock(SID)
+    await waitFor(() => expect(load).toHaveBeenCalled())
+
+    view.rerender(
+      <PresenceDock
+        sessionId={sidB}
+        presenceCues={{
+          getSnapshot: () => EMPTY_CUES,
+          subscribe: () => () => {},
+        }}
+        useSessions={useSessions as never}
+        t={t as never}
+      />,
+    )
+
+    // Old finish must still bump the queued tick even though session A unmounted.
+    resolveA(dockStatus(SID, { shape: 'blob', color: 'cream' }))
+
+    await waitFor(() => {
+      expect(load.mock.calls.some((c) => c[0] === sidB)).toBe(true)
+      expect(document.querySelector('[data-presence-dock]')?.hasAttribute('data-pending')).toBe(false)
+      expect(readPresenceLookCache(sidB)).toEqual({ shape: 'petal', color: 'sky' })
+    })
   })
 })

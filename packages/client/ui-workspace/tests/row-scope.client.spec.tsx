@@ -104,6 +104,7 @@ function mountSessions(groupBy: 'workspace' | 'flat') {
     renameWorkspace: vi.fn(async () => {}),
     deleteWorkspace: vi.fn(async () => {}),
     archiveSession: vi.fn(async () => {}),
+    unarchiveSession: vi.fn(async () => {}),
     pinSession: vi.fn(async () => {}),
     unpinSession: vi.fn(async () => {}),
     insertWorkspaceBefore: vi.fn(async () => {}),

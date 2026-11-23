@@ -103,7 +103,19 @@ export function apply(ctx: ClientContext): void {
     // Explicit group actions keep their target; unscoped New Session inherits
     // the current Session Workspace before the recent-Workspace fallback.
     startSession: (workspaceId) => { ctx.workspaces.startSession(workspaceId) },
-    open: (sessionId) => { ctx.sessions.open(sessionId) },
+    open: (sessionId) => {
+      // Archive-view rows stay clickable; opening one must restore first or the
+      // cold log rejects the next prompt (`session is archived offload`).
+      const archived = ctx.workspaces.list.getSnapshot().archivedSessionIds
+      if (archived.includes(sessionId)) {
+        void ctx.workspaces.unarchiveSession(sessionId).then(
+          () => { ctx.sessions.open(sessionId) },
+          () => { ctx.sessions.open(sessionId) },
+        )
+        return
+      }
+      ctx.sessions.open(sessionId)
+    },
     searchSessions,
     searchResultLimit: ctx.sessions.searchResultLimit,
     renameSession: async (sessionId, title) => {
@@ -129,6 +141,9 @@ export function apply(ctx: ClientContext): void {
     },
     archiveSession: async (sessionId, options) => {
       await ctx.workspaces.archiveSession(sessionId, options)
+    },
+    unarchiveSession: async (sessionId) => {
+      await ctx.workspaces.unarchiveSession(sessionId)
     },
     pinSession: async (sessionId) => { await ctx.workspaces.pinSession(sessionId) },
     unpinSession: async (sessionId) => { await ctx.workspaces.unpinSession(sessionId) },

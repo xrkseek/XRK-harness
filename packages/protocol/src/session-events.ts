@@ -185,6 +185,13 @@ export type UserMessageSource =
       readonly form: "fragment";
       readonly fragmentId: string;
       readonly fragmentKind: "additional_context" | "recap" | "generic";
+      /**
+       * Stable digest of the model-facing body. Host skips re-append when the
+       * latest same fragmentId still matches (prefix-cache + log bloat).
+       */
+      readonly digest?: string;
+      /** True when this row replaces a prior fragment with a new digest. */
+      readonly update?: boolean;
       readonly budgetTruncations?: readonly WorkspaceBudgetTruncation[];
     }
   | {

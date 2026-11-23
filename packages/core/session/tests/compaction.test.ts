@@ -461,7 +461,7 @@ describe("deriveMessages compaction window", () => {
     expect(events.filter((e) => e.type === "user/message")).toHaveLength(2);
   });
 
-  it("re-projects an open todo list ahead of the compaction window", () => {
+  it("re-projects an open todo list after the compaction window (prefix-cache safe)", () => {
     const store = createMemorySessionStore();
     const s = store.create("todos");
     store.append(s.id, {
@@ -493,14 +493,15 @@ describe("deriveMessages compaction window", () => {
     });
 
     const windowed = deriveMessages(store.get(s.id).events);
-    expect(windowed[0]?.role).toBe("user");
-    expect(windowed[0]?.content).toContain("[in_progress] ship notes");
-    expect(windowed[0]?.content).toContain("[pending] bump version");
-    expect(String(windowed[0]?.content)).toMatch(/stale in_progress|same turn/i);
-    expect(windowed[0]?.content).not.toContain("old-ask");
-    expect(windowed[1]?.content).toContain("context compacted");
+    expect(windowed[0]?.content).toContain("context compacted");
     expect(windowed.some((m) => m.content === "old-ask")).toBe(false);
-    expect(windowed.at(-1)).toEqual({ role: "user", content: "continue" });
+    expect(windowed.some((m) => m.content === "continue")).toBe(true);
+    const plan = windowed.at(-1);
+    expect(plan?.role).toBe("user");
+    expect(plan?.content).toContain("[in_progress] ship notes");
+    expect(plan?.content).toContain("[pending] bump version");
+    expect(String(plan?.content)).toMatch(/stale in_progress|same turn/i);
+    expect(plan?.content).not.toContain("old-ask");
   });
 
   it("describes shadowed images by id instead of re-attaching them", () => {

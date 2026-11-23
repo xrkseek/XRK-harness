@@ -10,7 +10,6 @@
  */
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -22,12 +21,6 @@ import type {} from '@xrkseek/client-ui-conversation/client'
 import { PresenceBall, usePresenceEnabled } from './PresenceBall.tsx'
 import { useOverviewOpen } from './overview-open.ts'
 import {
-  readTeamRosterLive,
-  subscribeTeamRosterLive,
-  teamRosterLiveRevision,
-} from '@xrkseek/client-runtime/client'
-import { companionChildMemberId, mergeTeamRosterLiveLook } from './team-live-look.ts'
-import {
   PRESENCE_DOCK_ENTER_MS,
   PRESENCE_DOCK_EXIT_MS,
 } from './presence-handoff.ts'
@@ -35,8 +28,13 @@ import {
   EMPTY_PRESENCE_SESSION_CUES,
   type PresenceSessionCues,
 } from './presence-session-cues.ts'
-import { PENDING_MEMBER_LOOK } from './pending-member-look.ts'
 import { loadSessionStatus, type SessionStatusView } from './preview-load.ts'
+import {
+  readOverviewLoadCache,
+  writeOverviewLoadCache,
+} from './overview-load-cache.ts'
+import { useCompanionMemberLook } from './use-companion-member-look.ts'
+import { resolveCompanionLook } from './presence-look-cache.ts'
 import { overviewStatusPollMs } from './overview-status-poll.ts'
 import css from './PresenceDock.module.css'
 
@@ -285,7 +283,9 @@ export function PresenceDock({
   const [phase, setPhase] = useState<DockPhase>(() => (overviewOpen ? 'gone' : 'idle'))
   const phaseRef = useRef(phase)
   phaseRef.current = phase
-  const [status, setStatus] = useState<SessionStatusView | null>(null)
+  const [status, setStatus] = useState<SessionStatusView | null>(() =>
+    readOverviewLoadCache(sessionId)?.status ?? null,
+  )
   const [statusTick, setStatusTick] = useState(0)
   const animTimer = useRef<number | undefined>(undefined)
   const fleetBusyRef = useRef(false)
@@ -329,25 +329,10 @@ export function PresenceDock({
     () => EMPTY_PRESENCE_SESSION_CUES,
   )
 
-  /* The header ball (and, on phones, the only ball outside Overview) used to
-   * read `status.companionBall` straight — so a Team edit here waited for the
-   * next Face poll (5s idle) while the Overview pair updated instantly. */
-  const rosterLiveRev = useSyncExternalStore(
-    subscribeTeamRosterLive,
-    teamRosterLiveRevision,
-    () => 0,
-  )
-  const liveChildLook = (() => {
-    const id = companionChildMemberId(status?.delegate)
-    return id ? readTeamRosterLive(id)?.appearance : undefined
-  })()
-  const memberLook = useMemo(
-    () => mergeTeamRosterLiveLook(
-      status?.companionBall ?? PENDING_MEMBER_LOOK,
-      liveChildLook,
-    ),
-    // `rosterLiveRev` is the wake-up signal: the live map itself is not reactive.
-    [status?.companionBall, liveChildLook, rosterLiveRev],
+  const { paintedLook, memberLook } = useCompanionMemberLook(
+    sessionId,
+    status?.companionBall,
+    status?.delegate,
   )
 
   useEffect(() => {
@@ -383,10 +368,10 @@ export function PresenceDock({
 
   const visible = presenceEnabled && phase !== 'gone'
 
-  // Drop stale companionBall immediately on session switch — otherwise the chip
-  // keeps the previous seat's look (or paints Settings 老板) until Status returns.
+  // Session switch: adopt remembered Status (numbers). Look paints via
+  // resolveCompanionLook even when Overview cache was evicted.
   useEffect(() => {
-    setStatus(null)
+    setStatus(readOverviewLoadCache(sessionId)?.status ?? null)
     setStatusTick((n) => n + 1)
   }, [sessionId])
 
@@ -423,24 +408,41 @@ export function PresenceDock({
     }
     statusLoadInFlight.current = true
     const started = performance.now()
+    const bumpIfQueued = (): void => {
+      // Always bump when a later session/visibility change queued a reload —
+      // the in-flight effect's `alive` may already be false after session switch.
+      if (!statusLoadQueued.current) return
+      statusLoadQueued.current = false
+      setStatusTick((n) => n + 1)
+    }
     const finish = (next: SessionStatusView | null): void => {
       statusLastLatencyMs.current = performance.now() - started
       statusLoadInFlight.current = false
-      if (alive) setStatus(next)
-      if (statusLoadQueued.current) {
-        statusLoadQueued.current = false
-        if (alive) setStatusTick((n) => n + 1)
+      if (alive && next !== null) {
+        // Face briefly omitting companionBall must not drop a remembered look
+        // from Overview Status seed (look cache still paints the ball).
+        const retained = next.companionBall
+          ?? resolveCompanionLook(sessionId, null)
+        const painted = retained && !next.companionBall
+          ? { ...next, companionBall: retained }
+          : next
+        setStatus(painted)
+        const prior = readOverviewLoadCache(sessionId)
+        writeOverviewLoadCache(sessionId, {
+          plan: prior?.plan ?? null,
+          office: prior?.office ?? null,
+          status: painted,
+        })
       }
+      // null / error: keep prior status + look cache (no PENDING flash).
+      bumpIfQueued()
     }
     void loadSessionStatus(sessionId).then(
       (next) => { finish(next) },
       () => {
         statusLastLatencyMs.current = performance.now() - started
         statusLoadInFlight.current = false
-        if (statusLoadQueued.current) {
-          statusLoadQueued.current = false
-          if (alive) setStatusTick((n) => n + 1)
-        }
+        bumpIfQueued()
       },
     )
     return () => { alive = false }
@@ -455,6 +457,7 @@ export function PresenceDock({
       data-presence-dock=""
       data-phone-dock={phoneSlot ? '' : undefined}
       data-icon-only={iconOnly ? '' : undefined}
+      data-pending={!paintedLook ? '' : undefined}
       data-phase={phase === 'idle' ? undefined : phase}
       aria-label={phase === 'gone' ? undefined : t('preview.status.presence')}
       aria-hidden={phase === 'exit' || phase === 'gone' || undefined}

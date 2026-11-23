@@ -464,21 +464,22 @@ describe("runTurn", () => {
     });
     const msgs = deriveMessages(store.get(session.id).events);
     // A `todo/write` becomes no chat turn of its own, but its snapshot must
-    // stay model-visible: the projection prepends one standing-plan message.
+    // stay model-visible as a **trailing** standing-plan message (never
+    // prepended — mutating plan must not bust DeepSeek-style prefix cache).
     // Before this, the plan survived only as the tool-result summary of the
     // round that wrote it, and vanished outright once a compaction moved the
     // event outside the window — while the client panel kept showing it (it
     // back-scans the whole log). Same state, two projections, one of them
     // lying.
     expect(msgs.map((m) => m.role)).toEqual([
-      "user", // standing plan
       "user", // "plan"
       "assistant",
       "tool",
       "assistant",
+      "user", // standing plan (trailing)
     ]);
-    expect(msgs[0]!.content).toContain("[in_progress] ship");
-    expect(msgs[0]!.content).toContain("latest user wins");
+    expect(msgs.at(-1)!.content).toContain("[in_progress] ship");
+    expect(msgs.at(-1)!.content).toContain("latest user wins");
   });
 
   it("stands the plan down once every item is settled", () => {

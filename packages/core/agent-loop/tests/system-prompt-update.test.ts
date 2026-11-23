@@ -73,7 +73,9 @@ describe("systemPromptUpdate in-history", () => {
     expect(second[0]?.content).toBe(first[0]?.content);
     const trailingSystems = second.filter((m) => m.role === "system");
     expect(trailingSystems).toHaveLength(2);
+    // Delta-only append — do not re-bill the baseline persona at the tail.
     expect(String(trailingSystems[1]?.content)).toContain("new guidance");
+    expect(String(trailingSystems[1]?.content)).not.toContain("PersonaBase");
     expect(String(second[0]?.content)).not.toContain("new guidance");
   });
 
@@ -185,6 +187,10 @@ describe("systemPromptUpdate in-history", () => {
     expect(second[0]?.content).toBe(first[0]?.content);
     const systems = second.filter((m) => m.role === "system");
     expect(systems.length).toBeGreaterThanOrEqual(2);
-    expect(String(systems[systems.length - 1]?.content)).toContain("later guidance");
+    const trailing = String(systems[systems.length - 1]?.content);
+    expect(trailing).toContain("later guidance");
+    expect(trailing).not.toBe(String(first[0]?.content));
+    // Extension of baseline → delta only (no second full persona).
+    expect(trailing).not.toMatch(/^PersonaBase/);
   });
 });

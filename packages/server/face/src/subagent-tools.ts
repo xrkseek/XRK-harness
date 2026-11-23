@@ -11,9 +11,9 @@ import {
   readSessionEvents,
 } from "@xrkseek/core-session";
 import { permissionSelectFromEvents } from "./permissions.js";
-import { forgetSessionProcessCaches } from "@xrkseek/core-agent-loop";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
+import { wipeDurableSession } from "./session-subtree.js";
 import { formatToolError } from "./face-error-text.js";
 import {
   formatChildOutcome,
@@ -344,43 +344,16 @@ function childRouteCreatePin(route: {
  * child durable and registered its link, so any failure between there and a
  * successful `session.prompt` would otherwise leave an empty session in the
  * sidebar and a permanent entry in the catalog / quota counts.
+ *
+ * Full wipe (not a partial store.delete): the old path left workspace
+ * membership / order / caches behind, and passed a lying `cascade:true` that
+ * `session.cancel` never honored.
  */
 async function discardUnstartedChild(
   runtime: FaceRuntime,
   childSessionId: string,
 ): Promise<void> {
-  runtime.subagents.detach(childSessionId);
-  runtime.agentTeams.removeNode(childSessionId);
-  runtime.agentTeamTasks.forgetByChild(childSessionId);
-  runtime.sessionCwds.delete(childSessionId);
-  try {
-    await dispatchFaceMethod(
-      runtime,
-      "session.cancel",
-      `tool-sa-discard-${childSessionId}`,
-      { sessionId: childSessionId, cascade: true },
-    );
-  } catch {
-    /* best effort: the log is dropped either way */
-  }
-  try {
-    runtime.store.delete?.(childSessionId);
-  } catch {
-    /* store without delete / already gone */
-  }
-  runtime.listProjectionCache.forget(childSessionId);
-  runtime.wireIds.clear(childSessionId);
-  forgetSessionProcessCaches(childSessionId);
-  await Promise.resolve(runtime.invalidateAgent?.(childSessionId)).catch(
-    () => undefined,
-  );
-  // Soft Activation detach keeps subagent summaries; a half-made spawn wipe
-  // must purge catalog + lineage or the parent header overcounts ghosts.
-  runtime.bus.publishHost({
-    type: "host/session-removed",
-    sessionId: childSessionId,
-    purged: true,
-  });
+  await wipeDurableSession(runtime, childSessionId);
 }
 
 /**

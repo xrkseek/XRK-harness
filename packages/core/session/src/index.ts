@@ -1,4 +1,8 @@
-import type { ChatMessage, SessionEvent } from "@xrkseek/protocol";
+import {
+  flattenText,
+  type ChatMessage,
+  type SessionEvent,
+} from "@xrkseek/protocol";
 
 export {
   SessionBusyError,
@@ -295,6 +299,24 @@ export function createMemorySessionStore(): SessionStore {
 }
 
 /**
+ * Model-facing standing-plan body prefix. Assemble peels a trailing message
+ * with this prefix so first-step skeleton lift still finds the human user
+ * (plan must stay last for prefix-cache, but must not block CURRENT_MESSAGE).
+ */
+export const STANDING_PLAN_CONTENT_PREFIX =
+  "Standing plan (re-projected while open items remain; omitted when settled). ";
+
+/** True when a chat message is the projected standing-plan trailer. */
+export function isStandingPlanMessage(message: ChatMessage): boolean {
+  if (message.role !== "user") return false;
+  const text =
+    typeof message.content === "string"
+      ? message.content
+      : flattenText(message.content);
+  return text.startsWith(STANDING_PLAN_CONTENT_PREFIX);
+}
+
+/**
  * The standing plan — latest `todo/write` snapshot, re-projected into
  * model-visible history.
  *
@@ -305,10 +327,10 @@ export function createMemorySessionStore(): SessionStore {
  * which the client proves by recovering it via a full back-scan. The
  * asymmetry is the bug: the panel keeps the plan, the agent loses it.
  *
- * Emitted as a leading user message, never mid-history, so
- * assistant/tool-call adjacency (and therefore `assertModelVisible` against
- * the assembled request) is untouched. A fully settled plan projects
- * nothing: a finished list is noise, not standing state.
+ * Emitted as a **trailing** user message (never prepended): mutating the plan
+ * must not rewrite the conversation prefix or DeepSeek-style prompt cache
+ * drops from the first history token. Assistant/tool-call adjacency in the
+ * durable transcript stays untouched. A fully settled plan projects nothing.
  */
 export function standingPlanMessage(
   events: readonly SessionEvent[],
@@ -323,7 +345,7 @@ export function standingPlanMessage(
     return {
       role: "user",
       content:
-        "Standing plan (re-projected while open items remain; omitted when settled). " +
+        STANDING_PLAN_CONTENT_PREFIX +
         "Own the open items: todo_write in the same turn you finish a step " +
         "(mark completed — never leave stale in_progress for the next user message); " +
         "advance the next pending to in_progress when you continue; rewrite when the " +
@@ -334,13 +356,21 @@ export function standingPlanMessage(
   return undefined;
 }
 
+/** Append standing plan after durable history (prefix-cache safe). */
+function withTrailingStandingPlan(
+  messages: readonly ChatMessage[],
+  plan: ChatMessage | undefined,
+): ChatMessage[] {
+  if (!plan) return [...messages];
+  return [...messages, plan];
+}
+
 /** Project model-facing history from the append-only log. */
 export function deriveMessages(events: readonly SessionEvent[]): ChatMessage[] {
   const plan = standingPlanMessage(events);
   const compact = findLatestCompaction(events);
   if (compact) {
     const messages: ChatMessage[] = [
-      ...(plan ? [plan] : []),
       {
         role: "user",
         content: formatCompactionForModel(compact.event),
@@ -353,16 +383,17 @@ export function deriveMessages(events: readonly SessionEvent[]): ChatMessage[] {
     // `image/offload.targets.seq` is absolute durable-log index — fold marks
     // from the full log and remap slice-local indices.
     const sliceStart = compact.index + 1;
-    return messages.concat(
-      deriveMessagesUnwindowed(events.slice(sliceStart), {
-        indexOffset: sliceStart,
-        markSource: events,
-      }),
+    return withTrailingStandingPlan(
+      messages.concat(
+        deriveMessagesUnwindowed(events.slice(sliceStart), {
+          indexOffset: sliceStart,
+          markSource: events,
+        }),
+      ),
+      plan,
     );
   }
-  return plan
-    ? [plan, ...deriveMessagesUnwindowed(events)]
-    : deriveMessagesUnwindowed(events);
+  return withTrailingStandingPlan(deriveMessagesUnwindowed(events), plan);
 }
 
 export class ModelVisibleInvariantError extends Error {
@@ -415,6 +446,7 @@ export {
     planFtsQuery,
     SessionLogUnreadableError,
     isLikelyRemoteSessionsPath,
+    shouldVacuumFreelist,
     type FtsQueryPlan,
     resolveSqliteJournalMode,
   SESSION_ARCHIVE_DB_FILENAME,

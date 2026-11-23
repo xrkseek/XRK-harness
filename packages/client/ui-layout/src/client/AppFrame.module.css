@@ -42,6 +42,33 @@
     var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
+/* Desktop track toggle: pin Overview / sidebar content to open/rest widths so
+   intermediate grid-template-columns frames do not reflow heavy subtrees every
+   tick. Column overflow:hidden clips the slide. Phone uses transform sheets. */
+.frame[data-animating]:not([data-phone]) .detailsCol,
+.frame[data-animating]:not([data-phone]) .sidebarCol {
+  contain: layout paint;
+}
+
+.frame[data-animating]:not([data-phone]) .detailsCol > * {
+  width: var(--xrk-details-anim-width, 360px);
+  min-width: var(--xrk-details-anim-width, 360px);
+  max-width: var(--xrk-details-anim-width, 360px);
+  box-sizing: border-box;
+}
+
+.frame[data-animating]:not([data-phone]) .sidebarCol > * {
+  width: var(--xrk-sidebar-anim-width, 280px);
+  min-width: var(--xrk-sidebar-anim-width, 280px);
+  max-width: var(--xrk-sidebar-anim-width, 280px);
+  box-sizing: border-box;
+}
+
+/* Isolate chat paint from the moving track edge (layout still follows 1fr). */
+.frame[data-animating]:not([data-phone]) .centerCol {
+  contain: paint;
+}
+
 /* Frameless Desktop: thin titlebar above the whole shell (all columns).
    Host mirrors inbound community frame clearance names so third-party
    layout.css that still reads those vars resolves on the frame. */

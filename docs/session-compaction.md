@@ -126,6 +126,8 @@ SDK 仍可在 `compaction.maxRequestTokens` 等字段显式覆盖。**Settings �
 天花板 = `resolveSoftBudgetCeiling(softMax, buffer)`（buffer ≥ max 时忽略 buffer，避免非正 ceiling 误杀）。达到 `softBudgetTriggerPercent`（相对 softMax）时开始 prune/摘要；若 softMax 已是窗的 90%（留空推导或圆环强制线），不再二次乘该百分比，以免压到约 81% 窗。超天花板时按策略压到不超过天花板（`prune-summary` 先 prune，再最多 **2 + peel** 次 `runCompaction({ reason: "auto" })`，peel 阶段 keep 减半）；**仍超则 fail-closed**（抛 `ContextOverflowError`，不再出站）。  
 工具正文在进日志前按 spill 策略截断：超 **64KiB**（Face `agent-loop.toolResultMaxInlineBytes` 可调；`0` 关闭）全文只写一份到 `~/.xrk/spill/tool-outputs/`，模型只见 head/tail + 路径；`bash.maxOutputBytes` 默认同为 64KiB。spill / 策略在 **Settings → Plugins**；软上限在 **Models**。`minimal` 预设默认仅 overflow（无主动软压）。
 
+**前缀缓存代价：** 每次成功 compact（soft / overflow / `/compact`）会 `breakSeriesBaseline`——下一次请求重新立 message-0，提供方 prompt-cache 命中从低位再爬。DeepSeek Flash 目录默认软压 **300k**（窗 1M）；把软压调得更紧会更早换窗、更常付 miss 价。会话级命中率见 Status `costUsage.cacheHitRate`（cache-read ÷ billed prompt）。维护者排期见 [session-optimize.md](./session-optimize.md) §5。
+
 ## Token 估算
 
 | 用途 | API（`@xrkseek/core-session`） | 说明 |
@@ -265,6 +267,8 @@ Price (before compact) = **max(local `estimateRequestTokens({ density: "soft-bud
 
 Ceiling = `resolveSoftBudgetCeiling(softMax, buffer)` (buffer ≥ max is ignored so a non-positive ceiling cannot fail-closed every turn). Auto-compact starts at `softBudgetTriggerPercent` of softMax; when softMax is already 90% of the window (blank-derived or ring force), that percent is **not** applied again (avoids ~81% of window). Over ceiling, stages follow strategy (`prune-summary` prunes then up to **2 + peel** `runCompaction({ reason: "auto" })`, peeling halves keep); **still over → fail-closed** (`ContextOverflowError`, no outbound call).  
 Tool bodies are bounded **before** they enter the log (one spill policy): over **64KiB** (Face `agent-loop.toolResultMaxInlineBytes`; `0` disables) writes the full body once under `~/.xrk/spill/tool-outputs/` with a head/tail preview + path; `bash.maxOutputBytes` defaults to 64KiB too. Spill / strategy under **Settings → Plugins**; soft ceiling under **Models**. The `minimal` preset stays overflow-only.
+
+**Prefix-cache cost:** every successful compact (soft / overflow / `/compact`) calls `breakSeriesBaseline` — the next request re-baselines message 0 and prompt-cache hits climb from near-zero again. DeepSeek Flash ships a **300k** soft ceiling (1M window); a tighter soft budget windows earlier and pays more miss tokens. Session hit share is Status `costUsage.cacheHitRate` (cache-read ÷ billed prompt). Maintainer schedule: [session-optimize.md](./session-optimize.md) §5.
 
 ## Token estimates
 

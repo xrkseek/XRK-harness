@@ -383,6 +383,7 @@ describe("Face workspace U2", () => {
     });
     expect(deleted.result.ok).toBe(true);
     if (deleted.result.ok) {
+      // sidB was moved onto ws_default by insertSessionBefore — nothing to park.
       expect(deleted.result.value).toEqual({ deleted: true });
     }
 
@@ -759,6 +760,74 @@ describe("Face workspace U2", () => {
     expect(
       hostFrames.some((f) => f.type === "host/archived-sessions-changed"),
     ).toBe(true);
+  });
+
+  it("workspace.delete archives released sessions for Settings purge", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-del-arch-"));
+    const other = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-del-arch2-"));
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const created = await dispatchFaceMethod(runtime, "workspace.create", "c", {
+      path: other,
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const extraId = (
+      created.result.value as { workspace: { workspaceId: string } }
+    ).workspace.workspaceId;
+
+    const sess = await dispatchFaceMethod(runtime, "session.create", "s", {
+      workspaceId: extraId,
+    });
+    expect(sess.result.ok).toBe(true);
+    if (!sess.result.ok) return;
+    const sessionId = (sess.result.value as { sessionId: string }).sessionId;
+
+    const deleted = await dispatchFaceMethod(runtime, "workspace.delete", "d", {
+      workspaceId: extraId,
+    });
+    expect(deleted.result.ok).toBe(true);
+    if (!deleted.result.ok) return;
+    expect(deleted.result.value).toEqual({
+      deleted: true,
+      archivedSessionIds: [sessionId],
+    });
+    expect(runtime.workspaces.isArchived(sessionId)).toBe(true);
+    expect(store.has(sessionId)).toBe(true);
+  });
+
+  it("session.delete clears registry-only archive ghosts", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-del-ghost-"));
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const ghostId = "sess_ghost_archive_only";
+    runtime.workspaces.archiveSession(ghostId);
+    expect(runtime.workspaces.isArchived(ghostId)).toBe(true);
+    expect(store.has(ghostId)).toBe(false);
+
+    const deleted = await dispatchFaceMethod(runtime, "session.delete", "g1", {
+      sessionId: ghostId,
+    });
+    expect(deleted.result.ok).toBe(true);
+    expect(runtime.workspaces.isArchived(ghostId)).toBe(false);
   });
 
   it("workspace.archiveSession cancels the session turn", async () => {

@@ -18,6 +18,7 @@ import {
   workspaceCheckpointStoreForSession,
 } from "../workspace-checkpoint.js";
 import { resetFaceStateAfterLogCut } from "../log-cut-reset.js";
+import { ensureSessionHotWritable } from "../session-subtree.js";
 
 function requireSession(
   runtime: Parameters<FaceHandler>[0],
@@ -150,6 +151,8 @@ export const sessionCheckpointRestore: FaceHandler = async (
   const sessionId = String(p.sessionId ?? "").trim();
   const gate = requireSession(runtime, sessionId);
   if (!gate.ok) return gate.result;
+  // truncateChat / log cut need a hot column — restore archived offload first.
+  await ensureSessionHotWritable(runtime, sessionId);
 
   const id = String(p.id ?? p.checkpointId ?? "").trim();
   const atSeq =

@@ -116,7 +116,7 @@
 }
 
 .sessionRow .title {
-  margin: 0 6px 0 4px;
+  margin: 0;
 }
 
 .titleStack {
@@ -129,6 +129,35 @@
 
 .sessionRow .titleStack {
   margin: 0 6px 0 4px;
+}
+
+.titleLine {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.titleLine .title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compact archive mark — visible when archive filter reattaches the row. */
+.archivedBadge {
+  flex: none;
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.02em;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+.sessionArchived .title {
+  color: var(--dsw-alias-label-secondary);
 }
 
 .sessionRow.hasSideline {

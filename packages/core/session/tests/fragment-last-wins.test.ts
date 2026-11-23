@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { deriveMessages } from "../src/index.js";
 import type { SessionEvent } from "@xrkseek/protocol";
 
-describe("deriveMessages context-fragment last-wins", () => {
-  it("keeps only the latest row per fragmentId in the model window", () => {
+describe("deriveMessages context-fragment chronology", () => {
+  it("keeps fragment updates in place (no last-wins relocate)", () => {
     const events: SessionEvent[] = [
       {
         type: "user/message",
@@ -40,6 +40,7 @@ describe("deriveMessages context-fragment last-wins", () => {
           form: "fragment",
           fragmentId: "additional_context.session_capability",
           fragmentKind: "additional_context",
+          update: true,
         },
       },
       {
@@ -53,12 +54,19 @@ describe("deriveMessages context-fragment last-wins", () => {
     const texts = msgs.map((m) =>
       typeof m.content === "string" ? m.content : JSON.stringify(m.content),
     );
+    // Both snapshots stay: relocating to the latest slot would rewrite the
+    // prefix after "first ask" / "ok" and miss provider KV cache.
     expect(texts.filter((t) => t.includes("session_capability"))).toEqual([
+      "<session_capability>\npermission: default\n</session_capability>",
       "<session_capability>\npermission: full\n</session_capability>",
     ]);
-    expect(texts).toContain("first ask");
-    expect(texts).toContain("second ask");
-    expect(texts).toContain("ok");
+    expect(texts).toEqual([
+      "<session_capability>\npermission: default\n</session_capability>",
+      "first ask",
+      "ok",
+      "<session_capability>\npermission: full\n</session_capability>",
+      "second ask",
+    ]);
   });
 
   it("does not collapse distinct fragmentIds or human messages", () => {

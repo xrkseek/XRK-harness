@@ -55,6 +55,7 @@ sdk · server · presets → core* / llm / mcp / attachment / exec* / workspace 
 | Preset 选项 | `docs/profiles.md` · `docs/workspace-inject.md` · preset README |
 | 新能力是否可依赖 | `docs/status.md` |
 | Meter / compaction | `docs/session-compaction.md` · `docs/protocol-events.md` |
+| 壳栏位 / 概况动效与性能 | `docs/shell-performance.md`（保留运动；钉宽裁切） |
 
 空壳 / 未接线能力在实现前 **只** 更新 `docs/status.md`「未做」，勿写假 API。`@xrkseek/mcp` 已能跑；勿再当空壳。
 
@@ -147,6 +148,7 @@ Forbidden: server → concrete llm adapters; core-agent → exec implementations
 | Preset options | `docs/profiles.md` · `docs/workspace-inject.md` · preset README |
 | Dependability | `docs/status.md` |
 | Meter / compaction | `docs/session-compaction.md` · `docs/protocol-events.md` |
+| Shell column / Overview motion & perf | `docs/shell-performance.md` (keep motion; pin-width clip) |
 
 Before implementing unwired capabilities, update `docs/status.md` **Not done** only — never fake APIs. `@xrkseek/mcp` is already Working; do not treat it as a stub.
 

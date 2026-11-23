@@ -107,4 +107,42 @@ describe('ArchivedSessionsSection bulk actions', () => {
     })
     expect(unarchive).toHaveBeenCalledWith(sid('a'))
   })
+
+  it('lists archived ids without a summary and deletes them', async () => {
+    const { deleteSession } = mount(['ghost'], [])
+
+    expect(screen.getByText(archivedZh.missingSummary)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: archivedZh['bulk.deleteAll'] }))
+    fireEvent.click(screen.getByRole('button', { name: archivedZh.delete }))
+
+    await waitFor(() => {
+      expect(deleteSession).toHaveBeenCalledWith(sid('ghost'))
+    })
+  })
+
+  it('surfaces how many unarchived sessions remain', () => {
+    mount(['a'], [summary('a', 'Alpha'), summary('live', 'Live')])
+    expect(screen.getByText('另有 1 个未归档会话仍在侧栏。')).toBeTruthy()
+  })
+
+  it('hides archived delegated subagents and ignores them in remain count', () => {
+    const worker = {
+      ...summary('worker', '调研员'),
+      origin: 'subagent' as const,
+      parentId: sid('a'),
+    }
+    const liveWorker = {
+      ...summary('live-worker', '施工员'),
+      origin: 'subagent' as const,
+      parentId: sid('live'),
+    }
+    mount(
+      ['a', 'worker'],
+      [summary('a', 'Alpha'), worker, summary('live', 'Live'), liveWorker],
+    )
+    expect(screen.getByText('Alpha')).toBeTruthy()
+    expect(screen.queryByText('调研员')).toBeNull()
+    // Only the human-facing live session counts — not the hidden worker.
+    expect(screen.getByText('另有 1 个未归档会话仍在侧栏。')).toBeTruthy()
+  })
 })

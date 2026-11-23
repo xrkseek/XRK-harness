@@ -322,6 +322,8 @@ export class FaceWorkspaceRegistry {
   /**
    * Drop one session from archive, pin, membership, and every workspace order
    * bucket. Idempotent for an unknown id. Used by durable `session.delete`.
+   * Always scrubs every order bucket — membership can desync from order and
+   * leave ghost sidebar slots after a half-finished delete.
    */
   forgetSession(sessionId: string): {
     archivedSessionIds: string[];
@@ -332,14 +334,42 @@ export class FaceWorkspaceRegistry {
     const ws = this.membership.get(sessionId);
     if (ws !== undefined) {
       this.membership.delete(sessionId);
-      this.removeFromOrder(ws, sessionId);
       const row = this.workspaces.get(ws);
       if (row) row.updatedAt = new Date().toISOString();
+    }
+    for (const wsId of [...this.sessionOrder.keys()]) {
+      this.removeFromOrder(wsId, sessionId);
     }
     return {
       archivedSessionIds: [...this.archived],
       pinnedSessionIds: [...this.pinned],
     };
+  }
+
+  /**
+   * Drop archive / membership / order / pin rows whose durable log is gone.
+   * Scans order buckets too — ids can linger in `sessionOrder` after membership
+   * was cleared (H4 ghost slots).
+   * @returns how many session ids were forgotten.
+   */
+  forgetAbsent(liveIds: ReadonlySet<string>): number {
+    const stale = new Set<string>();
+    for (const id of this.archived) {
+      if (!liveIds.has(id)) stale.add(id);
+    }
+    for (const id of this.membership.keys()) {
+      if (!liveIds.has(id)) stale.add(id);
+    }
+    for (const ids of this.sessionOrder.values()) {
+      for (const id of ids) {
+        if (!liveIds.has(id)) stale.add(id);
+      }
+    }
+    for (const id of this.pinned) {
+      if (!liveIds.has(id)) stale.add(id);
+    }
+    for (const id of stale) this.forgetSession(id);
+    return stale.size;
   }
 
   /** Whether one session sits in the registry-global archive set. */
@@ -367,8 +397,8 @@ export class FaceWorkspaceRegistry {
 
   /**
    * Remove one workspace registration (including the bootstrap default).
-   * Sessions lose their accounting slot and appear under Ungrouped; logs and
-   * directories stay untouched.
+   * Sessions lose membership/order; Face then archives + offloads the returned
+   * ids so Settings can permanently delete them.
    */
   delete(workspaceId: string): { ok: true; movedSessionIds: string[] } | { ok: false; reason: string } {
     if (workspaceId === XIANGYANG_WORKSPACE_ID) {

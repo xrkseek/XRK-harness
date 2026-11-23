@@ -281,7 +281,9 @@ describe('deriveGroups', () => {
       'archived-only',
     )
     expect(groups[0]!.sessions.map(node => node.id)).toEqual([gone.id])
+    expect(groups[0]!.sessions[0]!.archived).toBe(true)
     expect(deriveFlat(sessions, archived('gone'), 'archived-only').map(r => r.id)).toEqual([gone.id])
+    expect(deriveFlat(sessions, archived('gone'), 'archived-only')[0]!.archived).toBe(true)
   })
 
   it('marks selected Workspace and Ungrouped sessions without relying on an Intent', () => {

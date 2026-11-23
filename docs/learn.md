@@ -34,8 +34,8 @@
 
 - **取消流式**：abort 时把已落库 `assistant/chunk` 固化为 `assistant/message`（**字段** `interrupted: true`），`turn/end.reason` 仍是 **`aborted`**（带 `AgentCancelCause`）。进程崩溃留下的开洞 turn 由 `repairOpenTurnEvents` 闭合为 **`interrupted`**（无 cancel cause）。对照表见 [protocol-events.md](./protocol-events.md#结束原因aborted-vs-interrupted--end-reasons-aborted-vs-interrupted)。
 
-- **会话归档**：侧栏会话行 `⋯` →「归档会话」（`workspace.archiveSession`）；从侧栏隐藏，并把该会话日志从热库 `sessions.db` **分离**到 `sessions-archive.db`（减轻热库；不是永久删除）。归档保留工作区 membership，解档后回到原位并迁回热库。
-- **解档**：Settings →「已归档会话」（`workspace.unarchiveSession`）。**永久删除**（仅已归档）走 `session.delete`，热库与归档库行一起抹掉。
+- **会话归档**：侧栏会话行 `⋯` →「归档会话」（`workspace.archiveSession`）；从侧栏隐藏，并把该会话日志从热库 `sessions.db` **分离**到 `sessions-archive.db`（减轻热库；不是永久删除）。归档保留工作区 membership，解档后回到原位并迁回热库。侧栏归档筛选（全部 / 仅已归档）会给行加「已归档」标识，`⋯` 变为「取消归档」（不再出现二次归档）。点开已归档行，或对已归档 id 做 `session.prompt` / fork / truncate / rename / cwd / 审批 / checkpoint restore，会先 restore 到热库再写。工具委派子会话（`origin=subagent`）随父会话一起归档 / 解档 / 置顶解档；`fork` 子会话独立。删除**项目**工作区时，释放出的会话会自动进归档集（便于 Settings 永久删除）；删除**干员家**只解组身份会话到「未分组」（不归档）。Host 启动串行修复：修剪「父已不在」的孤儿委派子树（含孙代）、把 New Session blank 压到每工作区至多一个（并清无 membership 的 blank）、再 offload 仍热的已归档行，最后一次 reclaim；并清掉 `sessionOrder` 幽灵槽。`session.create` / fork 权限钉失败走完整 wipe，不留 membership 幽灵。
+- **解档 / 永久删除**：Settings →「已归档会话」。本页列出已归档的**主会话**（隐藏 `origin=subagent` 行；删父会级联抹子）。侧栏未归档的不会出现在这里。`session.delete`（仅已归档）抹热库与归档库行，并级联工具委派子树；无摘要的归档登记也可删。
 
 - **组合叶**：`@xrkseek/compose` C0·C1·C2（`interceptInject` / `openSubagentRealm`）能跑；presets 只接线。
 
@@ -137,8 +137,8 @@ Short digest of capabilities; details live in topic docs and [modules/](./module
 
 - **Cancel streaming**: On abort, persisted `assistant/chunk` solidifies into `assistant/message` (`interrupted: true`); `turn/end.reason` remains **`aborted`** (with `AgentCancelCause`). Crash-open turns are closed by `repairOpenTurnEvents` as **`interrupted`** (no cancel cause). See the table in [protocol-events.md](./protocol-events.md#结束原因aborted-vs-interrupted--end-reasons-aborted-vs-interrupted).
 
-- **Session archive**: Sidebar session row `⋯` → “Archive session” (`workspace.archiveSession`); hides from the sidebar and **moves** that session’s log from hot `sessions.db` into `sessions-archive.db` (lightens the hot file; not a permanent wipe). Archive keeps workspace membership so unarchive restores the same slot and rehydrates the hot DB.
-- **Unarchive**: Settings → “Archived sessions” (`workspace.unarchiveSession`). **Permanent delete** (archived only) is `session.delete`, which drops rows from both hot and archive DBs.
+- **Session archive**: Sidebar session row `⋯` → “Archive session” (`workspace.archiveSession`); hides from the sidebar and **moves** that session’s log from hot `sessions.db` into `sessions-archive.db` (lightens the hot file; not a permanent wipe). Archive keeps workspace membership so unarchive restores the same slot and rehydrates the hot DB. Sidebar archive filters (all / archived-only) mark rows with an “Archived” badge and swap `⋯` to “Unarchive” (no second archive). Clicking an archived row (or `session.prompt` / fork / truncate / rename / cwd / approval / checkpoint restore on an archived id) restores it to hot before writes. Tool-delegated children (`origin=subagent`) archive / unarchive / pin-restore with the parent; `fork` children stay independent. Deleting a **project** workspace parks released sessions into the archive set for Settings purge; deleting an **agent-home** ungroups identity sessions (干员「未分组」, not archive). Host boot repairs serially: wipe orphan delegated subtrees (including grandchildren) whose parent is gone, cap New Session blanks at one per workspace (and drop membership-less blanks), offload still-hot archived rows, then one reclaim; also scrubs ghost `sessionOrder` slots. Failed `session.create` / fork permission pin uses a full wipe so membership ghosts are not left behind.
+- **Unarchive / permanent delete**: Settings → “Archived sessions”. That page lists archived **human-facing** sessions (hides `origin=subagent` rows; deleting a parent cascades). Unarchived sidebar chats do not appear there. `session.delete` (archived only) drops hot and archive rows and wipes the delegated subtree; registry-only ghosts can still be deleted.
 
 - **Compose leaf**: `@xrkseek/compose` C0·C1·C2 (`interceptInject` / `openSubagentRealm`) work; presets only wire.
 

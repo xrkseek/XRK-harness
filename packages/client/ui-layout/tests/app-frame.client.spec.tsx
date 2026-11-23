@@ -243,6 +243,23 @@ describe('AppFrame', () => {
     expect(detailsCol.hasAttribute('inert')).toBe(true)
   })
 
+  it('pins Overview and sidebar content width while desktop tracks ease', () => {
+    // grid-template-columns easing would otherwise reflow PresenceBall / tabs /
+    // sidebar every frame; CSS vars freeze subtrees for the slide.
+    const { frame, instance, rerenderFrame } = mountFrame()
+    act(() => { instance.actions.openDetails() })
+    rerenderFrame()
+    expect(frame.hasAttribute('data-animating')).toBe(true)
+    expect(frame.style.getPropertyValue('--xrk-details-anim-width')).toBe('360px')
+    expect(frame.style.getPropertyValue('--xrk-sidebar-anim-width')).toBe(`${SIDEBAR_DEFAULT}px`)
+
+    act(() => { instance.actions.closeDetails() })
+    rerenderFrame()
+    expect(frame.hasAttribute('data-animating')).toBe(true)
+    expect(frame.style.getPropertyValue('--xrk-details-anim-width')).toBe('360px')
+    expect(frame.style.getPropertyValue('--xrk-sidebar-anim-width')).toBe(`${SIDEBAR_DEFAULT}px`)
+  })
+
   it('renders the session pair with empty owner shares (sessionId is framework-standard)', () => {
     const { slotCalls, getByTestId } = mountFrame()
     expect(getByTestId('center-content')).toBeTruthy()

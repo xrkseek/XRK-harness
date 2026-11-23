@@ -207,6 +207,43 @@ export function promptPressureTokens(usage: TokenUsage): number {
 }
 
 /**
+ * Billed prompt-side tokens (uncached input + cache read + cache write).
+ * DeepSeek / OpenAI-style meters treat these as disjoint; Anthropic may fold
+ * write into input — callers still sum what the sample reports.
+ */
+export function billedPromptTokens(usage: {
+  readonly inputTokens?: number;
+  readonly input?: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheRead?: number;
+  readonly cacheWriteTokens?: number;
+  readonly cacheWrite?: number;
+}): number {
+  const input = usage.inputTokens ?? usage.input ?? 0;
+  const cacheRead = usage.cacheReadTokens ?? usage.cacheRead ?? 0;
+  const cacheWrite = usage.cacheWriteTokens ?? usage.cacheWrite ?? 0;
+  return input + cacheRead + cacheWrite;
+}
+
+/**
+ * Cache-read share of billed prompt tokens, 0..1.
+ * `null` when there was no prompt-side billing (empty sample).
+ */
+export function cacheHitRate(usage: {
+  readonly inputTokens?: number;
+  readonly input?: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheRead?: number;
+  readonly cacheWriteTokens?: number;
+  readonly cacheWrite?: number;
+}): number | null {
+  const billed = billedPromptTokens(usage);
+  if (billed <= 0) return null;
+  const cacheRead = usage.cacheReadTokens ?? usage.cacheRead ?? 0;
+  return cacheRead / billed;
+}
+
+/**
  * Context-window occupancy from one provider sample (Codex
  * `tokens_in_context_window`): prefer exact {@link TokenUsage.totalTokens};
  * else {@link promptPressureTokens}.

@@ -5,10 +5,14 @@
  * successful `loadPreviewTabs` result so re-opening Overview paints immediately
  * instead of flashing「正在读取概况」and resetting summary numbers to empty.
  *
+ * A successful Status that carries `companionBall` also warms
+ * `presence-look-cache` so the header ball can re-enter without PENDING flash.
+ *
  * Soft faces still must not call `session.getSnapshot()` inside getSnapshot
  * (see `xrk-overview-uses`); this map is write-on-fetch only, read for paint.
  */
 import type { PreviewTabLoad } from './preview-load.ts'
+import { rememberCompanionLook } from './presence-look-cache.ts'
 
 const MAX_SESSIONS = 24
 const bySession = new Map<string, PreviewTabLoad>()
@@ -61,6 +65,7 @@ export function writeOverviewLoadCache(sessionId: string, load: PreviewTabLoad):
   if (load.status === null) return
   bySession.delete(sessionId)
   bySession.set(sessionId, load)
+  rememberCompanionLook(sessionId, load.status.companionBall)
   while (bySession.size > MAX_SESSIONS) {
     const oldest = bySession.keys().next().value
     if (oldest === undefined || oldest === sessionId) break

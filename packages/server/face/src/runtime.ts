@@ -7,7 +7,6 @@ import {
   listSessionsNeedingInboxRecover,
   newSession,
   readSessionEvents,
-  repairOpenTurnEvents,
   sessionEventCount,
   type PersistentSessionStore,
   type SessionStore,
@@ -154,6 +153,7 @@ import { seedXiangyangSkills } from "./xiangyang-skills.js";
 import { bindXiangyangWorkspaceTools } from "./xiangyang-workspace-tools.js";
 import { runXiangyangCodingSessionMigrate } from "./xiangyang-session-migrate.js";
 import { FaceSubagentRegistry, subagentOwnedEvents } from "./subagent-registry.js";
+import { repairSessionStoreOnBoot } from "./session-subtree.js";
 import { FaceForkLineageStore } from "./fork-lineage.js";
 import { ExternalAgentSessionRegistry, externalAgentHandlesPath } from "./external-agent-runtime.js";
 import { AgentTeamGraph, agentTeamGraphPath } from "./agent-team-graph.js";
@@ -247,6 +247,12 @@ export interface CreateFaceRuntimeOptions {
    * (archive). Optional — Host may also run consolidate on stop.
    */
   readonly onSessionFinalize?: (sessionId: string) => void | Promise<void>;
+  /**
+   * Run serial boot store repair (orphan / blank / archive offload) after
+   * hydrate. Opt-in — product Host sets true; Face unit tests leave unset so
+   * fire-and-forget prune cannot race fixtures created on the next tick.
+   */
+  readonly bootStoreRepair?: boolean;
   /** Public host runtime snapshot for settings.get (no secrets). */
   readonly hostPublic?: FaceHostPublicSettings;
   /** Cordis panel `runHostHalf` → dsh-compat `host.mjs` apply. */
@@ -1946,30 +1952,21 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
   runtimeBox.current = runtime;
   goals.bind(runtime);
-  // Durable Inbox SoT is the session log (`prompt/admitted`). After Host
-  // restart, rebuild echo rpc maps, close crash-open turns, republish queue
-  // baselines, refill pendingUserRpc for dangling promotes, and wake drains
-  // so pending queue/steer (and promote-without-user/message) resume. Skip
-  // sessions whose goal bind() just disarmed — user must resume (same fence
-  // as goals rehydrate; do not auto-continue).
+
+  // Inbox SoT = session log. Peek candidates without full-log × N; open-turn
+  // repair happens inside ensureLoaded on the read below (no second repair pass).
   for (const sessionId of listSessionsNeedingInboxRecover(store)) {
+    let events;
     try {
-      const repairs = repairOpenTurnEvents(
-        readSessionEvents(store, sessionId),
-      );
-      for (const ev of repairs) {
-        store.append(sessionId, ev);
-      }
+      events = readSessionEvents(store, sessionId);
     } catch {
-      /* best-effort per session — still republish / wake */
+      continue;
     }
-    const events = readSessionEvents(store, sessionId);
     const pending = listPendingAdmits(events, sessionId);
     const dangling = listDanglingPromotedAdmits(events, sessionId);
     rebuildAdmitRpcMaps(pending, { admitRpcMap, rpcAdmitMap });
     rebuildAdmitRpcMaps(dangling, { admitRpcMap, rpcAdmitMap });
     if (dangling.length > 0) {
-      // Same human-only gate as live promote → pendingUserRpc.
       const echoes: FacePendingUserEcho[] = dangling
         .filter((row) => isHumanUserMessageSource(row.source))
         .map((row) => ({
@@ -1986,27 +1983,21 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     if (pending.length === 0 && dangling.length === 0) continue;
     options.drain.wake(sessionId);
   }
+
   hydrateFaceSettingsDocument(runtime);
   void hydrateCredentialsFromSecretStore(runtime);
   hydrateFaceHostSettings(runtime);
   hydrateWorkspaceRegistry(runtime, workspaces);
-  // Pre-offload installs kept archived logs in hot sessions.db — move them once.
-  if (typeof runtime.store.offloadToArchive === "function") {
-    const archived = workspaces.list(runtime.store.list()).archivedSessionIds;
-    for (const sessionId of archived) {
-      if (!runtime.store.has(sessionId)) continue;
-      if (runtime.store.isOffloaded?.(sessionId)) continue;
-      try {
-        runtime.store.offloadToArchive(sessionId);
-      } catch {
-        /* best-effort per id */
-      }
-    }
-    try {
-      runtime.store.reclaimStorage?.();
-    } catch {
-      /* best-effort */
-    }
+
+  // Must run *after* hydrate — archived/membership are empty before import.
+  if (workspaces.forgetAbsent(new Set(store.list())) > 0) {
+    void persistWorkspaceDoc(runtime, workspaces);
+  }
+  // Serial boot repair (orphans → blanks → archive offload → one VACUUM).
+  // Opt-in (Host): fire-and-forget — createFaceRuntime is sync. Unit tests
+  // leave this off so prune cannot delete fixtures on the next tick.
+  if (options.bootStoreRepair) {
+    void repairSessionStoreOnBoot(runtime).catch(() => undefined);
   }
   // Product default: 向阳空间 under ~/.xrk (always present; never folder basename).
   // IM (`ws_im`) is created only when a gateway connects / admits — not here.

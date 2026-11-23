@@ -258,13 +258,19 @@ export function listDanglingPromotedAdmits(
 /**
  * Sessions that need Inbox recover after Host restart: pending admits and/or
  * dangling promotes (promoted, user/message not yet written).
+ *
+ * Prefers {@link SessionStore.readInboxRecoverEvents} when present so durable
+ * stores can skip full-log hydrate + LRU thrash across hundreds of sessions.
  */
 export function listSessionsNeedingInboxRecover(
   store: SessionStore,
 ): readonly string[] {
   const out: string[] = [];
+  const peek = store.readInboxRecoverEvents?.bind(store);
   for (const sessionId of store.list()) {
-    const events = readSessionEvents(store, sessionId);
+    const events = peek
+      ? peek(sessionId)
+      : readSessionEvents(store, sessionId);
     if (listPendingAdmits(events, sessionId).length > 0) {
       out.push(sessionId);
       continue;

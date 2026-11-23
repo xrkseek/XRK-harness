@@ -139,6 +139,8 @@ export class WorkspaceRuntime implements IWorkspaces {
         // A leftover empty composer must not swallow New Session from a live
         // chat: that blank never received inheritFrom, so the trigger stays
         // 「选择模型」 while Status on the source still shows the route.
+        // Face `session.create` + boot `pruneExcessBlankSessions` then wipe
+        // the abandoned blanks so they do not pile up in sessions.db.
         if (
           currentId !== undefined
           && currentId !== summary.id

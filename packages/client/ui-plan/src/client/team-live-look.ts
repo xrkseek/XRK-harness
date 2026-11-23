@@ -10,8 +10,8 @@ import type { TeamRosterLiveLook } from '@xrkseek/client-runtime/client'
 
 /**
  * Overlay an optimistic roster patch on a Face status snapshot.
- * Fields the patch does not carry keep the snapshot's value (including `''`
- * overlays, which must clear rather than fall through).
+ * Absent patch fields keep the snapshot. Present fields win — including `''`
+ * overlays and kit clears (`'none'`), which must not fall through.
  */
 export function mergeTeamRosterLiveLook<T extends object>(
   base: T,
@@ -20,16 +20,16 @@ export function mergeTeamRosterLiveLook<T extends object>(
   if (!look) return base
   return {
     ...base,
-    ...(look.shape ? { shape: look.shape } : {}),
-    ...(look.color ? { color: look.color } : {}),
+    ...(look.shape !== undefined && look.shape !== '' ? { shape: look.shape } : {}),
+    ...(look.color !== undefined && look.color !== '' ? { color: look.color } : {}),
     ...(typeof look.size === 'number' ? { size: look.size } : {}),
-    ...(look.kit ? { kit: look.kit } : {}),
-    ...(look.kitHat ? { kitHat: look.kitHat } : {}),
-    ...(look.kitGlasses ? { kitGlasses: look.kitGlasses } : {}),
-    ...(look.kitHeld ? { kitHeld: look.kitHeld } : {}),
-    ...(look.overlayHat ? { overlayHat: look.overlayHat } : {}),
-    ...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {}),
-    ...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {}),
+    ...(look.kit !== undefined ? { kit: look.kit } : {}),
+    ...(look.kitHat !== undefined ? { kitHat: look.kitHat } : {}),
+    ...(look.kitGlasses !== undefined ? { kitGlasses: look.kitGlasses } : {}),
+    ...(look.kitHeld !== undefined ? { kitHeld: look.kitHeld } : {}),
+    ...(look.overlayHat !== undefined ? { overlayHat: look.overlayHat } : {}),
+    ...(look.overlayGlasses !== undefined ? { overlayGlasses: look.overlayGlasses } : {}),
+    ...(look.overlayHeld !== undefined ? { overlayHeld: look.overlayHeld } : {}),
   }
 }
 
@@ -42,5 +42,10 @@ export function companionChildMemberId(
   delegate: { readonly childMemberId?: string; readonly childSeat?: string } | undefined,
 ): string | undefined {
   if (!delegate) return undefined
-  return delegate.childMemberId ?? (delegate.childSeat === 'manager' ? 'mem_seed_manager' : undefined)
+  if (delegate.childMemberId) return delegate.childMemberId
+  // Seed ids when Face omits memberId (older Hosts / brief Status gaps).
+  // Keep in sync with Face `MANAGER_MEMBER_ID` / `SUNFLOWER_MEMBER_ID`.
+  if (delegate.childSeat === 'manager') return 'mem_seed_manager'
+  if (delegate.childSeat === 'sunflower') return 'mem_seed_xrkseek'
+  return undefined
 }

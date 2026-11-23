@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, flushSession, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, promotedUserMessageSource, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, deriveAutoCompactMaxTokens, resolveSoftBudgetCeiling, resolveSoftBudgetTriggerTokens, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, flushSession, isStandingPlanMessage, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, promotedUserMessageSource, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, deriveAutoCompactMaxTokens, resolveSoftBudgetCeiling, resolveSoftBudgetTriggerTokens, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -83,6 +84,7 @@ import {
 } from "./workspace-changes-emit.js";
 import {
   breakSeriesBaseline,
+  hydrateSeriesBaselineFromLog,
   recallSeriesBaseline,
   rememberSeriesBaseline,
 } from "./series-baseline.js";
@@ -551,6 +553,27 @@ async function invokeLlmBody(
   });
 }
 
+const SLASH_RECIPE_FRAGMENT_ID = "slash-recipe";
+
+/** Last-wins digest for the slash-recipe context-fragment row. */
+function latestSlashRecipeDigest(
+  events: readonly SessionEvent[],
+): string | undefined {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev?.type !== "user/message" || !ev.source) continue;
+    if (ev.source.kind !== "context-fragment") continue;
+    if (ev.source.fragmentId !== SLASH_RECIPE_FRAGMENT_ID) continue;
+    if (typeof ev.source.digest === "string" && ev.source.digest.trim()) {
+      return ev.source.digest.trim();
+    }
+    const body =
+      typeof ev.content === "string" ? ev.content : flattenText(ev.content);
+    return createHash("sha256").update(body, "utf8").digest("hex").slice(0, 16);
+  }
+  return undefined;
+}
+
 async function buildModelRequest(input: {
   events: readonly SessionEvent[];
   sessionId: string;
@@ -618,7 +641,19 @@ async function buildModelRequest(input: {
   // Image/file blocks (including offloaded images) must stay in history —
   // lifting them into skeletonUser would stringify attachments away and the
   // model would never see the upload.
+  //
+  // Standing plan is always last for prefix-cache. Peel it before skeleton
+  // lift so an open todo list cannot steal the human turn (otherwise
+  // CURRENT_MESSAGE + opening clock never attach).
   let history = derived;
+  let trailingStandingPlan: ChatMessage | undefined;
+  if (history.length > 0) {
+    const last = history[history.length - 1];
+    if (last && isStandingPlanMessage(last)) {
+      trailingStandingPlan = last;
+      history = history.slice(0, -1);
+    }
+  }
   let skeletonText = "";
   if (input.firstStep && history.length > 0) {
     const last = history[history.length - 1];
@@ -708,9 +743,14 @@ async function buildModelRequest(input: {
       : {}),
   });
 
+  const messages =
+    trailingStandingPlan !== undefined
+      ? [...placed.messages, trailingStandingPlan]
+      : placed.messages;
+
   return {
     system: assembled.system,
-    messages: placed.messages,
+    messages,
     tools: assembled.tools,
     ...(placed.seriesBaselineSystem !== undefined
       ? { seriesBaselineSystem: placed.seriesBaselineSystem }
@@ -743,11 +783,21 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
   let toolFailed = 0;
   const compaction = resolveCompactionOptions(input.compaction);
   let overflowRecovered = false;
+  // Image offload runs inside buildReq (after this turn's user/message is
+  // logged). A turn-start pass here cannot see the new upload yet and only
+  // duplicated the first buildReq scan.
   /** Leading system text for in-history KV-cache series (turn + cross-turn). */
   let seriesBaselineSystem: string | undefined = recallSeriesBaseline(
     input.sessionId,
     input.llm,
   );
+  if (seriesBaselineSystem === undefined) {
+    seriesBaselineSystem = hydrateSeriesBaselineFromLog(
+      input.sessionId,
+      input.llm,
+      readSessionEvents(input.store, input.sessionId),
+    );
+  }
 
   let userText = input.userText;
   let userContent: MessageContent = input.userContent ?? input.userText;
@@ -849,22 +899,34 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
 
   // Slash recipe as context inject (DSH: live guidance after cached system
   // prefix). Same fragmentId last-wins — sticky until the next slash recipe
-  // replaces it (same as other additional_context fragments). Does not rewrite
-  // message-0.
+  // replaces it. Digest-gated: identical bodies must not re-append (last-wins
+  // would relocate the row and bust the conversation prefix).
   if (slashRecipe) {
-    append(input.store, input.sessionId, {
-      type: "user/message",
-      ts: now(),
-      turnId,
-      messageId: newUserMessageId(),
-      content: `## Recipe\n${slashRecipe}`,
-      source: {
-        kind: "context-fragment",
-        form: "fragment",
-        fragmentId: "slash-recipe",
-        fragmentKind: "additional_context",
-      },
-    });
+    const recipeContent = `## Recipe\n${slashRecipe}`;
+    const recipeDigest = createHash("sha256")
+      .update(recipeContent, "utf8")
+      .digest("hex")
+      .slice(0, 16);
+    const priorRecipeDigest = latestSlashRecipeDigest(
+      readSessionEvents(input.store, input.sessionId),
+    );
+    if (priorRecipeDigest !== recipeDigest) {
+      append(input.store, input.sessionId, {
+        type: "user/message",
+        ts: now(),
+        turnId,
+        messageId: newUserMessageId(),
+        content: recipeContent,
+        source: {
+          kind: "context-fragment",
+          form: "fragment",
+          fragmentId: SLASH_RECIPE_FRAGMENT_ID,
+          fragmentKind: "additional_context",
+          digest: recipeDigest,
+          ...(priorRecipeDigest !== undefined ? { update: true as const } : {}),
+        },
+      });
+    }
   }
   append(input.store, input.sessionId, {
     type: "user/message",
@@ -1863,9 +1925,13 @@ export {
 export {
   breakSeriesBaseline,
   clearSeriesBaselineAnchors,
+  hydrateSeriesBaselineFromLog,
   llmRouteKey,
   recallSeriesBaseline,
   rememberSeriesBaseline,
 } from "./series-baseline.js";
-export { placeSystemOnWire } from "./place-system-on-wire.js";
+export {
+  placeSystemOnWire,
+  systemAppendAfterBaseline,
+} from "./place-system-on-wire.js";
 export { forgetSessionProcessCaches } from "./session-process-caches.js";

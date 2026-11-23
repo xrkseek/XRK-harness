@@ -18,6 +18,10 @@ import { persistWorkspaceDoc } from "./workspace-store.js";
 import { sessionCancel } from "./handlers/session.js";
 import { killLiveSessionJobs } from "./handlers/job.js";
 import { collectArchiveActivity } from "./session-archive-activity.js";
+import {
+  archiveDelegatedDescendants,
+  unarchiveDelegatedDescendants,
+} from "./session-subtree.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { resolveImGatewayWired } from "./process-channels.js";
@@ -453,9 +457,10 @@ export async function workspaceArchiveSessionFace(
   }
   // Archive is the sidebar “put this away” path after edit-fork; stop the
   // original turn so a leftover drain does not keep writing behind the child.
+  // Stop does not abort workers — but archive *is* lifecycle: delegated
+  // descendants follow the parent off the hot store (forks stay independent).
   await sessionCancel(runtime, `archive-${sessionId}`, {
     sessionId,
-    cascade: true,
   });
   // sessionCancel already kills jobs; call again for force paths that race a
   // late register (idempotent best-effort).
@@ -465,6 +470,7 @@ export async function workspaceArchiveSessionFace(
   } catch {
     /* Host Phase1 is best-effort */
   }
+  await archiveDelegatedDescendants(runtime, sessionId);
   // Move the durable log into sessions-archive.db so hot sessions.db can shrink.
   // Registry membership stays; unarchive restores the same slot + hot rows.
   try {
@@ -518,8 +524,10 @@ export async function workspaceUnarchiveSessionFace(
   } catch {
     /* memory stores / missing id */
   }
-  const archivedSessionIds = runtime.workspaces.unarchiveSession(sessionId);
+  runtime.workspaces.unarchiveSession(sessionId);
+  unarchiveDelegatedDescendants(runtime, sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
+  const archivedSessionIds = [...runtime.workspaces.list(runtime.store.list()).archivedSessionIds];
   runtime.bus.publishHost({
     type: "host/archived-sessions-changed",
     archivedSessionIds,
@@ -544,12 +552,15 @@ export async function workspacePinSessionFace(
     };
   }
   // Pin clears archive membership — restore the log to the hot DB first.
+  // Delegated children followed the parent into archive; bring them back too
+  // (same as workspace.unarchiveSession), else they stay cold ghosts.
   try {
     runtime.store.restoreFromArchive?.(sessionId);
   } catch {
     /* memory stores / missing id */
   }
   const result = runtime.workspaces.pinSession(sessionId);
+  unarchiveDelegatedDescendants(runtime, sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/archived-sessions-changed",
@@ -697,6 +708,9 @@ export async function workspaceDeleteFace(
       },
     };
   }
+  // Read kind before delete() drops the row — agent-home releases ungroup into
+  // 干员「未分组」(identity kept); project releases park in archive for purge.
+  const deletingKind = runtime.workspaces.get(workspaceId)?.kind;
   const result = runtime.workspaces.delete(workspaceId);
   if (!result.ok) {
     if (result.reason.startsWith("unknown")) {
@@ -718,17 +732,56 @@ export async function workspaceDeleteFace(
       },
     };
   }
-  // Agent-home delete keeps session identity so session.list still carries
-  // memberId — client routes those unbound rows to 干员「未分组」; project
-  // orphans (no memberId) stay under 工作区「未分组」.
+  // Park released *project* logs in archive (+ offload) so Settings can purge.
+  // agent-home identity sessions stay live and unbound (sidebar 未分组).
+  const archivedReleased: string[] = [];
+  if (deletingKind !== "agent-home") {
+    for (const sessionId of result.movedSessionIds) {
+      if (!runtime.store.has(sessionId)) continue;
+      if (runtime.workspaces.isArchived(sessionId)) {
+        archivedReleased.push(sessionId);
+        continue;
+      }
+      await sessionCancel(runtime, `workspace-delete-${sessionId}`, {
+        sessionId,
+      });
+      await archiveDelegatedDescendants(runtime, sessionId);
+      try {
+        runtime.store.offloadToArchive?.(sessionId);
+      } catch {
+        /* memory store / already cold */
+      }
+      runtime.workspaces.archiveSession(sessionId);
+      archivedReleased.push(sessionId);
+    }
+  }
+  if (archivedReleased.length > 0) {
+    try {
+      runtime.store.reclaimStorage?.();
+    } catch {
+      /* reclaim optional */
+    }
+  }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/workspace-removed",
     workspaceId,
   });
+  if (archivedReleased.length > 0) {
+    runtime.bus.publishHost({
+      type: "host/archived-sessions-changed",
+      archivedSessionIds: runtime.workspaces.list(runtime.store.list())
+        .archivedSessionIds,
+    });
+  }
   return {
     ok: true,
-    value: { deleted: true as const },
+    value: {
+      deleted: true as const,
+      ...(archivedReleased.length > 0
+        ? { archivedSessionIds: archivedReleased }
+        : {}),
+    },
   };
 }
 

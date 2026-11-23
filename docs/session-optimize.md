@@ -46,7 +46,7 @@
 | 遥测 / 标题 | `forwardOptional` · `basicRedactionRule` · seq=`readEvents.length` · 委托子跳过 title fallback |
 | Checkpoint / fork 血缘 | restore `chatSeq`/`chatAhead`/`truncateChat` · `FaceForkLink.atSeq` |
 | 基线已修（原体检 §2） | fork blank hint · archive hint 整行 · trimBeforeSeqCut · 任意轮分支 UI · FTS 双索引 · 投影 evict · shadow `reclaim` |
-| 提供方 KV 前缀 | `tools[]` 禁活表 · `tool_search` 稳定 · `series-baseline` · process-cache 生命周期 · recipe inject · expand 从 header 回灌 · deferred 跳过 dynamicSchema（见 §5） |
+| 提供方 KV 前缀 | `tools[]` 禁活表 · `tool_search` 稳定 · `series-baseline`(+hydrate) · standing plan 尾部(+peel) · fragment/slash digest · 无 fragment last-wins 搬家 · system append delta · buildReq image offload · `costUsage.cacheHitRate` · process-cache · recipe inject · expand 回灌 · deferred 跳过 dynamicSchema（见 §5） |
 
 假差距 / 定位差异（摘要）：live/persisted 枚举 · SOURCE_CONFLICT · Format V3 链 · 四分叉 derive · attempt settlement · `source.kind=provider` · 元数据必须进 sessions 表 · compaction 锁对。
 
@@ -119,9 +119,21 @@
 | **已收** | deferred 白跑 dynamicSchema | `materializeTools` 先 `listForModel` 再 merge schema |
 | **已收** | slash/recipe 进 system | 改 durable `context-fragment` inject（`## Recipe`）；message-0 不随配方变；模型仍可见 |
 | **已收** | Host 重启 / 截断丢失 expand | `hydrate` 从最新 `request/header.tools` 回灌；log cut = forget 后立刻 hydrate（编辑重发不再空窗） |
+| **已收** | standing plan prepend 断前缀 | `deriveMessages` **尾部**投影 open todos；plan 变不改 conversation 左端 |
+| **已收** | 尾部 plan 挡 first-step skeleton | assemble 先 peel `isStandingPlanMessage`，lift 后再挂回尾部（否则丢 CURRENT_MESSAGE / 开局 time） |
+| **已收** | context-fragment 每回合重追加 | `appendContextFragments` 按 `fragmentId+digest` 门控；同内容不写第二行 |
+| **已收** | fragment last-wins 搬家断前缀 | `foldChat` 不再按 fragmentId 折叠；更新只追加在尾部（与 skill-catalog 同姿态） |
+| **已收** | turn 开局无效 double offload | 用户图尚未入账时的 turn-start `ensureDurableImageOffloads` 已删；只留 `buildReq` 内扫描 |
+| **已收** | slash recipe 无 digest 重追加 | 同 `slash-recipe` fragmentId + digest 门控；相同配方不二次写入 |
+| **已收** | in-history 尾部重发整段 persona | `placeSystemOnWire` 只 append baseline 后缀 delta（plan/time 刷新不再双计 persona） |
+| **已收** | Host 重启丢 series baseline | `hydrateSeriesBaselineFromLog`：最新 compaction 后首条 `request/header.system` |
+| **已收** | 图 offload 中途改 wire | turn 开局先 `ensureDurableImageOffloads`（一步内再跑仍幂等） |
+| **已收** | 会话命中率不可见 | `costUsage.cacheHitRate`（`billedPromptTokens` / `cacheHitRate`） |
 | **真缺口** | `toolUpdate` / defer_loading | 本仓零命中；`tool_search` expand / Direct 工具增删仍整表重发 tools 段 |
-| **部分** | 其它 `workspaceBlocks` 进 system | plan/time 等仍可能拼进 system；压缩后才重基线 |
+| **部分** | follow-up time 进 system workspaceBlocks | 默认 ≥60s 才刷新；in-history 下以 **delta** 挂尾，不改 message-0；仍占尾部 uncached |
 | **定位差异** | DSH 系统节点进 session 日志 | 本仓 system 每请求装配 + 进程内 anchor；不靠日志 system 节点 |
 | **刻意不做** | 全 deferred / Messages `toolHistory` 照搬 | 伤 Direct 工具体验；DeepSeek Chat Completions 无 addition-only 半残 |
 
-**动手顺序（成本）：** ① 禁 `tools[]` 活表 ✅ → ② 跨回合 series baseline ✅ → ③ expand 回灌 + recipe inject ✅ → ④ DeepSeek `toolUpdate: addition-only`（大件）→ ⑤ 可选：live `cacheReadTokens` 探针。
+**Compact 的 cache 代价：** soft-budget / overflow / `/compact` 都会 `breakSeriesBaseline`——换窗后下一请求重基线，提供方前缀命中从接近 0 再爬。Flash 默认软压 **300k**（窗 1M）；压得越勤，账单上 miss 段越长。见 [session-compaction.md](./session-compaction.md)。
+
+**动手顺序（成本）：** ① 禁 `tools[]` 活表 ✅ → ② 跨回合 series baseline ✅ → ③ expand 回灌 + recipe inject ✅ → ④ standing plan / fragment·slash digest / early offload / hydrate / system delta ✅ → ⑤ DeepSeek `toolUpdate: addition-only`（大件）→ ⑥ Status 看 `costUsage.cacheHitRate`。

@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.10',
+    date: '2026-11-23',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '归档冷写、空白/孤儿子树胀库、Stop 假级联：会话生命周期一批严重洞已堵。',
+        en: 'Cold writes on archived chats, blank/orphan subtree bloat, and fake Stop cascade — serious lifecycle holes closed.',
+      },
+      {
+        zh: '前缀缓存连环打断（plan/fragment/system delta/hydrate）已修；Status 可见 cacheHitRate。',
+        en: 'Prefix-cache thrash (plan/fragment/system delta/hydrate) fixed; Status shows cacheHitRate.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.10。完整清单见 docs/releases/v0.8.10.md。',
+        en: 'Desktop / npm / phone align to 0.8.10. Full list: docs/releases/v0.8.10.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.9',
     date: '2026-11-22',
     title: {

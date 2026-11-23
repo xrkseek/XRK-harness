@@ -4,10 +4,17 @@ import {
   readSessionEvents,
   releaseSessionResident,
   sessionEventCount,
+  sessionHintsBlank,
+  sessionListHints,
   truncateSession,
   withdrawAdmit,
 } from "@xrkseek/core-session";
-import { forgetSessionProcessCaches } from "@xrkseek/core-agent-loop";
+import {
+  ensureSessionHotWritable,
+  pruneExcessBlankSessions,
+  wipeDurableSession,
+  wipeDurableSubtree,
+} from "../session-subtree.js";
 import { resetFaceStateAfterLogCut } from "../log-cut-reset.js";
 import {
   type AgentCancelCause,
@@ -71,7 +78,6 @@ import {
   threadStopHandoffSource,
 } from "../message-source.js";
 import {
-  forgetSessionOpenerState,
   markSessionHumanSpoke,
   rememberSessionOpener,
 } from "../session-opener.js";
@@ -95,7 +101,6 @@ import { resolveDefaultAgentPreset } from "../settings-document.js";
 import {
   effectiveSessionAgentPreset,
   pinSessionAgentPreset,
-  unpinSessionAgentPreset,
 } from "../session-agent-preset.js";
 import {
   modelSelectionFromPrefix,
@@ -110,11 +115,6 @@ import {
 } from "../model-catalog.js";
 import { reserveModelSessionSlot } from "../model-session-cap.js";
 import { selectSessionModel } from "../select-session-model.js";
-import {
-  clearSessionModelSelection,
-  sessionModelsPath,
-} from "../session-model-store.js";
-import { resolveXrkHome } from "@xrkseek/server-config";
 import { persistWorkspaceDoc } from "../workspace-store.js";
 import {
   resolveParentWorkspaceAttach,
@@ -440,8 +440,13 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       );
     }
   } catch (err) {
-    runtime.store.delete?.(sessionId);
-    forgetSessionProcessCaches(sessionId);
+    // attachSession / subagents.attach already ran — partial store.delete left
+    // membership + order ghosts (H-membership). Full wipe matches discard.
+    await wipeDurableSession(runtime, sessionId, {
+      persistWorkspace: true,
+      reclaim: false,
+      publishSets: true,
+    }).catch(() => undefined);
     slot.release();
     return {
       ok: false,
@@ -468,6 +473,23 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     publishWorkspaceChanged(runtime, workspace);
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
+  // Only when New Session skipped blank reuse on a *live* chat (client passes
+  // inheritFrom of a non-blank row). Ghost / blank inherit and plain creates
+  // must not wipe sibling blanks — tests and multi-blank fixtures rely on that.
+  // Boot `pruneExcessBlankSessions` still heals historical dirt.
+  if (
+    !parentSessionId
+    && attach.workspaceId
+    && inheritFrom
+    && inheritFrom !== sessionId
+    && runtime.store.has(inheritFrom)
+    && !sessionHintsBlank(sessionListHints(runtime.store, inheritFrom))
+  ) {
+    await pruneExcessBlankSessions(runtime, {
+      keepSessionId: sessionId,
+      workspaceId: attach.workspaceId,
+    }).catch(() => undefined);
+  }
   // Live session now counts in occupancy — drop the pending credit.
   slot.release();
   return {
@@ -877,6 +899,14 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       error: { code: "invalid-mode", message: "mode must be queue|steer" },
     };
   }
+  if (!runtime.store.has(sessionId)) {
+    return {
+      ok: false,
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
+    };
+  }
+  // Archived sidebar open used to leave the log cold; restore before admit.
+  await ensureSessionHotWritable(runtime, sessionId);
 
   const parts: PromptWirePart[] = [];
   for (const raw of content) {
@@ -1241,9 +1271,10 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
 };
 
 /**
- * Permanently delete an archived session: cancel any drain, drop the durable
- * log, forget workspace archive/membership, clear per-session Face caches,
- * and publish `host/session-removed` so list surfaces converge.
+ * Permanently delete an archived session (durable log when present, always
+ * clear registry). Ghost archive ids (registry only) take the same forget path.
+ * Tool-delegated descendants are wiped too — Stop does not cascade, but
+ * permanent delete is lifecycle (fork children stay independent).
  */
 export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
   const sessionId = String(asRecord(payload).sessionId ?? "").trim();
@@ -1251,12 +1282,6 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
     return {
       ok: false,
       error: { code: "invalid-payload", message: "sessionId required" },
-    };
-  }
-  if (!runtime.store.has(sessionId)) {
-    return {
-      ok: false,
-      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   if (!runtime.workspaces.isArchived(sessionId)) {
@@ -1269,7 +1294,9 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
       },
     };
   }
-  if (typeof runtime.store.delete !== "function") {
+
+  const hasRoot = runtime.store.has(sessionId);
+  if (hasRoot && typeof runtime.store.delete !== "function") {
     return {
       ok: false,
       error: {
@@ -1279,78 +1306,7 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
 
-  // Stop the turn before wiping the log so a racing drain cannot re-append.
-  await sessionCancel(runtime, `delete-${sessionId}`, {
-    sessionId,
-    cascade: true,
-  });
-
-  try {
-    await runtime.onSessionFinalize?.(sessionId);
-  } catch {
-    /* Host Phase1 is best-effort */
-  }
-
-  runtime.externalAgents.detach(sessionId);
-  runtime.forkLineage.detach(sessionId);
-  try {
-    await runtime.invalidateAgent?.(sessionId);
-  } catch {
-    /* ignore */
-  }
-
-  // Permanent wipe: drops hot and/or cold archive rows. VACUUM when freelist
-  // is large enough so sessions.db / sessions-archive.db can shrink soon.
-  runtime.store.delete(sessionId);
-  try {
-    runtime.store.reclaimStorage?.();
-  } catch {
-    /* best-effort */
-  }
-  forgetSessionProcessCaches(sessionId);
-  const sets = runtime.workspaces.forgetSession(sessionId);
-  runtime.sessionIdentities.forget(sessionId);
-  await persistWorkspaceDoc(runtime, runtime.workspaces);
-
-    runtime.listProjectionCache.forget(sessionId);
-    // Folded cells outlive a deleted session otherwise: they are only evicted
-    // by the store LRU, so every deleted log keeps a full copy of its projection
-    // state resident for the life of the process.
-    runtime.projections.evictSession(sessionId);
-    runtime.wireIds.clear(sessionId);
-  runtime.inboxWire.clear(sessionId);
-  runtime.toolDisclosure.forget(sessionId);
-  runtime.pathAllowlist.forget(sessionId);
-  runtime.sessionModels.delete(sessionId);
-  forgetSessionOpenerState(runtime, sessionId);
-  try {
-    clearSessionModelSelection(
-      sessionModelsPath(runtime.productDir?.trim() || resolveXrkHome()),
-      sessionId,
-    );
-  } catch {
-    /* sidecar best-effort */
-  }
-  runtime.sessionCwds.delete(sessionId);
-  runtime.sessionHasImage.delete(sessionId);
-  runtime.sessionImageScanned.delete(sessionId);
-  unpinSessionAgentPreset(runtime, sessionId);
-  runtime.goals.forget(sessionId);
-  runtime.agentTeams.removeNode(sessionId);
-
-  runtime.bus.publishHost({
-    type: "host/session-removed",
-    sessionId,
-  });
-  runtime.bus.publishHost({
-    type: "host/archived-sessions-changed",
-    archivedSessionIds: sets.archivedSessionIds,
-  });
-  runtime.bus.publishHost({
-    type: "host/pinned-sessions-changed",
-    pinnedSessionIds: sets.pinnedSessionIds,
-  });
-
+  await wipeDurableSubtree(runtime, sessionId);
   return { ok: true, value: { deleted: true as const } };
 };
 
@@ -1400,6 +1356,8 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
+  // Fork copies from the parent log then appends child knobs — parent must be hot.
+  await ensureSessionHotWritable(runtime, sessionId);
 
   const atSeq =
     typeof p.atSeq === "number" && Number.isFinite(p.atSeq)
@@ -1546,8 +1504,11 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
       );
     }
   } catch (err) {
-    runtime.store.delete?.(child.id);
-    forgetSessionProcessCaches(child.id);
+    await wipeDurableSession(runtime, child.id, {
+      persistWorkspace: true,
+      reclaim: false,
+      publishSets: true,
+    }).catch(() => undefined);
     forkSlot.release();
     return {
       ok: false,
@@ -1640,6 +1601,7 @@ export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => 
       },
     };
   }
+  await ensureSessionHotWritable(runtime, sessionId);
 
   const atSeq =
     typeof p.atSeq === "number" && Number.isFinite(p.atSeq)
@@ -1772,6 +1734,7 @@ export const sessionRespondApproval: FaceHandler = async (runtime, _rpcId, paylo
       error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
+  await ensureSessionHotWritable(runtime, sessionId);
   const out = runtime.approvals.respond(sessionId, approvalId, decisionRaw);
   if (!out.ok) {
     return {
@@ -1821,6 +1784,7 @@ export const sessionSetWorkingDirectory: FaceHandler = async (
       error: { code: "invalid-payload", message: "cd must be a string" },
     };
   }
+  await ensureSessionHotWritable(runtime, sessionId);
   const result = await setSessionWorkingDirectory(runtime, sessionId, cdRaw);
   if (!result.ok) {
     return {
@@ -1856,6 +1820,7 @@ export const sessionRename: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
+  await ensureSessionHotWritable(runtime, sessionId);
   try {
     const { title, seq } = runtime.titles.rename(sessionId, titleRaw);
     return { ok: true, value: { title, seq } };
@@ -1907,6 +1872,13 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
       },
     };
   }
+  if (!runtime.store.has(sessionId)) {
+    return {
+      ok: false,
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
+    };
+  }
+  await ensureSessionHotWritable(runtime, sessionId);
 
   const kind = Reflect.get(action, "kind");
   const pending = listPendingAdmits(

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  billedPromptTokens,
+  cacheHitRate,
   inputPressureTokens,
   promptPressureTokens,
   providerUsageSample,
@@ -35,6 +37,23 @@ describe("token-usage event helpers", () => {
     });
     expect(usageFromSessionEvent(message)).toEqual(message.usage);
     expect(inputPressureTokens(chunk.usage!)).toBe(13);
+  });
+
+  it("billedPromptTokens + cacheHitRate report prompt-side hit share", () => {
+    expect(
+      billedPromptTokens({
+        inputTokens: 27,
+        cacheReadTokens: 256,
+        cacheWriteTokens: 0,
+      }),
+    ).toBe(283);
+    expect(
+      cacheHitRate({
+        inputTokens: 27,
+        cacheReadTokens: 256,
+      }),
+    ).toBeCloseTo(256 / 283, 6);
+    expect(cacheHitRate({ inputTokens: 0, cacheReadTokens: 0 })).toBeNull();
   });
 
   it("window pressure prefers totalTokens; prompt path never adds cacheWrite", () => {
