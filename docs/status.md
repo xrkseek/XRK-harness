@@ -42,7 +42,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | --- | --- |
 | 出站 `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` → undici 全局 dispatcher | **能跑**（Host `spawn` 安装；依赖 `undici`） |
 | Skill `/` 菜单模糊子序列（对齐 commands） | **能跑** |
-| `read_image` 结果 content=`[text,image]` + Face `meta` + Web 工具卡；`file_path` 可为工作区路径或 `sha256:…` / `attachment:sha256:…`；可选 Hermes 式 `region` `[x1,y1,x2,y2]`（裁剪在 normalize 前） | **能跑** |
+| `read_image` 结果 content=`[text,image]` + Face `meta` + Web 工具卡；`file_path` 可为工作区路径或 `sha256:…` / `attachment:sha256:…`（含 `.svg`，入库前栅格化为 PNG）；可选 Hermes 式 `region` `[x1,y1,x2,y2]`（裁剪在 normalize 前） | **能跑** |
 | Host `home` + 工具行 POSIX `~` 缩写（read / read_image / Generic） | **能跑** |
 | SSH 远端工作区（**无产品 UI**；仅 `XRK_SSH_HOST` CI/无头；日常远程 → MCP；fs / bash / `run_code`） | **能跑**（env；Web 目录浏览走 SSH；交互式 PTY / `openPath` 关闭；见 [seams](./seams.md) · [configuration](./configuration.md)） |
 | 工作区 MCP 叠加（`{cwd}/.xrk/mcp.json`：`servers` 增补 · `denyGlobal`） | **能跑**（agent resolve 合并；与五档无关） |
@@ -268,7 +268,7 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 | --- | --- |
 | Outbound `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` → undici global dispatcher | **Working** (Host `spawn` install; `undici` dep) |
 | Skill `/` menu fuzzy subsequence (aligned with commands) | **Working** |
-| `read_image` content=`[text,image]` + Face `meta` + Web tool card; `file_path` may be a workspace path or `sha256:…` / `attachment:sha256:…`; optional Hermes-style `region` `[x1,y1,x2,y2]` (crop before normalize) | **Working** |
+| `read_image` content=`[text,image]` + Face `meta` + Web tool card; `file_path` may be a workspace path or `sha256:…` / `attachment:sha256:…` (including `.svg`, rasterized to PNG on admit); optional Hermes-style `region` `[x1,y1,x2,y2]` (crop before normalize) | **Working** |
 | Host `home` + tool-row POSIX `~` abbreviation (read / read_image / Generic) | **Working** |
 | SSH remote workspace (**no product UI**; `XRK_SSH_HOST` CI/headless only; day-to-day remotes → MCP; fs / bash / `run_code`) | **Working** (env; Web directory browse rides SSH; interactive PTY / `openPath` off; see [seams](./seams.md) · [configuration](./configuration.md)) |
 | Workspace MCP overlay (`{cwd}/.xrk/mcp.json`: `servers` add · `denyGlobal`) | **Working** (merge at agent resolve; orthogonal to badges) |

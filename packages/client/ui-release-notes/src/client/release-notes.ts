@@ -69,6 +69,36 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.14',
+    date: '2026-11-24',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '工作区 SVG：read_image / present 入库栅格化；图片灯箱可缩放、拖移、双击与下滑关闭。',
+        en: 'Workspace SVG via read_image / present (rasterized); lightbox zoom, pan, double-tap, and swipe-down dismiss.',
+      },
+      {
+        zh: '装扮槽位：改回内置件不再残留旧贴纸；名册与添加干员共用解析。',
+        en: 'Dress slots: reverting to builtins drops leftover overlays; Team and Add-agent share one look resolve.',
+      },
+      {
+        zh: 'Desktop 更新探测失败静默：侧栏版本胶囊不钉「检查失败」；后台失败回 idle。',
+        en: 'Desktop update-check failures stay silent on the foot chip; background probes publish idle.',
+      },
+      {
+        zh: '手机「检查更新」总是重新打源：缓存的中间版不再挡住已发布的更新版；可跳过本版。',
+        en: 'Phone Check for updates always re-hits the feed; a cached mid offer no longer blocks a newer release; skip still works.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.14。完整清单见 docs/releases/v0.8.14.md。',
+        en: 'Desktop / npm / phone align to 0.8.14. Full list: docs/releases/v0.8.14.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.13',
     date: '2026-11-24',
     title: {

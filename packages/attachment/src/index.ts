@@ -10,6 +10,7 @@ export type {
   ImageAttachmentRef,
   ImageMediaType,
   ImageRequestPolicy,
+  ImportImageFileInput,
   RequestImageAttachment,
   SaveFileAttachment,
   SaveImageAttachment,

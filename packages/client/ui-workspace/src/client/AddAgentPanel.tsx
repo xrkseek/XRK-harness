@@ -16,13 +16,7 @@ import {
   useSeatTitles,
 } from './dressing-scope.ts'
 import {
-  GLASSES_BUILTINS,
-  HAT_BUILTINS,
-  HELD_BUILTINS,
-  resolveEnginePick,
-  resolveStickerOverlay,
-  splitLegacyKit,
-  stickerIdFromPick,
+  memberAppearanceLook,
   type DressingSticker,
 } from './dressing-library.ts'
 import css from './AddAgentPanel.module.css'
@@ -31,29 +25,7 @@ import { catalogMemberName, isOfficeSeatMemberId } from './catalog-labels.ts'
 type Translate = WorkspaceBrowserProps['t']
 
 function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSticker[]) {
-  const split = splitLegacyKit(member.appearance?.kit)
-  const kitHat = member.appearance?.kitHat ?? split.hat
-  const kitGlasses = member.appearance?.kitGlasses ?? split.glasses
-  const kitHeld = member.appearance?.kitHeld ?? 'none'
-  const hatImg = resolveStickerOverlay(kitHat, stickers)
-    || (stickerIdFromPick(kitHat) ? '' : (member.appearance?.overlayHat ?? member.appearance?.face ?? ''))
-  const glassesImg = resolveStickerOverlay(kitGlasses, stickers)
-    || (stickerIdFromPick(kitGlasses) ? '' : (member.appearance?.overlayGlasses ?? ''))
-  const heldImg = resolveStickerOverlay(kitHeld, stickers)
-    || (stickerIdFromPick(kitHeld) ? '' : (member.appearance?.overlayHeld ?? ''))
-  return {
-    shape: member.appearance?.shape ?? 'blob',
-    color: member.appearance?.color ?? 'cream',
-    bodyColor: member.appearance?.bodyColor ?? '',
-    eyeColor: member.appearance?.eyeColor ?? '',
-    size: member.appearance?.size ?? 1,
-    engineHat: resolveEnginePick(kitHat, HAT_BUILTINS),
-    engineGlasses: resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
-    engineHeld: resolveEnginePick(kitHeld, HELD_BUILTINS),
-    ...(hatImg ? { overlayHat: hatImg } : {}),
-    ...(glassesImg ? { overlayGlasses: glassesImg } : {}),
-    ...(heldImg ? { overlayHeld: heldImg } : {}),
-  }
+  return memberAppearanceLook(member.appearance, stickers)
 }
 
 function MemberTile({

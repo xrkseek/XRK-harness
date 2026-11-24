@@ -52,6 +52,15 @@ export interface SaveImageAttachment {
   readonly sourcePath?: string;
 }
 
+/** Workspace file admission input for {@link AttachmentStore.importImageFile}. */
+export interface ImportImageFileInput {
+  readonly data: Uint8Array;
+  /** Leaf name or path used for extension / byte sniff. */
+  readonly fileName: string;
+  /** Absolute OS path when known (Desktop / present sourcePath). */
+  readonly sourcePath?: string;
+}
+
 export interface SaveFileAttachment {
   readonly data: Uint8Array;
   /** Display leaf name; never interpreted as a path. */

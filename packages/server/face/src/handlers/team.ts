@@ -40,7 +40,6 @@ import {
   isCatalogSeedMemberId,
   MANAGER_MEMBER_ID,
   SUNFLOWER_MEMBER_ID,
-  parseMemberAppearance,
   parseMemberBasePreset,
   parseMemberNickname,
   parseMemberToolPolicy,
@@ -306,12 +305,7 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
     if (wantAppearance || wantNickname) {
       const patched = runtime.agentRoster.patchCatalogMeta(rawId, {
         ...(wantAppearance
-          ? {
-              appearance: parseMemberAppearance(appearanceArg, {
-                shape: listed.appearance.shape,
-                color: listed.appearance.color,
-              }),
-            }
+          ? { appearance: appearanceArg }
           : {}),
         ...(wantNickname ? { nickname: nicknameArg } : {}),
       });
@@ -396,12 +390,7 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
         ? { basePreset: basePresetArg }
         : {}),
     ...(hasAppearance
-      ? {
-          appearance: parseMemberAppearance(appearanceArg, {
-            shape: "blob",
-            color: "cream",
-          }),
-        }
+      ? { appearance: appearanceArg }
       : {}),
     ...(typeof args.id === "string" ? { id: args.id } : {}),
     ...(args.kind === "advanced" || args.kind === "thin"

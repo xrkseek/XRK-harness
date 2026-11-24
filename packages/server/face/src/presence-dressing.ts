@@ -187,6 +187,19 @@ export function resolveStickerOverlay(
   return stickers.find((row) => row.id === id)?.image;
 }
 
+/** Sticker library → else raw only when no builtin engine pick owns the slot. */
+export function resolveSlotOverlay(
+  pick: string,
+  stickers: readonly PresenceSticker[],
+  builtins: readonly string[],
+  rawOverlay?: string,
+): string | undefined {
+  const fromSticker = resolveStickerOverlay(pick, stickers);
+  if (fromSticker) return fromSticker;
+  if (resolveEnginePick(pick, builtins) !== "none") return undefined;
+  return rawOverlay || undefined;
+}
+
 export function dressingFromPresence(user: Record<string, unknown> | undefined): {
   readonly stickers: readonly PresenceSticker[];
   readonly kitHat: string;

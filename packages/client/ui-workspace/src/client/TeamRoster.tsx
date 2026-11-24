@@ -47,10 +47,10 @@ import {
   GLASSES_BUILTINS,
   HAT_BUILTINS,
   HELD_BUILTINS,
+  memberAppearanceLook,
   resolveEnginePick,
   resolveStickerOverlay,
   splitLegacyKit,
-  stickerIdFromPick,
   stickerRef,
   stickersForSlot,
   type DressingSticker,
@@ -71,48 +71,8 @@ type ToolMode = 'inherit' | 'allow' | 'deny'
 const ROLES: readonly SpawnRole[] = ['default', 'worker', 'researcher', 'reviewer', 'lead']
 const FILE_TOOLS = 'bash,read,grep,glob'
 
-function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSticker[]): {
-  shape: string
-  color: string
-  bodyColor: string
-  eyeColor: string
-  size: number
-  kitHat: string
-  kitGlasses: string
-  kitHeld: string
-  engineHat: string
-  engineGlasses: string
-  engineHeld: string
-  overlayHat?: string
-  overlayGlasses?: string
-  overlayHeld?: string
-} {
-  const split = splitLegacyKit(member.appearance?.kit)
-  const kitHat = member.appearance?.kitHat ?? split.hat
-  const kitGlasses = member.appearance?.kitGlasses ?? split.glasses
-  const kitHeld = member.appearance?.kitHeld ?? 'none'
-  const hatImg = resolveStickerOverlay(kitHat, stickers)
-    || (stickerIdFromPick(kitHat) ? '' : (member.appearance?.overlayHat ?? member.appearance?.face ?? ''))
-  const glassesImg = resolveStickerOverlay(kitGlasses, stickers)
-    || (stickerIdFromPick(kitGlasses) ? '' : (member.appearance?.overlayGlasses ?? ''))
-  const heldImg = resolveStickerOverlay(kitHeld, stickers)
-    || (stickerIdFromPick(kitHeld) ? '' : (member.appearance?.overlayHeld ?? ''))
-  return {
-    shape: member.appearance?.shape ?? 'blob',
-    color: member.appearance?.color ?? 'cream',
-    bodyColor: member.appearance?.bodyColor ?? '',
-    eyeColor: member.appearance?.eyeColor ?? '',
-    size: member.appearance?.size ?? 1,
-    kitHat,
-    kitGlasses,
-    kitHeld,
-    engineHat: resolveEnginePick(kitHat, HAT_BUILTINS),
-    engineGlasses: resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
-    engineHeld: resolveEnginePick(kitHeld, HELD_BUILTINS),
-    ...(hatImg ? { overlayHat: hatImg } : {}),
-    ...(glassesImg ? { overlayGlasses: glassesImg } : {}),
-    ...(heldImg ? { overlayHeld: heldImg } : {}),
-  }
+function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSticker[]) {
+  return memberAppearanceLook(member.appearance, stickers)
 }
 
 /**
@@ -577,30 +537,28 @@ export function TeamRoster({
     setBossNickDraft((prev) => (prev === bossNickname ? prev : bossNickname))
   }, [bossSelected, bossNickname])
   const bossRailLook = useMemo(() => {
-    const kitHat = bossLook.kitHat
-    const kitGlasses = bossLook.kitGlasses
-    const kitHeld = bossLook.kitHeld
-    return {
+    const look = memberAppearanceLook({
       shape: bossLook.shape,
       color: bossLook.color,
-      size: bossLook.size,
-      /* Custom hex overrides live beside the preset id: dropping them here made
-       * the boss seat paint the palette default (white body, black eyes) while
-       * the rail/preview showed the real custom colour. */
       bodyColor: bossLook.bodyColor,
       eyeColor: bossLook.eyeColor,
-      engineHat: resolveEnginePick(kitHat, HAT_BUILTINS),
-      engineGlasses: resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
-      engineHeld: resolveEnginePick(kitHeld, HELD_BUILTINS),
-      ...(resolveStickerOverlay(kitHat, stickers)
-        ? { overlayHat: resolveStickerOverlay(kitHat, stickers)! }
-        : {}),
-      ...(resolveStickerOverlay(kitGlasses, stickers)
-        ? { overlayGlasses: resolveStickerOverlay(kitGlasses, stickers)! }
-        : {}),
-      ...(resolveStickerOverlay(kitHeld, stickers)
-        ? { overlayHeld: resolveStickerOverlay(kitHeld, stickers)! }
-        : {}),
+      size: bossLook.size,
+      kitHat: bossLook.kitHat,
+      kitGlasses: bossLook.kitGlasses,
+      kitHeld: bossLook.kitHeld,
+    }, stickers)
+    return {
+      shape: look.shape,
+      color: look.color,
+      size: look.size,
+      bodyColor: look.bodyColor,
+      eyeColor: look.eyeColor,
+      engineHat: look.engineHat,
+      engineGlasses: look.engineGlasses,
+      engineHeld: look.engineHeld,
+      ...(look.overlayHat ? { overlayHat: look.overlayHat } : {}),
+      ...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {}),
+      ...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {}),
     }
   }, [bossLook, stickers])
   const seatIds = new Set(seatMembers.map(row => row.id))
@@ -870,24 +828,26 @@ export function TeamRoster({
     const nextHat = patch.kitHat ?? kitHat
     const nextGlasses = patch.kitGlasses ?? kitGlasses
     const nextHeld = patch.kitHeld ?? kitHeld
-    // Empty-string overlays travel on the wire so Host + live merge clear a
-    // prior sticker; `undefined` was omitted and left the old custom face on
-    // Overview / the left rail while the right preview (no face fallback) updated.
+    const hatOverlay = resolveStickerOverlay(nextHat, stickers) ?? ''
+    const glassesOverlay = resolveStickerOverlay(nextGlasses, stickers) ?? ''
+    const heldOverlay = resolveStickerOverlay(nextHeld, stickers) ?? ''
+    const engineHat = resolveEnginePick(nextHat, HAT_BUILTINS)
+    const engineGlasses = resolveEnginePick(nextGlasses, GLASSES_BUILTINS)
     return {
       shape: patch.shape ?? shape,
       color: patch.color ?? color,
       bodyColor: patch.bodyColor ?? bodyColor,
       eyeColor: patch.eyeColor ?? eyeColor,
       size: patch.size ?? size,
-      kit: resolveEnginePick(nextHat, HAT_BUILTINS) !== 'none'
-        ? resolveEnginePick(nextHat, HAT_BUILTINS)
-        : resolveEnginePick(nextGlasses, GLASSES_BUILTINS),
+      kit: engineHat !== 'none' ? engineHat : engineGlasses,
       kitHat: nextHat,
       kitGlasses: nextGlasses,
       kitHeld: nextHeld,
-      overlayHat: resolveStickerOverlay(nextHat, stickers) ?? '',
-      overlayGlasses: resolveStickerOverlay(nextGlasses, stickers) ?? '',
-      overlayHeld: resolveStickerOverlay(nextHeld, stickers) ?? '',
+      // '' clears prior stickers on Host; face mirrors hat (legacy alias).
+      overlayHat: hatOverlay,
+      overlayGlasses: glassesOverlay,
+      overlayHeld: heldOverlay,
+      face: hatOverlay,
     }
   }
 

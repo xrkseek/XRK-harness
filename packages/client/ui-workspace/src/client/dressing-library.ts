@@ -181,6 +181,93 @@ export function resolveStickerOverlay(pick: string, stickers: readonly DressingS
   return stickers.find((row) => row.id === id)?.image ?? ''
 }
 
+/** Slot image: sticker library → else raw only when no builtin engine pick. */
+export function resolveSlotOverlayImage(
+  pick: string,
+  stickers: readonly DressingSticker[],
+  builtins: readonly string[],
+  rawOverlay = '',
+): string {
+  const fromSticker = resolveStickerOverlay(pick, stickers)
+  if (fromSticker) return fromSticker
+  if (resolveEnginePick(pick, builtins) !== 'none') return ''
+  return rawOverlay
+}
+
+/** Rail / tile look from a roster appearance row (Team + Add-agent share this). */
+export function memberAppearanceLook(
+  appearance: {
+    readonly shape?: string
+    readonly color?: string
+    readonly bodyColor?: string
+    readonly eyeColor?: string
+    readonly size?: number
+    readonly kit?: string
+    readonly kitHat?: string
+    readonly kitGlasses?: string
+    readonly kitHeld?: string
+    readonly overlayHat?: string
+    readonly overlayGlasses?: string
+    readonly overlayHeld?: string
+    readonly face?: string
+  } | undefined,
+  stickers: readonly DressingSticker[],
+): {
+  readonly shape: string
+  readonly color: string
+  readonly bodyColor: string
+  readonly eyeColor: string
+  readonly size: number
+  readonly kitHat: string
+  readonly kitGlasses: string
+  readonly kitHeld: string
+  readonly engineHat: string
+  readonly engineGlasses: string
+  readonly engineHeld: string
+  readonly overlayHat?: string
+  readonly overlayGlasses?: string
+  readonly overlayHeld?: string
+} {
+  const split = splitLegacyKit(appearance?.kit)
+  const kitHat = appearance?.kitHat ?? split.hat
+  const kitGlasses = appearance?.kitGlasses ?? split.glasses
+  const kitHeld = appearance?.kitHeld ?? 'none'
+  const hatImg = resolveSlotOverlayImage(
+    kitHat,
+    stickers,
+    HAT_BUILTINS,
+    appearance?.overlayHat ?? appearance?.face ?? '',
+  )
+  const glassesImg = resolveSlotOverlayImage(
+    kitGlasses,
+    stickers,
+    GLASSES_BUILTINS,
+    appearance?.overlayGlasses ?? '',
+  )
+  const heldImg = resolveSlotOverlayImage(
+    kitHeld,
+    stickers,
+    HELD_BUILTINS,
+    appearance?.overlayHeld ?? '',
+  )
+  return {
+    shape: appearance?.shape ?? 'blob',
+    color: appearance?.color ?? 'cream',
+    bodyColor: appearance?.bodyColor ?? '',
+    eyeColor: appearance?.eyeColor ?? '',
+    size: appearance?.size ?? 1,
+    kitHat,
+    kitGlasses,
+    kitHeld,
+    engineHat: resolveEnginePick(kitHat, HAT_BUILTINS),
+    engineGlasses: resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
+    engineHeld: resolveEnginePick(kitHeld, HELD_BUILTINS),
+    ...(hatImg ? { overlayHat: hatImg } : {}),
+    ...(glassesImg ? { overlayGlasses: glassesImg } : {}),
+    ...(heldImg ? { overlayHeld: heldImg } : {}),
+  }
+}
+
 export function stickersForSlot(
   rows: readonly DressingSticker[],
   slot: DressingSlot,

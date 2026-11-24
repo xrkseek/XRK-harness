@@ -154,14 +154,14 @@ export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterPro
   const openSheet = () => {
     setOpen(true)
     if (!bridge) return
-    // idle → start check. error → retry check (chip would otherwise stick on
-    // failed forever until a background schedule happens to succeed).
-    // available/ready/installing/checking already own the sheet content.
+    // idle / error → (re)check. available/ready/installing/checking already
+    // own the sheet; do not start a second probe under them.
     if (state.phase !== 'idle' && state.phase !== 'error') return
     setState({ phase: 'checking' })
     void bridge.updates.check().then((next) => {
       setState(next)
     }).catch((error: unknown) => {
+      // IPC / schedule reject path — keep it in local sheet state only.
       setState({
         phase: 'error',
         message: error instanceof Error ? error.message : String(error),
@@ -172,6 +172,9 @@ export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterPro
   const closeSheet = () => {
     if (installing) return
     setOpen(false)
+    // Ephemeral check errors live in React state for the open sheet; clear so
+    // the foot chip stays on the installed version after dismiss.
+    if (state.phase === 'error') setState({ phase: 'idle' })
   }
 
   const runInstall = () => {
@@ -255,17 +258,9 @@ export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterPro
         onClick={openSheet}
       />
     )
-  } else if (state.phase === 'error') {
-    // Must not fall through to the idle version pill — that hid real failures.
-    chip = (
-      <UpdateStatusChip
-        tone="ready"
-        label={t('release.failed')}
-        ariaLabel={t('release.failed')}
-        onClick={openSheet}
-      />
-    )
   } else {
+    // idle + error: keep the installed-version pill. Check failures are silent
+    // in the foot row (details stay in the sheet when the user opens it).
     chip = (
       <button type="button" className={css.hit} onClick={openSheet} aria-label={checkLabel}>
         <span className={css.version} title={versionLabel}>{versionLabel}</span>

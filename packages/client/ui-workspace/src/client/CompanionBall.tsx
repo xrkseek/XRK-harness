@@ -635,6 +635,10 @@ export function CompanionBall({
     ? kitGlasses
     : (kit && kit.startsWith('specs') && isCompanionKit(kit) ? kit : 'none')
   const heldBuiltin = kitHeld && isHeldBuiltin(kitHeld) ? kitHeld : undefined
+  // Builtin engine owns the slot — ignore leftover face/overlay stickers.
+  const hatImage = resolvedHat !== 'none' ? '' : ((overlayHat || face) ?? '')
+  const glassesImage = resolvedGlasses !== 'none' ? '' : (overlayGlasses ?? '')
+  const heldImage = heldBuiltin ? '' : (overlayHeld ?? '')
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const [ready, setReady] = useState(false)
@@ -664,9 +668,9 @@ export function CompanionBall({
           kitHat: resolvedHat,
           kitGlasses: resolvedGlasses,
           kitHeld: heldBuiltin ?? 'none',
-          hatImage: (overlayHat || face) ?? '',
-          glassesImage: overlayGlasses ?? '',
-          heldImage: overlayHeld ?? '',
+          hatImage,
+          glassesImage,
+          heldImage,
         })
         setReady(true)
       },
@@ -690,11 +694,11 @@ export function CompanionBall({
     const ball = ballRef.current
     if (!ball || !ready || empty) return
     ball.setDressing?.(resolvedHat, resolvedGlasses, heldBuiltin ?? 'none', {
-      hat: (overlayHat || face) ?? '',
-      glasses: overlayGlasses ?? '',
-      held: overlayHeld ?? '',
+      hat: hatImage,
+      glasses: glassesImage,
+      held: heldImage,
     })
-  }, [ready, empty, resolvedHat, resolvedGlasses, heldBuiltin, overlayHat, overlayGlasses, overlayHeld, face])
+  }, [ready, empty, resolvedHat, resolvedGlasses, heldBuiltin, hatImage, glassesImage, heldImage])
 
   return (
     <span

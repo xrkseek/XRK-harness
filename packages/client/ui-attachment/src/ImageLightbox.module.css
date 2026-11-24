@@ -3,13 +3,15 @@
   inset: 0;
   z-index: var(--ds-z-scrim);
   display: grid;
-  place-items: center;
-  padding: 40px;
+  grid-template: 1fr / 1fr;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: lightbox-in 160ms var(--ds-ease-out, cubic-bezier(0.2, 0, 0, 1)) both;
 }
 
-/* Same mask recipe as the Modal primitive and the settings dialog. A separate
-   layer, not a background on .backdrop: backdrop-filter there would blur the
-   previewed image and the close control along with the page. */
 .mask {
   position: absolute;
   inset: 0;
@@ -17,23 +19,63 @@
   backdrop-filter: var(--dsw-mask-blur);
 }
 
-.image {
+.stage {
   position: relative;
-  max-width: min(100%, 1600px);
-  /* Prefer % of the shell-framed backdrop — 100dvh spills under Flutter IME. */
-  max-height: min(calc(100dvh - 80px), calc(100% - 80px));
-  object-fit: contain;
-  border-radius: 12px;
-  background: var(--dsw-specific-input-major);
-  box-shadow: var(--dsw-shadow-lv3);
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  padding:
+    max(56px, calc(env(safe-area-inset-top, 0px) + 48px))
+    max(24px, env(safe-area-inset-right, 0px))
+    max(48px, calc(env(safe-area-inset-bottom, 0px) + 28px))
+    max(24px, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+  overflow: hidden;
+  cursor: default;
+  touch-action: none;
+}
+
+.stageCanPan {
+  cursor: grab;
+}
+
+.stagePanning {
+  cursor: grabbing;
+}
+
+.image {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  transform-origin: center center;
+  will-change: transform;
+  pointer-events: none;
+  border-radius: 4px;
+  background: oklch(0.22 0 0 / 0.65);
+  outline: 1px solid oklch(1 0 0 / 0.1);
+  box-shadow: 0 12px 40px oklch(0 0 0 / 0.35);
+  -webkit-user-drag: none;
+  user-select: none;
+  opacity: 1;
+  transition: opacity 140ms var(--ds-ease-out, cubic-bezier(0.2, 0, 0, 1));
+}
+
+.imagePending,
+.imageFailed {
+  opacity: 0;
 }
 
 .actions {
-  position: fixed;
-  top: max(20px, env(safe-area-inset-top, 0px));
-  right: max(20px, env(safe-area-inset-right, 0px));
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
   z-index: 1;
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -48,6 +90,23 @@
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
   touch-action: manipulation;
+  transition-property: background-color, color, opacity, transform, border-color;
+  transition-duration: 120ms;
+  transition-timing-function: var(--ds-ease-out, cubic-bezier(0.2, 0, 0, 1));
+}
+
+.action:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-specific-input-major));
+  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-border-l2-darkmode-thin));
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: 2px;
+}
+
+.action:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .action:disabled {
@@ -55,9 +114,65 @@
   cursor: default;
 }
 
+.meta {
+  position: absolute;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: min(72vw, 420px);
+  transform: translateX(-50%);
+  pointer-events: none;
+  text-align: center;
+}
+
+.zoom {
+  min-width: 3.5em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: oklch(0 0 0 / 0.55);
+  color: oklch(1 0 0 / 0.92);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ds-ease-out, cubic-bezier(0.2, 0, 0, 1));
+}
+
+.zoomVisible {
+  opacity: 1;
+}
+
+.caption {
+  margin: 0;
+  padding: 0 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: oklch(1 0 0 / 0.72);
+  font-size: 12px;
+  line-height: 18px;
+  text-shadow: 0 1px 2px oklch(0 0 0 / 0.55);
+}
+
+@keyframes lightbox-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @media (max-width: 767px) {
-  .backdrop {
-    padding: 16px;
+  .stage {
+    padding:
+      max(52px, calc(env(safe-area-inset-top, 0px) + 44px))
+      max(12px, env(safe-area-inset-right, 0px))
+      max(44px, calc(env(safe-area-inset-bottom, 0px) + 24px))
+      max(12px, env(safe-area-inset-left, 0px));
   }
 
   .action {
@@ -65,8 +180,31 @@
     height: 44px;
   }
 
+  .actions {
+    top: max(12px, env(safe-area-inset-top, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop {
+    animation: none;
+  }
+
   .image {
-    max-height: min(calc(100dvh - 48px), calc(100% - 48px));
-    border-radius: 8px;
+    will-change: auto;
+    transition: none;
+  }
+
+  .action {
+    transition: none;
+  }
+
+  .action:active:not(:disabled) {
+    transform: none;
+  }
+
+  .zoom {
+    transition: none;
   }
 }

@@ -1,17 +1,20 @@
 /**
  * Local durable attachment backend under `{XRK_HOME}/attachments/v1`.
  */
-import { join, resolve } from "node:path";
+import { basename, extname, join, resolve } from "node:path";
 import { resolveConfiguredXrkHome, xrkCachePath } from "@xrkseek/xrk-home-paths";
 import {
   AttachmentError,
   DEFAULT_FILE_LIMITS,
+  sniffImageMediaType,
   type AttachmentStore,
   type FileAttachmentLimits,
   type FileAttachmentRef,
   type ImageAttachmentLimits,
   type ImageAttachmentRef,
+  type ImageMediaType,
   type ImageRequestPolicy,
+  type ImportImageFileInput,
   type RequestImageAttachment,
   type SaveFileAttachment,
   type SaveImageAttachment,
@@ -21,6 +24,7 @@ import {
 import { CompressionLimiter } from "./compression-limiter.js";
 import { cropImageRegion } from "./crop-region.js";
 import type { NormalizationPolicy } from "./normalization.js";
+import { looksLikeSvg, rasterizeSvgToPng } from "./rasterize-svg.js";
 import {
   commitFileAttachment,
   commitPreparedImageFile,
@@ -34,9 +38,18 @@ import {
 } from "./store.js";
 import { readRequestImageFile, requestImageVariantId } from "./request-image.js";
 
+const RASTER_EXT: Readonly<Record<string, ImageMediaType>> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+};
+
 export { canPassThroughNormalization, normalizeImage } from "./normalization.js";
 export type { NormalizedImage, NormalizationPolicy } from "./normalization.js";
 export { cropImageRegion } from "./crop-region.js";
+export { looksLikeSvg, rasterizeSvgToPng } from "./rasterize-svg.js";
 export {
   commitPreparedImageFile,
   prepareImageFile,
@@ -297,6 +310,38 @@ export function createLocalAttachmentStore(
     async saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef> {
       const prepared = await compression.run(() =>
         prepareImageFile(input, imageLimits, normalizationPolicy),
+      );
+      return commitPreparedImageFile(root, prepared);
+    },
+    async importImageFile(input: ImportImageFileInput): Promise<ImageAttachmentRef> {
+      const leaf = basename(input.fileName.replaceAll("\\", "/"));
+      const ext = extname(leaf).toLowerCase();
+      const isSvg = ext === ".svg" || looksLikeSvg(input.data);
+      const rasterBytes = isSvg
+        ? await compression.run(() => rasterizeSvgToPng(input.data))
+        : input.data;
+      const mediaType: ImageMediaType | undefined = isSvg
+        ? "image/png"
+        : (RASTER_EXT[ext] ?? sniffImageMediaType(rasterBytes));
+      if (mediaType === undefined || !imageLimits.mediaTypes.includes(mediaType)) {
+        throw new AttachmentError(
+          `Image type for ${leaf || "file"} is not accepted.`,
+          "UNSUPPORTED_IMAGE_TYPE",
+        );
+      }
+      const prepared = await compression.run(() =>
+        prepareImageFile(
+          {
+            data: rasterBytes,
+            mediaType,
+            name: leaf || "image.png",
+            ...(input.sourcePath !== undefined
+              ? { sourcePath: input.sourcePath }
+              : {}),
+          },
+          imageLimits,
+          normalizationPolicy,
+        ),
       );
       return commitPreparedImageFile(root, prepared);
     },

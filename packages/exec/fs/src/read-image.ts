@@ -20,6 +20,16 @@ const IMAGE_EXTENSIONS: Readonly<Record<string, ImageMediaType>> = {
   ".gif": "image/gif",
 };
 
+const WORKSPACE_IMAGE_EXTS = new Set<string>([
+  ...Object.keys(IMAGE_EXTENSIONS),
+  ".svg",
+]);
+
+/** True for workspace paths `read_image` / `present` treat as images. */
+export function isWorkspaceImagePath(filePath: string): boolean {
+  return WORKSPACE_IMAGE_EXTS.has(extname(filePath).toLowerCase());
+}
+
 /** Minimal FS surface used by `read_image` (avoids circular import with index). */
 export interface ReadImageFs {
   stat(userPath: string): Promise<{ readonly isFile: boolean }>;
@@ -131,7 +141,7 @@ export function createReadImageTool(
   return {
     name: "read_image",
     description:
-      "Read a PNG/JPEG/WebP/GIF from a workspace path or a Host attachment id " +
+      "Read a PNG/JPEG/WebP/GIF/SVG from a workspace path or a Host attachment id " +
       "(sha256:… / attachment:sha256:… from image_generate). " +
       "The id is the durable content-addressed handle — re-inspect or trace with it, no disk hunt. " +
       "Large images are normalized before the next model request. " +
@@ -217,15 +227,22 @@ export function createReadImageTool(
           }
         } else {
           const mediaType = imageMediaTypeForPath(filePath);
-          if (mediaType === undefined) {
+          const canImport = attachments.importImageFile !== undefined;
+          if (
+            !isWorkspaceImagePath(filePath)
+            || (mediaType === undefined && !canImport)
+          ) {
             return {
               content:
-                `cannot read "${filePath}": read_image accepts PNG/JPEG/WebP/GIF paths ` +
+                `cannot read "${filePath}": read_image accepts PNG/JPEG/WebP/GIF/SVG paths ` +
                 `or attachment ids (sha256:… / attachment:sha256:…)`,
               isError: true,
             };
           }
-          if (!attachments.imageLimits.mediaTypes.includes(mediaType)) {
+          if (
+            mediaType !== undefined
+            && !attachments.imageLimits.mediaTypes.includes(mediaType)
+          ) {
             return {
               content: `cannot read "${filePath}": ${mediaType} images are not accepted`,
               isError: true,
@@ -243,7 +260,7 @@ export function createReadImageTool(
             attachments.imageLimits.maxMessageImageBytes,
           );
           data = await fs.readBytes(filePath, byteCap);
-          saveMediaType = mediaType;
+          saveMediaType = mediaType ?? "image/png";
           displayPath = filePath;
           name = basename(filePath);
         }
@@ -254,12 +271,20 @@ export function createReadImageTool(
           saveMediaType = cropped.mediaType;
           cropOffset = { ...cropped.offset };
         }
-        const ref = await attachments.saveImage({
-          data,
-          mediaType: saveMediaType,
-          name: name ?? "image",
-          ...(sourcePath !== undefined ? { sourcePath } : {}),
-        });
+        const ref = region === undefined
+          && attachmentId === undefined
+          && attachments.importImageFile !== undefined
+          ? await attachments.importImageFile({
+              data,
+              fileName: name ?? basename(filePath),
+              ...(sourcePath !== undefined ? { sourcePath } : {}),
+            })
+          : await attachments.saveImage({
+              data,
+              mediaType: saveMediaType,
+              name: name ?? "image",
+              ...(sourcePath !== undefined ? { sourcePath } : {}),
+            });
         const value: ImageReadValue = {
           path: displayPath,
           image: {

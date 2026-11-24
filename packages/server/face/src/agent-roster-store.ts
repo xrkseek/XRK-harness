@@ -25,9 +25,8 @@ import {
   parseOverlayImage as parsePresenceOverlayImage,
   parseSlotPick,
   resolveEnginePick,
-  resolveStickerOverlay,
+  resolveSlotOverlay,
   splitLegacyKit,
-  stickerIdFromPick,
   type PresenceSticker,
 } from "./presence-dressing.js";
 
@@ -525,19 +524,34 @@ export function parseMemberAppearance(
     ? base.kit
     : fallback.kit;
   const kit = isMemberKit(kitRaw) && kitRaw !== "none" ? kitRaw : undefined;
-  const overlayHat =
-    pickOverlay(base, "overlayHat", fallback.overlayHat)
-    ?? (Object.prototype.hasOwnProperty.call(base, "face")
-      ? parseOverlayImage(base.face)
-      : fallback.face);
-  const overlayGlasses = pickOverlay(base, "overlayGlasses", fallback.overlayGlasses);
-  const overlayHeld = pickOverlay(base, "overlayHeld", fallback.overlayHeld);
   const split = splitLegacyKit(kit);
   const kitHat = parseSlotPick(base.kitHat ?? fallback.kitHat, HAT_BUILTINS)
     ?? (split.hat !== "none" ? split.hat : undefined);
   const kitGlasses = parseSlotPick(base.kitGlasses ?? fallback.kitGlasses, GLASSES_BUILTINS)
     ?? (split.glasses !== "none" ? split.glasses : undefined);
   const kitHeld = parseSlotPick(base.kitHeld ?? fallback.kitHeld, HELD_BUILTINS);
+  // Builtin engine owns the slot — drop leftover raw overlays (sticker → flower).
+  const overlayHat = resolveSlotOverlay(
+    kitHat ?? "none",
+    [],
+    HAT_BUILTINS,
+    pickOverlay(base, "overlayHat", fallback.overlayHat)
+      ?? (Object.prototype.hasOwnProperty.call(base, "face")
+        ? parseOverlayImage(base.face)
+        : fallback.face),
+  );
+  const overlayGlasses = resolveSlotOverlay(
+    kitGlasses ?? "none",
+    [],
+    GLASSES_BUILTINS,
+    pickOverlay(base, "overlayGlasses", fallback.overlayGlasses),
+  );
+  const overlayHeld = resolveSlotOverlay(
+    kitHeld ?? "none",
+    [],
+    HELD_BUILTINS,
+    pickOverlay(base, "overlayHeld", fallback.overlayHeld),
+  );
   return {
     shape,
     color,
@@ -578,15 +592,27 @@ export function appearanceLookWire(
   const kitHat = look.kitHat ?? split.hat;
   const kitGlasses = look.kitGlasses ?? split.glasses;
   const kitHeld = look.kitHeld ?? "none";
-  const hatOverlay = resolveStickerOverlay(kitHat, stickers)
-    ?? (stickerIdFromPick(kitHat) ? undefined : look.overlayHat ?? look.face);
-  const glassesOverlay = resolveStickerOverlay(kitGlasses, stickers)
-    ?? (stickerIdFromPick(kitGlasses) ? undefined : look.overlayGlasses);
-  const heldOverlay = resolveStickerOverlay(kitHeld, stickers)
-    ?? (stickerIdFromPick(kitHeld) ? undefined : look.overlayHeld);
   const engineHat = resolveEnginePick(kitHat, HAT_BUILTINS);
   const engineGlasses = resolveEnginePick(kitGlasses, GLASSES_BUILTINS);
   const engineHeld = resolveEnginePick(kitHeld, HELD_BUILTINS);
+  const hatOverlay = resolveSlotOverlay(
+    kitHat,
+    stickers,
+    HAT_BUILTINS,
+    look.overlayHat ?? look.face,
+  );
+  const glassesOverlay = resolveSlotOverlay(
+    kitGlasses,
+    stickers,
+    GLASSES_BUILTINS,
+    look.overlayGlasses,
+  );
+  const heldOverlay = resolveSlotOverlay(
+    kitHeld,
+    stickers,
+    HELD_BUILTINS,
+    look.overlayHeld,
+  );
   const kit = engineHat !== "none"
     ? engineHat
     : engineGlasses !== "none"
@@ -842,6 +868,7 @@ export function formatRosterCatalog(
 /**
  * Keep an operator's own held prop; a missing / `none` slot falls back to the
  * catalog default (product logo), so an upgraded profile still shows one.
+ * Re-parse so forcing a builtin held drops a leftover custom overlayHeld.
  */
 function catalogAppearanceHeld(
   operator: AgentRosterMember["appearance"] | undefined,
@@ -849,9 +876,15 @@ function catalogAppearanceHeld(
 ): AgentRosterMember["appearance"] {
   if (operator === undefined) return seed;
   const held = operator.kitHeld?.trim() ?? "";
-  return held === "" || held === "none"
-    ? { ...operator, kitHeld: seed.kitHeld ?? CATALOG_DEFAULT_HELD }
-    : operator;
+  if (held !== "" && held !== "none") return operator;
+  return parseMemberAppearance(
+    {
+      ...operator,
+      kitHeld: seed.kitHeld ?? CATALOG_DEFAULT_HELD,
+      overlayHeld: "",
+    },
+    seed,
+  );
 }
 
 export function mergeGlobalSeedMembers(
@@ -1323,10 +1356,7 @@ export class FaceAgentRosterStore {
       const index = doc.members.findIndex((row) => row.id === id);
       const prev = index === -1 ? undefined : doc.members[index];
       const appearance = parseMemberAppearance(
-        {
-          ...(prev?.appearance ?? fallback),
-          ...(input.appearance ?? {}),
-        },
+        input.appearance ?? {},
         prev?.appearance ?? fallback,
       );
       const nextTools =
@@ -1487,10 +1517,7 @@ export class FaceAgentRosterStore {
       ...prev,
       appearance:
         canAppearance && patch.appearance
-          ? parseMemberAppearance(
-              { ...prev.appearance, ...patch.appearance },
-              prev.appearance,
-            )
+          ? parseMemberAppearance(patch.appearance, prev.appearance)
           : prev.appearance,
       updatedAt: Date.now(),
       seed: true,

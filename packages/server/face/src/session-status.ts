@@ -1002,12 +1002,20 @@ function bossBallFromPresence(
     typeof user.shape === "string" && user.shape ? user.shape : "blob";
   const color =
     typeof user.color === "string" && user.color ? user.color : "cream";
+  // Non-empty overlays only — empty strings must not become truthy leftovers.
+  // appearanceLookWire drops overlays when a builtin kit owns the slot.
   const overlayHat =
-    typeof user.overlayHat === "string" ? user.overlayHat : undefined;
+    typeof user.overlayHat === "string" && user.overlayHat.trim()
+      ? user.overlayHat
+      : undefined;
   const overlayGlasses =
-    typeof user.overlayGlasses === "string" ? user.overlayGlasses : undefined;
+    typeof user.overlayGlasses === "string" && user.overlayGlasses.trim()
+      ? user.overlayGlasses
+      : undefined;
   const overlayHeld =
-    typeof user.overlayHeld === "string" ? user.overlayHeld : undefined;
+    typeof user.overlayHeld === "string" && user.overlayHeld.trim()
+      ? user.overlayHeld
+      : undefined;
   const bodyColor =
     typeof user.bodyColor === "string" ? user.bodyColor.trim() : "";
   const eyeColor =

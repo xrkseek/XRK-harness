@@ -100,6 +100,7 @@ export {
   createReadImageTool,
   formatImageReadOutput,
   imageMediaTypeForPath,
+  isWorkspaceImagePath,
   parseAttachmentFilePath,
   type CreateReadImageToolOptions,
   type ImageReadValue,
@@ -596,7 +597,7 @@ export interface FsToolsOptions {
     }): string | undefined;
   };
   /**
-   * Full image attachment store for `present` inline galleries (PNG/JPEG/WebP/GIF).
+   * Full image attachment store for `present` inline galleries.
    * Distinct from {@link attachments} (file-id reads for `read_file`).
    */
   readonly presentAttachments?: AttachmentStore;

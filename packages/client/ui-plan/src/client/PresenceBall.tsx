@@ -30,8 +30,12 @@ import {
   DEFAULT_STATUS_PRESETS,
   isPresenceColor,
   isPresenceShape,
+  PRESENCE_GLASSES_KITS,
+  PRESENCE_HAT_KITS,
+  PRESENCE_HELD_KITS,
+  resolveEnginePick,
   resolvePresencePaint,
-  resolveStickerOverlay,
+  resolveSlotOverlayImage,
   resolveStatusPresetsForLocale,
   seatTitlesForScheme,
   splitLegacyKit,
@@ -300,22 +304,6 @@ function usePresenceStickers(): readonly PresenceSticker[] {
     presenceStickerSnapshot,
     presenceStickerServerSnapshot,
   )
-}
-
-const NO_SLOT: { readonly engine: string; readonly overlay: string } = { engine: 'none', overlay: '' }
-
-/**
- * One member dressing slot. A builtin id goes to the engine verbatim; a
- * `sticker:<id>` pick (custom dressing) is swapped for its image here, because
- * the engine only knows builtin ids.
- */
-function memberSlot(
-  pick: string | undefined,
-  stickers: readonly PresenceSticker[],
-): { readonly engine: string; readonly overlay: string } {
-  if (!pick || pick === 'none') return NO_SLOT
-  const image = resolveStickerOverlay(pick, stickers)
-  return image ? { engine: 'none', overlay: image } : { engine: pick, overlay: '' }
 }
 
 export interface BossMoodSnapshot {
@@ -673,17 +661,38 @@ export const PresenceBall = memo(function PresenceBall({
     : resolvePresencePaint(look.color, dark, look.bodyColor, look.eyeColor)
   const split = splitLegacyKit(memberLook?.kit)
   const memberStickers = usePresenceStickers()
-  const memberHat = memberSlot(memberLook?.kitHat ?? split.hat, memberStickers)
-  const memberGlasses = memberSlot(memberLook?.kitGlasses ?? split.glasses, memberStickers)
-  const memberHeld = memberSlot(memberLook?.kitHeld, memberStickers)
-  const engineHat = memberLook ? memberHat.engine : look.engineHat
-  const engineGlasses = memberLook ? memberGlasses.engine : look.engineGlasses
-  const engineHeld = memberLook ? memberHeld.engine : look.engineHeld
-  const overlayHat = memberLook ? (memberHat.overlay || memberLook.overlayHat || '') : look.overlayHat
+  const hatPick = memberLook?.kitHat ?? split.hat ?? 'none'
+  const glassesPick = memberLook?.kitGlasses ?? split.glasses ?? 'none'
+  const heldPick = memberLook?.kitHeld ?? 'none'
+  const engineHat = memberLook ? resolveEnginePick(hatPick, PRESENCE_HAT_KITS) : look.engineHat
+  const engineGlasses = memberLook
+    ? resolveEnginePick(glassesPick, PRESENCE_GLASSES_KITS)
+    : look.engineGlasses
+  const engineHeld = memberLook ? resolveEnginePick(heldPick, PRESENCE_HELD_KITS) : look.engineHeld
+  const overlayHat = memberLook
+    ? resolveSlotOverlayImage(
+      hatPick,
+      memberStickers,
+      PRESENCE_HAT_KITS,
+      memberLook.overlayHat || '',
+    )
+    : look.overlayHat
   const overlayGlasses = memberLook
-    ? (memberGlasses.overlay || memberLook.overlayGlasses || '')
+    ? resolveSlotOverlayImage(
+      glassesPick,
+      memberStickers,
+      PRESENCE_GLASSES_KITS,
+      memberLook.overlayGlasses || '',
+    )
     : look.overlayGlasses
-  const overlayHeld = memberLook ? (memberHeld.overlay || memberLook.overlayHeld || '') : look.overlayHeld
+  const overlayHeld = memberLook
+    ? resolveSlotOverlayImage(
+      heldPick,
+      memberStickers,
+      PRESENCE_HELD_KITS,
+      memberLook.overlayHeld || '',
+    )
+    : look.overlayHeld
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const lastAccentRef = useRef<string>('')

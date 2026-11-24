@@ -8,6 +8,7 @@ import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
   ImageRequestPolicy,
+  ImportImageFileInput,
   RequestImageAttachment,
   SaveFileAttachment,
   SaveImageAttachment,
@@ -48,6 +49,11 @@ export interface AttachmentStore {
     data: Uint8Array,
     region: ImageRegion,
   ): Promise<CroppedImageRegion>;
+  /**
+   * Admit workspace image bytes by file name / sniff (local store).
+   * Prefer this over {@link saveImage} for disk paths from `present` / `read_image`.
+   */
+  importImageFile?(input: ImportImageFileInput): Promise<ImageAttachmentRef>;
 
   validateFile(input: SaveFileAttachment): Promise<void>;
   saveFiles(

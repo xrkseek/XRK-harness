@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type { ToolDefinition, ToolExecuteExtras } from "@xrkseek/core-tools";
 import type { AttachmentStore, ImageAttachmentRef } from "@xrkseek/attachment";
-import { imageMediaTypeForPath } from "./read-image.js";
+import { imageMediaTypeForPath, isWorkspaceImagePath } from "./read-image.js";
 
 /**
  * Per-call delivery limit, aligned with DSH `tool-present` (default 8).
@@ -23,7 +23,7 @@ export interface PresentToolOptions {
   /** Maximum files per call. Must be a positive safe integer. */
   readonly maxFiles?: number;
   /**
-   * When set, PNG/JPEG/WebP/GIF deliverables are persisted as durable image
+   * When set, PNG/JPEG/WebP/GIF/SVG deliverables are persisted as durable image
    * attachments so the chat row can gallery them like `read_image` /
    * `image_generate`. Non-image files stay path-only.
    */
@@ -58,7 +58,7 @@ export function createPresentTool(
       "(delivery + on-screen display). " +
       "Call present after writing a file (including files created through Bash, scripts, or downloads) " +
       "and before your final response; mentioning the path in your reply does not replace this call. " +
-      "PNG/JPEG/WebP/GIF paths are shown inline in chat like read_image / image_generate. " +
+      "PNG/JPEG/WebP/GIF/SVG paths are shown inline in chat like read_image / image_generate. " +
       "Relative paths resolve against the workspace root; contents are not copied for non-image files.",
     parameters: {
       type: "object",
@@ -133,24 +133,38 @@ export function createPresentTool(
 
       const imageParts: ImagePart[] = [];
       for (const file of declared) {
+        if (!isWorkspaceImagePath(file.path)) continue;
         const mediaType = imageMediaTypeForPath(file.path);
-        if (mediaType === undefined) continue;
-        if (!attachments.imageLimits.mediaTypes.includes(mediaType)) continue;
+        if (
+          mediaType !== undefined
+          && !attachments.imageLimits.mediaTypes.includes(mediaType)
+        ) {
+          continue;
+        }
+        if (mediaType === undefined && attachments.importImageFile === undefined) {
+          continue;
+        }
         try {
           const byteCap = Math.min(
             attachments.imageLimits.maxImageBytes,
             attachments.imageLimits.maxMessageImageBytes,
           );
           const data = await fs.readBytes(file.path, byteCap);
-          const ref = await attachments.saveImage({
-            data,
-            mediaType,
-            name: basename(file.path),
-            sourcePath: file.path,
-          });
+          const leaf = basename(file.path);
+          const ref = attachments.importImageFile !== undefined
+            ? await attachments.importImageFile({
+                data,
+                fileName: leaf,
+                sourcePath: file.path,
+              })
+            : await attachments.saveImage({
+                data,
+                mediaType: mediaType!,
+                name: leaf,
+                sourcePath: file.path,
+              });
           imageParts.push({ type: "image", attachment: ref });
         } catch {
-          // Soft-degrade: path text still delivers; skip the broken image tile.
           continue;
         }
       }

@@ -13,6 +13,7 @@ import {
   PRESENCE_NS,
   PRESENCE_STICKERS_MAX,
   parseOverlayImage,
+  resolveStickerOverlay,
   stickerIdFromPick,
   stickerRef,
   type DressingSlot,
@@ -300,13 +301,23 @@ export function removeDressingSticker(id: string): void {
     { op: 'set', path: ['stickers'], value: encodeStickers(rows) },
   ]
   if (parseSlotPick(section?.kitHat, []) === ref) {
-    ops.push({ op: 'set', path: ['kitHat'], value: 'none' })
+    ops.push(
+      { op: 'set', path: ['kitHat'], value: 'none' },
+      { op: 'set', path: ['overlayHat'], value: '' },
+      { op: 'set', path: ['face'], value: '' },
+    )
   }
   if (parseSlotPick(section?.kitGlasses, []) === ref) {
-    ops.push({ op: 'set', path: ['kitGlasses'], value: 'none' })
+    ops.push(
+      { op: 'set', path: ['kitGlasses'], value: 'none' },
+      { op: 'set', path: ['overlayGlasses'], value: '' },
+    )
   }
   if (parseSlotPick(section?.kitHeld, []) === ref) {
-    ops.push({ op: 'set', path: ['kitHeld'], value: 'none' })
+    ops.push(
+      { op: 'set', path: ['kitHeld'], value: 'none' },
+      { op: 'set', path: ['overlayHeld'], value: '' },
+    )
   }
   void host.patch(ops)
 }
@@ -318,6 +329,26 @@ export function useBossLook(): BossLook {
     readBossLook,
     () => DEFAULT_BOSS_LOOK,
   )
+}
+
+/** Kit pick + mirrored overlay (and legacy `face` for hat) in one patch. */
+function setBossKitSlot(
+  field: 'kitHat' | 'kitGlasses' | 'kitHeld',
+  overlayField: 'overlayHat' | 'overlayGlasses' | 'overlayHeld',
+  builtins: ReadonlySet<string>,
+  next: string,
+): void {
+  if (!host) return
+  const pick = slotOrSticker(next, builtins)
+  const overlay = resolveStickerOverlay(pick, readStickers())
+  const ops: Array<{ op: 'set'; path: string[]; value: unknown }> = [
+    { op: 'set', path: [field], value: pick },
+    { op: 'set', path: [overlayField], value: overlay },
+  ]
+  if (overlayField === 'overlayHat') {
+    ops.push({ op: 'set', path: ['face'], value: overlay })
+  }
+  void host.patch(ops)
 }
 
 /** Persist one Boss look field into Host `ui-presence` (live, no Save). */
@@ -343,14 +374,14 @@ export function setBossLookField(
     return
   }
   if (field === 'kitHat') {
-    void host.set('kitHat', slotOrSticker(value, HAT_IDS))
+    setBossKitSlot('kitHat', 'overlayHat', HAT_IDS, value)
     return
   }
   if (field === 'kitGlasses') {
-    void host.set('kitGlasses', slotOrSticker(value, GLASSES_IDS))
+    setBossKitSlot('kitGlasses', 'overlayGlasses', GLASSES_IDS, value)
     return
   }
-  void host.set('kitHeld', slotOrSticker(value, HELD_IDS))
+  setBossKitSlot('kitHeld', 'overlayHeld', HELD_IDS, value)
 }
 
 /** Persist the Boss ball size (0.8–1.2). Out-of-range input is ignored. */

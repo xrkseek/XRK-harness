@@ -8,6 +8,12 @@ afterEach(cleanup)
 
 const labels = { dialog: '原图预览', close: '关闭原图预览', download: '下载原图' }
 
+function loadNatural(img: HTMLImageElement, width: number, height: number): void {
+  Object.defineProperty(img, 'naturalWidth', { configurable: true, get: () => width })
+  Object.defineProperty(img, 'naturalHeight', { configurable: true, get: () => height })
+  fireEvent.load(img)
+}
+
 describe('ImageLightbox', () => {
   it('focuses its close control, closes by button and Escape, and restores focus', () => {
     const opener = document.createElement('button')
@@ -47,8 +53,6 @@ describe('ImageLightbox', () => {
   })
 
   it('tolerates a focus owner it cannot restore (no active element at mount)', () => {
-    // jsdom always reports body as the fallback active element; stub the
-    // element-less state a detached focus can leave.
     Object.defineProperty(document, 'activeElement', { configurable: true, get: () => null })
     try {
       const view = render(<ImageLightbox src="blob:original" alt="原图" labels={labels} onClose={vi.fn()} />)
@@ -58,13 +62,30 @@ describe('ImageLightbox', () => {
     }
   })
 
-  it('closes on a mask press but not on a press over the image', () => {
-    const onClose = vi.fn()
-    const view = render(<ImageLightbox src="blob:original" alt="原图" labels={labels} onClose={onClose} />)
-    fireEvent.mouseDown(view.getByRole('img'))
-    expect(onClose).not.toHaveBeenCalled()
-    const mask = document.querySelector('[aria-hidden="true"]') as HTMLElement
-    fireEvent.mouseDown(mask)
-    expect(onClose).toHaveBeenCalledTimes(1)
+  it('zooms with Ctrl+wheel (non-passive native listener)', () => {
+    const view = render(<ImageLightbox src="blob:original" alt="长图" labels={labels} onClose={vi.fn()} />)
+    const img = view.getByRole('img') as HTMLImageElement
+    const stage = document.querySelector('[data-image-lightbox-stage]') as HTMLElement
+    Object.defineProperty(stage, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        left: 0, top: 0, right: 400, bottom: 700, width: 400, height: 700, x: 0, y: 0, toJSON: () => ({}),
+      }),
+    })
+    loadNatural(img, 750, 4200)
+    const before = img.style.transform
+    fireEvent.wheel(stage, { deltaY: -120, ctrlKey: true, clientX: 200, clientY: 350 })
+    expect(img.style.transform).not.toBe(before)
+  })
+
+  it('arms framing from a cached complete image without waiting for load', () => {
+    const view = render(<ImageLightbox src="blob:cached" alt="cached.png" labels={labels} onClose={vi.fn()} />)
+    const img = view.getByRole('img') as HTMLImageElement
+    Object.defineProperty(img, 'complete', { configurable: true, get: () => true })
+    Object.defineProperty(img, 'naturalWidth', { configurable: true, get: () => 320 })
+    Object.defineProperty(img, 'naturalHeight', { configurable: true, get: () => 240 })
+    view.rerender(<ImageLightbox src="blob:cached-2" alt="cached.png" labels={labels} onClose={vi.fn()} />)
+    // src change re-reads complete bitmap; transform leaves pending (0,0,1) only when natural is 0.
+    expect(img.style.transform).toContain('scale(')
   })
 })

@@ -58,6 +58,33 @@ describe("createPresentTool", () => {
     expect(out.content).toBe("presented out/a.png (preview)");
   });
 
+  it("attaches durable image blocks for SVG deliverables", async () => {
+    const importImageFile = vi.fn(async () => ({
+      attachmentId: "sha256:svg-png",
+      mediaType: "image/png" as const,
+      bytes: 12,
+      width: 64,
+      height: 64,
+      name: "mark.svg",
+    }));
+    const tool = createPresentTool(
+      {
+        stat: async () => ({ isFile: true }),
+        readBytes: async () => new Uint8Array([1, 2, 3]),
+      },
+      { attachments: mockAttachments({ importImageFile }) },
+    );
+    const out = await tool.execute(
+      { files: [{ path: "out/mark.svg" }] },
+      undefined,
+    );
+    expect(out.isError).toBeFalsy();
+    const parts = out.content as Array<{ type: string; attachment?: { attachmentId: string } }>;
+    expect(parts[1]?.type).toBe("image");
+    expect(parts[1]?.attachment?.attachmentId).toBe("sha256:svg-png");
+    expect(importImageFile).toHaveBeenCalled();
+  });
+
   it("attaches durable image blocks for PNG deliverables", async () => {
     const readBytes = vi.fn(async () => new Uint8Array([1, 2, 3, 4]));
     const saveImage = vi.fn(async (input: { mediaType: string; name?: string; sourcePath?: string; data: Uint8Array }) => ({

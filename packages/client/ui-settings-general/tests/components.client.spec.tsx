@@ -140,15 +140,17 @@ describe('DesktopReleaseFooter', () => {
     expect(install).toHaveBeenCalledOnce()
   })
 
-  it('surfaces a failed update as an error chip instead of the idle version pill', async () => {
-    const check = vi.fn(async () => ({ phase: 'idle' as const }))
+  it('keeps the version pill when snapshot is error (silent foot chip)', async () => {
+    const check = vi.fn(async () => ({
+      phase: 'error' as const,
+      message: 'feed closed',
+    }))
     ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
       version: async () => '0.5.13',
       updates: {
         check,
         snapshot: async () => ({
           phase: 'error' as const,
-          version: '0.5.20',
           message: 'feed closed',
         }),
         install: vi.fn(),
@@ -156,17 +158,16 @@ describe('DesktopReleaseFooter', () => {
       },
     }
     render(<DesktopReleaseFooter t={interpolate} />)
-    const failed = await screen.findByRole('button', {
-      name: 'Could not check or install the update',
+    const chip = await screen.findByRole('button', {
+      name: 'Check for updates v0.5.13',
     })
-    expect(failed.textContent).toMatch(/Could not check or install the update/)
-    // Error chip must retry (not stick forever); a successful check returns to idle copy.
-    fireEvent.click(failed)
+    expect(chip.textContent).toMatch(/v0\.5\.13/)
+    expect(screen.queryByText(/Could not check or install the update/)).toBeNull()
+    fireEvent.click(chip)
     expect(check).toHaveBeenCalledOnce()
+    const dialog = await screen.findByRole('dialog', { name: 'Software update' })
     await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: 'Software update' }).textContent).toMatch(
-        /You are on the latest version/,
-      )
+      expect(dialog.textContent).toMatch(/feed closed/)
     })
   })
 

@@ -60,6 +60,19 @@ describe("presence dressing kitHeld", () => {
       kitHeld: "flag",
     }).kitHeld).toBe("flag");
   });
+
+  it("does not wire a leftover overlay beside a builtin held", () => {
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const wire = appearanceLookWire({
+      shape: "blob",
+      color: "cream",
+      kitHeld: "flower",
+      overlayHeld: png,
+    });
+    expect(wire.kitHeld).toBe("flower");
+    expect(wire.overlayHeld).toBeUndefined();
+  });
 });
 
 /* The boss seat (`ui-presence`) is gated by Host-side enumerations, while roster

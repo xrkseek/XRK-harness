@@ -52,9 +52,8 @@ import {
   PRESENCE_TITLE_SCHEME_FIELD,
   resolveEnginePick,
   resolveSeatTitles,
-  resolveStickerOverlay,
+  resolveSlotOverlayImage,
   splitLegacyKit,
-  stickerIdFromPick,
   type PresenceColor,
   type PresenceKit,
   type PresenceSeatTitles,
@@ -171,18 +170,30 @@ export class PresenceSettingsRuntime {
   }
 
   getOverlayHat(): string {
-    return resolveStickerOverlay(this.kitHat, this.stickers)
-      || (stickerIdFromPick(this.kitHat) ? '' : this.overlayHat)
+    return resolveSlotOverlayImage(
+      this.kitHat,
+      this.stickers,
+      PRESENCE_HAT_KITS,
+      this.overlayHat,
+    )
   }
 
   getOverlayGlasses(): string {
-    return resolveStickerOverlay(this.kitGlasses, this.stickers)
-      || (stickerIdFromPick(this.kitGlasses) ? '' : this.overlayGlasses)
+    return resolveSlotOverlayImage(
+      this.kitGlasses,
+      this.stickers,
+      PRESENCE_GLASSES_KITS,
+      this.overlayGlasses,
+    )
   }
 
   getOverlayHeld(): string {
-    return resolveStickerOverlay(this.kitHeld, this.stickers)
-      || (stickerIdFromPick(this.kitHeld) ? '' : this.overlayHeld)
+    return resolveSlotOverlayImage(
+      this.kitHeld,
+      this.stickers,
+      PRESENCE_HELD_KITS,
+      this.overlayHeld,
+    )
   }
 
   getRevision(): number {

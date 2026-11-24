@@ -79,6 +79,8 @@ export class DesktopUpdateCoordinator {
   private checkOperation: Promise<DesktopUpdateState> | undefined;
   private installOperation: Promise<DesktopUpdateState> | undefined;
   private downloadOperation: Promise<void> | undefined;
+  /** Whether the check that started the current prefetch was user-initiated. */
+  private lastCheckManual = false;
   private readonly publishState: (
     state: DesktopUpdateState,
   ) => DesktopUpdateState;
@@ -131,12 +133,13 @@ export class DesktopUpdateCoordinator {
 
   /**
    * Check the configured Desktop release stream and retain an available version.
-   * @param _manual - Reserved for UI visibility (dsh parity); check logic is identical.
+   * @param manual - User-initiated checks keep a visible `error` phase; background
+   *   polls fail soft (idle + log) so the Settings foot chip never sticks on failure.
    */
-  async check(_manual = false): Promise<DesktopUpdateState> {
+  async check(manual = false): Promise<DesktopUpdateState> {
     if (this.installOperation !== undefined) return this.installOperation;
     if (this.checkOperation !== undefined) return this.checkOperation;
-    this.checkOperation = this.doCheck().finally(() => {
+    this.checkOperation = this.doCheck(manual).finally(() => {
       this.checkOperation = undefined;
     });
     return this.checkOperation;
@@ -166,12 +169,29 @@ export class DesktopUpdateCoordinator {
     this.lastPercent = -1;
   }
 
-  private async doCheck(): Promise<DesktopUpdateState> {
+  /**
+   * Check / probe failures never stick on `error` in published state — that
+   * pinned the Settings foot chip forever. Publish `idle`, then either throw
+   * (background → schedule backoff) or return an ephemeral error for the
+   * caller’s open dialog without leaving it in {@link state}/snapshot.
+   */
+  private failCheck(error: unknown, manual: boolean): DesktopUpdateState {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("xrk desktop update check failed:", error);
+    this.publish({ phase: "idle" });
+    if (!manual) {
+      throw error instanceof Error ? error : new Error(message);
+    }
+    return { phase: "error", message };
+  }
+
+  private async doCheck(manual: boolean): Promise<DesktopUpdateState> {
     // Fresh check must not inherit a prior download's percent or a resolved
     // downloadOperation — otherwise a later feed version can flip to `ready`
     // without fetching its bytes (cached Promise from the previous prefetch).
     this.clearProgress();
     this.downloadOperation = undefined;
+    this.lastCheckManual = manual;
     this.publish({ phase: "checking" });
     try {
       if (!this.enabled()) {
@@ -232,6 +252,11 @@ export class DesktopUpdateCoordinator {
           const failedVersion = this.availableVersion;
           this.availableVersion = undefined;
           this.clearProgress();
+          if (!this.lastCheckManual) {
+            console.error("xrk desktop update prefetch failed:", error);
+            this.publish({ phase: "idle" });
+            return;
+          }
           this.publish({
             phase: "error",
             ...(failedVersion !== undefined ? { version: failedVersion } : {}),
@@ -243,10 +268,7 @@ export class DesktopUpdateCoordinator {
       this.availableVersion = undefined;
       this.downloadOperation = undefined;
       this.clearProgress();
-      return this.publish({
-        phase: "error",
-        message: error instanceof Error ? error.message : String(error),
-      });
+      return this.failCheck(error, manual);
     }
   }
 

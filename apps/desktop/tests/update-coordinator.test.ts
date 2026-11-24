@@ -231,7 +231,7 @@ describe("DesktopUpdateCoordinator", () => {
     expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true);
   });
 
-  it("surfaces prefetch download failures as error without enabling install", async () => {
+  it("surfaces prefetch download failures as error without enabling install (manual)", async () => {
     const updater = {
       autoDownload: false,
       autoInstallOnAppQuit: false,
@@ -249,7 +249,7 @@ describe("DesktopUpdateCoordinator", () => {
       updater,
       enabled: () => true,
     });
-    await expect(coordinator.check()).resolves.toEqual({
+    await expect(coordinator.check(true)).resolves.toEqual({
       phase: "available",
       version: "1.1.0",
     });
@@ -259,6 +259,75 @@ describe("DesktopUpdateCoordinator", () => {
     expect(coordinator.state.message).toMatch(/feed closed/u);
     expect(updater.quitAndInstall).not.toHaveBeenCalled();
     await expect(coordinator.install()).rejects.toThrow(/no verified update/u);
+  });
+
+  it("fails soft to idle when background prefetch download fails", async () => {
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => ({
+        isUpdateAvailable: true,
+        updateInfo: { version: "1.1.0" },
+      })),
+      downloadUpdate: vi.fn(async () => {
+        throw new Error("feed closed");
+      }),
+      quitAndInstall: vi.fn(),
+    } satisfies DesktopAppUpdater;
+    const coordinator = new DesktopUpdateCoordinator({
+      publish: (state) => state,
+      updater,
+      enabled: () => true,
+    });
+    await expect(coordinator.check(false)).resolves.toEqual({
+      phase: "available",
+      version: "1.1.0",
+    });
+    await vi.waitFor(() => {
+      expect(coordinator.state.phase).toBe("idle");
+    });
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
+  it("fails soft (idle + reject) when a background check throws", async () => {
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => {
+        throw new Error("DNS failed");
+      }),
+      downloadUpdate: vi.fn(),
+      quitAndInstall: vi.fn(),
+    } satisfies DesktopAppUpdater;
+    const coordinator = new DesktopUpdateCoordinator({
+      publish: (state) => state,
+      updater,
+      enabled: () => true,
+    });
+    await expect(coordinator.check(false)).rejects.toThrow(/DNS failed/u);
+    expect(coordinator.state.phase).toBe("idle");
+  });
+
+  it("returns an ephemeral error for manual check without sticking published state", async () => {
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => {
+        throw new Error("DNS failed");
+      }),
+      downloadUpdate: vi.fn(),
+      quitAndInstall: vi.fn(),
+    } satisfies DesktopAppUpdater;
+    const coordinator = new DesktopUpdateCoordinator({
+      publish: (state) => state,
+      updater,
+      enabled: () => true,
+    });
+    await expect(coordinator.check(true)).resolves.toEqual({
+      phase: "error",
+      message: "DNS failed",
+    });
+    expect(coordinator.state.phase).toBe("idle");
   });
 
   it("does not reuse a prior downloadOperation for a newer feed version", async () => {
@@ -341,12 +410,12 @@ describe("DesktopUpdateCoordinator", () => {
       updater,
       enabled: () => true,
     });
-    await coordinator.check();
+    await coordinator.check(true);
     await vi.waitFor(() => {
       expect(coordinator.state.phase).toBe("error");
     });
     states.length = 0;
-    await coordinator.check();
+    await coordinator.check(true);
     expect(states[0]).toEqual({ phase: "checking" });
     expect(states.find((row) => row.phase === "available")).toEqual({
       phase: "available",

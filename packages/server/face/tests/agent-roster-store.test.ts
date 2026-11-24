@@ -243,6 +243,24 @@ describe("FaceAgentRosterStore", () => {
     );
   });
 
+  it("seed refresh forcing default held drops a leftover custom overlayHeld", () => {
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const dir = home();
+    const store = new FaceAgentRosterStore(dir);
+    store.patchCatalogAppearance("mem_seed_manager", {
+      shape: "blob",
+      color: "cream",
+      kitHeld: "none",
+      overlayHeld: png,
+    });
+    // Re-open triggers mergeGlobalSeedMembers → catalogAppearanceHeld.
+    const again = new FaceAgentRosterStore(dir);
+    const look = again.get(GLOBAL_ROSTER_ID, "mem_seed_manager")?.appearance;
+    expect(look?.kitHeld).toBe("brand-xrk");
+    expect(look?.overlayHeld).toBeUndefined();
+  });
+
   it("keeps catalog nicknames across refresh; 向日葵 nickname stays locked", () => {
     const dir = home();
     const store = new FaceAgentRosterStore(dir);
@@ -449,6 +467,51 @@ describe("FaceAgentRosterStore", () => {
     expect(cleared?.appearance.overlayHeld).toBeUndefined();
     expect(cleared?.appearance.face).toBeUndefined();
     expect(cleared?.appearance.kitHat).toBe("bow");
+    // Builtin held replaces a prior custom overlay even when the patch omits
+    // overlayHeld:"" — leftover toilet PNG must not survive beside flower.
+    const stickerThenBuiltin = store.upsert(GLOBAL_ROSTER_ID, {
+      name: "贴纸换内置",
+      playbook: "Custom held then a builtin flower.",
+      role: "worker",
+      appearance: {
+        shape: "blob",
+        color: "cream",
+        kitHeld: "sticker:stk_toilet1",
+        overlayHeld: png,
+      },
+    });
+    expect(stickerThenBuiltin?.appearance.overlayHeld).toBe(png);
+    const switched = store.upsert(GLOBAL_ROSTER_ID, {
+      id: stickerThenBuiltin!.id,
+      name: "贴纸换内置",
+      playbook: "Custom held then a builtin flower.",
+      role: "worker",
+      appearance: {
+        shape: "blob",
+        color: "cream",
+        kitHeld: "flower",
+      },
+    });
+    expect(switched?.appearance.kitHeld).toBe("flower");
+    expect(switched?.appearance.overlayHeld).toBeUndefined();
+    // Face used to pre-parse (dropping "") then merge with prev — pin the
+    // store path: empty overlay clears must win without spreading prev first.
+    const preParsedClear = store.upsert(GLOBAL_ROSTER_ID, {
+      id: stickerThenBuiltin!.id,
+      name: "贴纸换内置",
+      playbook: "Custom held then a builtin flower.",
+      role: "worker",
+      appearance: {
+        shape: "blob",
+        color: "cream",
+        kitHeld: "tea",
+        overlayHeld: "",
+        bodyColor: "",
+      },
+    });
+    expect(preParsedClear?.appearance.kitHeld).toBe("tea");
+    expect(preParsedClear?.appearance.overlayHeld).toBeUndefined();
+    expect(preParsedClear?.appearance.bodyColor).toBeUndefined();
   });
 
   it("promoting to global drops the same id from every workspace roster", () => {

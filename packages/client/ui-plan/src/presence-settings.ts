@@ -799,6 +799,19 @@ export function resolveStickerOverlay(pick: string, stickers: readonly PresenceS
   return stickers.find((row) => row.id === id)?.image ?? ''
 }
 
+/** Slot image: sticker library → else raw only when no builtin engine pick. */
+export function resolveSlotOverlayImage(
+  pick: string,
+  stickers: readonly PresenceSticker[],
+  builtins: readonly string[],
+  rawOverlay = '',
+): string {
+  const fromSticker = resolveStickerOverlay(pick, stickers)
+  if (fromSticker) return fromSticker
+  if (resolveEnginePick(pick, builtins) !== 'none') return ''
+  return rawOverlay
+}
+
 /** Accept `#rrggbb` (also `#rgb` shorthand) from the colour inputs; else ''. */
 export function parseHexColor(raw: unknown): string {
   if (typeof raw !== 'string') return ''
