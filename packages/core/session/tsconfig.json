@@ -10,6 +10,7 @@
     { "path": "../../protocol" },
     { "path": "../../attachment" },
     { "path": "../../runtime-diagnostics/invariants" },
-    { "path": "../../session-format" }
+    { "path": "../../session-format" },
+    { "path": "../../spill" }
   ]
 }
