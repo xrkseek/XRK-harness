@@ -2,9 +2,11 @@
 
 .label {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 6px;
   max-width: 180px;
+  min-width: 0;
   padding: 0 10px;
   height: 24px;
   border-radius: 999px;
@@ -12,12 +14,18 @@
   font-size: 12px;
   line-height: 24px;
   color: var(--dsw-alias-label-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .icon {
   flex: none;
   opacity: 0.7;
+}
+
+/* text-overflow only works on the text box itself — not on inline-flex parents
+   with a bare text node (anonymous flex item). Mirror ModelSelect.triggerLabel. */
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

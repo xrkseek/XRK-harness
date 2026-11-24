@@ -426,6 +426,12 @@ export interface FaceRuntime {
   jobViewsFor(sessionId: string): JobView[] | undefined;
   publishJobs(sessionId: string, opts?: { baseline?: boolean }): void;
   /**
+   * Soft-detach hub for wait-class tools (`wait_agent` · peer sync wait ·
+   * subagent foreground wait). UI `session.yieldWait` / steer admit call
+   * {@link import("./wait-yield.js").WaitYieldHub.yield}; children keep running.
+   */
+  readonly waitYield: import("./wait-yield.js").WaitYieldHub;
+  /**
    * Latest Claude Code mods AbovePrompt snapshot for a session, if any.
    * Used as the mux subscribe baseline (like jobs).
    */

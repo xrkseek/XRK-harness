@@ -201,6 +201,21 @@ export function listSessionsWithPendingAdmits(
 }
 
 /**
+ * True when this session has at least one pending **steer** (not queue).
+ * Wait-class tools (`wait_agent`, peer sync wait) poll this so a human
+ * 插队 can soft-yield the wait without `session.cancel`.
+ */
+export function sessionHasPendingSteer(
+  store: SessionStore,
+  sessionId: string,
+): boolean {
+  return listPendingAdmits(
+    readSessionEvents(store, sessionId),
+    sessionId,
+  ).some((p) => p.delivery === "steer");
+}
+
+/**
  * `prompt/promoted` rows after the latest admit-speech `user/message` — crash
  * window between promote and the Face-stamped user row (`beforeUserMessage`
  * await). Seat / handoff / plugin steers close the window the same as human

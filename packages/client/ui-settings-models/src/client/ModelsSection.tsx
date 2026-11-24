@@ -201,7 +201,9 @@ export async function removeProviderProfile(
     // to retry the idempotent operation instead of the row silently staying.
     return messageOf(error)
   }
-  await controller.load()
+  // Soft refresh off the critical path — a hard awaited load flips status to
+  // loading and holds the delete dialog open for llm.providers + describe.
+  void controller.load({ soft: true })
   return undefined
 }
 
@@ -387,7 +389,9 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
     // Announced only once the refreshed directory is in the snapshot the
     // notice reads its name from: an apply can rename the route, and the
     // target captured when the card opened still carries the old name.
-    void controller.load().then(() => { setSavedTarget(target) })
+    // Soft: a hard load after save remounted the default-model select and
+    // made every provider apply feel frozen.
+    void controller.load({ soft: true }).then(() => { setSavedTarget(target) })
   }
 
   const closeEditor = (changed: boolean, target: ProviderIdentity): void => {
@@ -438,9 +442,10 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   }
 
   const closeDelete = (): void => {
-    if (deleting) return
+    // Always dismissible — a hung Host RPC must not trap the modal.
     setDeleteTarget(undefined)
     setDeleteFailure(undefined)
+    setDeleting(false)
   }
 
   const confirmDelete = (): void => {
@@ -757,7 +762,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                     setDeclaring(false)
                     discardResume()
                     clearProviderFormSession()
-                    if (changed) void controller.load()
+                    if (changed) void controller.load({ soft: true })
                   }}
                 />
               </div>
@@ -811,7 +816,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
         className={styles['deleteDialog'] as string}
         footer={(
           <>
-            <Button variant="outline" autoFocus disabled={deleting} onClick={closeDelete}>
+            <Button variant="outline" autoFocus onClick={closeDelete}>
               {t('cancel')}
             </Button>
             <Button

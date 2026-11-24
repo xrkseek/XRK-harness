@@ -50,10 +50,15 @@ export class GitAttributionCardController {
   private commitEnabled(text: string): void {
     const value = text === 'true' ? true : text === 'false' ? false : undefined
     if (value === undefined) return
+    const previous = this.form.field('enabled')
     this.form.actions().edit('enabled', text)
     const generation = ++this.commitGeneration
     void this.scope.set('enabled', value).catch(() => {
       if (generation !== this.commitGeneration) return
+      // Roll back the optimistic toggle so the card matches Host state,
+      // then surface the shared PluginCard failure line.
+      this.form.actions().edit('enabled', previous)
+      this.form.markFailed()
     })
   }
 

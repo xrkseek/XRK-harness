@@ -53,7 +53,6 @@ import {
   loadOfficeRecipes,
   appendWorkspaceInjectsIfChanged,
   standingSkillToolSourceOptions,
-  SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
   type WorkspaceInjector,
 } from "@xrkseek/workspace";
@@ -256,14 +255,9 @@ export function createMinimalComposition(
     order: 0,
     content: () => persona,
   });
-  prompts.register({
-    id: "tool:skill",
-    order: 112,
-    content: () => SKILL_TOOL_GUIDANCE,
-  });
   wireCompositionPrompts(prompts, {
     ...(options.plugins ? { plugins: options.plugins } : {}),
-    reservedIds: ["base", "tool:skill"],
+    reservedIds: ["base"],
   });
 
   const workspace = createWorkspaceInjector({

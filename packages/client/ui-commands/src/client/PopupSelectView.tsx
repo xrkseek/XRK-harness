@@ -12,7 +12,12 @@
 import { useEffect, useRef } from 'react'
 import { useSyncExternalStore } from 'react'
 import clsx from 'clsx'
-import { IconCheckOutlineRegular, RiskConfirmation, useAnchoredMaxHeight } from '@xrkseek/client-ui-primitives'
+import {
+  IconCheckOutlineRegular,
+  isComposingKeyboardEvent,
+  RiskConfirmation,
+  useAnchoredMaxHeight,
+} from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import { filterOptions } from './popup.ts'
 import type { PopupSelectController } from './popup.ts'
@@ -108,6 +113,7 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
         popup.move(-1)
         return
       case 'Enter':
+        if (isComposingKeyboardEvent(ev)) return
         ev.preventDefault()
         void popup.select(state.active)
         return

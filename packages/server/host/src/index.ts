@@ -151,6 +151,7 @@ import {
   mergeCommunityProviderModels,
   schedulePluginUpdateProbeWarm,
   sessionCreatedByBoss,
+  dispatchFaceMethod,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -2465,6 +2466,8 @@ export function createHostManager(): HostManager {
           return cronAgentDepth.run(true, async () => {
             const session = store.create();
             const face = faceBox.runtime;
+            const label = job.name?.trim() || job.id;
+            const promptText = run.prompt.trim() || `执行定时任务：${label}`;
             try {
               // Inherit the job's captured route so unattended runs match the
               // session that created the cronjob (not Host agent-default).
@@ -2474,7 +2477,6 @@ export function createHostManager(): HostManager {
                   model: run.model,
                 });
               }
-              const label = job.name?.trim() || job.id;
               try {
                 face?.titles.rename(session.id, `[cron] ${label}`);
               } catch {
@@ -2506,9 +2508,42 @@ export function createHostManager(): HostManager {
                   // thread store best-effort
                 }
               }
+              // Face admit as 老板 (human_face / kind:user) — same ownership as
+              // the boss clicking the scheduled task. Prefer queue+drain over
+              // bare continueTurn so transcript chrome + wake match UI composer.
+              if (face) {
+                const prompted = await dispatchFaceMethod(
+                  face,
+                  "session.prompt",
+                  `cron-p-${job.id}-${Date.now().toString(36)}`,
+                  {
+                    sessionId: session.id,
+                    mode: "queue",
+                    content: [{ type: "text", text: promptText }],
+                  },
+                );
+                if (!prompted.result.ok) {
+                  return {
+                    ok: false,
+                    output: "",
+                    error:
+                      prompted.result.ok === false
+                        ? prompted.result.error.message
+                        : `session.prompt failed for cron ${job.id}`,
+                    sessionId: session.id,
+                  };
+                }
+                const result = await drain.run(session.id);
+                return {
+                  ok: true,
+                  output: result?.text ?? "",
+                  sessionId: session.id,
+                };
+              }
+              // No Face yet (boot race) — bare turn still stamps kind:user = 老板.
               const agent = await resolveAgent(session.id);
               const result = await agent.continueTurn({
-                text: `[cron ${job.id}${job.name ? ` ${job.name}` : ""}]\n${run.prompt}`,
+                text: promptText,
                 ...(signal ? { signal } : {}),
               });
               return {

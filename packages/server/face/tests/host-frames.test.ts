@@ -349,6 +349,41 @@ describe("host/remote-event", () => {
     ]);
   });
 
+  it("WaitYieldHub attach/yield publishes host/session-wait-yield", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-host-wy-"));
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const host = collectHost(runtime);
+    const att = runtime.waitYield.attach("sess-a", {
+      kind: "wait_agent",
+      label: "child",
+    });
+    expect(host.at(-1)).toEqual({
+      type: "host/session-wait-yield",
+      sessionId: "sess-a",
+      active: { kind: "wait_agent", label: "child" },
+    });
+    expect(runtime.waitYield.yield("sess-a")).toBe(true);
+    expect(host.at(-1)).toEqual({
+      type: "host/session-wait-yield",
+      sessionId: "sess-a",
+      active: null,
+    });
+    att.dispose();
+    expect(host.at(-1)).toEqual({
+      type: "host/session-wait-yield",
+      sessionId: "sess-a",
+      active: null,
+    });
+  });
+
   it("forwards agent-preset/selected on select", async () => {
     const rt = await runtime();
     // Attach to the launch coding workspace — 向阳空间 locks 奇创.

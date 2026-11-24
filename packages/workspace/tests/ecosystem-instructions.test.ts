@@ -239,6 +239,52 @@ describe("ecosystem instruction inject", () => {
     expect(joined).toContain("Run pnpm check before shipping");
   });
 
+  it("does not dump .agents/context into standing inject (skill-on-demand)", async () => {
+    const fs = await import("node:fs/promises");
+    const root = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-ctx-"));
+    await mkdir(path.join(root, ".agents", "context"), { recursive: true });
+    await writeFile(
+      path.join(root, ".agents", "AGENTS.md"),
+      "# Overlay\nUse skill for deep notes.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, ".agents", "context", "fat-note.md"),
+      "# Fat audit\n".repeat(40),
+      "utf8",
+    );
+    await writeFile(path.join(root, "AGENTS.md"), "# Repo\nShared.", "utf8");
+    const joined = (
+      await createWorkspaceInjector({ root }).inject()
+    ).instructionBlocks.join("\n");
+    expect(joined).toContain("## .agents/AGENTS.md");
+    expect(joined).not.toContain(".agents/context/fat-note.md");
+    expect(joined).not.toContain("Fat audit");
+  });
+
+  it("subagent/minimal skip workspace .cursor/rules", async () => {
+    const fs = await import("node:fs/promises");
+    const root = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-cursor-"));
+    await mkdir(path.join(root, ".cursor", "rules"), { recursive: true });
+    await writeFile(
+      path.join(root, ".cursor", "rules", "maintainer.mdc"),
+      "---\ndescription: x\n---\n# Maintainer only\nNever ship half UX.",
+      "utf8",
+    );
+    await writeFile(path.join(root, "AGENTS.md"), "# Repo\nShared.", "utf8");
+    const userJoined = (
+      await createWorkspaceInjector({ root }).inject()
+    ).instructionBlocks.join("\n");
+    expect(userJoined).toContain("Never ship half UX");
+    for (const audience of ["subagent", "minimal"] as const) {
+      const joined = (
+        await createWorkspaceInjector({ root, audience }).inject()
+      ).instructionBlocks.join("\n");
+      expect(joined).not.toContain("Never ship half UX");
+      expect(joined).toContain("Shared");
+    }
+  });
+
   it("tags every instruction section with its source path", async () => {
     const root = await import("node:fs/promises").then((fs) =>
       fs.mkdtemp(path.join(tmpdir(), "xrk-eco-prov-")),

@@ -221,9 +221,9 @@ describe("createSessionDrainLatch", () => {
     });
     expect(Date.now() - started).toBeLessThan(500);
     expect(onAbortCalls).toBe(1);
-    // The stuck entry is kept: the latch still tells the truth about
-    // activity, and a later wake re-arms once the chain finally settles.
-    expect(latch.isActive()).toBe(true);
+    // Timeout abandons the stuck entry so a later run/wake is not parked on a
+    // never-settling done. Orphaned drain settle is a no-op.
+    expect(latch.isActive()).toBe(false);
     release();
     await runP;
     expect(latch.isActive()).toBe(false);

@@ -62,6 +62,39 @@ describe('queue snapshot intake', () => {
     ])
   })
 
+  it('keeps handoff admit source on pending steers (not boss 插队 chrome)', () => {
+    const session = makeSession()
+    const handoffSource = {
+      kind: 'handoff',
+      form: 'notice',
+      via: 'subagent',
+      fromSessionId: 'sess_child',
+      label: '打招呼子代理',
+      rpcId: rid('rpc-handoff-1'),
+    }
+    session.handleMuxEnvelope(rid('env-handoff'), {
+      type: 'session/queue',
+      sessionId: SID,
+      items: [{
+        id: iid('admit-handoff'),
+        placement: 'steering',
+        message: createUserMessage({
+          content: text('Partial / last answer:\n你好老板'),
+          source: handoffSource as never,
+        }),
+      }],
+    })
+    const row = session.getSnapshot().queue[0]
+    expect(row?.placement).toBe('steering')
+    expect(row?.source).toMatchObject({
+      kind: 'handoff',
+      via: 'subagent',
+      fromSessionId: 'sess_child',
+      label: '打招呼子代理',
+    })
+    expect(row?.rpcId).toBe('rpc-handoff-1')
+  })
+
   it('marks mixed-content messages non-editable while retaining their preview', () => {
     const session = makeSession()
     session.handleMuxEnvelope(rid('env-2'), queueFrame([{

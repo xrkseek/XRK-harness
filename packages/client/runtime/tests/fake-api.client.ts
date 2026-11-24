@@ -168,6 +168,11 @@ export class FakeApiClient implements IApiClient {
     attachment: (payload: unknown) => this.record('session.attachment', payload, this.onAttachment(payload)),
     updateQueue: (payload: unknown) => this.record('session.updateQueue', payload, this.onUpdateQueue(payload)),
     cancel: (payload: unknown) => this.record('session.cancel', payload, this.onCancel(payload)),
+    yieldWait: (payload: unknown) => this.record(
+      'session.yieldWait',
+      payload,
+      Promise.resolve(ok({ accepted: true as const, detached: false })),
+    ),
     delete: (payload: unknown) => this.record('session.delete', payload, this.onDelete(payload)),
   }
 

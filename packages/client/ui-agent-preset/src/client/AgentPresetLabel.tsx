@@ -58,7 +58,7 @@ export function AgentPresetLabel({
   return (
     <span className={css.label} title={text.description ?? t('headerHint')}>
       <IconAgentPresetOutlineRegular size={14} className={css.icon} />
-      {text.name}
+      <span className={css.name}>{text.name}</span>
     </span>
   )
 }

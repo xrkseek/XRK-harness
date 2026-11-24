@@ -114,6 +114,7 @@
 | **假差距** | 动态上下文当 user 快照 | `additional_context` fragments（非改 system 前缀） |
 | **已收** | `dynamicSchema` 灌 sibling / 名册 | `session-tool-copy` 指针化；活 ids → board / 工具结果 |
 | **已收** | `tool_search` 描述塞 deferred catalog | 描述字节稳定；`list`/`*`/空查询浏览目录；关键词才 expand（体验不减） |
+| **已收** | 渐进披露省量（skills + deferred tools） | 站立 catalog **仅名**；Deferred 默认不上 `tools[]`。种子 17 skill：相对名+描述约 **90% 字节**；合成 7+12 工具表相对全挂约 **81% 字节**（展开尾追加）。**不砸** message-0 / tools 前缀——catalog 尾追加、expand 走 `stabilizeToolsForSeries`。细节与复测：[workspace-inject.md](./workspace-inject.md)「渐进披露省量」 |
 | **已收** | 跨回合丢失 leading system baseline | `series-baseline.ts`：in-history 路由记住 message-0；提示词变了只追加（对齐 DSH 系列前缀） |
 | **已收** | 截断/删会话仍挂过期 baseline | `forgetSessionProcessCaches`：与 `request/header` 同批清 series-baseline + time-context（删会话 · log cut；LRU 驻留驱逐保留，会话可 remount） |
 | **已收** | LRU 误清 toolDisclosure | 驻留驱逐保留 expand 名（与 series-baseline 同姿态）；删会话 / log cut 仍清 |

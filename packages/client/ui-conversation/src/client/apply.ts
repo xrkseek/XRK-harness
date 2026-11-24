@@ -61,6 +61,7 @@ import {
 } from './chat/user-message-media.ts'
 import { ApprovalPanel } from './skeleton/ApprovalPanel.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
+import { waitYieldDockEntry } from './skeleton/WaitYieldDock.tsx'
 import { modBandDockEntry } from './skeleton/ModBandDock.tsx'
 import { queueDockEntry } from './queue/QueueDock.tsx'
 import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
@@ -882,6 +883,9 @@ export function apply(ctx: Context): void {
 
   // The plan strip rides the input dock above the queue rows (same posture).
   ctx.plugin(todoDockEntry)
+
+  // Soft-detach for wait_agent / peer wait / foreground subagent (job.background posture).
+  ctx.plugin(waitYieldDockEntry)
 
   // The read-only queue dock entry rides the same
   // registration path into the input dock declared above.

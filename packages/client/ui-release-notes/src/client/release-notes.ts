@@ -69,6 +69,36 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.13',
+    date: '2026-11-24',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '「停止等待」：只结束 wait_agent / 对端 / 前台子代理等待，子任务继续跑；插队同效。',
+        en: 'Stop waiting: ends wait_agent / peer / foreground-subagent waits only — children keep running; steer does the same.',
+      },
+      {
+        zh: '技能 / 延迟工具渐进披露：catalog 仅名 + skill_search；PTY/job/cron/browser 经 tool_search；空闲看板不倾倒 peer。',
+        en: 'Progressive disclosure: names-only catalog + skill_search; PTY/job/cron/browser via tool_search; idle boards skip peer dumps.',
+      },
+      {
+        zh: 'Escape 层栈 · 浮层锚定 · IME 组字不误提交；Goal/干员删除需确认。',
+        en: 'Escape layer stack · anchored overlays · IME-safe Enter; confirm before clearing Goal / deleting a member.',
+      },
+      {
+        zh: '装扮清贴纸同步概况/侧栏；模型设置 soft load 不再冻卡；`.agents/context` 不站立灌入。',
+        en: 'Dress clears sync Overview/rail; Models soft load stops freezes; `.agents/context` not standing-injected.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.13。完整清单见 docs/releases/v0.8.13.md。',
+        en: 'Desktop / npm / phone align to 0.8.13. Full list: docs/releases/v0.8.13.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.12',
     date: '2026-11-23',
     title: {

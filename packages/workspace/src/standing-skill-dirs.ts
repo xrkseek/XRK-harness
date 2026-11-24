@@ -14,7 +14,7 @@
  * 3. Workspace vendor trees + `{productDir}/skills`
  * 4. `extraSkillDirs` (公文包)
  *
- * Progressive disclosure = catalog name+blurb → `skill` body (no skill_search).
+ * Progressive disclosure = catalog names → `skill_search` blurbs → `skill` body.
  */
 import path from "node:path";
 import { homedir } from "node:os";

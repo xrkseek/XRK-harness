@@ -143,6 +143,50 @@ Owner 份额（父级 `renderSlot` 传入）另有 `InputZone`：`{ session, inp
 
 完整 SlotMap 以 `packages/client/ui-conversation` 契约为准；未声明槽位 `register` 会失败。
 
+### Header / 窄列自保
+
+`SlotOutlet` 默认仍是 `display: contents`（布局中立地址）。下列座位在宿主侧升为真 flex 盒子，并带 `data-slot-layout="row"|"column"`（见 `web-react` `SLOT_ANCHOR_LAYOUT`）：
+
+| 槽位 | `data-slot-layout` |
+|------|-------------------|
+| `conversation.session.header.actions` / `.utilities` | `row` |
+| `conversation.input.left` / `.right` | `row` |
+| `settings.general.item` | `column` |
+
+宿主 CSS 用 `[data-slot-layout='row']` 约束子项（`nowrap` 基线等），**不要**硬编码每个槽位 key。挂在这些座位上的控件仍应自带：
+
+- `flex: none`（或明确的 flex 策略）
+- `white-space: nowrap`（中文否则会竖排）
+- 一条窄列降级（藏字留图标，或读列宽变量）
+
+列宽 ≠ 视口宽。对话列实时宽写在 **`--dsh-conversation-column-width`**（`ConversationRoot` 发布；侧栏收起会变宽而窗口不变）。
+
+稳定容器名（非 module 全局表 `ui-theme/styles/containers.css`）：
+
+| 属性 | 容器名 |
+|------|--------|
+| `[data-conversation-header]` | `xrk-conversation-header` |
+| `[data-overview-header]` | `xrk-overview-header` |
+| `[data-composer-tool-row]` | `xrk-composer-tool-row` |
+| `[data-trajectory-table]` | `xrk-trajectory-table` |
+
+`.module.css` 会哈希 `@container` 名字——具名查询请用**非 module** CSS，或直接读列宽变量 / 视口 `@media`。
+
+浮层（菜单 / 弹层）必须 **portal 到 `document.body`** 并用 `position: fixed` + 视口 clamp（产品内 `useAnchoredPosition` / `ModelSelect` / `ContextMeter` 同款）——祖先的 `overflow: hidden` / `clip` 会裁掉绝对定位面板。
+
+壳层 z-index 阶梯（`interaction.css`，勿自造裸数字）：
+
+| Token | 量级 | 用途 |
+|-------|------|------|
+| `--ds-z-chrome-*` | 2–32 | AppFrame 栏 / 手柄 / 手机抽屉 |
+| `--ds-z-column-*` | 5–10 | 对话列内 sticky / composer / 宽度手柄 / turn rail |
+| `--ds-z-desktop-chrome` | 55 | Desktop 标题栏 |
+| `--ds-z-popover` / `--ds-z-popover-nested` | 100 / 101 | 菜单、卡片、tooltip |
+| `--ds-z-boot-chrome` | 110 | 启动 splash 标题栏 |
+| `--ds-z-scrim` / `--ds-z-surface` | 1000 / 1100 | 遮罩 / 对话框与 toast |
+
+组件**内部**局部堆叠（同 stacking context 的 0–3）可保留裸数字；跨层浮层与 sticky 必须用上表 token。
+
 ## 侧栏扩展点（第一方）
 
 装了 **`xrkh-better-sidebar`** 后，其它 client 可 `inject: ['betterSidebar']`，调用：
@@ -338,6 +382,50 @@ Author runtime name: **XRK Plug** (`@xrkseek/plug`). Surface map: [plugin-surfac
 | `settings.plugin.item` | Plugin settings card row (list) |
 
 The full SlotMap lives in `packages/client/ui-conversation`; registering an undeclared slot fails.
+
+### Header / narrow-column self-defense
+
+`SlotOutlet` defaults to `display: contents` (layout-neutral address). These seats are real flex boxes with `data-slot-layout="row"|"column"` (`web-react` `SLOT_ANCHOR_LAYOUT`):
+
+| Slot | `data-slot-layout` |
+|------|-------------------|
+| `conversation.session.header.actions` / `.utilities` | `row` |
+| `conversation.input.left` / `.right` | `row` |
+| `settings.general.item` | `column` |
+
+Host CSS constrains children via `[data-slot-layout='row']` (nowrap baseline, etc.) — **do not** hard-code every slot key. Controls on these seats should still ship:
+
+- `flex: none` (or an explicit flex strategy)
+- `white-space: nowrap` (CJK otherwise stacks vertically)
+- one narrow-column fallback (icon-only, or read the column-width variable)
+
+Column width ≠ viewport width. The live conversation column is published as **`--dsh-conversation-column-width`** (`ConversationRoot`; collapsing the sidebar widens the column without resizing the window).
+
+Stable container names (non-module sheet `ui-theme/styles/containers.css`):
+
+| Attribute | Name |
+|-----------|------|
+| `[data-conversation-header]` | `xrk-conversation-header` |
+| `[data-overview-header]` | `xrk-overview-header` |
+| `[data-composer-tool-row]` | `xrk-composer-tool-row` |
+| `[data-trajectory-table]` | `xrk-trajectory-table` |
+
+`.module.css` hashes `@container` names — use **non-module** CSS for named queries, or read the column-width variable / viewport `@media`.
+
+Floating UI (menus / panels) must **portal to `document.body`** with `position: fixed` + viewport clamp (`useAnchoredPosition` / product `ModelSelect` / `ContextMeter`) — ancestor `overflow: hidden` / `clip` crops absolute panels.
+
+Shell z-index ladder (`interaction.css`; do not invent naked integers):
+
+| Token | Magnitude | Use |
+|-------|-----------|-----|
+| `--ds-z-chrome-*` | 2–32 | AppFrame columns / handles / phone drawer |
+| `--ds-z-column-*` | 5–10 | In-column sticky / composer / width handles / turn rail |
+| `--ds-z-desktop-chrome` | 55 | Desktop titlebar |
+| `--ds-z-popover` / `--ds-z-popover-nested` | 100 / 101 | Menus, cards, tooltips |
+| `--ds-z-boot-chrome` | 110 | Splash-time titlebar |
+| `--ds-z-scrim` / `--ds-z-surface` | 1000 / 1100 | Scrim / dialogs & toasts |
+
+Local stacking inside one component (0–3 in the same stacking context) may stay naked; cross-layer floats and sticky chrome must use the table above.
 
 ## Sidebar extension points (first-party)
 

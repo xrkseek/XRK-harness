@@ -107,18 +107,3 @@ export function createToolPairStep(): PipelineStep {
     await next();
   };
 }
-
-export function createContextWindowStep(maxMessages: number): PipelineStep {
-  return async (ctx, next) => {
-    if (ctx.request.messages.length > maxMessages) {
-      const trimmed = ctx.request.messages.slice(-maxMessages);
-      ctx.request = {
-        system: ctx.request.system,
-        messages: trimmed,
-        tools: ctx.request.tools,
-      };
-      ctx.meta.contextWindowTrimmed = true;
-    }
-    await next();
-  };
-}

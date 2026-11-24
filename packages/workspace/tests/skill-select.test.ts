@@ -45,7 +45,8 @@ describe("scoreSkillAgainstQuery", () => {
 
 describe("selectSkillsForBudget", () => {
   it("prefers query-relevant skills that still fit", () => {
-    const packed = selectSkillsForBudget([...LIBRARY], 280, "deploy kubernetes");
+    // Names-only lines are short — tiny budget still forces a subset.
+    const packed = selectSkillsForBudget([...LIBRARY], 150, "deploy kubernetes");
     expect(packed.selected.map((s) => s.name)[0]).toBe("deploy");
     expect(packed.selected.length).toBeGreaterThanOrEqual(1);
     expect(packed.selected.length).toBeLessThan(LIBRARY.length);
@@ -61,8 +62,8 @@ describe("selectSkillsForBudget", () => {
 
 describe("buildSkillCatalogPayload selection modes", () => {
   it("shadow records a selection without changing prompt bytes vs truncate", () => {
-    const truncBudget = createInjectBudget(220);
-    const shadowBudget = createInjectBudget(220);
+    const truncBudget = createInjectBudget(140);
+    const shadowBudget = createInjectBudget(140);
     const truncated = buildSkillCatalogPayload([...LIBRARY], truncBudget);
     const shadowed = buildSkillCatalogPayload([...LIBRARY], shadowBudget, {
       selection: { mode: "shadow", query: "deploy kubernetes" },
@@ -73,28 +74,32 @@ describe("buildSkillCatalogPayload selection modes", () => {
     expect(shadowed?.selection?.mode).toBe("shadow");
     expect(shadowed?.selection?.selected[0]?.name).toBe("deploy");
     // Offline eval helper matches the same packing.
-    const offline = recordShadowSkillSelection([...LIBRARY], 220, "deploy kubernetes");
+    const offline = recordShadowSkillSelection([...LIBRARY], 140, "deploy kubernetes");
     expect(offline.selected.map((s) => s.name)).toEqual(
       shadowed?.selection?.selected.map((s) => s.name),
     );
   });
 
   it("select packs a relevant subset instead of mid-catalog truncation alone", () => {
-    const budget = createInjectBudget(260);
+    const budget = createInjectBudget(140);
     const selected = buildSkillCatalogPayload([...LIBRARY], budget, {
       selection: { mode: "select", query: "browser ui" },
     });
     expect(selected?.selection?.mode).toBe("select");
     expect(selected?.content).toContain("browser");
-    // Full catalog under the same budget would truncate; select should still be valid XML-ish.
     expect(selected?.content).toContain("<available_skills>");
+    expect(selected?.content).toContain("skill_search");
+    expect(selected?.content).not.toMatch(/Drive a headed browser/);
     const full = formatAvailableSkillsXml([...LIBRARY]);
-    expect(selected!.content.length).toBeLessThanOrEqual(full.length);
+    expect(full).toContain("Names only");
+    expect(selected!.selection!.selected.length).toBeLessThan(LIBRARY.length);
   });
 
-  it("default truncate mode omits selection metadata", () => {
+  it("default truncate mode omits selection metadata and blurbs", () => {
     const payload = buildSkillCatalogPayload([...LIBRARY], createInjectBudget(10_000));
     expect(payload?.selection).toBeUndefined();
     expect(payload?.content).toContain("deploy");
+    expect(payload?.content).toContain("Names only");
+    expect(payload?.content).not.toContain("Ship production releases");
   });
 });

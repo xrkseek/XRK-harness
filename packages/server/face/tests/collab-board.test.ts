@@ -1,9 +1,41 @@
 import { describe, expect, it } from "vitest";
+import { formatRosterCatalog } from "../src/agent-roster-store.js";
 import {
   COLLAB_BOARD_THREAD_WINDOW_MS,
   formatCollabBoardText,
   formatTeamMateBoardText,
 } from "../src/collab-board.js";
+
+describe("formatRosterCatalog density", () => {
+  const members = [
+    {
+      id: "mem_seed_worker",
+      scope: "global" as const,
+      name: "施工员",
+      nickname: undefined,
+      role: "worker" as const,
+      inject: "minimal" as const,
+      brief: "按任务改代码，不扩范围",
+      ready: true,
+      kind: "standard" as const,
+      catalog: true,
+      appearance: undefined,
+      basePreset: undefined,
+      tools: undefined,
+    },
+  ];
+
+  it("spawn-ids omits briefs so board stays progressive vs team_list", () => {
+    const compact = formatRosterCatalog(members as never, {
+      density: "spawn-ids",
+    });
+    expect(compact).toContain("mem_seed_worker");
+    expect(compact).toContain("inject=minimal");
+    expect(compact).not.toContain("按任务改代码");
+    const full = formatRosterCatalog(members as never);
+    expect(full).toContain("按任务改代码");
+  });
+});
 
 describe("formatCollabBoardText", () => {
   const now = 1_700_000_000_000;
@@ -56,7 +88,7 @@ describe("formatCollabBoardText", () => {
     expect(text).toContain("thread_message");
   });
 
-  it("lists unpinned parents with who · duty · todo · 支线 · 主线", () => {
+  it("idle board ignores unboundPeers — find via session_search (progressive)", () => {
     const text = formatCollabBoardText({
       now,
       membersCatalog: "(no Agent Team members yet)",
@@ -76,18 +108,10 @@ describe("formatCollabBoardText", () => {
         { sessionId: "sess_self", title: "当前会话", identity: "经理", self: true },
       ],
     });
-    expect(text).not.toContain("Peers: none");
-    expect(text).toContain("sess_peer");
-    expect(text).toContain("写注入目录");
-    expect(text).toContain("who=发版员");
-    expect(text).toContain("小发");
-    expect(text).toContain("duty=整理变更并发版");
-    expect(text).toContain("todo_open=2");
-    expect(text).toContain("补 collab board");
-    expect(text).toContain("主线=「0.7 发版」");
-    expect(text).toContain("running");
-    expect(text).toContain("sess_self*");
-    expect(text).toContain("主线=none");
+    expect(text).toContain("Peers: none");
+    expect(text).toContain("session_search");
+    expect(text).not.toContain("sess_peer");
+    expect(text).not.toContain("who=发版员");
   });
 
   it("tells Frugal badges to Skill-load instead of spawn", () => {

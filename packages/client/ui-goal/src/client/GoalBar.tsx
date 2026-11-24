@@ -11,8 +11,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GoalActivation, GoalSnapshot } from '@xrkseek/xrk-goal/client'
 import {
+  Button,
   IconCheckOutlineRegular, IconCloseOutlineRegular, IconEditOutlineRegular, IconGoalOutlineRegular,
-  IconPauseOutlineRegular, IconPlayOutlineRegular, IconTrashOutlineRegular, Tooltip,
+  IconPauseOutlineRegular, IconPlayOutlineRegular, IconTrashOutlineRegular, isComposingKeyboardEvent,
+  Modal, Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, TranslateNS } from '@xrkseek/client-ui-slots'
 import type { GoalActionResult, GoalBarActions } from './slots.ts'
@@ -45,6 +47,7 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
   const [pending, setPending] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [clearedGoalId, setClearedGoalId] = useState<GoalSnapshot['id'] | null>(null)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const pendingRef = useRef(false)
 
   // A new goal identity (cleared/completed/replaced externally) invalidates the local edit
@@ -54,6 +57,7 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
     setEditing(false)
     setActionError(null)
     setClearedGoalId(null)
+    setClearConfirmOpen(false)
   }, [goalId])
 
   // React state disables the controls on the next render; the ref closes the
@@ -66,7 +70,10 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
     const result = await action()
     pendingRef.current = false
     setPending(false)
-    if (!result.ok) setActionError(`${result.error.message} (${result.error.code})`)
+    if (!result.ok) {
+      setActionError(result.error.message)
+      console.debug('goal action failed', result.error.code)
+    }
     return result
   }, [])
 
@@ -79,11 +86,39 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
 
   const handleClear = useCallback(async (clearedId: GoalSnapshot['id']) => {
     const result = await runAction(onClear)
-    if (result?.ok) setClearedGoalId(clearedId)
+    if (result?.ok) {
+      setClearConfirmOpen(false)
+      setClearedGoalId(clearedId)
+    }
   }, [onClear, runAction])
 
   // Loading, absent, and complete goals have no strip at all.
   if (goal === undefined || goal === null || goal.phase === 'complete' || goal.id === clearedGoalId) return null
+
+  const clearConfirm = (
+    <Modal
+      open={clearConfirmOpen}
+      onClose={() => { if (!pending) setClearConfirmOpen(false) }}
+      closeLabel={t('dialog.close')}
+      title={t('action.clearConfirmTitle')}
+      layout="inset"
+      description={t('action.clearConfirmDesc')}
+      footer={(
+        <>
+          <Button variant="outline" disabled={pending} onClick={() => { setClearConfirmOpen(false) }}>
+            {t('dialog.cancel')}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={pending}
+            onClick={() => { void handleClear(goal.id) }}
+          >
+            {t('action.clearConfirm')}
+          </Button>
+        </>
+      )}
+    />
+  )
 
   if (editing) {
     return (
@@ -96,7 +131,10 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
             value={draft}
             onChange={(e) => { setDraft(e.target.value) }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleEdit()
+              if (e.key === 'Enter') {
+                if (isComposingKeyboardEvent(e)) return
+                void handleEdit()
+              }
               if (e.key === 'Escape') setEditing(false)
             }}
             autoFocus
@@ -127,6 +165,7 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
             </Tooltip>
           </div>
         </div>
+        {clearConfirm}
       </div>
     )
   }
@@ -169,12 +208,19 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
             </button>
           </Tooltip>
           <Tooltip label={t('action.clear')} side="bottom">
-            <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void handleClear(goal.id) }} aria-label={t('action.clear')}>
+            <button
+              type="button"
+              className={css.iconBtn}
+              disabled={pending}
+              onClick={() => { setClearConfirmOpen(true) }}
+              aria-label={t('action.clear')}
+            >
               <IconTrashOutlineRegular size={14} />
             </button>
           </Tooltip>
         </div>
       </div>
+      {clearConfirm}
     </div>
   )
 }

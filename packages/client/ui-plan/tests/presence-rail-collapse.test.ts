@@ -79,7 +79,7 @@ describe('delegate stack overlap', () => {
 
   it('keeps the 委派 arrow above the left fan', () => {
     const block = cssBlock(previewCss, '.delegateArrow')
-    expect(block).toMatch(/z-index:\s*6/)
+    expect(block).toMatch(/z-index:\s*var\(--ds-z-column-raised\)/)
     expect(previewCss).toMatch(/\.delegateFromStack\s*\{[^}]*overflow:\s*hidden/)
   })
 

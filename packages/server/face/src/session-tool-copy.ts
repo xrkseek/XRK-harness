@@ -244,8 +244,9 @@ export function closeAgentDescription(): string {
 
 export function waitAgentDescription(): string {
   return (
-    "Block until listed children are idle; return last assistant text. " +
-    "Use when this turn needs that answer. Else end the turn — Host steers background completion."
+    "Block until listed children are idle; return status (answer via steer handoff). " +
+    "UI 停止等待 / parent steer soft-detaches without stopping children. " +
+    "Use when this turn needs that answer now. Else end the turn — Host steers background completion."
   );
 }
 

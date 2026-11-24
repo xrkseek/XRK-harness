@@ -99,6 +99,17 @@ export const hostFrameSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('host/session-status'), sessionId: sessionIdSchema, running: z.boolean() }),
   z.object({
+    type: z.literal('host/session-wait-yield'),
+    sessionId: sessionIdSchema,
+    active: z.union([
+      z.object({
+        kind: z.enum(['wait_agent', 'peer_wait', 'subagent_foreground']),
+        label: z.string().optional(),
+      }),
+      z.null(),
+    ]),
+  }),
+  z.object({
     type: z.literal('host/session-thread'),
     sessionId: sessionIdSchema,
     bound: z.boolean(),

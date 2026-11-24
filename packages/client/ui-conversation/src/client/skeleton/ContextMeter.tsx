@@ -5,10 +5,17 @@
  * falls back to breakdown sum (approximate ring for silent-usage providers). */
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { UseProjection } from '@xrkseek/client-runtime/client'
 // Type-only: the `contextPressure` / `contextBreakdown` projection key merges.
 import type {} from '@xrkseek/xrk-token-meter/client'
-import { Tooltip } from '@xrkseek/client-ui-primitives'
+import {
+  ANCHORED_MEASURE_STYLE,
+  ANCHORED_VIEWPORT_MARGIN,
+  Tooltip,
+  useAnchoredPosition,
+  useEscapeLayer,
+} from '@xrkseek/client-ui-primitives'
 import type { ComposerBarProps } from '../contract/slots.ts'
 import { contextBreakdownForMeter, contextOccupancy } from '../chat/StatsLine.tsx'
 import { formatTokens } from '../chat/token-format.ts'
@@ -43,6 +50,18 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
   const breakdown = useProjection('contextBreakdown')
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLSpanElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  // Portaled panel — same clamp as ModelSelect (centerCol overflow:hidden).
+  const panelPos = useAnchoredPosition({
+    open,
+    anchorRef: triggerRef,
+    panelRef,
+    side: 'top',
+    align: 'end',
+    gap: 8,
+    margin: ANCHORED_VIEWPORT_MARGIN,
+  })
   // Provider pressure preferred; else heuristic rows when window is known
   // (providers that never emit usage still get an approximate ring).
   const context = contextOccupancy(
@@ -63,23 +82,21 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
     if (!available && open) setOpen(false)
   }, [available, open])
 
-  // Outside click / Escape close, one document listener while open (Menu's pattern).
+  // Outside click close (portal panel is outside rootRef).
   useEffect(() => {
     if (!open || !available) return
     const onPointerDown = (e: PointerEvent): void => {
-      if (e.target instanceof Node && rootRef.current?.contains(e.target) === true) return
+      const node = e.target
+      if (!(node instanceof Node)) return
+      if (rootRef.current?.contains(node) === true) return
+      if (panelRef.current?.contains(node) === true) return
       setOpen(false)
     }
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false)
-    }
     document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
+    return () => { document.removeEventListener('pointerdown', onPointerDown) }
   }, [available, open])
+
+  useEscapeLayer(open && available, () => { setOpen(false) })
 
   if (context === null) return null
   const percent = context.percent
@@ -109,10 +126,78 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
     && reconciled !== undefined
     && Math.abs(reconciled.residualTokens) > Math.max(2_000, context.usedTokens * 0.08)
 
+  const panel = open
+    ? createPortal(
+      <div
+        ref={panelRef}
+        className={css.panel}
+        role="dialog"
+        aria-label={t('context.used')}
+        style={panelPos ?? ANCHORED_MEASURE_STYLE}
+      >
+        <div className={css.header}>
+          {/* Empty sides collapse through `.headline:empty` so the locale that
+              needs no leading (or trailing) text spends no header gap. */}
+          <span className={css.headline}>{headBefore}</span>
+          <span className={css.percent}>{reading}</span>
+          <span className={css.headline}>{headAfter}</span>
+          {/* `~`: usedTokens prefers projectedTokens (DSH ContextMeter parity). */}
+          <span className={css.figures}>
+            {`~${formatTokens(context.usedTokens, t)} / ${formatTokens(context.contextWindow, t)}`}
+          </span>
+        </div>
+        <div className={css.bar}>
+          {segments.map(segment => (
+            <div
+              key={segment.key}
+              className={segment.color === undefined ? css.segment : `${css.segment} ${segment.color}`}
+              style={{ width: `${segment.width}%` }}
+            />
+          ))}
+        </div>
+        {reconciled !== undefined && (
+          <>
+            <dl className={css.rows}>
+              {ROWS.map(row => (
+                <div key={row.key} className={css.row}>
+                  <dt>
+                    <span className={`${css.swatch} ${row.color}`} aria-hidden />
+                    {t(row.label)}
+                  </dt>
+                  <dd>{`~${formatTokens(reconciled[row.key], t)}`}</dd>
+                </div>
+              ))}
+            </dl>
+            {/* Soft/auto compact + overflow read the ring (provider pressure),
+                not the tools row. Residual note when messages were filled up. */}
+            {context.approximate
+              ? (
+                <p className={css.note}>{t('context.approximateNote')}</p>
+              )
+              : showResidualNote
+                ? (
+                  <p className={css.note}>
+                    {t('context.breakdownNote', {
+                      messages: formatTokens(reconciled!.messageTokens, t),
+                      used: formatTokens(context.usedTokens, t),
+                    })}
+                  </p>
+                )
+                : (
+                  <p className={css.note}>{t('context.compactHint')}</p>
+                )}
+          </>
+        )}
+      </div>,
+      document.body,
+    )
+    : null
+
   return (
     <span ref={rootRef} className={css.root}>
       <Tooltip label={t('context.aria', { percent: reading })} side="top" delayMs={200} disabled={open}>
         <button
+          ref={triggerRef}
           type="button"
           className={css.trigger}
           aria-label={t('context.aria', { percent: reading })}
@@ -133,63 +218,7 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
           </svg>
         </button>
       </Tooltip>
-      {open && (
-        <div className={css.panel} role="dialog" aria-label={t('context.used')}>
-          <div className={css.header}>
-            {/* Empty sides collapse through `.headline:empty` so the locale that
-                needs no leading (or trailing) text spends no header gap. */}
-            <span className={css.headline}>{headBefore}</span>
-            <span className={css.percent}>{reading}</span>
-            <span className={css.headline}>{headAfter}</span>
-            {/* `~`: usedTokens prefers projectedTokens (DSH ContextMeter parity). */}
-            <span className={css.figures}>
-              {`~${formatTokens(context.usedTokens, t)} / ${formatTokens(context.contextWindow, t)}`}
-            </span>
-          </div>
-          <div className={css.bar}>
-            {segments.map(segment => (
-              <div
-                key={segment.key}
-                className={segment.color === undefined ? css.segment : `${css.segment} ${segment.color}`}
-                style={{ width: `${segment.width}%` }}
-              />
-            ))}
-          </div>
-          {reconciled !== undefined && (
-            <>
-              <dl className={css.rows}>
-                {ROWS.map(row => (
-                  <div key={row.key} className={css.row}>
-                    <dt>
-                      <span className={`${css.swatch} ${row.color}`} aria-hidden />
-                      {t(row.label)}
-                    </dt>
-                    <dd>{`~${formatTokens(reconciled[row.key], t)}`}</dd>
-                  </div>
-                ))}
-              </dl>
-              {/* Soft/auto compact + overflow read the ring (provider pressure),
-                  not the tools row. Residual note when messages were filled up. */}
-              {context.approximate
-                ? (
-                  <p className={css.note}>{t('context.approximateNote')}</p>
-                )
-                : showResidualNote
-                  ? (
-                    <p className={css.note}>
-                      {t('context.breakdownNote', {
-                        messages: formatTokens(reconciled!.messageTokens, t),
-                        used: formatTokens(context.usedTokens, t),
-                      })}
-                    </p>
-                  )
-                  : (
-                    <p className={css.note}>{t('context.compactHint')}</p>
-                  )}
-            </>
-          )}
-        </div>
-      )}
+      {panel}
     </span>
   )
 }

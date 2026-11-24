@@ -39,6 +39,7 @@ export interface RpcMethodMap {
   'session.attachment': SessionsApi['attachment']
   'session.updateQueue': SessionsApi['updateQueue']
   'session.cancel': SessionsApi['cancel']
+  'session.yieldWait': SessionsApi['yieldWait']
   'session.delete': SessionsApi['delete']
   'session.tools': SessionsApi['tools']
   'session.pressBand': SessionsApi['pressBand']

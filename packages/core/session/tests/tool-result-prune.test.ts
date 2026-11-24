@@ -28,6 +28,18 @@ describe("tool-result prune", () => {
     expect(pruneToolResultText("short")).toBeUndefined();
   });
 
+  it("keeps spill locator in the omit marker when bound path sits past head", () => {
+    const path = "C:\\Users\\xrkseek\\.xrk\\spill\\tool-outputs\\tool_abc.txt";
+    const marker = `... output truncated; full content saved to ${path} ...`;
+    const headPad = "H".repeat(TOOL_RESULT_PRUNE_HEAD_CHARS + 200);
+    const tailPad = "T".repeat(TOOL_RESULT_PRUNE_THRESHOLD_CHARS);
+    const raw = `${headPad}${marker}${tailPad}`;
+    const out = pruneToolResultText(raw);
+    expect(out).toBeDefined();
+    expect(out!).toContain(path);
+    expect(out!).toContain("full text at");
+  });
+
   it("pruneToolResultContent short-circuits soft-budget rewrite", () => {
     const big = "W".repeat(TOOL_RESULT_PRUNE_THRESHOLD_CHARS + 80);
     const first = pruneToolResultContent(big);

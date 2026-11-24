@@ -42,4 +42,4 @@
 
 全局 Plan / 委派 / 主线 / Canvas / MCP 挂载：见家目录站立 `AGENTS.md` 与对应种子 skill。
 
-细则：`.agents/context/` · `docs/plugin-development.md` · 知识索引 **`xrk-harness-knowledge-map`**。
+细则：需要时读 `.agents/context/` 或对应 skill（**不站立注入**）· `docs/plugin-development.md` · 知识索引 **`xrk-harness-knowledge-map`**。

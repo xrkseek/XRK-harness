@@ -276,6 +276,57 @@ describe("subagent tools", () => {
     expect(def.dynamicSchema?.()?.description).not.toContain("mem_seed_researcher");
   });
 
+  it("wait_agent soft-detaches on session.yieldWait (children keep running)", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-yield-")),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive() {
+          return true;
+        },
+        async run() {
+          await new Promise(() => {});
+        },
+      },
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const child = runtime.ensureSession("child");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "one-shot",
+      label: "c",
+    });
+
+    const tools = createToolRegistry();
+    bindSubagentTools(tools, { runtime, parentSessionId: parent });
+    const waitPromise = tools.get("wait_agent")!.execute({
+      agent_id: child,
+      timeout_ms: 30_000,
+    });
+    // Yield after the wait body has attached to the hub.
+    for (let i = 0; i < 50 && !runtime.waitYield.isAttached(parent); i += 1) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(runtime.waitYield.isAttached(parent)).toBe(true);
+    expect(runtime.waitYield.yield(parent)).toBe(true);
+
+    const out = await waitPromise;
+    const text = String(out.content);
+    expect(text).toMatch(/detached/);
+    expect(text).toContain("steer handoff");
+    expect(out.isError).toBeFalsy();
+    // one-shot promoted so courier can still report back
+    expect(runtime.subagents.getByChild(child)?.mode).toBe("continuable");
+  });
+
   it("wait_agent reports status only (answer via steer handoff)", async () => {
     const store = createMemorySessionStore();
     const runtime = createFaceRuntime({

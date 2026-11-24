@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 // The read render intent on the web side: the pure readCardModel derivation
 // over the settled result view, and both conversation render sites that consume
 // it — the chat tool row (the keyed ReadRow and the GenericToolCard fallback,
@@ -309,7 +309,7 @@ describe('DetailsPanel Output section (read)', () => {
       nodes: [], turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [],
       pending: [], pendingSubmissions: [], queue: [], running: false, composerPhase: 'active', removed: false,
       openState: 'open', openError: null, hasMore: false, loadingOlder: false,
-      promptError: null, blank: false, subagent: null, lastAgentError: null, ...over,
+      promptError: null, blank: false, subagent: null, lastAgentError: null, waitYield: null, ...over,
     }
   }
 

@@ -22,6 +22,9 @@ import {
   ConnectionIndicator,
   IconAgentPresetOutlineRegular, IconCloseOutlineRegular, IconDataOutlineRegular,
   IconSettingsOutlineRegular,
+  isTopEscapeLayer,
+  popEscapeLayer,
+  pushEscapeLayer,
   useShellFrameOverlay,
 } from '@xrkseek/client-ui-primitives'
 import type { ConnectionIndicatorState } from '@xrkseek/client-ui-primitives'
@@ -122,21 +125,18 @@ function SettingsPanel({
     const previousInert = appRoot === null ? false : appRoot.inert
     if (appRoot !== null) appRoot.inert = true
     closeButton.current?.focus()
+    // Escape stack: Menus / nested Modals push above this token so Esc
+    // dismisses the inner layer first even when this listener registered earlier.
+    const escapeToken = pushEscapeLayer()
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return
-      // Nested confirm Modals (delete provider, …) own Escape first via
-      // stopImmediatePropagation. Count only *modal* dialogs: popovers and
-      // sheets use role="dialog" without aria-modal (StatsLine, ContextMeter,
-      // BossStatusSheet, …). Counting those blocked Escape, so phone back
-      // (xrk_web_back → Escape, then dismiss) needed two presses to leave
-      // Settings / Plugins.
-      if (document.querySelectorAll('[role="dialog"][aria-modal="true"]').length > 1) {
-        return
-      }
+      if (!isTopEscapeLayer(escapeToken)) return
+      e.preventDefault()
       onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
+      popEscapeLayer(escapeToken)
       document.removeEventListener('keydown', onKeyDown)
       if (appRoot !== null) appRoot.inert = previousInert
       openerRef.current?.focus()

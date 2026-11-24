@@ -72,6 +72,30 @@ summary:focus-visible,
   --ds-z-popover: 100;   /* menus, cards, tooltips, hover cards */
   --ds-z-scrim: 1000;    /* dimming layer behind a dialog or lightbox */
   --ds-z-surface: 1100;  /* dialogs, portals, toasts, onboarding covers */
+
+  /* AppFrame chrome ladder (below popover). Keep magnitudes — order only. */
+  --ds-z-chrome-handle: 2;        /* column resize hit strips */
+  --ds-z-chrome-leading: 15;      /* shell.leading seat */
+  --ds-z-chrome-overlay: 20;      /* shell.overlay layer (pets / wallpaper) */
+  --ds-z-chrome-center: 21;       /* conversation column above overlay */
+  --ds-z-chrome-phone-fab: 24;    /* phone floating chrome */
+  --ds-z-chrome-phone-sheet: 28;  /* phone details sheet */
+  --ds-z-chrome-phone-scrim: 30;  /* phone drawer scrim */
+  --ds-z-chrome-phone-drawer: 32; /* phone sidebar drawer */
+
+  /* Conversation column sticky / overlay (below AppFrame phone chrome ≤32,
+   * below popover 100). Local stacking contexts may still use 0–3 naked. */
+  --ds-z-column-sticky: 5;        /* trajectory sticky bars / history strip */
+  --ds-z-column-raised: 6;        /* turn nav, code sticky header, preview bits */
+  --ds-z-column-composer: 7;      /* sticky composer seat */
+  --ds-z-column-handle: 8;        /* width handles + back-to-bottom */
+  --ds-z-column-rail: 9;          /* turn rail host above handles */
+  --ds-z-column-hero-menu: 10;    /* hero workspace row above input card */
+
+  /* Desktop shell (above phone drawer 32; boot sits above popover so splash
+   * window controls stay hittable while Host gates). */
+  --ds-z-desktop-chrome: 55;      /* titlebar; above community sidebar 40–48 */
+  --ds-z-boot-chrome: 110;        /* splash-time Desktop chrome */
 }
 
 /* A submenu must outrank the list it escapes from. Written as an offset so the

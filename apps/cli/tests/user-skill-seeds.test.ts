@@ -275,11 +275,18 @@ describe("ensureUserSkillSeeds", () => {
       const agents = await readFile(path.join(home, "AGENTS.md"), "utf8");
       expect(agents).toContain("XRK-Harness");
       expect(agents).toContain("YAGNI");
-      expect(agents).toContain("## Craft");
-      expect(agents).toContain("xrk-presence");
+      expect(agents).toContain("User asks are sky");
+      expect(agents).toContain("## Tools");
+      expect(agents).toContain("skill_search");
+      expect(agents).toContain("tool_search");
+      expect(agents).not.toContain("| Need | Skill |");
+      expect(agents).not.toContain("There is no skill_search");
+      // Progressive how-to lives on catalog footer / tool descriptions, not AGENTS.
+      expect(agents).not.toContain("Names only;");
       const soul = await readFile(path.join(home, "SOUL.md"), "utf8");
       expect(soul).toContain(".xrk/SOUL.md");
       expect(soul).toContain("harness gnome");
+      expect(soul).toContain("User is 天");
       expect(all.recipes.installed.length).toBeGreaterThan(0);
       expect(existsSync(path.join(home, "recipes", "plan-build.yaml"))).toBe(
         false,

@@ -6,7 +6,7 @@
 
 | File | Policy | Inject | Purpose |
 |------|--------|--------|---------|
-| `AGENTS.md` | **fingerprint** — Host overwrites `~/.xrk` when the bundle moves | **every** audience | Employee handbook: stance · how you work · skill route · craft |
+| `AGENTS.md` | **fingerprint** — Host overwrites `~/.xrk` when the bundle moves | **every** audience | Employee handbook: stance · seats · how you work (skills via inject **catalog**, not a standing skill table) |
 | `SOUL.md` | **fingerprint** — same | **every** audience | Default persona tone |
 | `XRK.md` | **fingerprint** — same path / refresh as AGENTS | **`audience=user` only**（经理 · 向日葵 · 经理特调父席） | Workspace-frequent ledger；**never** 干员家 / delegated child |
 

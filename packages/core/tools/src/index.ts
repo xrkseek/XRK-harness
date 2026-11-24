@@ -15,9 +15,17 @@ export {
   type ToolResultContent,
 } from "./definition.js";
 export {
+  isBrowseCatalogQuery,
+  scoreFuzzyQuery,
+  splitFuzzyTokens,
+  subsequenceCoverage,
+} from "./fuzzy-match.js";
+export {
+  STANDING_DEFERRED_TOOL_NAMES,
   TOOL_CATALOG_MAX_BYTES,
   TOOL_SEARCH_DEFAULT_LIMIT,
   TOOL_SEARCH_NAME,
+  applyStandingDeferredExposure,
   countExposures,
   exposureOf,
   formatDeferredCatalog,

@@ -19,6 +19,7 @@ import type { LlmAdapter } from "@xrkseek/llm";
 import type { SessionEvent } from "@xrkseek/protocol";
 import type { ToolsWireBaseline } from "@xrkseek/core-system-prompt";
 import { llmRouteKey } from "./series-baseline.js";
+import { rememberSessionCache } from "./session-cache-bound.js";
 
 export type ToolsBaselineAnchor = {
   readonly tools: ToolsWireBaseline;
@@ -79,7 +80,7 @@ export function rememberToolsBaseline(
     anchors.delete(sessionId);
     return;
   }
-  anchors.set(sessionId, {
+  rememberSessionCache(anchors, sessionId, {
     tools: asWireBaseline(tools),
     routeKey: llmRouteKey(llm),
   });

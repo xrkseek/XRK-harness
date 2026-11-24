@@ -181,6 +181,8 @@ function abortError(
 ): Error {
   const err = new Error(formatAbort(reason));
   err.name = "AbortError";
+  // Keep the abort reason for wait soft-yield vs hard Stop discrimination.
+  (err as Error & { cause?: unknown }).cause = reason;
   return err;
 }
 

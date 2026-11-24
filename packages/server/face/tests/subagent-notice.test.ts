@@ -197,7 +197,7 @@ describe("formatSubagentCompletionNotice", () => {
 });
 
 describe("formatSubagentUserPromptNotice", () => {
-  it("mirrors the human follow-up preview for the parent inbox", () => {
+  it("mirrors only the human follow-up body (no English shell)", () => {
     const text = formatSubagentUserPromptNotice(
       {
         parentSessionId: "parent",
@@ -207,8 +207,8 @@ describe("formatSubagentUserPromptNotice", () => {
       },
       "  Please refine the outline.  ",
     );
-    expect(text).toContain("User message to background subagent `child-u` (researcher):");
-    expect(text).toContain("Please refine the outline.");
+    expect(text).toBe("Please refine the outline.");
+    expect(text).not.toContain("User message to background");
   });
 
   it("clips very long follow-ups", () => {
@@ -222,7 +222,7 @@ describe("formatSubagentUserPromptNotice", () => {
       },
       long,
     );
-    expect(text.length).toBeLessThan(long.length + 120);
+    expect(text.length).toBeLessThan(long.length);
     expect(text.endsWith("…")).toBe(true);
   });
 });
@@ -291,10 +291,10 @@ describe("formatSubagentStopNotice", () => {
       ],
     );
     expect(text).toContain("ended abnormally (stopped at max tokens)");
-    expect(text).toContain("already auto-continued 2 time(s)");
-    expect(text).toContain("Incomplete tool calls on a max-tokens finish are discarded");
-    expect(text).toContain("send_message with a split-write instruction");
-    expect(text).toContain("do not send bare");
+    expect(text).toContain("Hit output cap after 2 auto-continue(s)");
+    expect(text).toContain("Incomplete tool calls on max-tokens are discarded");
+    expect(text).toContain("send_message with a split-write");
+    expect(text).toContain("not bare 「继续」");
   });
 });
 
@@ -360,12 +360,11 @@ describe("child error codes", () => {
       errorLink,
       errorEvents({ code: "QUOTA" }),
     );
-    expect(text).toContain("Do not send another prompt down it");
+    expect(text).toContain("Quota exhausted — do not resend on this route");
     expect(text).toContain("set_agent_model");
-    expect(text).toContain("reasoning_effort");
     expect(text).toContain("partial answer");
     expect(text).toContain("ask_user");
-    expect(text).toContain("do not spawn a duplicate worker");
+    expect(text).toContain("do not spawn a duplicate");
   });
 
   it("RATE_LIMIT says the route is still alive and never suggests switching", () => {
@@ -373,10 +372,10 @@ describe("child error codes", () => {
       errorLink,
       errorEvents({ code: "RATE_LIMIT" }),
     );
-    expect(text).toContain("Rate limited, not dead");
-    expect(text).toContain("wait and resend");
-    expect(text).not.toContain("switch");
-    expect(text).not.toContain("Do not send another prompt down it");
+    expect(text).toContain("Rate limited — wait, then same prompt");
+    expect(text).toContain("send_message/followup_task");
+    expect(text).not.toContain("set_agent_model");
+    expect(text).not.toContain("Quota exhausted");
   });
 
   it("AUTH keeps the generic inspect-and-recover line", () => {
@@ -385,9 +384,9 @@ describe("child error codes", () => {
       errorEvents({ code: "AUTH" }),
     );
     expect(text).toContain(
-      "Inspect with session_read / list_agents, then send_message to recover",
+      "session_read / list_agents, then send_message or interrupt_agent",
     );
-    expect(text).not.toContain("Do not send another prompt down it");
+    expect(text).not.toContain("Quota exhausted");
   });
 
   it("keeps completed / aborted verdicts byte-identical", () => {

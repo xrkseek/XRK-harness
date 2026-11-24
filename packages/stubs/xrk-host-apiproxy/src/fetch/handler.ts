@@ -17,6 +17,7 @@ import type { Wire } from '../api/rpc.schema.ts'
 import { clientRequestSchema, clientResponseSchema } from '../api/rpc.schema.ts'
 import {
   sessionCancelRequestSchema,
+  sessionYieldWaitRequestSchema,
   sessionDeleteRequestSchema,
   sessionToolsRequestSchema,
   sessionPressBandRequestSchema,
@@ -124,6 +125,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'session.attachment': { schema: sessionAttachmentRequestSchema, invoke: (api, r) => api.sessions.attachment(r) },
   'session.updateQueue': { schema: sessionUpdateQueueRequestSchema, invoke: (api, r) => api.sessions.updateQueue(r) },
   'session.cancel': { schema: sessionCancelRequestSchema, invoke: (api, r) => api.sessions.cancel(r) },
+  'session.yieldWait': { schema: sessionYieldWaitRequestSchema, invoke: (api, r) => api.sessions.yieldWait(r) },
   'session.delete': { schema: sessionDeleteRequestSchema, invoke: (api, r) => api.sessions.delete(r) },
   'session.tools': { schema: sessionToolsRequestSchema, invoke: (api, r) => api.sessions.tools(r) },
   'session.pressBand': { schema: sessionPressBandRequestSchema, invoke: (api, r) => api.sessions.pressBand(r) },

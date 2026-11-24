@@ -300,13 +300,19 @@ export {
   parseSkillMarkdown,
   renderSkillContent,
   resolveSkillDirs,
-  SKILL_TOOL_GUIDANCE,
   type SkillDefinition,
   type SkillSourceOptions,
   type SkillSummary,
 } from "./skills.js";
 
 export { createSkillTools, presentSkillCall } from "./skill-tools.js";
+export {
+  createSkillSearchTool,
+  searchSkillsByQuery,
+  skillSearchDescription,
+  SKILL_SEARCH_DEFAULT_LIMIT,
+  SKILL_SEARCH_NAME,
+} from "./skill-search.js";
 
 export {
   buildProposedSkillMarkdown,
@@ -370,6 +376,7 @@ export {
   digestWorkspaceText,
   foldLatestWorkspaceInjectDigests,
   formatAvailableSkillsXml,
+  SKILL_CATALOG_HOWTO,
   orderSkillsForCatalogBudget,
   planWorkspaceInjectAppends,
   type DurableInstructionsPayload,

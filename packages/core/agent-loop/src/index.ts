@@ -255,12 +255,6 @@ export interface RunTurnInput {
    */
   readonly toolResultMaxInlineBytes?: number;
   /**
-   * Spill plain-text tool results over this token ceiling (DSH
-   * `maxInlineBytes → maxInlineTokens`). Wins over `toolResultMaxInlineBytes`
-   * when set. Omit → byte ceiling. Face: `agent-loop.toolResultMaxInlineTokens`.
-   */
-  readonly toolResultMaxInlineTokens?: number;
-  /**
    * Provider request retries within a step (DSH llm-retry).
    * Default: normal mode, max 5, retry everything except the codes in
    * `nonRetryableCodes` (abort / auth / quota / bad request / context
@@ -1392,6 +1386,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
       toolName?: string;
       argumentsDelta?: string;
     }) => {
+      if (input.signal?.aborted) return;
       if (chunk.kind === "usage" && chunk.usage) {
         append(input.store, input.sessionId, {
           type: "assistant/chunk",
@@ -1778,9 +1773,6 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
         content: outcome.result.content,
         ...(input.toolResultMaxInlineBytes !== undefined
           ? { maxInlineBytes: input.toolResultMaxInlineBytes }
-          : {}),
-        ...(input.toolResultMaxInlineTokens !== undefined
-          ? { maxInlineTokens: input.toolResultMaxInlineTokens }
           : {}),
         ...(outcome.outputPaths?.[0]
           ? { savedPath: outcome.outputPaths[0] }

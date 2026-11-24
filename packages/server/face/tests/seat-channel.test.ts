@@ -8,16 +8,15 @@ import {
   maybePrefixDelegatedChildText,
   withSeatChannelPrefix,
 } from "../src/seat-channel.js";
-import { MANAGER_MEMBER_ID } from "../src/agent-roster-store.js";
 
 describe("seat-channel", () => {
-  it("withSeatChannelPrefix skips existing [tag]", () => {
+  it("withSeatChannelPrefix still formats tags for callers that need them", () => {
     expect(withSeatChannelPrefix("老板", "hi")).toBe("[老板] hi");
     expect(withSeatChannelPrefix("老板", "[老板] hi")).toBe("[老板] hi");
     expect(withSeatChannelPrefix("老板", "[经理] hi")).toBe("[经理] hi");
   });
 
-  it("custom titles: UI→boss formal, parent tool→manager formal", async () => {
+  it("maybePrefixDelegatedChildText is a no-op (owner is source, not body prefix)", async () => {
     const runtime = createBareFaceRuntime();
     const root = path.join(runtime.productDir!, "chan-proj");
     mkdirSync(root, { recursive: true });
@@ -38,19 +37,6 @@ describe("seat-channel", () => {
     const childId = String(
       (childCreated.value as { sessionId: string }).sessionId,
     );
-    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
-      preference: "zh",
-    });
-    Object.assign(runtime.settingsNamespaces.ensure("ui-presence").user, {
-      titleScheme: "office",
-      titleBoss: "主公",
-      titleManager: "军师",
-      titleAgent: "先锋",
-      bossNickname: "阿凯",
-    });
-    runtime.agentRoster.patchCatalogMeta(MANAGER_MEMBER_ID, {
-      nickname: "孔明",
-    });
     runtime.subagents.attach({
       parentSessionId: parentId,
       childSessionId: childId,
@@ -60,17 +46,16 @@ describe("seat-channel", () => {
 
     expect(
       maybePrefixDelegatedChildText(runtime, childId, "继续", "human_face"),
-    ).toBe("[主公（阿凯）] 继续");
+    ).toBe("继续");
     expect(
       maybePrefixDelegatedChildText(runtime, childId, "查一下", "parent"),
-    ).toBe("[军师（孔明）] 查一下");
-    // Non-child: unchanged
+    ).toBe("查一下");
     expect(
       maybePrefixDelegatedChildText(runtime, parentId, "hello", "human_face"),
     ).toBe("hello");
   });
 
-  it("prefixes first text block in MessageContent", async () => {
+  it("maybePrefixDelegatedChildContent leaves text blocks unchanged", async () => {
     const runtime = createBareFaceRuntime();
     const root = path.join(runtime.productDir!, "chan-blocks");
     mkdirSync(root, { recursive: true });
@@ -89,15 +74,6 @@ describe("seat-channel", () => {
     const childId = String(
       (childCreated.value as { sessionId: string }).sessionId,
     );
-    Object.assign(runtime.settingsNamespaces.ensure("ui-presence").user, {
-      titleScheme: "office",
-      titleBoss: "主公",
-      titleManager: "军师",
-      titleAgent: "先锋",
-    });
-    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
-      preference: "zh",
-    });
     runtime.subagents.attach({
       parentSessionId: parentId,
       childSessionId: childId,
@@ -110,6 +86,6 @@ describe("seat-channel", () => {
       [{ type: "text", text: "看图" }],
       "human_face",
     );
-    expect(out).toEqual([{ type: "text", text: "[主公] 看图" }]);
+    expect(out).toEqual([{ type: "text", text: "看图" }]);
   });
 });

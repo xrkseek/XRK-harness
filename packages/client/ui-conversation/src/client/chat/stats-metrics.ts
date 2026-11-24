@@ -139,9 +139,11 @@ export interface ContextBreakdownParts {
 /**
  * Meter panel rows reconciled to the ring numerator.
  *
- * System / tools stay heuristic (they match the timeline). Conversation
- * messages absorb `usedTokens − system − tools` so the three rows sum to the
- * provider ring (Codex / DSH: soft compact reads that ring, not chars/4 alone).
+ * System / tools stay heuristic (not scaled). Conversation messages absorb
+ * `usedTokens − system − tools` so the three rows sum to the provider ring
+ * (Codex / DSH: soft compact reads that ring, not chars/4 alone). Status
+ * timeline scales all cats instead — ring「工具」can read lower than 侧栏
+ *「工具定义」while both totals match provider.
  * `residualTokens` is how far the raw message heuristic sat under that fill
  * (positive = undercount — the photo gap); negative means the heuristic was
  * already above the ring residual.

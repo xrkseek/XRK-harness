@@ -82,10 +82,9 @@
      sidebar border without a vacant “button seat” next to the rail toggle. */
   padding: 8px 28px 0 12px;
   border-bottom: 1px solid transparent;
-  /* Anonymous container: JobListAction / presence chips query this width so
-     a squeezed conversation column (Overview + workbench open) collapses
-     long labels even when the window itself is still wide. */
-  container-type: inline-size;
+  /* Name `xrk-conversation-header` + type live in containers.css on
+     [data-conversation-header]. Do not set container-name here (hash overwrite).
+     Anonymous @container queries (JobListAction, 概况) hit via container-type. */
 }
 
 /* Header right pad is NOT Host-owned. Desktop workbench controls belong in
@@ -199,16 +198,30 @@
   cursor: default;
 }
 
-/* Status / Jobs: never shrink or clip away (概况 must stay hittable). Title
-   crumbs yield first. Sit above Presence's absolute chip (seat z-index 0). */
+/* Status / Jobs: stay hittable; may shrink after titleCluster yields.
+   Cap at 40% so actions + utilities (+ 12px gap) stay under 100%. */
 .headerActions {
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   align-items: center;
   gap: 8px;
-  max-width: min(280px, 48%);
+  min-width: 0;
+  max-width: min(280px, 40%);
   position: relative;
   z-index: 3;
+}
+
+/* SlotOutlet row box (`data-slot-layout=row`) — constrain occupants so CJK
+   labels cannot stack when the column squeezes. */
+.headerActions > :global([data-slot-layout='row']) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.headerActions > :global([data-slot-layout='row']) > * {
+  flex: none;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 /* Presence + plugin in-flow controls. Pack start so excess spills right
@@ -222,9 +235,21 @@
   gap: 8px;
   margin-left: 12px;
   min-width: 0;
-  max-width: min(320px, 55%);
+  max-width: min(320px, 40%);
   position: relative;
   z-index: 0;
+}
+
+.headerUtilities > :global([data-slot-layout='row']) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.headerUtilities > :global([data-slot-layout='row']) > * {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .headerUtilities:empty {
@@ -405,7 +430,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 8;
+  z-index: var(--ds-z-column-handle);
   width: min(
     40px,
     calc((100% - var(--dsh-chat-content-width)) / 2 - var(--dsh-chat-width-handle-inset) - 24px)
@@ -472,12 +497,12 @@
 
 /* Overlay sibling of the scrollport: the turn ladder portals here so it is
    not a sticky overflowing child of the transcript (that paints twice).
-   Above the width handles (z-index 8): host is pointer-events none so resize
-   still works outside the rail frame; the frame itself is pointer-events auto. */
+   Above the width handles (--ds-z-column-handle): host is pointer-events none
+   so resize still works outside the rail frame; the frame itself is auto. */
 .turnRailHost {
   position: absolute;
   inset: 0;
-  z-index: 9;
+  z-index: var(--ds-z-column-rail);
   pointer-events: none;
   /* Same inline-size query the transcript used so the rail still hides under 900px. */
   container-type: inline-size;
@@ -536,9 +561,9 @@
        • Flutter shell viewInsets when Activity is adjustNothing + overlays.
      Never stack Activity adjustResize + this bottom offset. */
   bottom: var(--xrk-keyboard-inset, 0px);
-  /* Above markdown CodeBlock sticky banners (z-index 6) so the footer never
-     paints under a sticking code header while scrolling. */
-  z-index: 7;
+  /* Above markdown CodeBlock sticky banners (--ds-z-column-raised) so the
+     footer never paints under a sticking code header while scrolling. */
+  z-index: var(--ds-z-column-composer);
   /* Input mask: transcript fades under a FIXED band at the seat top. 28px
      (was 36) keeps the soft handoff without a blank slab above a squeezed
      composer. Px stops, not % — a growing draft only widens the solid region.

@@ -58,7 +58,7 @@ function snapshotBase(): ConversationSnapshot {
     sessionId: SID, views: EMPTY_CONVERSATION_VIEWS, chat: chatSnapshotFixture(), nodes: [],
     turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [],
     pending: [], pendingSubmissions: [], queue: [], running: false, composerPhase: 'active', removed: false, openState: 'open', openError: null,
-    hasMore: false, loadingOlder: false, promptError: null, blank: false, subagent: null, lastAgentError: null,
+    hasMore: false, loadingOlder: false, promptError: null, blank: false, subagent: null, lastAgentError: null, waitYield: null,
   }
 }
 

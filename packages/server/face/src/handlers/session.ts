@@ -1137,9 +1137,40 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   // Promote stamps user/message from admitRpcMap → pendingUserRpc FIFO — do
   // not write pendingUserRpc here (raced with in-flight injects).
   runtime.publishQueue(sessionId);
+  // Steer soft-detaches wait-class bodies (same hub as session.yieldWait) so
+  // 插队 is not stranded behind wait_agent / peer sync / foreground subagent.
+  if (mode === "steer") {
+    runtime.waitYield.yield(sessionId);
+  }
   runtime.drain.wake(sessionId);
 
   return { ok: true, value: { accepted: true } };
+};
+
+/**
+ * Soft-detach wait-class tools without cancelling the turn or children
+ * (job.background posture). Idempotent when nothing is waiting.
+ */
+export const sessionYieldWait: FaceHandler = async (runtime, _rpcId, payload) => {
+  const p = asRecord(payload);
+  const sessionId = String(p.sessionId ?? "").trim();
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  if (!runtime.store.has(sessionId)) {
+    return {
+      ok: false,
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
+    };
+  }
+  const detached = runtime.waitYield.yield(sessionId);
+  // Same wake as steer admit — unblock wait slices that sleep without an
+  // immediate AbortSignal delivery (poll + raceDrainRunSlice).
+  if (detached) runtime.drain.wake(sessionId);
+  return { ok: true, value: { accepted: true as const, detached } };
 };
 
 /**

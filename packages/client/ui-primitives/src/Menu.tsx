@@ -12,8 +12,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
+import {
+  isTopEscapeLayer,
+  popEscapeLayer,
+  pushEscapeLayer,
+} from './escape-layer.ts'
 import { IconCheckOutlineRegular } from './icons/index.tsx'
 import { usePointerGrace } from './pointer-grace.ts'
+import { ANCHORED_MEASURE_STYLE } from './useAnchoredPosition.ts'
 import css from './Menu.module.css'
 
 /** Selectable row (optionally with a nested submenu). */
@@ -56,7 +62,7 @@ function isLabel(entry: MenuEntry): entry is MenuLabel {
 }
 
 /** Unplaced portal list: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real. */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
+const MEASURE_STYLE = ANCHORED_MEASURE_STYLE
 
 /**
  * Render an anchored dropdown menu.
@@ -213,6 +219,9 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       }
       return
     }
+    // Push after Settings / outer sheets so Escape closes the menu first
+    // even when Settings' document listener was registered earlier.
+    const escapeToken = pushEscapeLayer()
     const onPointerDown = (e: PointerEvent) => {
       if (!(e.target instanceof Node)) return
       // The portaled list is outside the anchor subtree; check both.
@@ -225,6 +234,10 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (!isTopEscapeLayer(escapeToken)) return
+        // Mark consumed so outer panels (SettingsRoot) that watch
+        // `defaultPrevented` / escape-layer top do not close on this keystroke.
+        e.preventDefault()
         onCloseRef.current()
         return
       }
@@ -252,6 +265,7 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
     return () => {
+      popEscapeLayer(escapeToken)
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }

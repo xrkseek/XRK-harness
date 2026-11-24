@@ -1178,15 +1178,13 @@ describe('ModelsSection', () => {
     fireEvent.click(confirm)
     await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
     expect(confirm.disabled).toBe(true)
-    expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: en.cancel }).disabled).toBe(true)
+    // Cancel stays enabled so a hung Host cannot trap the modal.
+    expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: en.cancel }).disabled).toBe(false)
     expect(within(dialog).getByRole('button', { name: openaiCopy(en.deleting) })).toBe(confirm)
-    fireEvent.click(within(dialog).getByRole('button', { name: en.close }))
-    expect(screen.getByRole('dialog', { name: openaiCopy(en.deleteTitle) })).toBe(dialog)
+    fireEvent.click(within(dialog).getByRole('button', { name: en.cancel }))
+    expect(screen.queryByRole('dialog', { name: openaiCopy(en.deleteTitle) })).toBeNull()
     expect(mutate).toHaveBeenCalledOnce()
     await act(async () => { resolveRemoval(ok(wireNamespaces()[2]!)) })
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: openaiCopy(en.deleteTitle) })).toBeNull()
-    })
   })
 
   it('renders the load failure with a retry control', async () => {

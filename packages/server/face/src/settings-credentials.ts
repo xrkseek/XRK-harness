@@ -201,13 +201,19 @@ export function defaultUiSettings(): FaceUiSettings {
 }
 
 export class FaceCredentialVault {
-  private readonly overrides = new Map<string, string>();
+  /**
+   * In-memory vault. `null` is a delete tombstone so `persistCredentialsFile`
+   * can drop the env ref from `.credentials.yaml` — deleting the Map entry
+   * instead left the yaml key alive across clear/unset (Models delete looked
+   * stuck / keys resurrected on reload).
+   */
+  private readonly overrides = new Map<string, string | null>();
   /** Values loaded from `.credentials.yaml` (reported as `source: file`). */
   private readonly fileBacked = new Set<string>();
 
   peek(slotId: string): string | undefined {
     const v = this.overrides.get(slotId);
-    return v !== undefined && v.length > 0 ? v : undefined;
+    return typeof v === "string" && v.length > 0 ? v : undefined;
   }
 
   hasOverride(slotId: string): boolean {
@@ -225,7 +231,7 @@ export class FaceCredentialVault {
 
   set(slotId: string, value: string | null): void {
     if (value === null || value === "") {
-      this.overrides.delete(slotId);
+      this.overrides.set(slotId, null);
       this.fileBacked.delete(slotId);
       return;
     }
@@ -721,11 +727,9 @@ export async function credentialsSet(
   if (clear) {
     runtime.credentials.set(slotId, null);
     await persistCredentialsFile(runtime);
-    try {
-      await syncSlotToSecretStore(runtime.secretStore, slotId, null);
-    } catch {
-      /* keyring failure must not block Face clear */
-    }
+    // Keyring is best-effort — never await OS CredMgr / keytar on the Face
+    // RPC path (Windows deletePassword can hang and freeze Settings).
+    void syncSlotToSecretStore(runtime.secretStore, slotId, null).catch(() => {});
     emitCredentialRemote(runtime, slotId);
     return {
       ok: true,
@@ -760,11 +764,8 @@ export async function credentialsSet(
 
   runtime.credentials.set(slotId, p.value);
   await persistCredentialsFile(runtime);
-  try {
-    await syncSlotToSecretStore(runtime.secretStore, slotId, p.value);
-  } catch {
-    /* keyring failure must not block Face set — yaml already written */
-  }
+  // Same as clear: yaml is durable; keyring must not stall credentials.set.
+  void syncSlotToSecretStore(runtime.secretStore, slotId, p.value).catch(() => {});
   const slot = listCredentialSlots(runtime).find((s) => s.id === slotId)!;
   emitCredentialRemote(runtime, slotId);
   return {
@@ -803,13 +804,13 @@ export async function credentialsUnset(
       },
     };
   }
+  // Match credentials.set(clear): vault first, then best-effort keyring, then
+  // remote events. Skipping persist left yaml keys alive across restart; awaiting
+  // keytar here also froze the Models delete dialog on Windows.
   runtime.credentials.set(slotId, null);
+  await persistCredentialsFile(runtime);
+  void syncSlotToSecretStore(runtime.secretStore, slotId, null).catch(() => {});
   emitCredentialRemote(runtime, slotId);
-  try {
-    await syncSlotToSecretStore(runtime.secretStore, slotId, null);
-  } catch {
-    /* ignore */
-  }
   return { ok: true, value: {} };
 }
 

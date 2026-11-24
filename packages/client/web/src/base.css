@@ -10,6 +10,7 @@
 @import '@xrkseek/client-ui-theme/styles/gradient-shadow-text.css';
 @import '@xrkseek/client-ui-theme/styles/shiki.css';
 @import '@xrkseek/client-ui-theme/styles/interaction.css';
+@import '@xrkseek/client-ui-theme/styles/containers.css';
 @import '@xrkseek/client-ui-theme/styles/mobile.css';
 
 html,

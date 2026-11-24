@@ -1178,14 +1178,37 @@ describe("Face credentials U2", () => {
       value: "sk-from-keyring-test",
     });
     expect(set.result.ok).toBe(true);
-    expect(await loadSlotFromSecretStore(secretStore, "host.apiKey")).toBe(
-      "sk-from-keyring-test",
-    );
+    // Keyring sync is fire-and-forget on the Face path — poll until dual-write lands.
+    await vi.waitFor(async () => {
+      expect(await loadSlotFromSecretStore(secretStore, "host.apiKey")).toBe(
+        "sk-from-keyring-test",
+      );
+    });
 
     const empty = runtime({ bootstrapApiKey: "", secretStore });
     expect(effectiveHostApiKey(empty)).toBe("");
     await hydrateCredentialsFromSecretStore(empty);
     expect(effectiveHostApiKey(empty)).toBe("sk-from-keyring-test");
+  });
+
+  it("credentials.unset persists vault removal (not memory-only)", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-cred-unset-"));
+    const rt = runtime({ bootstrapApiKey: "", productDir: dir });
+    const set = await dispatchFaceMethod(rt, "credentials.set", "cu1", {
+      ref: "XRK_API_KEY",
+      value: "sk-must-leave-disk",
+    });
+    expect(set.result.ok).toBe(true);
+    const before = await readFile(path.join(dir, ".credentials.yaml"), "utf8");
+    expect(before).toContain("sk-must-leave-disk");
+
+    const unset = await dispatchFaceMethod(rt, "credentials.unset", "cu2", {
+      ref: "XRK_API_KEY",
+    });
+    expect(unset.result.ok).toBe(true);
+    const after = await readFile(path.join(dir, ".credentials.yaml"), "utf8");
+    expect(after).not.toContain("sk-must-leave-disk");
+    expect(effectiveHostApiKey(rt)).toBe("");
   });
 
   it("DSH credentials.describe + set by ref/env", async () => {

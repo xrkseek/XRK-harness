@@ -123,6 +123,9 @@ export class SessionQueueMirror {
         preview: previewOf(content),
         text: textOf(content),
         ...(rpcId === undefined ? {} : { rpcId }),
+        // Pass-through Face admit source (handoff / seat / user). Dropping it
+        // made pending steers paint as boss 「插队中」 until durable promote.
+        ...(source === undefined ? {} : { source }),
       }
     })
   }

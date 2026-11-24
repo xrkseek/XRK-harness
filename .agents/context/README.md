@@ -1,6 +1,7 @@
-# `.agents/context/` — 常驻边界笔记
+# `.agents/context/` — 边界笔记（按需读，不站立注入）
 
-给 **产品 / Coding Agent** 的短边界说明。不是教科书、不是发版日记。
+给 **产品 / Coding Agent** 的短边界说明。不是教科书、不是发版日记。  
+Host **不会**把本目录整夹灌进 `agent-instructions`（对齐 Codex：薄 AGENTS + `skill` 渐进披露）；需要时读这里或加载对应 skill。
 
 | 文件 | 何时读 |
 |------|--------|

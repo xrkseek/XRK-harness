@@ -78,8 +78,8 @@ export interface SessionDrainCancelOptions {
   /**
    * Bounded join. A drain body that ignores its signal (stuck tool, hung
    * workspace snapshot) must not pin the cancel RPC forever; after this
-   * budget `cancel` resolves anyway. The entry is intentionally kept so a
-   * later `wake` re-arms a follow-up drain once the stuck chain settles.
+   * budget `cancel` resolves and **abandons** the entry so a later `run` /
+   * `wake` can start fresh (orphaned drain settle is a no-op).
    */
   readonly timeoutMs?: number;
   /** Fired synchronously once the abort signal has been published. */
@@ -226,9 +226,8 @@ export function createSessionDrainLatch(drain: DrainFn): SessionDrainLatch {
         }
         return;
       }
-      // Bounded join. The entry stays installed on timeout, so `isActive()`
-      // still tells the truth and the post-settle follow-up can pick up any
-      // wake that arrived meanwhile.
+      // Bounded join. On timeout abandon the entry: otherwise `stopping=true`
+      // + a never-settling `done` parks every later `run()` on a stale promise.
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
         e.done.catch(() => undefined),
@@ -237,6 +236,12 @@ export function createSessionDrainLatch(drain: DrainFn): SessionDrainLatch {
         }),
       ]);
       if (timer !== undefined) clearTimeout(timer);
+      if (entry === e && e.stopping) {
+        entry = undefined;
+        // Unblock any `run()` waiting on `entry.done.finally(...)`.
+        // Orphaned drain's later settle() sees entry !== e and no-ops.
+        e.resolve();
+      }
     },
   };
 }

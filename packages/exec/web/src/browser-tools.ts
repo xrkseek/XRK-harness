@@ -1186,7 +1186,9 @@ export function createBrowserTools(
     tools.push(storageTool);
   }
 
-  return tools;
+  // Progressive disclosure — full schemas only after tool_search expand.
+  // Standing wire stays thin; catalog still names every browser_* tool.
+  return tools.map((t) => ({ ...t, exposure: "deferred" as const }));
 }
 
 function actionIsRead(action: unknown): boolean {

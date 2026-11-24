@@ -3,13 +3,11 @@
  * Graph `delegator|worker|observer` stays a UI label; these prefix the child prompt.
  */
 
-import path from "node:path";
 import {
   flattenText,
   isHumanUserMessageSource,
   type SessionEvent,
 } from "@xrkseek/protocol";
-import { MEMBER_PACK_BRIEFCASE } from "./agent-member-pack.js";
 
 export type AgentTeamSpawnRole =
   | "default"
@@ -219,77 +217,34 @@ export function roleCapsHint(role: AgentTeamSpawnRole | undefined): string {
 }
 
 /**
- * 公文包 lines for the spawn preamble — same wording as the identity lane
- * (both call {@link formatMemberPackInventoryLines}). Callers pass the live
- * inventory lines when they have them, else the paths; this never invents a
- * second phrasing or trims the pack to "fit a task".
- */
-function briefcasePreambles(input: SubagentSpawnPreambleInput): readonly string[] {
-  // Live inventory lines win — they are the only source that can tell the
-  // truth about how many skills the pack has.
-  if (input.packInventoryLines && input.packInventoryLines.length > 0) {
-    return input.packInventoryLines;
-  }
-  const packHome = input.packHome?.trim();
-  if (!packHome) return [];
-  // Paths only: say nothing about skills we did not enumerate. Claiming
-  // "(none yet)" here would actively mislead a 干员 that does have skills.
-  const lines = [
-    `${MEMBER_PACK_BRIEFCASE}: not workspace cwd — read/edit here or copy into workspace`,
-    `pack_home: ${packHome}`,
-    `skills_dir: ${path.join(packHome, "skills")}`,
-  ];
-  const packMaterials = input.packMaterials?.trim();
-  if (packMaterials) lines.push(`materials: ${packMaterials}`);
-  return lines;
-}
-
-/**
- * Identity block every in-process child sees before the parent-written task.
- * Covers parent/child session ids, mode, role, workspace cwd, and whether
- * the parent transcript was seeded — so the child does not guess from AGENTS.md.
+ * Spawn-time deltas every in-process child sees before the parent-written task.
+ *
+ * Parent / child ids, label, role, caps, cwd, briefcase already live in
+ * turn-start `<session_capability>` + `<seat_identity>` — do not re-lecture.
+ * Keep only facts those fragments omit: mode, inherit_context, worktree shape,
+ * delivery contract, then the Task body.
  */
 export function applySubagentSpawnPreamble(
   input: SubagentSpawnPreambleInput,
 ): string {
-  const role = input.role && input.role !== "default" ? input.role : "default";
   const modeLine =
     input.mode === "one-shot"
-      ? "one-shot (no later human follow-ups)"
-      : "continuable (parent may followup_task / send_message)";
+      ? "one-shot"
+      : "continuable (followup_task / send_message)";
   const inheritLine = input.inheritContext
-    ? "yes — completed parent turns only (open turn excluded)"
-    : "no — no parent transcript; do not invent parent state";
+    ? "yes — completed parent turns only"
+    : "no — do not invent parent state";
+  // Same-checkout cwd already on <session_capability>; only call out isolation.
   const workspaceLine = input.isolatedWorktree
-    ? "isolated git worktree (not parent's checkout) — follow the task's worktree note"
-    : "same as the parent session — fs/git here";
-  const packLines = briefcasePreambles(input);
-  // Identity + delivery only. Live axes (ask, omitted tools, siblings) live in
-  // turn-start <session_capability> — do not re-lecture them here.
+    ? "- workspace: isolated git worktree — follow the task's worktree note"
+    : undefined;
   const header = [
-    "[subagent identity]",
-    `Delegated child of \`${input.parentSessionId}\` (you=\`${input.childSessionId}\`).`,
+    "[subagent spawn]",
     `- mode: ${modeLine}`,
-    `- label: ${input.label.trim() || "subagent"}`,
-    `- role: ${role}`,
-    ...(input.memberId
-      ? [
-          `- member_id: ${input.memberId}`,
-          `- inject: ${input.inject === "subagent" ? "subagent" : "minimal"}`,
-        ]
-      : []),
-    ...(input.permissionInherit
-      ? [`- permission: ${input.permissionInherit}`]
-      : []),
-    ...(input.parentToolSurface
-      ? [
-          `- tool_surface: badge=${input.parentToolSurface} · role=${role} · caps=${roleCapsHint(input.role)}`,
-        ]
-      : []),
     `- inherit_context: ${inheritLine}`,
-    `- workspace: ${input.cwd} · ${workspaceLine}`,
-    ...packLines.map((line) => `- ${line}`),
-    "Delivery: FINAL assistant message only reaches parent (not reasoning / mid-tool). Answer→evidence; hard fails there. Finish in-scope — no bounce, no 'let me know'; spawn only if tasked. Seat = cwd AGENTS.md (+ playbook) + <seat_identity>; ~/.xrk standing skipped; parent-repo root AGENTS.md ≠ identity.",
+    ...(workspaceLine !== undefined ? [workspaceLine] : []),
+    // Parent only sees FINAL assistant text. Keep this short — caps live in tools.
+    "Delivery: FINAL assistant text only → parent. Finish in-scope; spawn only if tasked.",
   ].join("\n");
   const tasked = applySpawnRoleReminder(input.prompt, input.role);
   const body = tasked.trim();

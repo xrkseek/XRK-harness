@@ -14,33 +14,17 @@
  * `session.getSnapshot()` here — write-on-fetch / write-on-live-paint only.
  */
 import type { TeamRosterLiveLook } from '@xrkseek/client-runtime/client'
+import {
+  isPresenceLookSnapshot,
+  type PresenceLookSnapshot,
+} from './presence-look.ts'
 import { mergeTeamRosterLiveLook } from './team-live-look.ts'
+
+export type { PresenceLookSnapshot } from './presence-look.ts'
 
 const MAX_SESSIONS = 48
 
-/** Opaque companion look — same fields Face puts on `session.status.companionBall`. */
-export type PresenceLookSnapshot = {
-  readonly shape: string
-  readonly color: string
-  readonly size?: number
-  readonly kit?: string
-  readonly kitHat?: string
-  readonly kitGlasses?: string
-  readonly kitHeld?: string
-  readonly overlayHat?: string
-  readonly overlayGlasses?: string
-  readonly overlayHeld?: string
-}
-
 const bySession = new Map<string, PresenceLookSnapshot>()
-
-function isLook(value: unknown): value is PresenceLookSnapshot {
-  if (!value || typeof value !== 'object') return false
-  const shape = (value as { shape?: unknown }).shape
-  const color = (value as { color?: unknown }).color
-  return typeof shape === 'string' && shape.length > 0
-    && typeof color === 'string' && color.length > 0
-}
 
 /** Test-only: drop every remembered look. */
 export function resetPresenceLookCacheForTests(): void {
@@ -63,7 +47,7 @@ export function writePresenceLookCache(
   sessionId: string,
   look: PresenceLookSnapshot,
 ): void {
-  if (!isLook(look)) return
+  if (!isPresenceLookSnapshot(look)) return
   bySession.delete(sessionId)
   bySession.set(sessionId, look)
   while (bySession.size > MAX_SESSIONS) {
@@ -81,7 +65,7 @@ export function resolveCompanionLook(
   sessionId: string,
   face: PresenceLookSnapshot | undefined | null,
 ): PresenceLookSnapshot | undefined {
-  if (isLook(face)) return face
+  if (isPresenceLookSnapshot(face)) return face
   return readPresenceLookCache(sessionId)
 }
 
@@ -111,7 +95,7 @@ export function rememberCompanionLook(
   sessionId: string,
   face: PresenceLookSnapshot | undefined | null,
 ): void {
-  if (isLook(face)) writePresenceLookCache(sessionId, face)
+  if (isPresenceLookSnapshot(face)) writePresenceLookCache(sessionId, face)
 }
 
 /**

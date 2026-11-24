@@ -1020,6 +1020,10 @@ export class SessionManager {
         })
         return
       }
+      case 'host/session-wait-yield': {
+        this.sessions.get(frame.sessionId)?.handleWaitYield(frame.active)
+        return
+      }
       case 'host/session-status': {
         this.recordMutation({ kind: 'status', sessionId: frame.sessionId, running: frame.running })
         this.sessions.get(frame.sessionId)?.handleRunning(frame.running)
@@ -1086,8 +1090,10 @@ export class SessionManager {
     }
     // Drop optimistic running bits until the next list/resync baseline arrives.
     // Host crash or stream loss can omit running:false; stale true traps Stop.
+    // Wait-yield dock re-arms from host baseline on the next host stream open.
     for (const session of this.sessions.values()) {
       session.handleRunning(false)
+      session.handleWaitYield(null)
     }
     for (const summary of this.summaries) {
       if (summary.running) {

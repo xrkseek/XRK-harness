@@ -1,23 +1,3 @@
-import type { ChatMessage, SessionEvent } from "@xrkseek/protocol";
-import {
-  assertModelVisible,
-  deriveMessages,
-} from "@xrkseek/core-session";
-import {
-  assembleThreeLayers,
-  type ThreeLayerInput,
-} from "./three-layer.js";
-import {
-  compactionStep,
-  createAssembleStep,
-  createContextWindowStep,
-  createOutboundPipeline,
-  createSlashRecipeStep,
-  createToolPairStep,
-  slashRecipeStep,
-  type PipelineStep,
-  type SlashResolveFn,
-} from "./outbound.js";
 import {
   renderPromptSections,
   PROMPT_VARIABLE_NAME,
@@ -60,7 +40,6 @@ export {
 export {
   compactionStep,
   createAssembleStep,
-  createContextWindowStep,
   createOutboundPipeline,
   createSlashRecipeStep,
   createToolPairStep,
@@ -139,46 +118,4 @@ export function createSystemPromptAssembler(): SystemPromptAssembler {
       return renderPromptSections(rendered, resolved);
     },
   };
-}
-
-/**
- * Default outbound chain:
- * slash → assemble → toolPair → compaction → contextWindow → invariant
- *
- * Prefer `assemble.resolveSlash` on `runTurn` for the hot path.
- * Pass `resolveSlash` here only when driving the outbound pipeline directly.
- */
-export function createDefaultOutbound(options: {
-  buildInput: () => ThreeLayerInput | Promise<ThreeLayerInput>;
-  events: readonly SessionEvent[];
-  maxMessages?: number;
-  extraSteps?: readonly PipelineStep[];
-  resolveSlash?: SlashResolveFn;
-}) {
-  const pipeline = createOutboundPipeline();
-  pipeline.use(
-    options.resolveSlash
-      ? createSlashRecipeStep(options.resolveSlash)
-      : slashRecipeStep,
-  );
-  pipeline.use(
-    createAssembleStep(async () => assembleThreeLayers(await options.buildInput())),
-  );
-  pipeline.use(createToolPairStep());
-  pipeline.use(compactionStep);
-  pipeline.use(createContextWindowStep(options.maxMessages ?? 200));
-  for (const step of options.extraSteps ?? []) {
-    pipeline.use(step);
-  }
-  pipeline.use(async (ctx, next) => {
-    // System is separate; invariant checks history-derived messages only
-    // against the non-system portion when we strip volatile+skeleton differently.
-    // M1: assert that deriveMessages(events) matches provided history snapshot
-    // carried in meta, else compare events to themselves via derive.
-    const history = (ctx.meta.historyForInvariant as ChatMessage[] | undefined) ??
-      deriveMessages(options.events);
-    assertModelVisible(options.events, history);
-    await next();
-  });
-  return pipeline;
 }

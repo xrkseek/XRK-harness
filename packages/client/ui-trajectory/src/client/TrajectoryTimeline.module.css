@@ -63,7 +63,7 @@
 
 .earlierHistory {
   position: absolute;
-  z-index: 5;
+  z-index: var(--ds-z-column-sticky);
   top: 0;
   bottom: 0;
   left: 0;
@@ -271,7 +271,7 @@
 
 .selectionEdges {
   position: absolute;
-  z-index: 4;
+  z-index: var(--ds-z-column-sticky);
   top: 0;
   bottom: 0;
   left: var(--trajectory-selection-left);
@@ -282,7 +282,7 @@
 
 .hoverLine {
   position: absolute;
-  z-index: 4;
+  z-index: var(--ds-z-column-sticky);
   top: 0;
   bottom: 0;
   left: clamp(

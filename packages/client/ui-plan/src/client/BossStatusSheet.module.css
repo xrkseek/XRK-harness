@@ -249,6 +249,11 @@
   font-weight: 650;
 }
 
+.saveError {
+  color: var(--dsw-alias-state-danger, var(--dsw-alias-label-primary));
+  font-weight: 650;
+}
+
 .saveBtn {
   position: relative;
   flex: none;

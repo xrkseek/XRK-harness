@@ -37,7 +37,10 @@ import {
   appearanceLookWire,
   displayMemberName,
   MANAGER_MEMBER_ID,
+  parseMemberAppearance,
   SUNFLOWER_MEMBER_ID,
+  type AppearanceLookWire,
+  type MemberAppearance,
 } from "./agent-roster-store.js";
 import {
   catalogSeedDisplayLabel,
@@ -103,6 +106,13 @@ export interface SessionStatusSubagentLive {
    * restart / dispose) — follow-up may attempt reopen via thread/resume.
    */
   readonly externalResume?: "live" | "cold";
+  /** Roster id when this child was dispatched from Team. */
+  readonly memberId?: string;
+  /**
+   * Child ball look (spawn freeze / roster). Parent Overview paints this so
+   * own-child 回传 is visible as a ball without stealing the 委派方 lead.
+   */
+  readonly look?: AppearanceLookWire;
 }
 
 /** Per-model live session cap for Status + model `analytics`. */
@@ -139,6 +149,10 @@ export interface SessionStatusGraph {
      * done" fallback paints a killed sibling as a completion.
      */
     readonly outcome?: ChildOutcome;
+    /** Roster id when this node is a Team-dispatched child. */
+    readonly memberId?: string;
+    /** Child ball look for board / Overview (omit on root). */
+    readonly look?: AppearanceLookWire;
   }[];
   readonly edges: readonly {
     readonly from: string;
@@ -393,31 +407,9 @@ export interface SessionStatusSnapshot {
     readonly updatedAt: number;
   };
   /** Child ball look. Always set for subagent sessions so Settings 装扮 cannot leak. */
-  readonly companionBall?: {
-    readonly shape: string;
-    readonly color: string;
-    readonly size?: number;
-    readonly kit?: string;
-    readonly kitHat?: string;
-    readonly kitGlasses?: string;
-    readonly kitHeld?: string;
-    readonly overlayHat?: string;
-    readonly overlayGlasses?: string;
-    readonly overlayHeld?: string;
-  };
+  readonly companionBall?: AppearanceLookWire;
   /** Parent 干员 look when the parent is itself a child; omit → home Settings ball. */
-  readonly parentCompanionBall?: {
-    readonly shape: string;
-    readonly color: string;
-    readonly size?: number;
-    readonly kit?: string;
-    readonly kitHat?: string;
-    readonly kitGlasses?: string;
-    readonly kitHeld?: string;
-    readonly overlayHat?: string;
-    readonly overlayGlasses?: string;
-    readonly overlayHeld?: string;
-  };
+  readonly parentCompanionBall?: AppearanceLookWire;
   /**
    * Immediate parent's sticky Overview (委派方 copy). Child dual-ball reads this
    * so the home seat does not fall back to ambient 待机.
@@ -988,19 +980,13 @@ function liveLineText(
  */
 type CompanionAppearanceLink = {
   readonly memberId?: string;
-  readonly appearance?: {
-    readonly shape: string;
-    readonly color: string;
-    readonly size?: number;
-    readonly kit?: string;
-    readonly kitHat?: string;
-    readonly kitGlasses?: string;
-    readonly kitHeld?: string;
-    readonly overlayHat?: string;
-    readonly overlayGlasses?: string;
-    readonly overlayHeld?: string;
-    readonly face?: string;
-  };
+  /** Spawn snapshot or roster row — always normalized before wire. */
+  readonly appearance?: unknown;
+};
+
+const DEFAULT_COMPANION_LOOK: MemberAppearance = {
+  shape: "blob",
+  color: "cream",
 };
 
 /**
@@ -1010,7 +996,7 @@ type CompanionAppearanceLink = {
 function bossBallFromPresence(
   user: Record<string, unknown>,
   stickers: readonly PresenceSticker[],
-): NonNullable<SessionStatusSnapshot["companionBall"]> {
+): AppearanceLookWire {
   const dressing = dressingFromPresence(user);
   const shape =
     typeof user.shape === "string" && user.shape ? user.shape : "blob";
@@ -1022,10 +1008,16 @@ function bossBallFromPresence(
     typeof user.overlayGlasses === "string" ? user.overlayGlasses : undefined;
   const overlayHeld =
     typeof user.overlayHeld === "string" ? user.overlayHeld : undefined;
+  const bodyColor =
+    typeof user.bodyColor === "string" ? user.bodyColor.trim() : "";
+  const eyeColor =
+    typeof user.eyeColor === "string" ? user.eyeColor.trim() : "";
   return appearanceLookWire(
     {
       shape: shape as never,
       color: color as never,
+      ...(bodyColor ? { bodyColor } : {}),
+      ...(eyeColor ? { eyeColor } : {}),
       ...(typeof user.size === "number" ? { size: user.size } : {}),
       kitHat: dressing.kitHat,
       kitGlasses: dressing.kitGlasses,
@@ -1065,9 +1057,7 @@ function childSeatForMemberId(
   return "agent";
 }
 
-type PresenceLookWire = NonNullable<
-  SessionStatusSnapshot["companionBall"]
->;
+type PresenceLookWire = AppearanceLookWire;
 
 type DelegateParentPaint = NonNullable<
   NonNullable<SessionStatusSnapshot["delegate"]>["parents"]
@@ -1269,8 +1259,8 @@ function pushBossLead(
 /**
  * Rank 委派方 keys by durable bubble recency (higher = more recent).
  * Human UI composer → `${sessionId}:boss`; seat / handoff → `fromSessionId`.
- * Own tool-child 回传 must not steal the 委派方 lead — those bubbles stay off
- * the rank map (子代理 list already shows them).
+ * Own tool-child 回传 counts: after report-back the child ball joins the
+ * main session's left 委派方 stack (same as peer / opener speech).
  * Also hydrates {@link FaceRuntime.sessionHumanSpoke} from the log so a
  * restarted Host still pins 老板 after the operator has typed.
  */
@@ -1298,8 +1288,6 @@ function recentBubbleSpeakerRanks(
         ? source.fromSessionId.trim()
         : "";
     if (!from || from === sessionId) continue;
-    // Child → parent handoff is 回传, not a new 委派方.
-    if (isDelegatedChildOf(runtime, sessionId, from)) continue;
     ranks.set(from, ++tick);
   }
   if (sawHuman) runtime.sessionHumanSpoke.add(sessionId);
@@ -1450,6 +1438,22 @@ function paintOfficeDelegatePair(args: {
   if (spoke) {
     pushBossLead(parents, sessionId, seatTitles.boss);
   }
+  // Ranked speakers missing from the stack (own-child 回传, etc.) — paint them.
+  for (const fromId of bubbleRanks.keys()) {
+    if (fromId.endsWith(":boss")) continue;
+    if (parents.some((p) => p.sessionId === fromId)) continue;
+    pushUniqueParent(
+      parents,
+      paintSessionAsDelegateParent(
+        runtime,
+        fromId,
+        dressingStickers,
+        seatTitles,
+        uiLocale,
+        isDelegatedChildOf(runtime, sessionId, fromId) ? "peer" : "opener",
+      ),
+    );
+  }
   orderParentsByRecentBubble(parents, bubbleRanks);
 
   const capped = capDelegateParents(parents);
@@ -1567,36 +1571,26 @@ function resolveDelegatedChildPaint(
 /**
  * Live roster look when `memberId` is set (open subagents / identity sessions
  * follow Team edits). Falls back to the frozen spawn snapshot otherwise.
+ * Roster rows already hold {@link MemberAppearance}; spawn snapshots still go
+ * through {@link parseMemberAppearance} so new look fields cannot silently
+ * drop out of the Status wire the way a hand-picked field list did.
  */
 function companionBallForMember(
   runtime: FaceRuntime,
   link: CompanionAppearanceLink | undefined,
   stickers: ReturnType<typeof dressingFromPresence>["stickers"] = [],
-): SessionStatusSnapshot["companionBall"] {
+): AppearanceLookWire | undefined {
   if (!link) return undefined;
   const memberId = typeof link.memberId === "string" ? link.memberId.trim() : "";
-  let look = link.appearance;
-  if (memberId) {
-    const member = rosterMemberById(runtime, memberId);
-    if (member?.appearance) look = member.appearance;
+  const member = memberId ? rosterMemberById(runtime, memberId) : undefined;
+  if (member?.appearance) {
+    return appearanceLookWire(member.appearance, stickers);
   }
   // Link present but no look yet → default blob/cream (blocks Settings kit leak).
-  const shape = typeof look?.shape === "string" && look.shape ? look.shape : "blob";
-  const color = typeof look?.color === "string" && look.color ? look.color : "cream";
-  return appearanceLookWire({
-    shape: shape as never,
-    color: color as never,
-    ...(typeof look?.size === "number" ? { size: look.size } : {}),
-    ...(typeof look?.kit === "string" && look.kit ? { kit: look.kit as never } : {}),
-    ...(typeof look?.kitHat === "string" && look.kitHat ? { kitHat: look.kitHat } : {}),
-    ...(typeof look?.kitGlasses === "string" && look.kitGlasses ? { kitGlasses: look.kitGlasses } : {}),
-    ...(typeof look?.kitHeld === "string" && look.kitHeld ? { kitHeld: look.kitHeld } : {}),
-    ...(look?.overlayHat || look?.face
-      ? { overlayHat: look.overlayHat ?? look.face }
-      : {}),
-    ...(look?.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {}),
-    ...(look?.overlayHeld ? { overlayHeld: look.overlayHeld } : {}),
-  }, stickers);
+  return appearanceLookWire(
+    parseMemberAppearance(link.appearance, DEFAULT_COMPANION_LOOK),
+    stickers,
+  );
 }
 
 /**
@@ -1631,6 +1625,11 @@ export function buildSessionStatusSnapshotUncached(
   const plan = foldPlanMode(events) ? "on" : "off";
   const model = resolveSessionModelSelection(runtime, sessionId);
   const cwd = resolveSessionCwd(runtime, sessionId);
+  // Early stickers so live/graph child rows can carry look before the
+  // office dual-ball block (same dressing as companionBall later).
+  const presenceUserEarly = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const dressingEarly = dressingFromPresence(presenceUserEarly);
 
   const jobs = (runtime.jobViewsFor(sessionId) ?? []).map(jobRow);
 
@@ -1751,6 +1750,19 @@ export function buildSessionStatusSnapshotUncached(
       const childModel = externalKind
         ? undefined
         : resolveSessionModelSelection(runtime, node.id);
+      const childLink = runtime.subagents.getByChild(node.id);
+      const childLook =
+        childLink && childLink.mode !== "fork"
+          ? companionBallForMember(
+              runtime,
+              childLink,
+              dressingEarly.stickers,
+            )
+          : undefined;
+      const childMemberId =
+        typeof childLink?.memberId === "string"
+          ? childLink.memberId.trim()
+          : "";
       live.push({
         id: node.id,
         activity,
@@ -1764,6 +1776,8 @@ export function buildSessionStatusSnapshotUncached(
         ...(steering > 0 ? { steering } : {}),
         ...(externalKind ? { externalKind } : {}),
         ...(externalResume ? { externalResume } : {}),
+        ...(childMemberId ? { memberId: childMemberId } : {}),
+        ...(childLook ? { look: childLook } : {}),
       });
     }
   }
@@ -1797,6 +1811,22 @@ export function buildSessionStatusSnapshotUncached(
             ? turnActive
             : activeOwn.has(n.id) || isChildSessionActive(runtime, n.id);
         const outcome = outcomeById.get(n.id);
+        const graphLink =
+          n.id === sessionId
+            ? undefined
+            : runtime.subagents.getByChild(n.id);
+        const graphLook =
+          graphLink && graphLink.mode !== "fork"
+            ? companionBallForMember(
+                runtime,
+                graphLink,
+                dressingEarly.stickers,
+              )
+            : undefined;
+        const graphMemberId =
+          typeof graphLink?.memberId === "string"
+            ? graphLink.memberId.trim()
+            : "";
         return {
           id: n.id,
           label: n.label,
@@ -1804,6 +1834,8 @@ export function buildSessionStatusSnapshotUncached(
           ...(n.depth !== undefined ? { depth: n.depth } : {}),
           activity: running ? ("running" as const) : ("inactive" as const),
           ...(outcome ? { outcome } : {}),
+          ...(graphMemberId ? { memberId: graphMemberId } : {}),
+          ...(graphLook ? { look: graphLook } : {}),
         };
       }),
     edges: team.edges
@@ -2098,6 +2130,21 @@ export function buildSessionStatusSnapshotUncached(
     const bubbleRanks = recentBubbleSpeakerRanks(runtime, sessionId, events);
     if (runtime.sessionHumanSpoke.has(sessionId)) {
       pushBossLead(parents, sessionId, seatTitles.boss);
+    }
+    for (const fromId of bubbleRanks.keys()) {
+      if (fromId.endsWith(":boss")) continue;
+      if (parents.some((p) => p.sessionId === fromId)) continue;
+      pushUniqueParent(
+        parents,
+        paintSessionAsDelegateParent(
+          runtime,
+          fromId,
+          dressing.stickers,
+          seatTitles,
+          uiLocale,
+          "peer",
+        ),
+      );
     }
     orderParentsByRecentBubble(parents, bubbleRanks);
     const cappedParents = capDelegateParents(parents);

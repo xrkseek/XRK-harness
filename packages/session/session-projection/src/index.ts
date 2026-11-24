@@ -257,15 +257,70 @@ function materializeCheckpointState(
   }
 }
 
+function isPlainObject(value: object): value is Record<string, unknown> {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 /**
  * Wire-view equality for the change feed (DSH compares view, not state ref).
- * Primitives use `Object.is`; plain JSON uses stable `JSON.stringify`.
+ * Reference equality first; plain objects / primitive arrays compare shallowly;
+ * nested unknown objects fall back to `JSON.stringify`.
  */
 function projectionViewEquals(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
     return false;
   }
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const ai = a[i];
+      const bi = b[i];
+      if (Object.is(ai, bi)) continue;
+      if (
+        (typeof ai === "object" && ai !== null)
+        || (typeof bi === "object" && bi !== null)
+      ) {
+        try {
+          return JSON.stringify(a) === JSON.stringify(b);
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    }
+    return true;
+  }
+
+  if (Array.isArray(a) || Array.isArray(b)) return false;
+
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (const key of keysA) {
+      if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+      const av = a[key];
+      const bv = b[key];
+      if (Object.is(av, bv)) continue;
+      if (
+        (typeof av === "object" && av !== null)
+        || (typeof bv === "object" && bv !== null)
+      ) {
+        try {
+          if (JSON.stringify(av) !== JSON.stringify(bv)) return false;
+        } catch {
+          return false;
+        }
+        continue;
+      }
+      return false;
+    }
+    return true;
+  }
+
   try {
     return JSON.stringify(a) === JSON.stringify(b);
   } catch {

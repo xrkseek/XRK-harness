@@ -56,6 +56,13 @@ describe('projectTranscriptChrome', () => {
     })).toEqual({ voice: 'runtime', lane: 'brief' })
   })
 
+  it('maps legacy subagent-mirror plugin bags to courier×handoff', () => {
+    expect(projectTranscriptChrome({
+      surface: 'steering',
+      source: { kind: 'plugin', plugin: 'subagent-mirror', form: 'notice' },
+    })).toEqual({ voice: 'courier', lane: 'handoff' })
+  })
+
   it('maps seat speech to seat / peer voices (never operator)', () => {
     expect(projectTranscriptChrome({
       surface: 'user',

@@ -2197,6 +2197,7 @@ export function TrajectoryTable({
       <div
         ref={tablePaneRef}
         className={css.tablePane}
+        data-trajectory-table=""
         data-trajectory-scroll=""
         onScroll={(event) => {
           const pane = event.currentTarget

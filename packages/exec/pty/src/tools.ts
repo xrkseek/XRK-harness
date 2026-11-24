@@ -122,9 +122,12 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
     return options.service;
   };
 
-  return [
+  // Progressive disclosure — full PTY schemas only after tool_search expand
+  // (same contract as browser_* / MCP). Standing wire stays thin.
+  const tools: ToolDefinition[] = [
     {
       name: "terminal_open",
+      exposure: "deferred",
       description:
         "Create a persistent terminal session from a registered backend type. Use this for shell or REPL state that must survive across tool calls.",
       parameters: {
@@ -182,6 +185,7 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
     },
     {
       name: "terminal_send",
+      exposure: "deferred",
       description:
         "Send text to a persistent terminal. By default Enter is submitted and the call waits for a prompt, stdin wait, output silence, timeout, or session exit." +
         (enableBg
@@ -304,6 +308,7 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
     },
     {
       name: "terminal_read",
+      exposure: "deferred",
       description:
         "Read a bounded page of retained output from a persistent terminal without sending input.",
       parameters: {
@@ -358,6 +363,7 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
     },
     {
       name: "terminal_signal",
+      exposure: "deferred",
       description:
         "Send an allowed signal to the current foreground process group of a persistent terminal. Shell-targeted SIGKILL is rejected; use terminal_close.",
       parameters: {
@@ -403,6 +409,7 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
     },
     {
       name: "terminal_close",
+      exposure: "deferred",
       description:
         "Close one persistent terminal and wait until its process tree is gone.",
       parameters: {
@@ -439,6 +446,7 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
     },
     {
       name: "terminal_list",
+      exposure: "deferred",
       description: "List persistent terminal sessions in this composition.",
       parameters: { type: "object", properties: {} },
       async execute() {
@@ -468,4 +476,5 @@ export function createPtyTools(options: CreatePtyToolsOptions): ToolDefinition[]
       isConcurrencySafe: () => true,
     },
   ];
+  return tools;
 }

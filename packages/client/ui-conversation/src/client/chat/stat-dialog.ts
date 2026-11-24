@@ -2,20 +2,22 @@
 // (TurnUsagePanel) and the composer-dock session stats pills (StatsLine);
 // the matching dialog surface skin lives in stat-dialog.module.css.
 
-import { useEffect, useRef, useState, type CSSProperties, type MutableRefObject } from 'react'
-import { useAnchoredPosition, useDismissOnOutsidePointer } from '@xrkseek/client-ui-primitives'
+import { useCallback, useRef, useState, type CSSProperties, type MutableRefObject } from 'react'
+import {
+  ANCHORED_MEASURE_STYLE,
+  useAnchoredPosition,
+  useDismissOnOutsidePointer,
+  useEscapeLayer,
+} from '@xrkseek/client-ui-primitives'
 
-/** Viewport margin the placement clamp keeps (the Menu portal margin). */
+/** Viewport margin the placement clamp keeps (tighter than composer menus). */
 const PANEL_MARGIN = 12
 
 /** Distance between the trigger's top edge and the panel's bottom. */
 const PANEL_GAP = 8
 
-/**
- * Unplaced portal panel: hidden but laid out so the clamp measures real
- * dimensions (the `useAnchoredPosition` measure pass).
- */
-export const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
+/** Same as {@link ANCHORED_MEASURE_STYLE} (stat-dialog callers import this name). */
+export const MEASURE_STYLE: CSSProperties = ANCHORED_MEASURE_STYLE
 
 /** Open state, refs, and clamped placement for one stat dialog. */
 export interface StatDialogSeat {
@@ -49,14 +51,8 @@ export function useStatDialog(controlled?: Pick<StatDialogSeat, 'open' | 'setOpe
   })
 
   useDismissOnOutsidePointer(rootRef, open, setOpen, panelRef)
-  useEffect(() => {
-    if (!open) return
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => { document.removeEventListener('keydown', onKeyDown) }
-  }, [open, setOpen])
+  const dismiss = useCallback(() => { setOpen(false) }, [setOpen])
+  useEscapeLayer(open, dismiss)
 
   return { open, setOpen, rootRef, panelRef, pos }
 }

@@ -99,13 +99,32 @@ export interface TurnOutlineState {
   readonly turns: readonly TurnOutlineFoldEntry[];
   draft: string;
   /**
-   * Every `turnId` that already anchored an entry, in first-seen order. This
-   * must mirror {@link FaceWireIdMaps.turn}'s dedup scope — the whole log, not
-   * just the previous event — or the outline's numbering drifts off the wire
-   * numbers the client timeline is keyed by, and the rail grows marks for
-   * turns the transcript does not have.
+   * Every `turnId` that already anchored an entry, in first-seen order. Array
+   * stays JSON-checkpointable; membership uses {@link seenTurnIdIndex}.
    */
   readonly seenTurnIds: readonly string[];
+}
+
+/** O(1) membership for {@link TurnOutlineState.seenTurnIds} (host-only). */
+const seenTurnIdIndex = new WeakMap<object, Set<string>>();
+
+function seenHas(state: TurnOutlineState, turnId: string): boolean {
+  let set = seenTurnIdIndex.get(state);
+  if (set === undefined) {
+    set = new Set(state.seenTurnIds);
+    seenTurnIdIndex.set(state, set);
+  }
+  return set.has(turnId);
+}
+
+function withSeenTurnId(
+  state: TurnOutlineState,
+  turnId: string,
+): { readonly seenTurnIds: readonly string[]; readonly index: Set<string> } {
+  const prev = seenTurnIdIndex.get(state) ?? new Set(state.seenTurnIds);
+  const index = new Set(prev);
+  index.add(turnId);
+  return { seenTurnIds: [...state.seenTurnIds, turnId], index };
 }
 
 /** Space-join text, collapse whitespace, cap at `limit` with a trailing ellipsis. */
@@ -208,7 +227,9 @@ export function createTurnOutlineProjectionUnit(): ProjectionDefinition<
         }
         seenTurnIds.push(id);
       }
-      return { turns, draft: v.draft, seenTurnIds };
+      const state = { turns, draft: v.draft, seenTurnIds };
+      seenTurnIdIndex.set(state, new Set(seenTurnIds));
+      return state;
     },
     apply(state, event: SessionEvent, seq: number): TurnOutlineState {
       switch (event.type) {
@@ -216,16 +237,19 @@ export function createTurnOutlineProjectionUnit(): ProjectionDefinition<
           // Whole-log dedup, matching FaceWireIdMaps.turn(): a turnId that
           // already anchored an entry keeps it, so numbering stays "first seen
           // wins" however far apart the repeats are.
-          if (state.seenTurnIds.includes(event.turnId)) return state;
+          if (seenHas(state, event.turnId)) return state;
           const turn = state.turns.length + 1;
-          return {
+          const seen = withSeenTurnId(state, event.turnId);
+          const next = {
             turns: [
               ...state.turns,
               { turn, seq, prompt: "", response: "" },
             ],
             draft: "",
-            seenTurnIds: [...state.seenTurnIds, event.turnId],
+            seenTurnIds: seen.seenTurnIds,
           };
+          seenTurnIdIndex.set(next, seen.index);
+          return next;
         }
         case "user/message": {
           const last = state.turns.at(-1);

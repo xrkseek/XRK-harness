@@ -149,7 +149,7 @@
 /* Must beat `.body > :not(.glow)` specificity so the open Menu (and its
    right-hand submenu) paints above the InputBar card. */
 .body > .workspaceRow {
-  z-index: 10;
+  z-index: var(--ds-z-column-hero-menu);
   display: flex;
   align-items: center;
   min-width: 0;

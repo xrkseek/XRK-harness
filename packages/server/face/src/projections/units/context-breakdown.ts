@@ -22,7 +22,8 @@ interface ContextBreakdownState {
 
 /**
  * DSH contextBreakdown over XRK events:
- * envelope last-wins on `request/header.system|tools`;
+ * envelope last-wins on `request/header.system|tools` (field present only —
+ * slim system-only headers omit tools and must not zero standing schemas);
  * messageTokens rides the same {@link foldSurfaceTokens} as contextPressure
  * (`context/compaction` with `shadowedTokenCount` → signed delta; legacy → 0).
  */
@@ -33,7 +34,8 @@ export function createContextBreakdownProjectionUnit(): ProjectionDefinition<
 > {
   return {
     key: "contextBreakdown",
-    stateVersion: 2,
+    // v4: prefer header.systemTokens / toolsTokens when present (no full text).
+    stateVersion: 4,
     init: () => ({ systemTokens: 0, toolsTokens: 0, messageTokens: 0 }),
     apply(state, event: SessionEvent): ContextBreakdownState {
       let systemTokens = state.systemTokens;
@@ -41,8 +43,20 @@ export function createContextBreakdownProjectionUnit(): ProjectionDefinition<
       let messageTokens = state.messageTokens;
 
       if (event.type === "request/header") {
-        systemTokens = estimateSystemTokens(event.header.system);
-        toolsTokens = estimateToolsTokens(event.header.tools);
+        // Match foldRequestHeader / contextTimeline: omitted fields keep prior.
+        if (typeof event.header.systemTokens === "number") {
+          systemTokens = event.header.systemTokens;
+        } else if (event.header.system !== undefined) {
+          systemTokens = estimateSystemTokens(event.header.system);
+        }
+        if (typeof event.header.toolsTokens === "number") {
+          toolsTokens = event.header.toolsTokens;
+        } else if (
+          event.header.tools !== undefined &&
+          event.header.tools.length > 0
+        ) {
+          toolsTokens = estimateToolsTokens(event.header.tools);
+        }
       }
 
       messageTokens = foldSurfaceTokens(messageTokens, event);

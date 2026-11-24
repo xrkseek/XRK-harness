@@ -8,6 +8,7 @@ import {
 } from '@xrkseek/client-ui-primitives'
 import {
   clearTeamRosterLive,
+  normalizeTeamRosterLiveLook,
   patchTeamRosterLive,
   type SessionId,
   type WorkspaceId,
@@ -557,6 +558,7 @@ export function TeamRoster({
   const [toolsMode, setToolsMode] = useState<ToolMode>('inherit')
   const [toolsNames, setToolsNames] = useState('')
   const [exportHint, setExportHint] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
 
   const bossSelected = isBossSeatId(selectedId)
@@ -868,6 +870,9 @@ export function TeamRoster({
     const nextHat = patch.kitHat ?? kitHat
     const nextGlasses = patch.kitGlasses ?? kitGlasses
     const nextHeld = patch.kitHeld ?? kitHeld
+    // Empty-string overlays travel on the wire so Host + live merge clear a
+    // prior sticker; `undefined` was omitted and left the old custom face on
+    // Overview / the left rail while the right preview (no face fallback) updated.
     return {
       shape: patch.shape ?? shape,
       color: patch.color ?? color,
@@ -880,9 +885,9 @@ export function TeamRoster({
       kitHat: nextHat,
       kitGlasses: nextGlasses,
       kitHeld: nextHeld,
-      overlayHat: resolveStickerOverlay(nextHat, stickers),
-      overlayGlasses: resolveStickerOverlay(nextGlasses, stickers),
-      overlayHeld: resolveStickerOverlay(nextHeld, stickers),
+      overlayHat: resolveStickerOverlay(nextHat, stickers) ?? '',
+      overlayGlasses: resolveStickerOverlay(nextGlasses, stickers) ?? '',
+      overlayHeld: resolveStickerOverlay(nextHeld, stickers) ?? '',
     }
   }
 
@@ -973,7 +978,9 @@ export function TeamRoster({
       patchTeamRosterLive(saved.id, {
         name: saved.name ?? null,
         ...(saved.nickname !== undefined ? { nickname: saved.nickname } : {}),
-        ...(saved.appearance !== undefined ? { appearance: saved.appearance } : {}),
+        ...(saved.appearance !== undefined
+          ? { appearance: normalizeTeamRosterLiveLook(saved.appearance) }
+          : {}),
       })
       if (selectedId !== saved.id) clearTeamRosterLive(selectedId)
     } catch (err) {
@@ -995,16 +1002,14 @@ export function TeamRoster({
     const nextAppearance = buildAppearance(patch)
     const nextNick = patch.nickname !== undefined ? patch.nickname : nickname
     // Optimistic seat paint before the upsert round-trip returns.
+    // Do not keep prior kit/face — that locked the left rail on the old
+    // custom sticker while the right preview (local kit state) moved on.
     if (lookTouched || patch.nickname !== undefined) {
       setMembers((prev) => prev.map((row) => {
         if (row.id !== id) return row
         return {
           ...row,
-          appearance: {
-            ...nextAppearance,
-            ...(row.appearance?.kit ? { kit: row.appearance.kit } : {}),
-            ...(row.appearance?.face ? { face: row.appearance.face } : {}),
-          },
+          appearance: nextAppearance,
           ...(patch.nickname !== undefined
             ? { nickname: patch.nickname.trim() || undefined }
             : {}),
@@ -2036,14 +2041,7 @@ export function TeamRoster({
                       <Button
                         variant="outline"
                         disabled={busy}
-                        onClick={() => {
-                          const remove = removeTeamMember
-                          if (remove === undefined) return
-                          void run(async () => {
-                            await remove(sessionId, selected.id, selected.scope === 'global' ? 'global' : 'workspace')
-                            setSelectedId(null)
-                          })
-                        }}
+                        onClick={() => { setDeleteConfirmId(selected.id) }}
                       >
                         {t('team.memberDelete')}
                       </Button>
@@ -2059,6 +2057,47 @@ export function TeamRoster({
           {error !== null && <div className={css.error} role="alert">{error}</div>}
         </div>
       )}
+      <Modal
+        open={deleteConfirmId !== null}
+        onClose={() => { if (!busy) setDeleteConfirmId(null) }}
+        closeLabel={t('close')}
+        title={t('team.memberDeleteTitle')}
+        layout="inset"
+        {...(selected !== undefined && deleteConfirmId === selected.id
+          ? {
+              description: t('team.memberDeleteDesc', {
+                name: selected.nickname?.trim() || selected.name,
+              }),
+            }
+          : {})}
+        footer={(
+          <>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => { setDeleteConfirmId(null) }}
+            >
+              {t('cancel')}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={busy || deleteConfirmId === null || selected === undefined}
+              onClick={() => {
+                const remove = removeTeamMember
+                const id = deleteConfirmId
+                if (remove === undefined || id === null || selected === undefined || sessionId === undefined) return
+                void run(async () => {
+                  await remove(sessionId, id, selected.scope === 'global' ? 'global' : 'workspace')
+                  setDeleteConfirmId(null)
+                  setSelectedId(null)
+                })
+              }}
+            >
+              {t('team.memberDeleteConfirm')}
+            </Button>
+          </>
+        )}
+      />
     </Modal>
   )
 }

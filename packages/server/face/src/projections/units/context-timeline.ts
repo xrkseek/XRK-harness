@@ -241,10 +241,69 @@ function catsOf(
   };
 }
 
+/**
+ * DSH `headlineOf` occupancy for Status 「当前窗口」:
+ *   derived = last.prompt + (current.total − last.total)
+ * Then DSH `anchoredParts`: scale **all** cats (system/tools included) to
+ * that target so provider residual does not dump into inject and make empty
+ * boards look like multi-k token "废话".
+ */
+function reconcileCurrentToProvider(
+  cats: ReturnType<typeof catsOf>,
+  last: ContextTimelineRequest | undefined,
+): ReturnType<typeof catsOf> {
+  if (
+    last?.prompt === undefined ||
+    !Number.isFinite(last.prompt) ||
+    last.prompt < 0
+  ) {
+    return cats;
+  }
+  const target = Math.max(
+    0,
+    Math.floor(last.prompt + (cats.total - last.total)),
+  );
+  if (target === cats.total) return cats;
+  if (cats.total <= 0) {
+    return { ...cats, total: target };
+  }
+
+  const keys = [
+    "system",
+    "tools",
+    "user",
+    "inject",
+    "assistant",
+    "tool",
+  ] as const;
+  const scale = target / cats.total;
+  const scaled = Object.fromEntries(
+    keys.map((key) => [key, Math.round(cats[key] * scale)]),
+  ) as Record<(typeof keys)[number], number>;
+  const sum = keys.reduce((s, key) => s + scaled[key], 0);
+  const drift = target - sum;
+  // Prefer the largest raw cat for rounding drift (usually tools).
+  const sink = keys.reduce((best, key) =>
+    cats[key] >= cats[best] ? key : best,
+  );
+  scaled[sink] += drift;
+
+  return {
+    system: Math.max(0, scaled.system),
+    tools: Math.max(0, scaled.tools),
+    user: Math.max(0, scaled.user),
+    inject: Math.max(0, scaled.inject),
+    assistant: Math.max(0, scaled.assistant),
+    tool: Math.max(0, scaled.tool),
+    total: target,
+  };
+}
+
 function viewOf(state: ContextTimelineState): ContextTimelineProjection {
   const cats = catsOf(state.system, state.tools, state.nodes);
+  const current = reconcileCurrentToProvider(cats, state.requests.at(-1));
   return {
-    current: cats,
+    current,
     toolList: state.toolList,
     requests: state.requests,
     events: state.events,
@@ -297,7 +356,8 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
 > {
   return {
     key: "contextTimeline",
-    stateVersion: 4,
+    // v5: slim system-only headers keep prior tools / toolList (ring/Overview).
+    stateVersion: 5,
     init: () => ({
       applied: 0,
       system: 0,
@@ -386,9 +446,27 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
       }
 
       if (event.type === "request/header") {
-        const system = estimateSystemTokens(event.header.system);
-        const tools = estimateToolsTokens(event.header.tools);
-        const toolList = toolListOf(event.header.tools);
+        // Slim system-only headers omit tools (see maybeAppendRequestHeader).
+        // Match foldRequestHeader: keep standing schemas until a later row
+        // carries a non-empty tools[] — otherwise Overview / ContextMeter
+        // zero tools after the first persona/time delta.
+        const system =
+          typeof event.header.systemTokens === "number"
+            ? event.header.systemTokens
+            : event.header.system !== undefined
+              ? estimateSystemTokens(event.header.system)
+              : next.system;
+        const hasTools =
+          event.header.tools !== undefined && event.header.tools.length > 0;
+        const tools =
+          typeof event.header.toolsTokens === "number"
+            ? event.header.toolsTokens
+            : hasTools
+              ? estimateToolsTokens(event.header.tools)
+              : next.tools;
+        const toolList = hasTools
+          ? toolListOf(event.header.tools)
+          : next.toolList;
         const model = event.header.config.model;
         const provider = event.header.config.provider;
         const contextWindow = event.header.config.contextWindow;

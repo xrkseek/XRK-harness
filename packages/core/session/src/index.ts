@@ -28,6 +28,7 @@ export {
   danglingPromotesForTurn,
   resolveAdmitsForTurn,
   sessionHasInboxWork,
+  sessionHasPendingSteer,
   newSession,
   promoteNextAdmit,
   promoteAdmitsForTurn,

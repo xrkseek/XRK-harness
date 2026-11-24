@@ -19,12 +19,14 @@
   overflow-x: hidden;
   overflow-y: auto;
   padding-bottom: var(--dsh-trajectory-bottom-clearance, 0px);
-  container: trajectory-table / inline-size;
+  /* Name `xrk-trajectory-table` lives on [data-trajectory-table] in
+     containers.css — module-local names hash and would overwrite it. */
+  container-type: inline-size;
 }
 
 .historyLoading {
   position: sticky;
-  z-index: 5;
+  z-index: var(--ds-z-column-sticky);
   top: 0;
   height: 0;
   overflow: visible;
@@ -233,7 +235,7 @@
   --request-boundary-base-left: 12px;
 
   position: absolute;
-  z-index: 6;
+  z-index: var(--ds-z-column-raised);
   top: -8px;
   left: calc(var(--request-boundary-base-left) + var(--request-boundary-offset, 0px));
   width: 16px;
@@ -333,7 +335,7 @@
 }
 
 .turnRail {
-  z-index: 4;
+  z-index: var(--ds-z-column-sticky);
   top: -1px;
   bottom: -1px;
   width: 2px;
@@ -345,7 +347,7 @@
 }
 
 .selectionRail {
-  z-index: 5;
+  z-index: var(--ds-z-column-sticky);
   top: 0;
   bottom: 0;
   width: 3px;
@@ -499,7 +501,8 @@
   width: 100%;
 }
 
-@container trajectory-table (max-width: 620px) {
+/* Anonymous: nearest size container is this .tablePane / [data-trajectory-table]. */
+@container (max-width: 620px) {
   .eventColumn {
     width: 50px;
   }
@@ -876,7 +879,7 @@
 
 .detailsResizeHandle {
   position: absolute;
-  z-index: 6;
+  z-index: var(--ds-z-column-raised);
   top: 0;
   bottom: 0;
   left: -4px;
@@ -1787,7 +1790,7 @@
 @media (max-width: 760px) {
   .details {
     position: absolute;
-    z-index: 5;
+    z-index: var(--ds-z-column-sticky);
     top: 0;
     right: 0;
     bottom: 0;

@@ -2748,7 +2748,7 @@ export function PreviewTabs({
       data-pending={paintPending || undefined}
       data-refreshing={(!paintPending && refreshing) || undefined}
     >
-      <div className={css.header}>
+      <div className={css.header} data-overview-header="">
         <div
           ref={tabsRef}
           className={css.tabs}

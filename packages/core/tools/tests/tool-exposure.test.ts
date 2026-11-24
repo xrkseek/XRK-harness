@@ -80,6 +80,10 @@ describe("tool_search", () => {
     const hits = searchDeferredTools(reg.list(), "calendar event");
     expect(hits.map((h) => h.name)).toEqual(["mcp__calendar__create_event"]);
     expect(hits.every((h) => h.name !== TOOL_SEARCH_NAME)).toBe(true);
+    // Fuzzy / partial: "cal" and "brow" style prefixes still rank.
+    expect(
+      searchDeferredTools(reg.list(), "cal").map((h) => h.name),
+    ).toEqual(["mcp__calendar__create_event"]);
 
     const search = reg.get(TOOL_SEARCH_NAME)!;
     // tools[] description stays free of live catalog (KV prefix).

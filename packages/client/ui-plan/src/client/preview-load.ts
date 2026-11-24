@@ -4,6 +4,9 @@
  * POST /office/connection.status → { result: { ok, value: { configured, connected } } }
  * POST /api/session.status → Face unary { result: { ok, value: SessionStatusView } }
  */
+import type { PresenceLookSnapshot } from './presence-look.ts'
+
+export type { PresenceLookSnapshot } from './presence-look.ts'
 
 export interface PlanPreviewView {
   readonly active: boolean
@@ -61,6 +64,9 @@ export interface SessionStatusView {
       readonly steering?: number
       readonly externalKind?: 'acp' | 'app-server'
       readonly externalResume?: 'live' | 'cold'
+      readonly memberId?: string
+      /** Child ball look — parent Overview / live list. */
+      readonly look?: PresenceLookSnapshot
     }[]
     readonly graph: {
       readonly nodes: readonly {
@@ -84,6 +90,8 @@ export interface SessionStatusView {
           readonly code?: string
           readonly quietMs?: number
         }
+        readonly memberId?: string
+        readonly look?: PresenceLookSnapshot
       }[]
       readonly edges: readonly {
         readonly from: string
@@ -191,30 +199,9 @@ export interface SessionStatusView {
     readonly updatedAt: number
   }
   /** Child 干员 ball — not the home Settings presence. */
-  readonly companionBall?: {
-    readonly shape: string
-    readonly color: string
-    readonly size?: number
-    readonly kit?: string
-    readonly kitHat?: string
-    readonly kitGlasses?: string
-    readonly kitHeld?: string
-    readonly overlayHat?: string
-    readonly overlayGlasses?: string
-    readonly overlayHeld?: string
-  }
-  readonly parentCompanionBall?: {
-    readonly shape: string
-    readonly color: string
-    readonly size?: number
-    readonly kit?: string
-    readonly kitHat?: string
-    readonly kitGlasses?: string
-    readonly kitHeld?: string
-    readonly overlayHat?: string
-    readonly overlayGlasses?: string
-    readonly overlayHeld?: string
-  }
+  readonly companionBall?: PresenceLookSnapshot
+  /** Parent 干员 look when the parent is itself a child; omit → home Settings ball. */
+  readonly parentCompanionBall?: PresenceLookSnapshot
   readonly parentPresence?: {
     readonly emotionId: string
     readonly tips?: string
@@ -364,11 +351,13 @@ function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function parsePresenceLook(raw: unknown): SessionStatusView['companionBall'] {
+function parsePresenceLook(raw: unknown): PresenceLookSnapshot | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const shape = str((raw as { shape?: unknown }).shape)
   const color = str((raw as { color?: unknown }).color)
   if (!shape || !color) return undefined
+  const bodyColor = str((raw as { bodyColor?: unknown }).bodyColor)
+  const eyeColor = str((raw as { eyeColor?: unknown }).eyeColor)
   const kit = str((raw as { kit?: unknown }).kit)
   const kitHat = str((raw as { kitHat?: unknown }).kitHat)
   const kitGlasses = str((raw as { kitGlasses?: unknown }).kitGlasses)
@@ -381,6 +370,8 @@ function parsePresenceLook(raw: unknown): SessionStatusView['companionBall'] {
   return {
     shape,
     color,
+    ...(bodyColor ? { bodyColor } : {}),
+    ...(eyeColor ? { eyeColor } : {}),
     ...(size !== undefined && size !== 1 ? { size } : {}),
     ...(kit ? { kit } : {}),
     ...(kitHat ? { kitHat } : {}),
@@ -524,6 +515,8 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       externalResumeRaw === 'live' || externalResumeRaw === 'cold'
         ? externalResumeRaw
         : undefined
+    const memberId = str((row as { memberId?: unknown }).memberId)
+    const look = parsePresenceLook((row as { look?: unknown }).look)
     return [{
       id,
       activity,
@@ -537,6 +530,8 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       ...(steering !== undefined && steering > 0 ? { steering } : {}),
       ...(externalKind ? { externalKind } : {}),
       ...(externalResume ? { externalResume } : {}),
+      ...(memberId ? { memberId } : {}),
+      ...(look ? { look } : {}),
     }]
   })
   const nodesRaw = (graphRaw as { nodes?: unknown }).nodes
@@ -557,6 +552,8 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       activityRaw === 'running' || activityRaw === 'inactive' ? activityRaw : undefined
     const depth = num((row as { depth?: unknown }).depth)
     const outcome = parseLiveOutcome((row as { outcome?: unknown }).outcome)
+    const memberId = str((row as { memberId?: unknown }).memberId)
+    const look = parsePresenceLook((row as { look?: unknown }).look)
     return [{
       id,
       label,
@@ -564,6 +561,8 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       ...(activity ? { activity } : {}),
       ...(depth !== undefined ? { depth } : {}),
       ...(outcome ? { outcome } : {}),
+      ...(memberId ? { memberId } : {}),
+      ...(look ? { look } : {}),
     }]
   })
   const edges = edgesRaw.flatMap((row) => {

@@ -1,4 +1,5 @@
 import type { ToolDefinition } from "@xrkseek/core-tools";
+import { createSkillSearchTool } from "./skill-search.js";
 import {
   isSkillName,
   loadSkill,
@@ -25,16 +26,17 @@ export function createSkillTools(
   options: SkillSourceOptions,
 ): ToolDefinition[] {
   return [
+    createSkillSearchTool(options),
     {
       name: "skill",
       description:
-        "Load full skill body by exact catalog name (progressive disclosure: catalog is name+blurb only; no skill_search). Prefer skills listed first (公文包 / workspace).",
+        "Load skill body by exact name (from catalog or skill_search). Prefer 公文包 / workspace head.",
       parameters: {
         type: "object",
         properties: {
           name: {
             type: "string",
-            description: "The exact skill name from the available skills list.",
+            description: "The exact skill name from the catalog or skill_search.",
           },
         },
         required: ["name"],
@@ -53,7 +55,7 @@ export function createSkillTools(
         });
         if (!skill) {
           return {
-            content: `Error: skill "${name}" is unknown or no longer available`,
+            content: `Error: skill "${name}" is unknown or no longer available. Tip: skill_search to browse.`,
             isError: true,
           };
         }

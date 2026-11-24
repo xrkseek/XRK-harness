@@ -62,8 +62,8 @@ function underRoot(dir: string, root: string): boolean {
  * product seed is a fallback textbook: it is useful, but it is never more
  * urgent than the workspace it is being read in.
  *
- * No `skill_search` tool — disclosure is this catalog → `skill` loads body.
- * (`tool_search` is for deferred tools, not skills.)
+ * Progressive disclosure: standing catalog = **names only** → `skill_search`
+ * returns blurbs → `skill` loads body. (`tool_search` is for deferred tools.)
  */
 export function orderSkillsForCatalogBudget(
   skills: readonly SkillSummary[],
@@ -93,23 +93,35 @@ export function orderSkillsForCatalogBudget(
  * same sentence used to be copied into the `select` and `truncate` branches,
  * so editing one left the other telling readers a different place to look.
  */
+/** Single how-to (Codex: catalog owns progressive disclosure, not AGENTS). */
+export const SKILL_CATALOG_HOWTO =
+  "Names only. `skill_search` (fuzzy) → blurbs; `skill` → body. Head: 公文包 → workspace → globals.";
+
 const SKILL_CATALOG_CLIPPED_SUFFIX =
-  "\n[skill catalog truncated] Prefer `skill` by exact name; else shell-list "
-  + "`skills/*/SKILL.md` + `.agents/skills/` (公文包 / workspace kept first).";
+  `\n[skill catalog truncated] ${SKILL_CATALOG_HOWTO}`;
 
 export function formatAvailableSkillsXml(
   skills: readonly SkillSummary[],
+  options?: {
+    /** Default false — Codex omit_descriptions; blurbs via skill_search. */
+    readonly includeDescriptions?: boolean;
+  },
 ): string {
   const listed = skills.filter((s) => s.modelInvocable);
-  const lines = listed.map(
-    (s) => `- \`${s.name}\`: ${s.description}`,
+  const withBlurbs = options?.includeDescriptions === true;
+  const lines = listed.map((s) =>
+    withBlurbs
+      ? `- \`${s.name}\`: ${s.description}`
+      : `- \`${s.name}\``,
   );
   return [
     "<system-reminder>",
     "<available_skills>",
     ...lines,
     "</available_skills>",
-    "Catalog = name+blurb; `skill` loads body (no skill_search). Head: 公文包 → workspace → product/globals.",
+    withBlurbs
+      ? "`skill` loads body. Head: 公文包 → workspace → globals."
+      : SKILL_CATALOG_HOWTO,
     "</system-reminder>",
   ].join("\n");
 }
@@ -238,7 +250,14 @@ function listedForClippedCatalog(
   // Match the rendered line, not a bare backticked name: `xrk-plugin` is a
   // substring of `xrk-plugin-dev`, so the loose check reported entries that
   // the clipped catalog had actually dropped.
-  return listed.filter((s) => content.includes(`- \`${s.name}\`:`));
+  // Names-only lines are `- \`name\``; blurb lines are `- \`name\`: …`.
+  return listed.filter((s) => {
+    const needle = `- \`${s.name}\``;
+    const at = content.indexOf(needle);
+    if (at < 0) return false;
+    const after = content[at + needle.length];
+    return after === undefined || after === "\n" || after === ":" || after === "\r";
+  });
 }
 
 export function buildInstructionsPayload(

@@ -103,14 +103,15 @@ describe("maybeAppendRequestHeader", () => {
       .get(sessionId)
       .events.filter((e) => e.type === "request/header");
     expect(headers).toHaveLength(2);
-    expect(headers[1]).toMatchObject({
-      reason: "change",
-      header: { system: "base system\n+inject noise" },
-    });
+    // Slim delta: tokens+hash only — no duplicated standing prompt body.
+    expect(headers[1]?.header.system).toBeUndefined();
+    expect(typeof headers[1]?.header.systemTokens).toBe("number");
+    expect(typeof headers[1]?.header.systemHash).toBe("string");
     // Slim row omits tools[] — must not look like a registry wipe.
     expect(headers[1]?.header.tools).toBeUndefined();
+    // Fold keeps the first full system (series baseline) + prior tools.
     expect(foldRequestHeader(store.get(sessionId).events)).toMatchObject({
-      system: "base system\n+inject noise",
+      system: "base system",
       tools: [
         {
           name: "bash",
@@ -141,10 +142,11 @@ describe("maybeAppendRequestHeader", () => {
       .get(sessionId)
       .events.filter((e) => e.type === "request/header");
     expect(afterExplicit).toHaveLength(3);
-    expect(afterExplicit[2]).toMatchObject({
-      reason: "change",
-      header: { system: "after compact" },
-    });
+    expect(afterExplicit[2]?.header.system).toBeUndefined();
+    expect(typeof afterExplicit[2]?.header.systemTokens).toBe("number");
+    expect(afterExplicit[2]?.header.systemHash).not.toBe(
+      headers[1]?.header.systemHash,
+    );
   });
 
   it("emits tool-registry inject on name add/remove; skips schema-only", () => {

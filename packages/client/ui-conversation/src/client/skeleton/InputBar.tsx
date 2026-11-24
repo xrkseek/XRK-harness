@@ -771,7 +771,7 @@ export const InputBar = memo(function InputBar({
           hint={hint}
           showPlaceholder={draft === '' && attachments.length === 0 && !claimActive}
         />
-        <div className={css.row}>
+        <div className={css.row} data-composer-tool-row="">
           <div className={css.tools}>
             <Tooltip label={t('input.commands')} side="top">
               <button

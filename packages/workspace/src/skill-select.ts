@@ -4,6 +4,7 @@
  * records the selection for offline eval and does not change prompt bytes.
  */
 
+import { scoreFuzzyQuery } from "@xrkseek/core-tools";
 import type { SkillSummary } from "./skills.js";
 
 export type SkillSelectMode = "truncate" | "select" | "shadow";
@@ -22,32 +23,15 @@ export interface SkillSelectionResult {
   readonly scores: Readonly<Record<string, number>>;
 }
 
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9_\u4e00-\u9fff]+/i)
-    .filter((t) => t.length >= 2);
-}
-
-/** Higher is better. Empty query → uniform 0 (stable order preserved). */
+/** Higher is better. Empty query → 0 (stable order preserved). */
 export function scoreSkillAgainstQuery(
   skill: SkillSummary,
   query: string | undefined,
 ): number {
   const q = query?.trim();
   if (!q) return 0;
-  const tokens = new Set(tokenize(q));
-  if (tokens.size === 0) return 0;
-  const hay = tokenize(
-    [skill.name, skill.description, skill.whenToUse ?? ""].join(" "),
-  );
-  let hits = 0;
-  for (const t of hay) {
-    if (tokens.has(t)) hits += 1;
-  }
-  // Exact name mention is a strong signal.
-  if (tokens.has(skill.name.toLowerCase())) hits += 3;
-  return hits;
+  const hay = [skill.name, skill.description, skill.whenToUse ?? ""].join("\n");
+  return scoreFuzzyQuery(q, hay, { name: skill.name });
 }
 
 /**
@@ -71,7 +55,8 @@ export function selectSkillsForBudget(
     return listed.indexOf(a) - listed.indexOf(b);
   });
 
-  const lineOf = (s: SkillSummary) => `- \`${s.name}\`: ${s.description}\n`;
+  // Match standing inject (names-only); blurbs live in skill_search.
+  const lineOf = (s: SkillSummary) => `- \`${s.name}\`\n`;
   const overhead =
     "<system-reminder>\n<available_skills>\n</available_skills>\n</system-reminder>\n"
       .length + 120;

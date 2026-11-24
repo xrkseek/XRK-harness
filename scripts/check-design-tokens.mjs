@@ -21,13 +21,21 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLIENT = join(ROOT, 'packages/client')
+const EXTENSIONS = join(ROOT, 'extensions')
 const THEME_STYLES = join(CLIENT, 'ui-theme/src/styles')
 // Build output and generated bundles restate the same rules; auditing them
-// would only re-report the sources.
+// would only re-report the sources. Skip compiled plugin `lib/` — scan `src`
+// (and top-level sources) so the first plugin `.module.css` is gated.
 const SKIP_DIRS = new Set(['node_modules', 'lib', 'dist', '.git', '.codegraph', 'coverage', '.tmp-audit'])
 
 function walk(dir, out = []) {
-  for (const name of readdirSync(dir)) {
+  let entries
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return out
+  }
+  for (const name of entries) {
     if (SKIP_DIRS.has(name)) continue
     const p = join(dir, name)
     if (statSync(p).isDirectory()) walk(p, out)
@@ -36,7 +44,7 @@ function walk(dir, out = []) {
   return out
 }
 
-const files = walk(CLIENT)
+const files = [...walk(CLIENT), ...walk(EXTENSIONS)]
 
 // ---------------------------------------------------------------- token sheet
 /** Parse every `--dsw-x: value` inside each top-level `body {...}` / `:root {...}` block. */
@@ -222,7 +230,27 @@ for (const file of files) {
   })
 }
 
-// ------------------------------------------------------------------ 5. report
+// ------------------------------------------ 5. module container-name overwrite
+// lightningcss hashes `container-name` inside `.module.css`. A module-local
+// name on the same element as `containers.css` [data-*] rules overwrites the
+// stable global name — plugins then cannot query `xrk-*` containers.
+const moduleContainerNames = []
+for (const file of files) {
+  if (!file.replace(/\\/g, '/').endsWith('.module.css')) continue
+  const lines = readFileSync(file, 'utf8').split(/\r?\n/)
+  lines.forEach((line, i) => {
+    if (/container-name\s*:/.test(line)) {
+      moduleContainerNames.push(`${relative(ROOT, file).replace(/\\/g, '/')}:${i + 1}`)
+      return
+    }
+    // `container: name / inline-size` also stamps a (hashed) name.
+    if (/container\s*:\s*[a-zA-Z][\w-]*\s*\//.test(line)) {
+      moduleContainerNames.push(`${relative(ROOT, file).replace(/\\/g, '/')}:${i + 1}`)
+    }
+  })
+}
+
+// ------------------------------------------------------------------ 6. report
 let failed = false
 const log = console.log
 
@@ -282,6 +310,13 @@ if (focusKilled.length) {
   log(`FAIL  ${focusKilled.length} outline suppression(s) with no focus replacement in the same sheet — keyboard users get no focus cue:\n`)
   for (const s of focusKilled) log(`  ${s}`)
   log('      (a `:focus-within` wrapper counts; add a `focus-exempt` note if the element is not focusable)\n')
+}
+
+if (moduleContainerNames.length) {
+  failed = true
+  log(`FAIL  ${moduleContainerNames.length} .module.css container-name declaration(s) — hashed names overwrite stable ui-theme/styles/containers.css names:\n`)
+  for (const s of moduleContainerNames) log(`  ${s}`)
+  log('      (use anonymous `@container (max-width: …)` in modules; declare stable names only in containers.css)\n')
 }
 
 if (failed) {

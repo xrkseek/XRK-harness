@@ -315,6 +315,7 @@ export function bindSessionThreadTools(
           timeoutMs,
           signal,
           {
+            yieldSessionId: sessionId,
             shouldBreak: () =>
               breakMutualPeerSyncWait({
                 runtime,
@@ -337,6 +338,19 @@ export function bindSessionThreadTools(
       }
       if ("mutualWait" in waited) {
         return { content: formatMutualPeerWaitAsyncNotice(targetId) };
+      }
+      if ("yielded" in waited) {
+        // Soft-detach (停止等待 / steer): async courier keeps the peer reply.
+        promoteFailedSyncPeerWait({
+          runtime,
+          peerSessionId: targetId,
+          waiterSessionId: sessionId,
+        });
+        return {
+          content:
+            `thread_message: wait detached (peer ${targetId} kept running; ` +
+            `reply arrives as [会话协作] handoff)`,
+        };
       }
       if ("reply" in waited) {
         clearPeerCollabAfterSyncReply({

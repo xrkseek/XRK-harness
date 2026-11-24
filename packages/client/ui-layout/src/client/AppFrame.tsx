@@ -28,6 +28,7 @@ import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStor
 import {
   IconGaugeOutlineRegular,
   ShortcutsPanel,
+  isEditableTarget,
   type ShortcutEntry,
 } from '@xrkseek/client-ui-primitives'
 import {
@@ -350,6 +351,9 @@ export function AppFrame({
       if (id === null) return
       // Composer Enter/newline stay with the editor; shell only lists them.
       if (id === 'composer.submit' || id === 'composer.newline') return
+      // Text fields keep native gestures (Alt+← word jump, Ctrl+B bold, …).
+      // Capture-phase shell shortcuts must not steal those.
+      if (isEditableTarget(e.target)) return
       // No subagent siblings → leave the key for the focused control.
       if (!runShellAction(id)) return
       e.preventDefault()

@@ -4,6 +4,7 @@
 .root {
   position: relative;
   display: inline-flex;
+  flex: none;
 }
 
 /* Same 28px circular hit target family as the composer's attach button. */
@@ -24,6 +25,15 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* Phone: match attach / send hit targets (40px) without growing the ring. */
+@media (max-width: 767px) {
+  .trigger {
+    width: 40px;
+    height: 40px;
+    touch-action: manipulation;
+  }
+}
+
 .track {
   fill: none;
   stroke: var(--dsw-alias-border-l3);
@@ -37,13 +47,14 @@
   stroke-linecap: round;
 }
 
+/* Portaled to document.body (fixed + JS clamp). Absolute right:0 under the
+   ring was cropped by centerCol overflow:hidden — left edge of the panel
+   vanished on a squeezed composer (same fix as ModelSelect.menu). */
 .panel {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  z-index: var(--ds-z-popover);
+  position: fixed;
+  z-index: var(--ds-z-surface);
   box-sizing: border-box;
-  width: 264px;
+  width: min(264px, calc(100vw - 32px - var(--ds-safe-h, 0px)));
   padding: 12px;
   border: 1px solid var(--dsw-alias-border-inverted);
   border-radius: 12px;

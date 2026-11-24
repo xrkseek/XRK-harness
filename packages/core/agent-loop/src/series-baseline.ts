@@ -22,6 +22,7 @@
 
 import type { LlmAdapter } from "@xrkseek/llm";
 import type { SessionEvent } from "@xrkseek/protocol";
+import { rememberSessionCache } from "./session-cache-bound.js";
 
 export type SeriesBaselineAnchor = {
   readonly baseline: string;
@@ -114,7 +115,7 @@ export function rememberSeriesBaseline(
   // Keep the first head for this route so later appends do not promote the
   // trailing system text into message 0 on the next turn.
   if (prior && prior.routeKey === routeKey) return;
-  anchors.set(sessionId, { baseline, routeKey });
+  rememberSessionCache(anchors, sessionId, { baseline, routeKey });
 }
 
 /** Compaction / series break — next request re-baselines at the head. */

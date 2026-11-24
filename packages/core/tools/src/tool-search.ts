@@ -8,6 +8,7 @@
  */
 
 import type { ToolDefinition } from "./definition.js";
+import { isBrowseCatalogQuery } from "./fuzzy-match.js";
 import {
   TOOL_SEARCH_DEFAULT_LIMIT,
   TOOL_SEARCH_NAME,
@@ -29,19 +30,14 @@ export interface CreateToolSearchToolOptions {
 
 /** Stable tools[] copy — live names live in execute results only (KV prefix). */
 export function toolSearchDescription(limitDefault: number): string {
+  // Only name packs that exist on most seats. Seat-only tools (向阳
+  // settings_*/workspace_*) must not be advertised here — browse `list`.
   return (
-    "Search deferred tools by keyword and expand up to " +
-    `${limitDefault} full schemas into subsequent turns. ` +
-    "Use when you need an MCP or other deferred tool not yet in the tools list. " +
-    "query `list` / `*` / empty → browse the deferred catalog without expanding; " +
-    "a keyword query expands matches."
+    "Fuzzy-search deferred tools and expand up to " +
+    `${limitDefault} full schemas into later turns. ` +
+    "Deferred on most seats: browser_*, computer_use, terminal_*, job_*, cronjob, MCP. " +
+    "`list`/`*`/empty → browse this seat's deferred names; keyword → expand."
   );
-}
-
-function isCatalogBrowseQuery(query: string): boolean {
-  if (query.length === 0) return true;
-  const q = query.toLowerCase();
-  return q === "*" || q === "list" || q === "ls" || q === "catalog";
 }
 
 export function createToolSearchTool(
@@ -61,7 +57,7 @@ export function createToolSearchTool(
         query: {
           type: "string",
           description:
-            "Keywords to expand, or `list`/`*`/empty to browse the deferred catalog without expanding.",
+            "Fuzzy keywords to expand (partial OK), or `list`/`*`/empty to browse without expanding.",
         },
         limit: {
           type: "integer",
@@ -73,7 +69,7 @@ export function createToolSearchTool(
     },
     async execute(args) {
       const query = typeof args?.query === "string" ? args.query.trim() : "";
-      if (isCatalogBrowseQuery(query)) {
+      if (isBrowseCatalogQuery(query)) {
         const catalog = formatDeferredCatalog(options.listTools());
         const already = [...options.state.listExpanded()].sort();
         return {

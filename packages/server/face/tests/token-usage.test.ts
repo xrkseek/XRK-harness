@@ -223,6 +223,52 @@ describe("Face tokenUsage / contextPressure / contextBreakdown", () => {
     });
   });
 
+  it("keeps toolsTokens when a slim header omits tools", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createContextBreakdownProjectionUnit());
+
+    const system = "You are terse.";
+    const tools = [
+      {
+        name: "grep",
+        description: "search",
+        parameters: { type: "object", properties: {} },
+      },
+    ];
+    store.append(session.id, {
+      type: "request/header",
+      ts: 1,
+      turnId: "t1",
+      reason: "initial",
+      header: {
+        config: { provider: "deepseek", model: "deepseek-v4-flash" },
+        system,
+        tools,
+      },
+    });
+    store.append(session.id, {
+      type: "request/header",
+      ts: 2,
+      turnId: "t1",
+      reason: "change",
+      header: {
+        config: { provider: "deepseek", model: "deepseek-v4-flash" },
+        system: `${system}\n# clock`,
+      },
+    });
+    driveAll(registry, session.id, store);
+
+    expect(registry.snapshot(session.id).values.contextBreakdown).toEqual({
+      systemTokens: estimateSystemTokens(`${system}\n# clock`),
+      toolsTokens: estimateToolsTokens(tools),
+      messageTokens: 0,
+    });
+  });
+
   it("prices assistant toolCalls like DSH tool-call blocks", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);

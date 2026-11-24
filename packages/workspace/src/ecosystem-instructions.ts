@@ -279,19 +279,10 @@ async function pushConventionLayer(
       0,
       scan,
     );
-    const agentsCtxDir = path.join(base, ".agents", "context");
-    if (await exists(agentsCtxDir)) {
-      const files = (await readdir(agentsCtxDir)).sort();
-      for (const f of files) {
-        await pushFile(
-          sections,
-          path.join(agentsCtxDir, f),
-          lp(`.agents/context/${f}`),
-          budget,
-          seen,
-        );
-      }
-    }
+    // Codex-aligned: do NOT dump `.agents/context/**` into standing
+    // agent-instructions. Those notes are on-demand via `skill` / AGENTS.md
+    // pointers — full folder inject was ~10k+ chars of duplicate domain dumps
+    // (face-projections, OFM audits, codegraph summaries already in skills).
   }
 
   if (profile.cursorRules) {
@@ -502,13 +493,19 @@ export async function collectEcosystemInstructions(
     );
   }
 
+  // Delegated / minimal seats: keep AGENTS overlays, skip Cursor maintainer
+  // rules (xrk-best-product etc.) — those are for the coding parent.
+  const workspaceProfile =
+    options.audience === "subagent" || options.audience === "minimal"
+      ? { ...WORKSPACE_CONVENTION_INJECT, cursorRules: false }
+      : WORKSPACE_CONVENTION_INJECT;
   await pushConventionLayer(
     sections,
     root,
     "",
     options.budget,
     seen,
-    WORKSPACE_CONVENTION_INJECT,
+    workspaceProfile,
     scan,
   );
   await pushProductStanding(sections, productDir, ".xrk/", options.budget, seen);

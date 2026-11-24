@@ -1,0 +1,33 @@
+/* Stable size-container names for host + plugins.
+ *
+ * CSS Modules (lightningcss `[hash]_[local]`) hash `container-name` inside
+ * `.module.css`, so a name declared there can never be queried from another
+ * package or from a plugin sheet — and a module-local name on the same
+ * element *overwrites* the stable name from this sheet. Never set
+ * `container-name` / `container: <name> / …` in `.module.css`
+ * (`check-design-tokens.mjs` fails the build if you do).
+ *
+ * Host modules that only need "nearest size container" use anonymous
+ * `@container (max-width: …)` — that still resolves via `container-type`.
+ * Plugins that need a *named* query use non-module CSS against these names,
+ * or read `--dsh-conversation-column-width` (column ≠ viewport). */
+
+[data-conversation-header] {
+  container-name: xrk-conversation-header;
+  container-type: inline-size;
+}
+
+[data-overview-header] {
+  container-name: xrk-overview-header;
+  container-type: inline-size;
+}
+
+[data-composer-tool-row] {
+  container-name: xrk-composer-tool-row;
+  container-type: inline-size;
+}
+
+[data-trajectory-table] {
+  container-name: xrk-trajectory-table;
+  container-type: inline-size;
+}

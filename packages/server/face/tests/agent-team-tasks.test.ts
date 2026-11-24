@@ -27,7 +27,7 @@ describe("agent team spawn roles", () => {
     expect(applySpawnRoleReminder("x", "default")).toBe("x");
   });
 
-  it("prefixes parent/child identity for every spawn shape", () => {
+  it("keeps spawn deltas only (ids/role live in session_capability)", () => {
     const oneShot = applySubagentSpawnPreamble({
       prompt: "Review src/foo.ts",
       parentSessionId: "sess_parent",
@@ -39,14 +39,15 @@ describe("agent team spawn roles", () => {
       cwd: "/repo",
       isolatedWorktree: false,
     });
-    expect(oneShot).toContain("[subagent identity]");
-    expect(oneShot).toContain("sess_parent");
-    expect(oneShot).toContain("sess_child");
+    expect(oneShot).toContain("[subagent spawn]");
+    expect(oneShot).not.toContain("sess_parent");
+    expect(oneShot).not.toContain("sess_child");
+    expect(oneShot).not.toContain("Delegated child");
     expect(oneShot).toContain("one-shot");
     expect(oneShot).toContain("ROLE: reviewer.");
-    expect(oneShot).toContain("same as the parent session");
+    expect(oneShot).not.toContain("same checkout as parent");
     expect(oneShot).toContain("Review src/foo.ts");
-    expect(oneShot).toContain("FINAL assistant message");
+    expect(oneShot).toContain("FINAL assistant text");
     expect(oneShot).not.toContain("ask_user");
     expect(oneShot).not.toContain("team_save");
     expect(oneShot).not.toContain("Playwright MCP");
@@ -62,7 +63,7 @@ describe("agent team spawn roles", () => {
       isolatedWorktree: false,
     });
     expect(companion).toContain("continuable");
-    expect(companion).toContain("role: default");
+    expect(companion).not.toContain("role: default");
     expect(companion).toContain("You are chat companion Xiao Ai.");
 
     const inherited = applySubagentSpawnPreamble({
@@ -104,8 +105,10 @@ describe("agent team spawn roles", () => {
       memberId: "mem_seed_release",
       inject: "minimal",
     });
-    expect(member).toContain("member_id: mem_seed_release");
-    expect(member).toContain("inject: minimal");
+    // member_id / inject live in <session_capability>, not the spawn block.
+    expect(member).not.toContain("member_id:");
+    expect(member).not.toContain("inject:");
+    expect(member).toContain("Ship v0.5.11");
   });
 });
 

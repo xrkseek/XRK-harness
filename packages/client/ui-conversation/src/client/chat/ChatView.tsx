@@ -480,6 +480,11 @@ function pendingInputContent(input: PendingChatInput): readonly unknown[] {
   return input.submission.text === '' ? [] : [{ type: 'text', text: input.submission.text }]
 }
 
+/** Face admit source from a Host queue row (handoff / seat / user). */
+function pendingInputSource(input: PendingChatInput): unknown {
+  return input.kind === 'steer' ? input.item.source : undefined
+}
+
 /** Shared empty tail so an idle flow keeps one stable `pendingInputs` identity. */
 const NO_PENDING_INPUTS: readonly PendingChatInput[] = []
 
@@ -1724,12 +1729,14 @@ export function ChatView({
     const previewAttachments = preview !== undefined && preview.kind === 'echo'
       ? previewAttachmentsOf(preview.submission.attachments)
       : undefined
+    const pendingSource = live.map(pendingInputSource).find((s) => s !== undefined)
     columnRows.push(
       <div key={key} className={css.flowItem} data-chat-round={nextSendRound}>
         <div className={css.roundLabel}>{t('chat.turnNavigation.turn', { turn: nextSendRound })}</div>
         <PendingSteeringBubble
           content={content}
           {...(previewAttachments === undefined ? {} : { previewAttachments })}
+          {...(pendingSource === undefined ? {} : { source: pendingSource })}
           renderMessageImages={renderMessageImages}
           renderMessageFiles={renderMessageFiles}
           t={t}
@@ -1769,6 +1776,7 @@ export function ChatView({
             key={input.item.id}
             content={input.item.content}
             steer
+            {...(input.item.source === undefined ? {} : { source: input.item.source })}
             onWithdraw={onWithdraw}
             {...(input.submission === undefined
               ? {}
@@ -1789,6 +1797,7 @@ export function ChatView({
         : preview.submission === undefined
           ? undefined
           : previewAttachmentsOf(preview.submission.attachments)
+    const groupSource = group.items.map(pendingInputSource).find((s) => s !== undefined)
     const key = group.items.map((input) => (
       input.kind === 'echo' ? input.submission.requestId : input.item.id
     )).join('+')
@@ -1797,6 +1806,7 @@ export function ChatView({
         key={key}
         content={content}
         steer
+        {...(groupSource === undefined ? {} : { source: groupSource })}
         {...(previewAttachments === undefined ? {} : { previewAttachments })}
         renderMessageImages={renderMessageImages}
         renderMessageFiles={renderMessageFiles}

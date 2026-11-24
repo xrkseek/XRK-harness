@@ -174,6 +174,15 @@ export type HostFrame =
   | { type: 'host/session-removed'; sessionId: SessionId; purged?: boolean }
   | { type: 'host/session-status'; sessionId: SessionId; running: boolean }
   | {
+    type: 'host/session-wait-yield'
+    sessionId: SessionId
+    /** Null clears the soft-detach wait dock (no wait body attached). */
+    active: {
+      kind: 'wait_agent' | 'peer_wait' | 'subagent_foreground'
+      label?: string
+    } | null
+  }
+  | {
     type: 'host/session-thread'
     sessionId: SessionId
     bound: boolean

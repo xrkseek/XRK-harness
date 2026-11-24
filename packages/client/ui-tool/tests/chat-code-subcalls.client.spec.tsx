@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 // Code Mode sub-call acceptance on the REAL machinery stack (same bench as
 // chat-toolview-slot.spec): a run_code result renders the 'code' variant row
 // (description summary, program body), its logged sub-dispatches render as
@@ -86,7 +86,7 @@ function snapshotWith(
     runningCalls: nestedRunningCalls,
     pending: [], pendingSubmissions: [], queue: [], running: runningCalls.length > 0, composerPhase: 'active', removed: false,
     openState: 'open', openError: null,
-    hasMore: false, loadingOlder: false, promptError: null, blank: false, subagent: null, lastAgentError: null,
+    hasMore: false, loadingOlder: false, promptError: null, blank: false, subagent: null, lastAgentError: null, waitYield: null,
   }
 }
 

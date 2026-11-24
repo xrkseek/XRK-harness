@@ -49,8 +49,9 @@
 ## 4. 边界（现行为）
 
 - **inbox 真源是 session log**：不建独立 inbox 表，也无集群多写 durable inbox。
-- **不打断在跑的 tool**：用户新输入须等当前 tool settle 完才到 next-step，不 abort 正在执行的 tool body 来插入文本。
-- **steer 不是第二条 HTTP 路径**：Face/HTTP 字段名仍是 `steer`/`queue`，走同一 admit 通道。
+- **不打断在跑的普通 tool**：用户新输入须等当前 tool settle 完才到 next-step，不 abort 正在执行的 tool body（如写文件 / bash）来插入文本。
+- **等待类 tool 可软脱离**（对标 `job.background`）：`wait_agent`、peer 同步等待、前台 `subagent` 等待挂在 Face `WaitYieldHub`。壳 **停止等待**（`session.yieldWait`）或 **插队 admit** 会 abort 该 hub，等待工具 settle 并回传状态；**子会话 / 对端继续跑**，完成仍走 steer handoff。之后 `promotePendingSteers` 即可插队。**queue** 不触发脱离。Stop / `session.cancel` 仍走硬 abort。
+- **steer 不是第三条 HTTP 路径**：Face/HTTP 字段名仍是 `steer`/`queue`，走同一 admit 通道。
 - **`session.cancel` 与 inbox 关系**：`session.cancel` 保留 pending admits；cancel 期间到达的消息（wake）在 teardown settle 后用全新 entry 续跑（见 [session-latch.md](./session-latch.md)），不会滞留在队列里。壳立刻按 `host/session-status running:false` 把列表、Composer Stop、`session.status.delivery.turnActive` 收成空闲；drain 最多再 join 数秒，期间 `/compact` 仍 `compactBlockedByTurn`，工具卡可等到 `tool/result` 才落定。
 - **无「不 wake 的 next-step inject」旗标**；Host 不暴露 `cancel keepInbox`。
 
@@ -120,7 +121,8 @@ The **model tool layer defaults to `steer` since v0.6.2**: `send_message` and `t
 ## 4. Boundaries (current behavior)
 
 - **Inbox source of truth is the session log**: no separate inbox table, no clustered multi-writer durable inbox.
-- **In-flight tools are not interrupted**: new user input must wait for the current tool to settle before next-step; an executing tool body is not aborted to inject text.
+- **Ordinary in-flight tools are not interrupted**: new user input must wait for the current tool to settle before next-step; an executing tool body (writes / bash / …) is not aborted to inject text.
+- **Wait-class tools can soft-detach** (job.background posture): `wait_agent`, peer sync waits, and foreground `subagent` waits attach to Face `WaitYieldHub`. Shell **Stop waiting** (`session.yieldWait`) or a **steer admit** aborts that hub so the wait settles with a status receipt; **children / peers keep running** and still report via steer handoff. Then `promotePendingSteers` can cut in. **queue** does not detach. Stop / `session.cancel` remains a hard abort.
 - **Steer is not a second HTTP path**: Face/HTTP field names remain `steer`/`queue`, through the same admit channel.
 - **`session.cancel` vs inbox**: `session.cancel` keeps pending admits; a message (wake) arriving during the cancel re-drains on a fresh entry once teardown settles (see [session-latch.md](./session-latch.md)) rather than sitting in the queue. The shell goes idle immediately on `host/session-status running:false` (session list, composer Stop, `session.status.delivery.turnActive`). Drain may still join for a few seconds: `/compact` stays `compactBlockedByTurn`, and tool cards can wait for `tool/result`.
 - **No “next-step inject without wake” flag**; Host does not expose `cancel keepInbox`.

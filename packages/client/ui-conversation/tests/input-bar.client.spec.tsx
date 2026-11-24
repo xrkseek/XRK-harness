@@ -54,7 +54,7 @@ function snapshotOf(overrides: Partial<ConversationSnapshot> = {}): Conversation
     nodes: [], turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [],
     pending: [], pendingSubmissions: [], queue: [], running: false, composerPhase: 'active', removed: false,
     openState: 'open', openError: null, hasMore: false, loadingOlder: false,
-    promptError: null, blank: false, subagent: null, lastAgentError: null,
+    promptError: null, blank: false, subagent: null, lastAgentError: null, waitYield: null,
     ...overrides,
   }
 }
@@ -279,7 +279,7 @@ function bench(over?: BenchOptions) {
   const primaryLabel = primaryStops
     ? '停止生成'
     : deliveryBusy && steeringAvailable && !composerLocked && plainMessageDraft
-      ? (over.busyEnter === 'steer' ? '插队（本轮结束后）' : '排队（本轮后）')
+      ? (over.busyEnter === 'steer' ? '插队（当前工具步后）' : '排队（本轮后）')
       : '发送消息'
   const button = view.container.querySelector<HTMLButtonElement>(
     `button[aria-label="${primaryLabel}"]`,
@@ -609,14 +609,14 @@ describe('image draft rail', () => {
 describe('Enter semantics', () => {
   it('advertises the empty-draft whole-queue steering gesture when it is available', () => {
     const { textarea } = bench({ running: true, queue: [row('q-1')], steerQueue: vi.fn() })
-    expect(textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（本轮结束后立刻答）')
+    expect(textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（当前工具步后立刻答）')
     // Preference does not move whole-queue flush onto plain Enter.
     expect(bench({
       running: true,
       queue: [row('q-1')],
       busyEnter: 'steer',
       steerQueue: vi.fn(),
-    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（本轮结束后立刻答）')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（当前工具步后立刻答）')
   })
 
   it('advertises queue vs steer chords while the agent is running with a draftable composer', () => {
@@ -641,7 +641,7 @@ describe('Enter semantics', () => {
         parentAvailable: true,
       },
     // Continuable children share whole-queue flush, so the steer hint wins.
-    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（本轮结束后立刻答）')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（当前工具步后立刻答）')
     expect(bench({
       running: true,
       queue: [row('q-1')],
@@ -667,7 +667,7 @@ describe('Enter semantics', () => {
       running: true,
       queue: [row('q-1')],
       plan: { active: true, pending: false },
-    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（本轮结束后立刻答）')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（当前工具步后立刻答）')
   })
 
   it('an open command menu withholds the whole-queue steering gesture', () => {
@@ -919,7 +919,7 @@ describe('running and lock semantics', () => {
 
   it('running Send follows the busy-state Steer preference and labels the delivery', () => {
     const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '按钮插话' })
-    expect(button.getAttribute('aria-label')).toBe('插队（本轮结束后）')
+    expect(button.getAttribute('aria-label')).toBe('插队（当前工具步后）')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('按钮插话', [], 'steer', expect.any(AbortSignal))
   })
@@ -965,7 +965,7 @@ describe('running and lock semantics', () => {
     const { button, busyEnter, sink } = bench({ running: true, draft: '跟随设置' })
     expect(button.getAttribute('aria-label')).toBe('排队（本轮后）')
     act(() => { busyEnter.set('steer') })
-    expect(button.getAttribute('aria-label')).toBe('插队（本轮结束后）')
+    expect(button.getAttribute('aria-label')).toBe('插队（当前工具步后）')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('跟随设置', [], 'steer', expect.any(AbortSignal))
   })

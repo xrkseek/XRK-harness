@@ -1,34 +1,25 @@
 /**
- * Optimistic `[seat…]` prefix for delegated-child echoes — mirrors Face
- * `withSeatChannelPrefix` so the bubble does not wait on the Host round-trip.
+ * Optimistic seat prefix for delegated-child echoes — retired.
+ * Owner is `user/message.source` (identity chip); do not stamp `[老板]` into body.
  */
 
 type BossLabelResolve = () => string
 
 let resolveBossLabel: BossLabelResolve | undefined
 
-/** Wire Settings boss formal（nick） from ui-plan presence prefs. */
+/** Wire Settings boss formal（nick） from ui-plan presence prefs (kept for bind). */
 export function bindSeatChannelBossLabel(resolve: BossLabelResolve): void {
   resolveBossLabel = resolve
 }
 
-/** `[label]` channel marker — same shape as Face `formatSeatChannelPrefix`. */
+/** `@deprecated` kept for call-site stability — returns `[label]` shape only. */
 export function formatSeatChannelEchoPrefix(label: string): string {
   const name = label.trim() || '?'
   return `[${name}]`
 }
 
-/**
- * Prepend the live boss seat marker for subagent echo text.
- * No-op when unbound / empty / already tagged.
- */
+/** No-op — Face no longer prefixes child admits; echo must match. */
 export function withSeatChannelEchoPrefix(text: string): string {
-  const body = text.trimStart()
-  if (!body) return text
-  const label = resolveBossLabel?.()?.trim()
-  if (!label) return text
-  const prefix = formatSeatChannelEchoPrefix(label)
-  if (body.startsWith(prefix)) return text
-  if (/^\[[^\]]+\]\s/.test(body)) return text
-  return `${prefix} ${body}`
+  void resolveBossLabel
+  return text
 }

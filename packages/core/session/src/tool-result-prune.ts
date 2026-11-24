@@ -12,6 +12,7 @@
 
 import { readSessionEvents } from "./seq.js";
 import type { MessageContent, SessionEvent, ToolResultEvent } from "@xrkseek/protocol";
+import { parseSpillLocator } from "@xrkseek/spill";
 import { estimateMessageContent } from "./surface-estimate.js";
 import { findLatestCompaction } from "./compaction.js";
 import type { SessionStore } from "./store.js";
@@ -73,7 +74,13 @@ export function pruneToolResultText(
   const omitted = units.length - headChars - tailChars;
   const head = units.slice(0, headChars).join("");
   const tail = units.slice(-tailChars).join("");
-  return `${head}\n\n…[${omitted} chars omitted]…\n\n${tail}`;
+  // Bound/spill may embed a disk locator mid-body (often past headChars). Keep
+  // that path in the omit marker so the model can still retrieve the full text.
+  const spillPath = parseSpillLocator(text);
+  const omitMarker = spillPath
+    ? `…[${omitted} chars omitted · full text at ${spillPath}]…`
+    : `…[${omitted} chars omitted]…`;
+  return `${head}\n\n${omitMarker}\n\n${tail}`;
 }
 
 /**

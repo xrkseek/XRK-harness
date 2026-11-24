@@ -519,6 +519,14 @@ export interface SessionsApi {
   cancel(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ accepted: true }>>
 
   /**
+   * Soft-detach wait-class tools (`wait_agent` · peer sync wait · subagent
+   * foreground wait) without cancelling the turn or children — same posture
+   * as `job.background`. Idempotent when nothing is waiting (`detached: false`).
+   */
+  yieldWait(request: RpcRequest<{ sessionId: SessionId }>):
+  Promise<RpcResponse<{ accepted: true; detached: boolean }>>
+
+  /**
    * Permanently deletes an archived session: drops the durable log, clears
    * workspace archive/membership, and publishes `host/session-removed`.
    * Non-archived ids fail with `session-not-archived`. Unknown ids fail with

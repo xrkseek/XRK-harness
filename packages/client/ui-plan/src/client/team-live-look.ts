@@ -9,19 +9,15 @@
 import type { TeamRosterLiveLook } from '@xrkseek/client-runtime/client'
 
 /**
- * Overlay an optimistic roster patch on a Face status snapshot.
- * Absent patch fields keep the snapshot. Present fields win — including `''`
- * overlays and kit clears (`'none'`), which must not fall through.
+ * Present live fields as a flat patch. Empty-string overlays / bodyColor and
+ * kit `'none'` are included so callers can clear Face/cache leftovers.
  */
-export function mergeTeamRosterLiveLook<T extends object>(
-  base: T,
-  look: TeamRosterLiveLook | undefined,
-): T {
-  if (!look) return base
+function liveLookPatch(look: TeamRosterLiveLook): TeamRosterLiveLook {
   return {
-    ...base,
     ...(look.shape !== undefined && look.shape !== '' ? { shape: look.shape } : {}),
     ...(look.color !== undefined && look.color !== '' ? { color: look.color } : {}),
+    ...(look.bodyColor !== undefined ? { bodyColor: look.bodyColor } : {}),
+    ...(look.eyeColor !== undefined ? { eyeColor: look.eyeColor } : {}),
     ...(typeof look.size === 'number' ? { size: look.size } : {}),
     ...(look.kit !== undefined ? { kit: look.kit } : {}),
     ...(look.kitHat !== undefined ? { kitHat: look.kitHat } : {}),
@@ -31,6 +27,19 @@ export function mergeTeamRosterLiveLook<T extends object>(
     ...(look.overlayGlasses !== undefined ? { overlayGlasses: look.overlayGlasses } : {}),
     ...(look.overlayHeld !== undefined ? { overlayHeld: look.overlayHeld } : {}),
   }
+}
+
+/**
+ * Overlay an optimistic roster patch on a Face status snapshot.
+ * Absent patch fields keep the snapshot. Present fields win — including `''`
+ * overlays / bodyColor and kit clears (`'none'`), which must not fall through.
+ */
+export function mergeTeamRosterLiveLook<T extends object>(
+  base: T,
+  look: TeamRosterLiveLook | undefined,
+): T {
+  if (!look) return base
+  return { ...base, ...liveLookPatch(look) }
 }
 
 /**

@@ -303,10 +303,9 @@
      < 22) without the dead air a flat 12px pad left under the stroke. */
   padding: 0 10px 10px;
   min-width: 0;
-  /* Size container so the chips inside can collapse to icon-only when the
-     card runs out of row width (PermissionSelect @container rule). Anonymous
-     on purpose: CSS modules hash container-name per module, so a name declared
-     here can never match a query in another module's sheet. */
+  /* Size container for chip collapse (PermissionSelect anonymous @container).
+     Stable name `xrk-composer-tool-row` lives on [data-composer-tool-row] in
+     ui-theme/styles/containers.css — modules keep anonymous queries. */
   container-type: inline-size;
 }
 

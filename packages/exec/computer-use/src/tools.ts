@@ -482,6 +482,8 @@ export function createComputerUseTools(
     },
     isConcurrencySafe: (args) =>
       COMPUTER_USE_READ_ACTIONS.has(String(args?.action ?? "")),
+    // Fat AX/vision schema — keep off standing tools[] until tool_search.
+    exposure: "deferred",
   };
   return [tool];
 }

@@ -33,7 +33,7 @@ Skill slash **不是** Face 命令：未知 `/name` 与 **workspace recipe** 在
 
 ## 出站管道
 
-自定义出站链可用 `createSlashRecipeStep(resolve)`。默认 `slashRecipeStep` 为 no-op，除非传入 `createDefaultOutbound({ resolveSlash })` — 优先使用 assemble 热路径上的 `resolveSlash`。
+热路径：`runTurn` → `assemble.resolveSlash`（`@xrkseek/core-agent-loop`）在入账前展开 `/id`。自定义出站链仍可用 `createSlashRecipeStep(resolve)` 挂进 `createOutboundPipeline`；默认 `slashRecipeStep` 为 no-op，不要指望它替代 assemble 热路径。
 
 参见：[workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md)。
 
@@ -74,6 +74,6 @@ Examples: `.agents/recipes/plugin-scaffold.yaml` or `{productDir}/recipes/*.yaml
 
 ## Outbound pipeline
 
-Custom outbound chains may use `createSlashRecipeStep(resolve)`. Default `slashRecipeStep` is a no-op unless `createDefaultOutbound({ resolveSlash })` is passed — prefer `resolveSlash` on the assemble hot path.
+Hot path: `runTurn` → `assemble.resolveSlash` (`@xrkseek/core-agent-loop`) expands `/id` before admit. Custom outbound chains may still attach `createSlashRecipeStep(resolve)` via `createOutboundPipeline`; default `slashRecipeStep` is a no-op and must not replace the assemble hot path.
 
 See also: [workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md).

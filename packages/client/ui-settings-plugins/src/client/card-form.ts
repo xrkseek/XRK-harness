@@ -198,6 +198,15 @@ export class CardForm<T> {
   }
 
   /**
+   * Mark the last live write as failed so PluginCard can show `saveFailed`.
+   * Call after rolling back an optimistic edit; the next `edit` clears it.
+   */
+  markFailed(): void {
+    this.failed = true
+    this.publish()
+  }
+
+  /**
    * Write every staged edit, then re-seed from what the Host accepted.
    *
    * The Host is the only authority on whether a value was accepted — its

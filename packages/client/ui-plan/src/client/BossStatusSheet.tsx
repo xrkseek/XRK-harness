@@ -7,6 +7,7 @@
  */
 import { useEffect, useId, useRef, useState } from 'react'
 import clsx from 'clsx'
+import { isComposingKeyboardEvent } from '@xrkseek/client-ui-primitives'
 import {
   BOSS_QUICK_MOOD_IDS,
   PRESENCE_STATUS_LINE_MAX,
@@ -34,12 +35,14 @@ export function BossStatusSheet({
   const inputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(boss.statusLine)
   const [savedFlash, setSavedFlash] = useState(false)
+  const [saveError, setSaveError] = useState(false)
   const savedTimer = useRef<number | null>(null)
 
   useEffect(() => {
     if (!open) return
     setDraft(boss.statusLine)
     setSavedFlash(false)
+    setSaveError(false)
     const id = window.setTimeout(() => { inputRef.current?.focus() }, 40)
     return () => { window.clearTimeout(id) }
   }, [open, boss.statusLine])
@@ -47,7 +50,9 @@ export function BossStatusSheet({
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => { window.removeEventListener('keydown', onKey) }
@@ -61,6 +66,7 @@ export function BossStatusSheet({
 
   const runtime = getPresenceSettingsRuntime()
   const flashSaved = (): void => {
+    setSaveError(false)
     setSavedFlash(true)
     if (savedTimer.current !== null) window.clearTimeout(savedTimer.current)
     savedTimer.current = window.setTimeout(() => {
@@ -68,30 +74,47 @@ export function BossStatusSheet({
       savedTimer.current = null
     }, 1600)
   }
+  const flashFailed = (): void => {
+    setSavedFlash(false)
+    setSaveError(true)
+  }
+  const writePresence = (write: (() => Promise<void>) | undefined, afterOk?: () => void): void => {
+    if (write === undefined) return
+    void write().then(() => {
+      afterOk?.()
+      flashSaved()
+    }).catch(() => { flashFailed() })
+  }
   const applyMood = (moodId: string): void => {
-    runtime?.setMood(moodId)
-    flashSaved()
+    writePresence(runtime === null ? undefined : () => runtime.setMood(moodId))
   }
   const applyTip = (tip: string): void => {
-    runtime?.setStatusLine(tip)
-    setDraft(tip)
-    flashSaved()
+    writePresence(
+      runtime === null ? undefined : () => runtime.setStatusLine(tip),
+      () => { setDraft(tip) },
+    )
   }
   const commitDraft = (flash = true): void => {
-    runtime?.setStatusLine(draft)
-    if (flash) flashSaved()
+    if (runtime === null) return
+    const write = runtime.setStatusLine(draft)
+    if (!flash) {
+      void write.catch(() => { flashFailed() })
+      return
+    }
+    void write.then(() => { flashSaved() }).catch(() => { flashFailed() })
   }
   const clearTip = (): void => {
-    runtime?.setStatusLine('')
-    setDraft('')
-    flashSaved()
+    writePresence(
+      runtime === null ? undefined : () => runtime.setStatusLine(''),
+      () => { setDraft('') },
+    )
   }
   const tipDirty = draft.trim() !== (boss.statusLine ?? '').trim()
   const canSave = tipDirty
 
   const saveAll = (): void => {
-    commitDraft(false)
-    flashSaved()
+    if (runtime === null) return
+    void runtime.setStatusLine(draft).then(() => { flashSaved() }).catch(() => { flashFailed() })
   }
 
   return (
@@ -143,6 +166,7 @@ export function BossStatusSheet({
             onBlur={() => { commitDraft() }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
+                if (isComposingKeyboardEvent(e)) return
                 e.preventDefault()
                 commitDraft()
               }
@@ -176,8 +200,16 @@ export function BossStatusSheet({
       </div>
 
       <div className={css.foot}>
-        <span className={clsx(css.liveHint, savedFlash && css.savedFlash)} role="status" aria-live="polite">
-          {savedFlash ? t('bossStatus.saved') : t('bossStatus.liveHint')}
+        <span
+          className={clsx(css.liveHint, savedFlash && css.savedFlash, saveError && css.saveError)}
+          role="status"
+          aria-live="polite"
+        >
+          {saveError
+            ? t('bossStatus.saveFailed')
+            : savedFlash
+              ? t('bossStatus.saved')
+              : t('bossStatus.liveHint')}
         </span>
         <button
           type="button"

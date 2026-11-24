@@ -128,7 +128,7 @@ async function settleOne(
   if (input.signal?.aborted) {
     return abortedBeforeDispatchOutcome(call);
   }
-  return runToolDetailed({
+  const outcome = await runToolDetailed({
     registry: input.registry,
     call,
     materialization: input.materialization,
@@ -138,6 +138,15 @@ async function settleOne(
     ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
     ...(input.runId !== undefined ? { runId: input.runId } : {}),
   });
+  // Tools may ignore signal mid-flight; discard a late success as aborted so
+  // Stop does not persist a normal tool/result after the user cancelled.
+  if (
+    input.signal?.aborted &&
+    !isAbortSettlementCode(outcome.result.error?.code)
+  ) {
+    return abortedAfterStartOutcome(call);
+  }
+  return outcome;
 }
 
 function noteOutcome(

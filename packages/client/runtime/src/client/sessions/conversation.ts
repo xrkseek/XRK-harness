@@ -328,6 +328,12 @@ export interface QueuedMessage {
   readonly text: string
   /** Prompt RPC identity echoed on the Host queue message source, when present. */
   readonly rpcId?: RpcId
+  /**
+   * Admit producer (`user` / `seat` / `handoff` / …). Face stamps this on every
+   * queue row — keep it so pending steers paint courier×handoff / identity
+   * instead of a bare boss 「插队中」 bubble.
+   */
+  readonly source?: unknown
 }
 
 /** Prompt-RPC identity shared by a local submission echo and its durable admission. */
@@ -568,4 +574,13 @@ export interface ConversationSnapshot {
    */
   blank: boolean
   lastAgentError: string | null
+  /**
+   * Soft-detach wait dock mirror from `host/session-wait-yield`.
+   * Independent of `running` so Stop's optimistic false cannot clear the dock.
+   * Null = hide 「停止等待」.
+   */
+  waitYield: {
+    readonly kind: 'wait_agent' | 'peer_wait' | 'subagent_foreground'
+    readonly label?: string
+  } | null
 }

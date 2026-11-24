@@ -277,35 +277,35 @@ export class PresenceSettingsRuntime {
     this.publish()
   }
 
-  setMood(moodId: string, statusLine?: string): void {
+  setMood(moodId: string, statusLine?: string): Promise<void> {
     const nextMood = parseMoodId(moodId)
     const nextLine = statusLine === undefined
       ? this.statusLine
       : parseStatusLine(statusLine)
-    if (this.moodId === nextMood && this.statusLine === nextLine) return
+    if (this.moodId === nextMood && this.statusLine === nextLine) return Promise.resolve()
     this.moodId = nextMood
     this.statusLine = nextLine
     this.moodAt = Date.now()
     this.revision += 1
-    void this.host.patch([
+    this.publish()
+    return this.host.patch([
       { op: 'set', path: [PRESENCE_MOOD_ID_FIELD], value: this.moodId },
       { op: 'set', path: [PRESENCE_STATUS_LINE_FIELD], value: this.statusLine },
       { op: 'set', path: [PRESENCE_MOOD_AT_FIELD], value: this.moodAt },
     ])
-    this.publish()
   }
 
-  setStatusLine(statusLine: string): void {
+  setStatusLine(statusLine: string): Promise<void> {
     const next = parseStatusLine(statusLine)
-    if (this.statusLine === next) return
+    if (this.statusLine === next) return Promise.resolve()
     this.statusLine = next
     this.moodAt = Date.now()
     this.revision += 1
-    void this.host.patch([
+    this.publish()
+    return this.host.patch([
       { op: 'set', path: [PRESENCE_STATUS_LINE_FIELD], value: this.statusLine },
       { op: 'set', path: [PRESENCE_MOOD_AT_FIELD], value: this.moodAt },
     ])
-    this.publish()
   }
 
   setBossNickname(nickname: string): void {

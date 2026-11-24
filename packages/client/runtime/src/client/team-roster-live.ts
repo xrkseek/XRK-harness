@@ -26,6 +26,42 @@ export type TeamRosterLivePatch = {
   readonly appearance?: TeamRosterLiveLook
 }
 
+/**
+ * Host wire omits cleared overlay / custom-colour / kit-none keys. Stamp
+ * explicit clears so Overview live-merge drops Face/cache leftovers.
+ */
+export function normalizeTeamRosterLiveLook(
+  look: {
+    readonly shape: string
+    readonly color: string
+    readonly bodyColor?: string
+    readonly eyeColor?: string
+    readonly size?: number
+    readonly kit?: string
+    readonly kitHat?: string
+    readonly kitGlasses?: string
+    readonly kitHeld?: string
+    readonly overlayHat?: string
+    readonly overlayGlasses?: string
+    readonly overlayHeld?: string
+  },
+): TeamRosterLiveLook {
+  return {
+    shape: look.shape,
+    color: look.color,
+    bodyColor: look.bodyColor ?? '',
+    eyeColor: look.eyeColor ?? '',
+    ...(look.size !== undefined ? { size: look.size } : {}),
+    kit: look.kit ?? 'none',
+    kitHat: look.kitHat ?? 'none',
+    kitGlasses: look.kitGlasses ?? 'none',
+    kitHeld: look.kitHeld ?? 'none',
+    overlayHat: look.overlayHat ?? '',
+    overlayGlasses: look.overlayGlasses ?? '',
+    overlayHeld: look.overlayHeld ?? '',
+  }
+}
+
 type Listener = () => void
 
 let revision = 0
@@ -49,9 +85,10 @@ export function patchTeamRosterLive(
     ...(prior ?? {}),
     ...(patch.name !== undefined ? { name: patch.name } : {}),
     ...(patch.nickname !== undefined ? { nickname: patch.nickname } : {}),
-    ...(patch.appearance
-      ? { appearance: { ...(prior?.appearance ?? {}), ...patch.appearance } }
-      : {}),
+    // Replace look wholesale — shallow-merging kept cleared overlays / kit
+    // slots from the prior optimistic paint (Overview + left rail stayed on
+    // the old custom sticker after a Team dress edit).
+    ...(patch.appearance ? { appearance: patch.appearance } : {}),
   })
   notify()
 }

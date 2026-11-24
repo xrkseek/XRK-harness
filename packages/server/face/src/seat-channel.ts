@@ -1,14 +1,9 @@
 /**
- * Channel prefixes on delegated-child admits.
+ * Seat channel helpers for delegated-child admits.
  *
- * Labels come from live Settings (`titleBoss` / `titleManager` / `titleAgent`
- * or a titleScheme × locale) — never hardcode 老板/经理/干员 in prefixes.
- *
- * Layers (roles; names are user-defined):
- * - Project: human_face → manager seat (no channel prefix on the parent).
- * - Tool child of project: parent tool → `[manager…]`; UI → `[boss…]`.
- * - Agent-home: human_face → agent seat (no channel prefix on the home).
- * - Tool child of agent-home / nested: parent tool → `[agent…]`; UI → `[boss…]`.
+ * Body text is no longer prefixed with `[老板]` / `[经理]` — transcript owner
+ * is `user/message.source` (identity chip). Label helpers remain for Face
+ * speech source builders / seat identity.
  *
  * Paths: `session.prompt` (UI) = human_face; `subagent.prompt` from
  * tool-/orch- rpc = parent; UUID rpc through subagent.prompt = human_face.
@@ -104,36 +99,18 @@ export function resolveSeatChannelLabel(
 }
 
 /**
- * Apply channel prefix when admitting into a tool-delegated child.
- * Forks and non-children are unchanged.
- * Prefer `fromSessionId` seat label so nested 干员 / peer speech is not
- * mistagged as the project 经理 title.
+ * Formerly prepended `[老板]` / `[经理]` into child admits. Transcript already
+ * carries owner via `user/message.source` (identity chip) — keep the body
+ * clean. Forks / non-children unchanged. Args retained so call sites stay stable.
  */
 export function maybePrefixDelegatedChildText(
-  runtime: FaceRuntime,
-  sessionId: string,
+  _runtime: FaceRuntime,
+  _sessionId: string,
   text: string,
-  channel: SeatChannel,
-  fromSessionId?: string,
+  _channel: SeatChannel,
+  _fromSessionId?: string,
 ): string {
-  const link = runtime.subagents.getByChild(sessionId);
-  if (!link || link.mode === "fork") return text;
-  const from = fromSessionId?.trim() || "";
-  let label: string;
-  if (from && channel !== "human_face") {
-    const presenceUser = runtime.settingsNamespaces.view("ui-presence")
-      .value as Record<string, unknown>;
-    const localeUser = runtime.settingsNamespaces.view("locale")
-      .value as Record<string, unknown>;
-    const titles = readSeatTitles(
-      presenceUser,
-      readUiLocalePreference(localeUser),
-    );
-    label = resolveChildParentSeat(runtime, from, titles).label;
-  } else {
-    label = resolveSeatChannelLabel(runtime, sessionId, channel);
-  }
-  return withSeatChannelPrefix(label, text);
+  return text;
 }
 
 /**

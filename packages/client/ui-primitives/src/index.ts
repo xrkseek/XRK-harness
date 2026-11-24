@@ -2,6 +2,23 @@
  * Cordis-free React primitives styled only through `--dsw-*` tokens.
  */
 
+export {
+  COMPOSITION_GRACE_MS,
+  createCompositionWatch,
+  isComposingKeyboardEvent,
+} from './ime.ts'
+export type { CompositionWatch, CompositionWatchOptions } from './ime.ts'
+export {
+  isTopEscapeLayer,
+  popEscapeLayer,
+  pushEscapeLayer,
+} from './escape-layer.ts'
+export { useEscapeLayer } from './useEscapeLayer.ts'
+export {
+  editableAncestor,
+  isEditableElement,
+  isEditableTarget,
+} from './context-menu.ts'
 export { StateDot } from './StateDot.tsx'
 export type { StateDotState } from './StateDot.tsx'
 export {
@@ -82,8 +99,16 @@ export type {
   SelectionTranslateTarget,
 } from './selection-translate.ts'
 export { useAnchoredMaxHeight } from './useAnchoredMaxHeight.ts'
-export { useAnchoredPosition } from './useAnchoredPosition.ts'
-export type { AnchoredPositionOptions } from './useAnchoredPosition.ts'
+export {
+  ANCHORED_MEASURE_STYLE,
+  ANCHORED_VIEWPORT_MARGIN,
+  computeAnchoredFixedPosition,
+  useAnchoredPosition,
+} from './useAnchoredPosition.ts'
+export type {
+  AnchoredFixedPositionInput,
+  AnchoredPositionOptions,
+} from './useAnchoredPosition.ts'
 export { useDismissOnOutsidePointer } from './useDismissOnOutsidePointer.ts'
 export { HoverCard } from './HoverCard.tsx'
 export { Modal } from './Modal.tsx'

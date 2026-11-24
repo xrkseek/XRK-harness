@@ -98,6 +98,7 @@ export type {
 export { createSnapshotStore, defineStore, shallowEqual } from './contract/store.ts'
 export {
   clearTeamRosterLive,
+  normalizeTeamRosterLiveLook,
   patchTeamRosterLive,
   readTeamRosterLive,
   subscribeTeamRosterLive,

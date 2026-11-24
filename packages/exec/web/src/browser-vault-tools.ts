@@ -184,5 +184,9 @@ export function createBrowserVaultTools(
     isConcurrencySafe: () => false,
   };
 
-  return [listTool, fillTool];
+  // Same progressive disclosure as createBrowserTools.
+  return [listTool, fillTool].map((t) => ({
+    ...t,
+    exposure: "deferred" as const,
+  }));
 }

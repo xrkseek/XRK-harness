@@ -164,20 +164,21 @@ function useSideWorkbenchOpen(): boolean {
     }
     read()
     const obs = new MutationObserver(read)
-    obs.observe(document.body, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ['data-xrkh-side-open', 'style'],
-    })
+    // Attribute-only on documentElement + side panel host — not body subtree
+    // (style animations used to force getComputedStyle every frame).
     obs.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['style', 'data-xrk-layout-side'],
     })
-    const id = window.setInterval(read, 800)
+    const sideHost = document.querySelector('[data-xrkh-panel-host]')
+    if (sideHost !== null) {
+      obs.observe(sideHost, {
+        attributes: true,
+        attributeFilter: ['data-xrkh-side-open'],
+      })
+    }
     return () => {
       obs.disconnect()
-      window.clearInterval(id)
     }
   }, [])
   return open

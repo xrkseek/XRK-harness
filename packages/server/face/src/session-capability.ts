@@ -307,7 +307,10 @@ export function formatSessionCapability(
         ]
       : []),
     ...(allowN > 0 ? [`path_allowlist: ${allowN}`] : []),
-    `tools: direct=${counts.direct} deferred=${counts.deferred} expanded=${expanded}`,
+    // Counts alone are opaque after progressive disclosure — one tip so the
+    // model expands browser_*/terminal_*/MCP without a standing skill table.
+    `tools: direct=${counts.direct} deferred=${counts.deferred} expanded=${expanded}` +
+      (counts.deferred > 0 ? " · expand via tool_search" : ""),
   ];
   lines.push(...childGapLines(runtime, sessionId));
   return lines.join("\n");

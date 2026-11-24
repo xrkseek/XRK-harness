@@ -9,7 +9,9 @@ import {
 import {
   listPendingAdmits,
   readSessionEvents,
+  sessionHasPendingSteer,
 } from "@xrkseek/core-session";
+import { mergeWaitSignals, shouldSoftYieldWait } from "./wait-yield.js";
 import { permissionSelectFromEvents } from "./permissions.js";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
@@ -272,12 +274,46 @@ async function waitDrainIdle(
   sessionId: string,
   signal?: AbortSignal,
   timeoutMs = FOREGROUND_WAIT_MS,
-): Promise<void> {
-  await waitSessionDrainIdle(runtime, sessionId, {
-    ...(signal ? { signal } : {}),
-    timeoutMs,
-    kind: "subagent",
-  });
+  /** Parent session that owns the wait (for soft-detach / 停止等待). */
+  yieldOwnerSessionId?: string,
+): Promise<"ok" | "yielded"> {
+  const owner = yieldOwnerSessionId?.trim() || "";
+  const attachment = owner
+    ? runtime.waitYield.attach(owner, {
+        kind: "subagent_foreground",
+        label: sessionId,
+      })
+    : undefined;
+  const pendingSteer = () =>
+    Boolean(owner && sessionHasPendingSteer(runtime.store, owner));
+  try {
+    // Steer may have called yield() before this attach — pending inbox is
+    // the durable signal so 插队 is not stranded behind the wait.
+    if (attachment?.signal.aborted || pendingSteer()) {
+      return "yielded";
+    }
+    const merged = mergeWaitSignals(signal, attachment?.signal);
+    await waitSessionDrainIdle(runtime, sessionId, {
+      ...(merged ? { signal: merged } : {}),
+      timeoutMs,
+      kind: "subagent",
+    });
+    return "ok";
+  } catch (err) {
+    if (
+      shouldSoftYieldWait({
+        yieldSignal: attachment?.signal,
+        turnSignal: signal,
+        err,
+        pendingSteer: pendingSteer(),
+      })
+    ) {
+      return "yielded";
+    }
+    throw err;
+  } finally {
+    attachment?.dispose();
+  }
 }
 
 /**
@@ -1460,8 +1496,15 @@ function createSubagentTool(
             .join("\n"),
         };
       }
+      let waitOutcome: "ok" | "yielded";
       try {
-        await waitDrainIdle(options.runtime, childId, signal, foregroundWaitMs);
+        waitOutcome = await waitDrainIdle(
+          options.runtime,
+          childId,
+          signal,
+          foregroundWaitMs,
+          options.parentSessionId,
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         const timedOut = /timed out waiting/i.test(message);
@@ -1506,6 +1549,29 @@ function createSubagentTool(
           isError: true,
         };
       }
+      if (waitOutcome === "yielded") {
+        // Soft-detach: same posture as timeout while the child is still live.
+        const stillRunning = isChildSessionActive(options.runtime, childId);
+        if (stillRunning) {
+          options.runtime.subagents.promoteToContinuable(childId);
+        }
+        options.runtime.agentTeamTasks.complete(task.id, {
+          ok: false,
+          preview: "wait detached",
+        });
+        const extra = worktreeLine(stillRunning);
+        return {
+          content: [
+            stillRunning
+              ? `Wait detached; child \`${childId}\` kept running — result arrives as a steer handoff when it settles.`
+              : `Wait detached; child \`${childId}\` already idle — see steer handoff for answer.`,
+            stillRunning ? childResumeHint(childId) : undefined,
+            extra || undefined,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        };
+      }
       const all = readSessionEvents(options.runtime.store, childId);
       // Never return seeded parent assistant text as the child's result.
       const link = options.runtime.subagents.getByChild(childId);
@@ -1545,7 +1611,19 @@ function createSubagentTool(
           );
           if (retry.result.ok) {
             try {
-              await waitDrainIdle(options.runtime, childId, signal);
+              const retryWait = await waitDrainIdle(
+                options.runtime,
+                childId,
+                signal,
+                FOREGROUND_WAIT_MS,
+                options.parentSessionId,
+              );
+              if (
+                retryWait === "yielded" &&
+                isChildSessionActive(options.runtime, childId)
+              ) {
+                options.runtime.subagents.promoteToContinuable(childId);
+              }
             } catch {
               // Keep the first answer, but promote so a later settle still
               // steers if the schema-retry turn outlives this wait.
@@ -2310,7 +2388,7 @@ function createWaitAgentTool(
   return {
     name: "wait_agent",
     description:
-      "Wait until listed children are idle, then return their last assistant text.",
+      "Wait until listed children are idle; UI 停止等待 / steer soft-detaches.",
     dynamicSchema: () => ({
       description: waitAgentDescription(),
     }),
@@ -2331,6 +2409,30 @@ function createWaitAgentTool(
           description: `Max wait in ms (default ${WAIT_AGENT_DEFAULT_MS}; max ${FOREGROUND_WAIT_MS}).`,
         },
       },
+    },
+    // Safe to overlap with other reads; wait itself is the barrier for answers.
+    isConcurrencySafe: () => true,
+    presentCall: (args) => {
+      const a = args as { targets?: unknown; agent_id?: unknown };
+      const targets = parseWaitTargets(a);
+      const who =
+        targets.length === 0
+          ? "children"
+          : targets.length === 1
+            ? targets[0]!
+            : `${targets.length} children`;
+      return {
+        card: "generic",
+        title: `Waiting · ${who}`,
+        kind: "search",
+        rawInput: args,
+        content: [
+          {
+            type: "text",
+            text: "停止等待 detaches · Stop cancels the turn",
+          },
+        ],
+      };
     },
     async execute(args, signal) {
       const a = args as {
@@ -2365,6 +2467,13 @@ function createWaitAgentTool(
           };
         }
       }
+      const attachment = options.runtime.waitYield.attach(
+        options.parentSessionId,
+        {
+          kind: "wait_agent",
+          label: targets.length === 1 ? targets[0] : `${targets.length} children`,
+        },
+      );
       const deadline = Date.now() + timeoutMs;
       const stillRunning = () =>
         targets.some((id) => isChildSessionActive(options.runtime, id));
@@ -2375,72 +2484,117 @@ function createWaitAgentTool(
           }
         }
       };
-      while (stillRunning()) {
-        if (signal?.aborted) {
-          // Parent Stop must not strand one-shot children without a later
-          // completion notice — same promote as the timeout path.
-          promoteLiveTargets();
-          throw new DOMException("aborted", "AbortError");
+      const statusLines = (header: string): string[] => {
+        const lines: string[] = [header];
+        for (const childId of targets) {
+          const running = isChildSessionActive(options.runtime, childId);
+          const inbox = childInboxCounts(options.runtime, childId);
+          lines.push(
+            [
+              childId,
+              running ? "running" : "idle",
+              `q=${inbox.queued}`,
+              `steer=${inbox.steering}`,
+              running
+                ? "(still running — answer via steer handoff when idle)"
+                : "(idle — see steer handoff for answer)",
+            ].join("\t"),
+          );
         }
-        if (Date.now() > deadline) break;
-        const remaining = Math.max(0, deadline - Date.now());
-        const slice = Math.min(POLL_MS * 20, remaining);
-        const activeOnes = targets.filter((id) =>
-          isChildSessionActive(options.runtime, id),
-        );
-        if (
-          activeOnes.length === 1 &&
-          options.runtime.drain.run &&
-          !options.runtime.externalAgents.has(activeOnes[0]!)
-        ) {
-          try {
-            const run = options.runtime.drain.run.bind(options.runtime.drain);
-            const id = activeOnes[0]!;
-            await raceDrainRunSlice({
-              run: () => run(id),
-              sliceMs: Math.max(POLL_MS, slice),
-              ...(signal ? { signal } : {}),
-            });
-          } catch (err) {
-            if (err instanceof Error && err.name === "AbortError") {
-              promoteLiveTargets();
+        return lines;
+      };
+      const softDetach = () => {
+        promoteLiveTargets();
+        return {
+          content: statusLines(
+            "wait_agent detached (children kept running — answer via steer handoff)",
+          ).join("\n"),
+        };
+      };
+      const pendingSteer = () =>
+        sessionHasPendingSteer(options.runtime.store, options.parentSessionId);
+      try {
+        while (stillRunning()) {
+          if (signal?.aborted) {
+            // Parent Stop must not strand one-shot children without a later
+            // completion notice — same promote as the timeout path.
+            promoteLiveTargets();
+            throw new DOMException("aborted", "AbortError");
+          }
+          if (attachment.signal.aborted || pendingSteer()) {
+            return softDetach();
+          }
+          if (Date.now() > deadline) break;
+          const remaining = Math.max(0, deadline - Date.now());
+          const slice = Math.min(POLL_MS * 20, remaining);
+          const merged = mergeWaitSignals(signal, attachment.signal);
+          const activeOnes = targets.filter((id) =>
+            isChildSessionActive(options.runtime, id),
+          );
+          if (
+            activeOnes.length === 1 &&
+            options.runtime.drain.run &&
+            !options.runtime.externalAgents.has(activeOnes[0]!)
+          ) {
+            try {
+              const run = options.runtime.drain.run.bind(options.runtime.drain);
+              const id = activeOnes[0]!;
+              await raceDrainRunSlice({
+                run: () => run(id),
+                sliceMs: Math.max(POLL_MS, slice),
+                ...(merged ? { signal: merged } : {}),
+              });
+            } catch (err) {
+              if (
+                shouldSoftYieldWait({
+                  yieldSignal: attachment.signal,
+                  turnSignal: signal,
+                  err,
+                  pendingSteer: pendingSteer(),
+                })
+              ) {
+                return softDetach();
+              }
+              if (err instanceof Error && err.name === "AbortError") {
+                promoteLiveTargets();
+                throw err;
+              }
+              /* keep polling until deadline */
+            }
+          } else {
+            try {
+              await waitForSignalOrSlice({
+                sliceMs: Math.max(POLL_MS, slice),
+                ...(merged ? { signal: merged } : {}),
+              });
+            } catch (err) {
+              if (
+                shouldSoftYieldWait({
+                  yieldSignal: attachment.signal,
+                  turnSignal: signal,
+                  err,
+                  pendingSteer: pendingSteer(),
+                })
+              ) {
+                return softDetach();
+              }
               throw err;
             }
-            /* keep polling until deadline */
           }
-        } else {
-          await waitForSignalOrSlice({
-            sliceMs: Math.max(POLL_MS, slice),
-            ...(signal ? { signal } : {}),
-          });
         }
+        const timedOut = stillRunning();
+        if (timedOut) promoteLiveTargets();
+        return {
+          content: statusLines(
+            timedOut
+              ? `wait_agent timed out after ${timeoutMs}ms`
+              : `wait_agent completed (${timeoutMs}ms budget)`,
+          ).join("\n"),
+          ...(timedOut ? { isError: true } : {}),
+        };
+      } finally {
+        attachment.dispose();
       }
-      const timedOut = stillRunning();
-      if (timedOut) promoteLiveTargets();
-      const lines: string[] = [
-        timedOut
-          ? `wait_agent timed out after ${timeoutMs}ms`
-          : `wait_agent completed (${timeoutMs}ms budget)`,
-      ];
-      for (const childId of targets) {
-        const running = isChildSessionActive(options.runtime, childId);
-        const inbox = childInboxCounts(options.runtime, childId);
-        lines.push(
-          [
-            childId,
-            running ? "running" : "idle",
-            `q=${inbox.queued}`,
-            `steer=${inbox.steering}`,
-            running
-              ? "(still running — answer via steer handoff when idle)"
-              : "(idle — see steer handoff for answer)",
-          ].join("\t"),
-        );
-      }
-      return {
-        content: lines.join("\n"),
-        ...(timedOut ? { isError: true } : {}),
-      };
     },
   };
 }

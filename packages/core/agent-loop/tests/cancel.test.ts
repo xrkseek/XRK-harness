@@ -21,10 +21,9 @@ function createHangStreamAdapter(partial: string): LlmAdapter {
         // Mirror Node throwIfAborted: rethrow the plain cancel cause when set.
         throw request.signal.reason ?? new DOMException("aborted", "AbortError");
       }
-      const head = partial.slice(0, Math.max(1, Math.floor(partial.length / 2)));
-      const tail = partial.slice(head.length);
-      if (head) yield { type: "text-delta", index: 0, text: head };
-      if (tail) yield { type: "text-delta", index: 0, text: tail };
+      // One delta so live-flush sees the full prefix before we hang (multi-
+      // delta flush is not guaranteed mid-step before abort).
+      if (partial) yield { type: "text-delta", index: 0, text: partial };
       await new Promise<void>((_resolve, reject) => {
         const onAbort = () => {
           reject(
@@ -57,7 +56,18 @@ describe("cancel mid-stream prefix finalize (DSH rc.8)", () => {
       signal: ac.signal,
     });
 
-    await new Promise((r) => setTimeout(r, 20));
+    // Wait until the live-flushed prefix is durable before abort.
+    const deadline = Date.now() + 2_000;
+    for (;;) {
+      const chunks = store
+        .get(session.id)
+        .events.filter((e) => e.type === "assistant/chunk");
+      const text = chunks
+        .map((e) => (e.type === "assistant/chunk" ? e.text : ""))
+        .join("");
+      if (text === "partial reply" || Date.now() >= deadline) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
     ac.abort();
     await expect(turnP).rejects.toMatchObject({ name: "AbortError" });
 

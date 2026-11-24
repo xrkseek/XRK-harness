@@ -599,9 +599,13 @@ describe("prompt-replay dumps", () => {
     );
     expect(homeFrags.some((f) => f.text.includes("施工员"))).toBe(true);
     expect(childFrags.some((f) => f.text.includes("<boss_status>"))).toBe(false);
-    expect(spawn).toContain("Seat = cwd AGENTS.md");
-    expect(spawn).toContain("<seat_identity>");
+    expect(spawn).toContain("[subagent spawn]");
+    expect(spawn).toContain("Delivery: FINAL assistant text only → parent");
     expect(spawn).not.toContain("Repo AGENTS.md is not your persona");
+    // seat_identity lives on turn-start fragments, not the spawn preamble body.
+    expect(childFrags.some((f) => f.text.includes("<seat_identity>"))).toBe(
+      true,
+    );
     expect(xyFrags.some((f) => f.text.includes("<session_posture>"))).toBe(
       true,
     );

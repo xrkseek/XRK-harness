@@ -1,15 +1,18 @@
 import {
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
 import type { JobView } from '@xrkseek/client-runtime/client'
-import { IconChevronDownOutlineRegular, useDismissOnOutsidePointer } from '@xrkseek/client-ui-primitives'
+import {
+  ANCHORED_MEASURE_STYLE,
+  IconChevronDownOutlineRegular,
+  useAnchoredPosition,
+  useDismissOnOutsidePointer,
+} from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-slots'
 import { NS } from './locales.ts'
 import type {} from '@xrkseek/client-ui-conversation/client'
@@ -32,9 +35,6 @@ export type JobListActionProps =
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_TASKS: readonly JobView[] = []
 
-/** Hidden pre-place so the first layout pass measures real menu size (Menu portal pattern). */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
-
 /** Overview (details) strip reserved on `document.documentElement` by AppFrame. */
 function readDetailsInsetPx(): number {
   const raw = getComputedStyle(document.documentElement)
@@ -42,6 +42,19 @@ function readDetailsInsetPx(): number {
     .trim()
   const n = Number.parseFloat(raw)
   return Number.isFinite(n) ? n : 0
+}
+
+function isPhoneLayout(): boolean {
+  return document.documentElement.hasAttribute('data-xrk-layout-phone')
+}
+
+/** Overview inset only on desktop (phone has no details column). */
+function jobListRightInset(): number {
+  return isPhoneLayout() ? 0 : readDetailsInsetPx()
+}
+
+function jobListMargin(): number {
+  return isPhoneLayout() ? 16 : 12
 }
 
 /**
@@ -58,7 +71,6 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
   const [open, setOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<string | undefined>(undefined)
-  const [fixedPos, setFixedPos] = useState<CSSProperties | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -66,6 +78,20 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
   const rows = useMemo(() => orderedJobs(jobs), [jobs])
   const settledRows = useMemo(() => rows.filter((job) => !isLiveJob(job)), [rows])
   const now = useJobClock(false)
+
+  // Phone: keep clear of notches; desktop: clear of Overview details inset.
+  const fixedPos = useAnchoredPosition({
+    open,
+    anchorRef: triggerRef,
+    panelRef: menuRef,
+    side: 'bottom',
+    align: 'end',
+    gap: 5,
+    margin: 12,
+    fallbackWidth: 420,
+    getMargin: jobListMargin,
+    getRightInset: jobListRightInset,
+  })
 
   useDismissOnOutsidePointer(rootRef, open, setOpen, menuRef)
 
@@ -78,44 +104,6 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
       setExpandedId(undefined)
     }
   }, [jobs, expandedId])
-
-  // Place under the trigger, end-aligned (grows left, away from Overview), and
-  // clamp so the card stays clear of the details inset + viewport edges.
-  useLayoutEffect(() => {
-    if (!open) {
-      setFixedPos(null)
-      return
-    }
-    const place = (): void => {
-      const trigger = triggerRef.current
-      const menu = menuRef.current
-      if (trigger === null) return
-      const r = trigger.getBoundingClientRect()
-      // Phone: keep the portaled menu clear of notches / home indicator.
-      const phone = document.documentElement.hasAttribute('data-xrk-layout-phone')
-      const MARGIN = phone ? 16 : 12
-      const vw = window.innerWidth
-      const vh = window.innerHeight
-      const detailsInset = phone ? 0 : readDetailsInsetPx()
-      const lw = menu !== null && menu.offsetWidth > 0 ? menu.offsetWidth : 420
-      const lh = menu !== null && menu.offsetHeight > 0 ? menu.offsetHeight : 0
-      let x = r.right - lw
-      let y = r.bottom + 5
-      const maxRight = vw - Math.max(0, detailsInset) - MARGIN
-      x = Math.min(Math.max(x, MARGIN), Math.max(MARGIN, maxRight - lw))
-      if (lh > 0) {
-        y = Math.min(Math.max(y, MARGIN), Math.max(MARGIN, vh - lh - MARGIN))
-      }
-      setFixedPos({ left: x, top: y })
-    }
-    place()
-    window.addEventListener('scroll', place, true)
-    window.addEventListener('resize', place)
-    return () => {
-      window.removeEventListener('scroll', place, true)
-      window.removeEventListener('resize', place)
-    }
-  }, [open, settledRows.length, expandedId])
 
   // Escape while focus is in the portaled list (outside the trigger root).
   useEffect(() => {
@@ -173,7 +161,7 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
       <div
         ref={menuRef}
         className={css.menu}
-        style={fixedPos ?? MEASURE_STYLE}
+        style={fixedPos ?? ANCHORED_MEASURE_STYLE}
         data-job-list-portal=""
         data-output-open={expandedJob !== undefined ? '' : undefined}
       >

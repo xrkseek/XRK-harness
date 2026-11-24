@@ -729,12 +729,51 @@ function StrictSessionEntry({ slotKey, entry, ownerProps, slotInjected, hookCont
 }
 
 /**
- * Anchor style shared by every outlet wrapper: `display:contents` keeps the
- * wrapper out of layout (grid/flex parents see the slot's own children), so
- * the anchor is purely addressable surface. Module-level constant — a stable
- * reference so the wrapper never diffs its style prop.
+ * Slot outlet layout. Most seats stay `contents` (layout-neutral address).
+ * Flex seats get a real box so host CSS can constrain occupants via
+ * `[data-slot-layout="row"|"column"]` without hard-coding every slot key.
+ * Inline style — beats module sheets that tried to restyle a contents box.
  */
-const ANCHOR_STYLE = { display: 'contents' } as const
+type SlotAnchorLayout = 'contents' | 'row' | 'column'
+
+const ANCHOR_STYLE: Record<SlotAnchorLayout, {
+  readonly display: string
+  readonly alignItems?: string
+  readonly flexDirection?: 'column'
+  readonly gap?: number
+  readonly minWidth?: number | string
+  readonly flex?: string
+  readonly width?: string
+}> = {
+  contents: { display: 'contents' },
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+    flex: '1 1 auto',
+  },
+  column: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    width: '100%',
+    minWidth: 0,
+  },
+}
+
+/** Slots that need a real layout box (extend here — not in every host CSS). */
+const SLOT_ANCHOR_LAYOUT: Readonly<Record<string, Exclude<SlotAnchorLayout, 'contents'>>> = {
+  'conversation.session.header.actions': 'row',
+  'conversation.session.header.utilities': 'row',
+  'conversation.input.left': 'row',
+  'conversation.input.right': 'row',
+  'settings.general.item': 'column',
+}
+
+function slotAnchorLayout(slotKey: string): SlotAnchorLayout {
+  return SLOT_ANCHOR_LAYOUT[slotKey] ?? 'contents'
+}
 
 function SlotOutlet({ slotKey, ownerProps, opts }: {
   slotKey: string
@@ -751,14 +790,16 @@ function SlotOutlet({ slotKey, ownerProps, opts }: {
   // bodies re-derive their `t` seat at the new revision (fresh identity).
   useLocaleRevision(host.locale)
   const sessionInfo = useSessionMaybeProvideInfo()
+  const layout = slotAnchorLayout(slotKey)
   // Anchor contract: every slot render site exposes a stable
-  // `[data-slot="<key>"]` wrapper — the addressable seam dynamic styles
-  // target — and `display:contents` keeps it layout-neutral. The wrapper
-  // rides the outlet, not the dispatch outcome: fallback, crash-face, and
-  // undeclared-empty states all render inside it, so the anchor's presence
-  // never flickers with registration churn.
+  // `[data-slot="<key>"]` wrapper (+ `data-slot-layout`). Fallback / crash-face
+  // / empty still ride inside so the anchor never flickers with registration.
   return (
-    <div data-slot={slotKey} style={ANCHOR_STYLE}>
+    <div
+      data-slot={slotKey}
+      data-slot-layout={layout}
+      style={ANCHOR_STYLE[layout]}
+    >
       {renderOutletContent(host, slotKey, ownerProps, opts, sessionInfo)}
     </div>
   )
@@ -978,7 +1019,7 @@ function RootOutlet({ ownerProps }: { ownerProps: object }) {
   // Same anchor contract as SlotOutlet: 'root' is a slot like any other, and
   // display:contents keeps the wrapper out of the shell's layout.
   return (
-    <div data-slot="root" style={ANCHOR_STYLE}>
+    <div data-slot="root" data-slot-layout="contents" style={ANCHOR_STYLE.contents}>
       <SlotErrorBoundary
         slotKey="root"
         key={entryKeyOf(entry)}

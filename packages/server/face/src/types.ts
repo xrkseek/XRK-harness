@@ -185,6 +185,21 @@ export type HostFrame =
       readonly running: boolean;
     }
   | {
+      /**
+       * Soft-detach wait dock mirror. Independent of `host/session-status`
+       * running so Stop's optimistic `running:false` cannot clear the wait bit.
+       * `active` null = no wait body attached (hide 「停止等待」).
+       */
+      readonly type: "host/session-wait-yield";
+      readonly sessionId: string;
+      readonly active:
+        | {
+            readonly kind: "wait_agent" | "peer_wait" | "subagent_foreground";
+            readonly label?: string;
+          }
+        | null;
+    }
+  | {
       /** Live 主线 / 支线 chrome after thread_* / sideline mutations. */
       readonly type: "host/session-thread";
       readonly sessionId: string;

@@ -49,9 +49,17 @@ ProjectionDefinition<'contextBreakdown', ContextBreakdownState> = {
     let systemTokens = state.systemTokens
     let toolsTokens = state.toolsTokens
     if (event.type === 'request/header') {
+      // Slim system-only envelopes omit tools — keep prior standing schemas
+      // (foldRequestHeader merge). Empty tools[] still prices as 0.
       const header = canonicalHeader(event.data.header)
-      systemTokens = estimateSystemTokens(header)
-      toolsTokens = estimateToolsTokens(header)
+      if (header.system !== undefined) {
+        systemTokens = estimateSystemTokens(header)
+      }
+      if (header.tools !== undefined && header.tools.length > 0) {
+        toolsTokens = estimateToolsTokens(header)
+      } else if (header.tools !== undefined && header.tools.length === 0) {
+        toolsTokens = 0
+      }
     }
     if (systemTokens === state.systemTokens
       && toolsTokens === state.toolsTokens
@@ -66,5 +74,6 @@ ProjectionDefinition<'contextBreakdown', ContextBreakdownState> = {
     }
   },
   view: ({ systemTokens, toolsTokens, messageTokens }) => ({ systemTokens, toolsTokens, messageTokens }),
-  stateVersion: 2,
+  // v3: slim system-only envelopes keep prior tool schemas.
+  stateVersion: 3,
 }

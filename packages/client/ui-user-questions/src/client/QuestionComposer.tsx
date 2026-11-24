@@ -6,7 +6,7 @@ import clsx from 'clsx'
 import {
   Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineRegular,
   IconChevronRightOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
-  IconEditOutlineRegular, MarkdownText,
+  IconEditOutlineRegular, isComposingKeyboardEvent, MarkdownText,
 } from '@xrkseek/client-ui-primitives'
 import {
   PendingQuestion, planReviewOf,
@@ -43,9 +43,7 @@ export function parseRecommendedLabel(label: string): { label: string; recommend
 
 /** Return whether a text-field key event belongs to an active IME composition. */
 function isComposing(event: KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>): boolean {
-  // keyCode 229 is the legacy IME-composition signal engines emit without isComposing.
-  // oxlint-disable-next-line typescript/no-deprecated
-  return event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
+  return isComposingKeyboardEvent(event.nativeEvent)
 }
 
 /**
@@ -303,7 +301,11 @@ function QuestionFlow({
                       disabled={busy !== null}
                       onClick={() => { choose(option.label) }}
                       onKeyDown={(event) => {
-                        if (event.key !== 'Enter' || !drafts.every(completed)) return
+                        if (
+                          event.key !== 'Enter' ||
+                          isComposingKeyboardEvent(event.nativeEvent) ||
+                          !drafts.every(completed)
+                        ) return
                         event.preventDefault()
                         submitDrafts(drafts)
                       }}

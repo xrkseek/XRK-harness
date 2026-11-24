@@ -75,7 +75,10 @@ export function formatCollabBoardText(input: {
   readonly canSpawn?: boolean;
   /** Defaults to coding (full board + thread mail). */
   readonly surface?: CollabBoardSurface;
-  /** Parent peers with no 主线 pin — listed when the pin window is empty. */
+  /**
+   * @deprecated Ignored — idle boards no longer dump unbound peers
+   * (session_search). Kept optional so old call sites type-check.
+   */
   readonly unboundPeers?: readonly CollabBoardPeerRow[];
   /** Live Settings titles — defaults office×zh when omitted (tests). */
   readonly titles?: SeatTitles;
@@ -112,52 +115,29 @@ export function formatCollabBoardText(input: {
         : `thread_message same-lane only · never ${agentWs} · *=you`;
   const lines = [teamLead];
   if (input.membersCatalog.trim()) lines.push(input.membersCatalog);
-  const peers = input.unboundPeers ?? [];
-  if (recent.length === 0 && peers.length === 0) {
-    // Idle first-turn: one line, no empty peer table lecture.
-    lines.push(`Peers: none · ${peerLane}`);
+  if (recent.length === 0) {
+    // Idle: do NOT dump unbound parent peers (that ate spawn-ids savings).
+    // Find peers via session_search / thread_list — same progressive bar as
+    // roster briefs → team_list. `unboundPeers` kept on the type for tests /
+    // callers but ignored on the idle path.
+    lines.push(`Peers: none · find via session_search · ${peerLane}`);
   } else {
     lines.push(`Peers · ${peerLane}`);
-    if (recent.length === 0) {
-      for (const peer of peers) {
-        lines.push(`- ${formatPeerLine(peer)}`);
-      }
-    } else {
-      for (const thread of recent) {
-        const sessions = thread.sessions
-          .map((s) => {
-            const mark = s.self ? "*" : "";
-            const tip = s.sideline ? ` · 支线=${clipBrief(s.sideline)}` : "";
-            return `${s.sessionId}${mark}${tip}`;
-          })
-          .join("; ");
-        const brief = thread.brief ? ` — ${clipBrief(thread.brief)}` : "";
-        lines.push(
-          `- 主线 ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
-        );
-      }
+    for (const thread of recent) {
+      const sessions = thread.sessions
+        .map((s) => {
+          const mark = s.self ? "*" : "";
+          const tip = s.sideline ? ` · 支线=${clipBrief(s.sideline)}` : "";
+          return `${s.sessionId}${mark}${tip}`;
+        })
+        .join("; ");
+      const brief = thread.brief ? ` — ${clipBrief(thread.brief)}` : "";
+      lines.push(
+        `- 主线 ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
+      );
     }
   }
   return lines.join("\n").slice(0, BOARD_MAX_CHARS);
-}
-
-function formatPeerLine(peer: CollabBoardPeerRow): string {
-  const mark = peer.self ? "*" : "";
-  const title = peer.title ? ` 「${clipBrief(peer.title)}」` : "";
-  const who = peer.identity
-    ? peer.nickname
-      ? ` who=${clipBrief(peer.identity)}（${clipBrief(peer.nickname)}）`
-      : ` who=${clipBrief(peer.identity)}`
-    : "";
-  const duty = peer.duty ? ` duty=${clipBrief(peer.duty)}` : "";
-  const todos =
-    peer.todoOpen !== undefined ? ` todo_open=${peer.todoOpen}` : "";
-  const tip = peer.sideline ? ` 支线=${clipBrief(peer.sideline)}` : "";
-  const main = peer.mainline
-    ? ` 主线=「${clipBrief(peer.mainline)}」`
-    : " 主线=none";
-  const run = peer.running ? " · running" : "";
-  return `${peer.sessionId}${mark}${title}${who}${duty}${todos}${tip}${main}${run}`;
 }
 
 function clipBrief(value: string): string {
@@ -465,9 +445,6 @@ export function formatCollabBoard(
         ? "qichuang"
         : "coding";
   const threads = listWorkspaceThreadCatalog(runtime, workspaceId, sessionId);
-  const recent = threads.filter(
-    (row) => row.updatedAt >= now - COLLAB_BOARD_THREAD_WINDOW_MS,
-  );
   const presenceUser = runtime.settingsNamespaces.view("ui-presence")
     .value as Record<string, unknown>;
   const localeUser = runtime.settingsNamespaces.view("locale")
@@ -475,21 +452,13 @@ export function formatCollabBoard(
   const locale = readUiLocalePreference(localeUser);
   const titles = readSeatTitles(presenceUser, locale);
   return formatCollabBoardText({
+    // Spawn-ids only — briefs via team_list (session-tool-copy contract).
+    // Idle boards omit unbound peer tables — session_search finds them.
     membersCatalog: formatRosterCatalog(
       runtime.agentRoster.listVisible(workspaceId),
+      { density: "spawn-ids" },
     ),
     threads,
-    ...(recent.length === 0
-      ? {
-          unboundPeers: listUnboundParentPeers(
-            runtime,
-            workspaceId,
-            sessionId,
-            titles,
-            locale,
-          ),
-        }
-      : {}),
     canSpawn,
     surface,
     titles,

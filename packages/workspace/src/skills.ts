@@ -439,11 +439,7 @@ export function formatSkillCatalog(
     const extra = s.whenToUse ? ` When to use: ${s.whenToUse}` : "";
     return `- **${s.name}**: ${s.description}.${extra}`;
   });
-  return [
-    "## Skills",
-    ...lines,
-    "Catalog = name+blurb; `skill` loads body. Head: 公文包 → workspace → product/globals.",
-  ].join("\n");
+  return ["## Skills", ...lines].join("\n");
 }
 
 function escapeAttr(value: string): string {
@@ -468,6 +464,3 @@ export function renderSkillContent(skill: SkillDefinition): string {
     "</skill_content>",
   ].join("\n");
 }
-
-export const SKILL_TOOL_GUIDANCE =
-  "`skill` loads body by exact catalog name (no skill_search). Prefer 公文包 / workspace head. Frugal: load then do the work here.";

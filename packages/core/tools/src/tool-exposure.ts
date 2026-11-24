@@ -3,14 +3,65 @@
  * Registry stays full; only the LLM wire catalog is filtered.
  */
 
-import type { ToolDefinition, ToolExposure } from "./definition.js";
+import type {
+  ToolDefinition,
+  ToolExposure,
+  ToolRegistry,
+} from "./definition.js";
+import { scoreFuzzyQuery } from "./fuzzy-match.js";
 
 export const TOOL_SEARCH_NAME = "tool_search";
 /** Codex `TOOL_SEARCH_DEFAULT_LIMIT`. */
 export const TOOL_SEARCH_DEFAULT_LIMIT = 8;
 /** Catalog fragment budget (Codex world_state tools ≈ 4KiB). */
 export const TOOL_CATALOG_MAX_BYTES = 4 * 1024;
-const NS_DESC_MAX = 250;
+/** Browse list stays short — full schema comes after expand. */
+const NS_DESC_MAX = 72;
+
+/**
+ * Standing Deferred packs (scientific bar — all of):
+ * 1. Schema fat enough that hello-turns pay real rent (≥~300 tok).
+ * 2. Rare on first turns / not on the peer-find or 主线 pin chain.
+ * 3. Present on **most** seats (safe to hint in the stable `tool_search`
+ *    description). Seat-only tools (向阳 `settings_*` / `workspace_*`) stay
+ *    Direct where Face binds them — do **not** advertise them globally.
+ *
+ * Keep Direct (disclosure chain / high P(use)):
+ * - fs/shell · skill/memory · ask/present/todo
+ * - `team_list` · `team_home` · `team_save` (spawn/mint)
+ * - `thread_*` (主线 pin + mail)
+ * - `session_*` (find peers after a thin collab board)
+ * - `web_*` (research seats hit early; expand tax ≈ keep Direct)
+ * - `settings_*` / `workspace_*` (向阳-only; Face binds, not this list)
+ *
+ * browser_* / computer_use / MCP already set `exposure: deferred` at source.
+ */
+export const STANDING_DEFERRED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "terminal_open",
+  "terminal_send",
+  "terminal_read",
+  "terminal_signal",
+  "terminal_close",
+  "terminal_list",
+  "job_list",
+  "job_output",
+  "job_kill",
+  "cronjob",
+  "propose_skill",
+]);
+
+/**
+ * Force listed Direct tools onto Deferred (idempotent; skips hidden / already
+ * deferred). Call after preset registration and again after Face binds.
+ */
+export function applyStandingDeferredExposure(tools: ToolRegistry): void {
+  for (const name of STANDING_DEFERRED_TOOL_NAMES) {
+    const tool = tools.get(name);
+    if (!tool) continue;
+    if (exposureOf(tool) !== "direct") continue;
+    tools.replace({ ...tool, exposure: "deferred" });
+  }
+}
 
 export function exposureOf(tool: ToolDefinition): ToolExposure {
   return tool.exposure ?? "direct";
@@ -83,20 +134,12 @@ function appendSchemaSearchText(
   if (items) appendSchemaSearchText(items, parts, depth + 1);
 }
 
-export function scoreToolSearch(query: string, searchText: string): number {
-  const q = query.trim().toLowerCase();
-  if (!q) return 0;
-  const tokens = q.split(/[\s,/|]+/).filter(Boolean);
-  if (tokens.length === 0) return 0;
-  let score = 0;
-  for (const token of tokens) {
-    if (searchText.includes(token)) score += 10;
-    // Prefer name-prefix hits.
-    if (searchText.startsWith(token) || searchText.includes(`\n${token}`)) {
-      score += 5;
-    }
-  }
-  return score;
+export function scoreToolSearch(
+  query: string,
+  searchText: string,
+  name?: string,
+): number {
+  return scoreFuzzyQuery(query, searchText, name ? { name } : undefined);
 }
 
 export function searchDeferredTools(
@@ -114,7 +157,7 @@ export function searchDeferredTools(
     if (tool.name === TOOL_SEARCH_NAME) continue;
     if (exposureOf(tool) !== "deferred") continue;
     if (exclude?.has(tool.name)) continue;
-    const score = scoreToolSearch(query, toolSearchText(tool));
+    const score = scoreToolSearch(query, toolSearchText(tool), tool.name);
     if (score > 0) scored.push({ tool, score });
   }
   scored.sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name));

@@ -4,6 +4,7 @@
 
 .trigger {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 3px;
   min-height: 28px;
@@ -14,6 +15,7 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 18px;
+  white-space: nowrap;
   cursor: pointer;
   transition: padding 120ms var(--ds-ease-out, ease), color 120ms ease;
 }
@@ -49,9 +51,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Conversation header is a size container: when the column is squeezed
-   (Overview + workbench), collapse the long 「N 个后台任务」 label to the
-   bare count so crumbs / tabs keep a readable share of the title row. */
+/* Nearest size container is [data-conversation-header]
+   (`xrk-conversation-header` in containers.css). Anonymous query on purpose —
+   CSS modules would hash a named @container and miss the global name. */
 @container (max-width: 640px) {
   .countFull {
     display: none;

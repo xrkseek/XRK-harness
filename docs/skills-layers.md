@@ -8,8 +8,9 @@
 
 | 种类 | 典型路径 | 进模型方式 |
 |----|------|------------|
-| **Rules / 站立说明** | `~/.agents/` · **`~/.xrk/`（产品数据根 / system data）** · `{workspace}/.agents/` · `{workspace}/.xrk/` · 工作区 `.cursor/rules/**` | 持久 `user/message` · `source: agent-instructions` |
-| **Skills** | 工作区 `skills/<name>/SKILL.md`；产品家 `{XRK_HOME}/skills`（种子 + 用户安装）；可选其它 home（**不含** `~/.cursor/skills`） | 站立 `skill-catalog` ≡ `skill` 工具 ≡ Face `skill.list` / `/skills`（`standingCatalogSkillDirCandidates`） |
+| **Rules / 站立说明** | `~/.agents/` · **`~/.xrk/`（产品数据根 / system data）** · `{workspace}/.agents/`（AGENTS/rules；**不含** `context/`） · `{workspace}/.xrk/` · 工作区 `.cursor/rules/**`（经理席） | 持久 `user/message` · `source: agent-instructions` |
+| **Skill 渐进披露** | 站立 catalog **仅名** → `skill_search` blurb → `skill` 正文 | 与 `tool_search`（延迟工具）对称；种子 17 skill 实测站立 catalog 相对「名+描述」约省 **90% 字节**，正文合计约 **56 KB** 离线（见 [workspace-inject.md](./workspace-inject.md)「渐进披露省量」） |
+| **Skills** | 工作区 `skills/<name>/SKILL.md`；产品家 `{XRK_HOME}/skills`（种子 + 用户安装）；可选其它 home（**不含** `~/.cursor/skills`） | 站立 `skill-catalog`（仅名）≡ `skill_search` / `skill` ≡ Face `skill.list` / `/skills`（`standingCatalogSkillDirCandidates`） |
 
 ### 权限边界（产品 vs 用户）
 
@@ -112,8 +113,9 @@ The product Agent reads rules and skills from **global** and **workspace** layer
 
 | Kind | Typical paths | How it reaches the model |
 |----|------|------------|
-| **Rules / standing instructions** | `~/.agents/` · **`~/.xrk/` (product system data)** · `{workspace}/.agents/` · `{workspace}/.xrk/` · workspace `.cursor/rules/**` | Durable `user/message` · `source: agent-instructions` |
-| **Skills** | Workspace `skills/<name>/SKILL.md`; product-home `{XRK_HOME}/skills` (seeds + user installs); optional other home (**excludes** `~/.cursor/skills`) | Standing `skill-catalog` ≡ `skill` tool ≡ Face `skill.list` / `/skills` (`standingCatalogSkillDirCandidates`) |
+| **Rules / standing instructions** | `~/.agents/` · **`~/.xrk/` (product system data)** · `{workspace}/.agents/` (AGENTS/rules; **not** `context/`) · `{workspace}/.xrk/` · workspace `.cursor/rules/**` (manager seats) | Durable `user/message` · `source: agent-instructions` |
+| **Skill progressive disclosure** | Standing catalog = **names only** → `skill_search` blurbs → `skill` body | Symmetric with `tool_search` (deferred tools); 17 seed skills: standing catalog saves ~**90% bytes** vs name+description; bodies ~**56 KB** stay offline (see [workspace-inject.md](./workspace-inject.md) “Progressive disclosure savings”) |
+| **Skills** | Workspace `skills/<name>/SKILL.md`; product-home `{XRK_HOME}/skills` (seeds + user installs); optional other home (**excludes** `~/.cursor/skills`) | Standing `skill-catalog` (names) ≡ `skill_search` / `skill` ≡ Face `skill.list` / `/skills` (`standingCatalogSkillDirCandidates`) |
 
 ### Authority boundary (product vs user)
 

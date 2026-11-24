@@ -63,7 +63,8 @@ export function createContextHeadersProjectionUnit(): ProjectionDefinition<
 > {
   return {
     key: "contextHeaders",
-    stateVersion: 2,
+    // v3: slim system-only rows carry prior tools[] (foldRequestHeader parity).
+    stateVersion: 3,
     init: () => ({ applied: 0, headers: [] }),
     apply(state, event: SessionEvent): ContextHeadersState {
       const seq = state.applied + 1;
@@ -71,13 +72,22 @@ export function createContextHeadersProjectionUnit(): ProjectionDefinition<
         return { ...state, applied: seq };
       }
 
-      const system = event.header.system;
+      // Slim system-only rows omit tools — carry standing schemas from the
+      // prior epoch (same merge as foldRequestHeader).
+      const prev = state.headers[state.headers.length - 1];
+      const system =
+        typeof event.header.system === "string" &&
+        event.header.system.length > 0
+          ? event.header.system
+          : prev?.system;
+      const hasTools =
+        event.header.tools !== undefined && event.header.tools.length > 0;
       const entry: ContextHeaderEntry = {
         seq,
-        ...(typeof system === "string" && system.length > 0
-          ? { system }
-          : {}),
-        tools: toolRows(event.header.tools),
+        ...(system !== undefined ? { system } : {}),
+        tools: hasTools
+          ? toolRows(event.header.tools)
+          : (prev?.tools ?? []),
       };
       const headers = [...state.headers, entry];
       return {

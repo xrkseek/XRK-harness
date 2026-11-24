@@ -29,7 +29,7 @@ tool/call (session, by loop)
 9. **Side events** — `todo_write` / `exit_plan_mode` 等经 `emitToolEvent`；loop 校验后 append（不进 `deriveMessages`）。
 10. **Settle** — 默认 parallel + 屏障；见 [tool-settlement.md](./tool-settlement.md)。
 11. **Materialize** — settle 用冻结工具表。
-12. **Wire catalog** — `listForModel` 按 `ToolDefinition.exposure` 过滤进模型的工具表（`direct` / `deferred` / `hidden`）；有 `tool_search` 时 Deferred 默认不出 schema，经 search 展开（单次 ≤8）；无 search → 仅 Direct（Deferred 不上线，避免 MCP schema 撑爆软预算）。Registry 仍挂全表。MCP 工具默认 `exposure: deferred`。
+12. **Wire catalog** — `listForModel` 按 `ToolDefinition.exposure` 过滤进模型的工具表（`direct` / `deferred` / `hidden`）；有 `tool_search` 时 Deferred 默认不出 schema，经 search 展开（单次 ≤8）；无 search → 仅 Direct（Deferred 不上线，避免 MCP schema 撑爆软预算）。Registry 仍挂全表。MCP 工具默认 `exposure: deferred`。渐进 wire 相对「全表上线」可省约 **八成字节**（合成对照）；expand 只 **尾追加** 且冻结旧声明，不整段砸提供方 KV 前缀——见 [workspace-inject.md](./workspace-inject.md)「渐进披露省量」· [session-optimize.md](./session-optimize.md) §5。
 
 Pipeline 是显式 `ToolPipeline` 对象（无全局 proxy）。审批 hook `ask` 由 Face `approval/*` 接线。路径越权（`workspace-write` 盘外）走 pre → `ask`（约 5s 确认），白名单是会话路径对象。
 
@@ -71,7 +71,7 @@ tool/call (session, by loop)
 9. **Side events** — `todo_write` / `exit_plan_mode` and peers go through `emitToolEvent`; the loop validates then appends (not into `deriveMessages`).
 10. **Settle** — Default parallel settle with a barrier; see [tool-settlement.md](./tool-settlement.md).
 11. **Materialize** — Settle uses a frozen tool table.
-12. **Wire catalog** — `listForModel` filters tools by `ToolDefinition.exposure` (`direct` / `deferred` / `hidden`); with `tool_search`, Deferred schemas stay off the wire until searched (≤8 per call); without search → Direct only (Deferred stay off the wire so MCP schemas cannot blow the soft budget). The Registry stays full. MCP tools default to `exposure: deferred`.
+12. **Wire catalog** — `listForModel` filters tools by `ToolDefinition.exposure` (`direct` / `deferred` / `hidden`); with `tool_search`, Deferred schemas stay off the wire until searched (≤8 per call); without search → Direct only (Deferred stay off the wire so MCP schemas cannot blow the soft budget). The Registry stays full. MCP tools default to `exposure: deferred`. Progressive wire can save ~**80% bytes** vs dumping every schema (synthetic baseline); expand **appends** at the `tools[]` tail with frozen survivor declarations so the provider KV prefix is not rewritten wholesale — see [workspace-inject.md](./workspace-inject.md) “Progressive disclosure savings” · [session-optimize.md](./session-optimize.md) §5.
 
 The pipeline is an explicit `ToolPipeline` object (no global proxy). The approval hook `ask` is wired by Face `approval/*`. Path overreach (`workspace-write` off-root) uses pre → `ask` (≈5s); the allowlist is session path objects.
 

@@ -13,7 +13,11 @@ import {
 } from "@xrkseek/core-session";
 import { echoRpcForAdmit, rebuildAdmitRpcMaps } from "./admit-rpc-rebuild.js";
 import type { AgentHandle } from "@xrkseek/core-agent";
-import { EXIT_PLAN_MODE, type ToolRegistry } from "@xrkseek/core-tools";
+import {
+  applyStandingDeferredExposure,
+  EXIT_PLAN_MODE,
+  type ToolRegistry,
+} from "@xrkseek/core-tools";
 import {
   syncIdentityPlaybooksFromShellTool,
   syncIdentityPlaybooksFromWriteTool,
@@ -56,6 +60,7 @@ import {
   type JobView,
 } from "./adapt/job-view.js";
 import { wireJobSessionJournal } from "./job-session-journal.js";
+import { createWaitYieldHub } from "./wait-yield.js";
 import {
   formatSubagentCompletionNotice,
   subagentNoticeSource,
@@ -985,16 +990,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     }
     void resolveAgent(parentId)
       .then((parent) => {
+        // Boss speech into the child, mirrored on the parent transcript.
+        // `kind:"user"` → speech bubble + 第 N 轮 (not a context chip /
+        // English "User message to background…" shell).
         const receipt = parent.admit(
           formatSubagentUserPromptNotice(noticeLink, preview),
           {
             delivery: "steer",
-            source: {
-              kind: "plugin",
-              plugin: "subagent-mirror",
-              form: "notice",
-              childSessionId,
-            },
+            source: { kind: "user" },
           },
         );
         noticeAdmitIds.add(receipt.admitId);
@@ -1366,6 +1369,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         if (agent.tools) {
           applyBossVoiceToolMask(runtime, sessionId, agent.tools);
         }
+        // After Face binds session_*/team-admin/workspace_*: same thin standing
+        // wire as the harness preset (tool_search expands on demand).
+        if (agent.tools) {
+          applyStandingDeferredExposure(agent.tools);
+        }
       }
     }
     bindAgentJobs(sessionId, agent);
@@ -1731,6 +1739,22 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     approvals.setPermissionRequestGate(permissionRequestGate);
   }
 
+  const waitYield = createWaitYieldHub();
+  // Mirror attach/dispose onto a dedicated host frame so the shell dock follows
+  // the hub (not tool-name heuristics) without racing Stop's running:false.
+  waitYield.subscribe((sessionId, active) => {
+    bus.publishHost({
+      type: "host/session-wait-yield",
+      sessionId,
+      active: active
+        ? {
+            kind: active.kind,
+            ...(active.label !== undefined ? { label: active.label } : {}),
+          }
+        : null,
+    });
+  });
+
   const runtime: FaceRuntime = {
     store,
     ...(options.attachments !== undefined
@@ -1739,6 +1763,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.inputModalities !== undefined
       ? { inputModalities: options.inputModalities }
       : {}),
+    waitYield,
     ensureSession(id) {
       if (id) {
         if (store.has(id)) return id;

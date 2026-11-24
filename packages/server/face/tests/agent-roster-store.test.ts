@@ -404,6 +404,51 @@ describe("FaceAgentRosterStore", () => {
       appearance: { shape: "blob", color: "cream", kitHeld: "flower" },
     });
     expect(held?.appearance.kitHeld).toBe("flower");
+    const custom = store.upsert(GLOBAL_ROSTER_ID, {
+      id: dressed!.id,
+      name: "三层贴图",
+      playbook: "Hat, glasses, and a staff together.",
+      role: "worker",
+      appearance: {
+        shape: "teardrop",
+        color: "rose",
+        bodyColor: "#ff88aa",
+        eyeColor: "#112233",
+        overlayHat: png,
+        overlayGlasses: png,
+        overlayHeld: png,
+      },
+    });
+    expect(custom?.appearance.bodyColor).toBe("#ff88aa");
+    expect(custom?.appearance.eyeColor).toBe("#112233");
+    expect(custom?.appearance.overlayHat).toBe(png);
+    // Explicit empty clears custom hex + sticker overlays (Team "follow palette"
+    // / switch back to builtin kit). Omitting the key used to keep the prior look.
+    const cleared = store.upsert(GLOBAL_ROSTER_ID, {
+      id: custom!.id,
+      name: "三层贴图",
+      playbook: "Hat, glasses, and a staff together.",
+      role: "worker",
+      appearance: {
+        shape: "teardrop",
+        color: "rose",
+        bodyColor: "",
+        eyeColor: "",
+        kitHat: "bow",
+        kitGlasses: "none",
+        kitHeld: "none",
+        overlayHat: "",
+        overlayGlasses: "",
+        overlayHeld: "",
+      },
+    });
+    expect(cleared?.appearance.bodyColor).toBeUndefined();
+    expect(cleared?.appearance.eyeColor).toBeUndefined();
+    expect(cleared?.appearance.overlayHat).toBeUndefined();
+    expect(cleared?.appearance.overlayGlasses).toBeUndefined();
+    expect(cleared?.appearance.overlayHeld).toBeUndefined();
+    expect(cleared?.appearance.face).toBeUndefined();
+    expect(cleared?.appearance.kitHat).toBe("bow");
   });
 
   it("promoting to global drops the same id from every workspace roster", () => {

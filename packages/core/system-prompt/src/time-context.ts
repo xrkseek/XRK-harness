@@ -5,6 +5,18 @@
  */
 
 const lastInjectMs = new Map<string, number>();
+/** Soft cap so Host long-runs do not retain every historical sessionId. */
+const TIME_CONTEXT_CACHE_MAX = 64;
+
+function rememberInject(id: string, nowMs: number): void {
+  if (lastInjectMs.has(id)) lastInjectMs.delete(id);
+  lastInjectMs.set(id, nowMs);
+  while (lastInjectMs.size > TIME_CONTEXT_CACHE_MAX) {
+    const oldest = lastInjectMs.keys().next().value;
+    if (oldest === undefined) break;
+    lastInjectMs.delete(oldest);
+  }
+}
 
 /**
  * @param sessionId - session key
@@ -21,7 +33,7 @@ export function shouldRefreshTimeContext(
   const id = sessionId.trim() || "_";
   const prev = lastInjectMs.get(id);
   if (prev === undefined || intervalMs === 0 || nowMs - prev >= intervalMs) {
-    lastInjectMs.set(id, nowMs);
+    rememberInject(id, nowMs);
     return true;
   }
   return false;
@@ -44,7 +56,7 @@ export function noteTimeContextInjected(
   sessionId: string,
   nowMs: number,
 ): void {
-  lastInjectMs.set(sessionId.trim() || "_", nowMs);
+  rememberInject(sessionId.trim() || "_", nowMs);
 }
 
 /**

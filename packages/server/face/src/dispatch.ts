@@ -75,6 +75,7 @@ import {
   sessionTools,
   sessionRolloutTrace,
   sessionUpdateQueue,
+  sessionYieldWait,
 } from "./handlers/session.js";
 import {
   sessionCheckpointList,
@@ -177,6 +178,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "session.eventWindow": sessionEventWindow,
   "session.prompt": sessionPrompt,
   "session.cancel": sessionCancel,
+  "session.yieldWait": sessionYieldWait,
   "session.delete": sessionDelete,
   "session.models": sessionModels,
   "session.selectModel": sessionSelectModel,

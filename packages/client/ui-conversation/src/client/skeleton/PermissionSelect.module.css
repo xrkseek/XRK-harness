@@ -1,6 +1,7 @@
 /* IM / 向阳空间: read-only full-access mark — same metrics as .trigger, no chevron. */
 .orchChip {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -17,6 +18,7 @@
 
 .trigger {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 4px;
   min-width: 0;

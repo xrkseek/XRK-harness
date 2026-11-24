@@ -54,6 +54,7 @@ import {
   type PresenceEmotion,
   type SessionBallPersona,
 } from './presence-emotion.ts'
+import type { PresenceLookSnapshot } from './presence-look.ts'
 import type { PresenceSettingsRuntime } from './presence-settings-runtime.ts'
 import { resolvePresenceStageSize } from './presence-stage-size.ts'
 import css from './PresenceBall.module.css'
@@ -623,18 +624,7 @@ export const PresenceBall = memo(function PresenceBall({
    */
   readonly engineActive?: boolean
   /** Child 干员 look — overrides Settings presence so the home ball stays unique. */
-  readonly memberLook?: {
-    readonly shape: string
-    readonly color: string
-    readonly size?: number
-    readonly kit?: string
-    readonly kitHat?: string
-    readonly kitGlasses?: string
-    readonly kitHeld?: string
-    readonly overlayHat?: string
-    readonly overlayGlasses?: string
-    readonly overlayHeld?: string
-  }
+  readonly memberLook?: PresenceLookSnapshot
   /** Smaller seat inside the Overview dual-ball pair. */
   readonly pairSeat?: boolean
   /** Dual-ball: 委派方 (`from`) vs 被委派方 (`to`). */
@@ -677,6 +667,8 @@ export const PresenceBall = memo(function PresenceBall({
     ? resolvePresencePaint(
       isPresenceColor(memberLook.color) ? memberLook.color : DEFAULT_PRESENCE_COLOR,
       dark,
+      memberLook.bodyColor ?? '',
+      memberLook.eyeColor ?? '',
     )
     : resolvePresencePaint(look.color, dark, look.bodyColor, look.eyeColor)
   const split = splitLegacyKit(memberLook?.kit)

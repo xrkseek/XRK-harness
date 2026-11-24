@@ -865,6 +865,6 @@ describe("subagent completion delivery", () => {
     expect(admits).toHaveLength(1);
     expect(admits[0]).toContain("ended with error (QUOTA)");
     expect(admits[0]).toContain("Route: demo-provider/demo-model · effort max");
-    expect(admits[0]).toContain("Do not send another prompt down it");
+    expect(admits[0]).toContain("Quota exhausted — do not resend on this route");
   });
 });

@@ -104,6 +104,12 @@ export interface ISession {
    */
   cancel(): Promise<RpcResult<{ accepted: true }>>
   /**
+   * Soft-detach wait-class tools (`wait_agent` · peer sync · subagent
+   * foreground wait) without cancelling the turn or children — same posture
+   * as {@link backgroundJob}. After detach, steer / 插队 can promote.
+   */
+  yieldWait(): Promise<RpcResult<{ accepted: true; detached: boolean }>>
+  /**
    * Surface a failure that belongs to this session's composer strip but does
    * not travel through {@link prompt} / {@link cancel} — edit-resubmit
    * truncation, file rollback. The strip toasts it on the next paint and the

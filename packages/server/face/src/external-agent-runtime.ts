@@ -930,7 +930,7 @@ function recordExternalTurn(
   assistantText: string,
 ): void {
   const ts = Date.now();
-  const turnId = `ext-${ts}`;
+  const turnId = `ext-${crypto.randomUUID()}`;
   store.append(sessionId, { type: "turn/start", ts, turnId });
   store.append(sessionId, {
     type: "user/message",

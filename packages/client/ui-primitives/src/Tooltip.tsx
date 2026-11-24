@@ -1,11 +1,13 @@
 // Hover/focus label bubble (figma tooltip pill: dark plate, white text).
 // The anchor is the child element itself (cloneElement, no wrapper node), so
 // attaching a tooltip never changes the anchor's layout context. The bubble is
-// position:fixed and coordinates come from the anchor's rect at show time, so
-// it escapes ancestor overflow clipping (the sidebar rail clips its column)
-// without a portal.
+// position:fixed and coordinates come from the anchor's rect; scroll (capture)
+// and resize re-measure so nested overflow containers do not leave a stale
+// bubble pointing at empty space.
 
-import { cloneElement, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  cloneElement, useCallback, useEffect, useId, useLayoutEffect, useRef, useState,
+} from 'react'
 import type {
   FocusEventHandler, MouseEventHandler, MutableRefObject, ReactElement, Ref,
 } from 'react'
@@ -24,6 +26,7 @@ interface AnchorProps {
   onMouseLeave?: MouseEventHandler | undefined
   onFocus?: FocusEventHandler | undefined
   onBlur?: FocusEventHandler | undefined
+  'aria-describedby'?: string | undefined
 }
 
 type TooltipLabel = string | (() => string)
@@ -41,6 +44,7 @@ type TooltipLabel = string | (() => string)
  * @returns the cloned anchor plus a fixed-position bubble while hovered/focused.
  */
 export function Tooltip({ label, side = 'right', delayMs = TOOLTIP_HOVER_DELAY_MS, disabled = false, maxWidth, children }: { label: TooltipLabel; side?: TooltipSide; delayMs?: number; disabled?: boolean; maxWidth?: number; children: ReactElement<AnchorProps> }) {
+  const tooltipId = useId()
   const anchor = useRef<HTMLElement | null>(null)
   // React 18 keeps the element's ref outside props; forward it so wrapping an
   // anchor in Tooltip never silently severs the owner's ref.
@@ -66,6 +70,17 @@ export function Tooltip({ label, side = 'right', delayMs = TOOLTIP_HOVER_DELAY_M
       ? pos.top + (pos.bottom - pos.top) / 2
       : placement === 'top' ? pos.top - 8 : pos.bottom + 8
   const EDGE_MARGIN = 12
+  const measureFromAnchor = useCallback(() => {
+    const el = anchor.current
+    if (el === null) return
+    const r = el.getBoundingClientRect()
+    setPlacement(side)
+    setPos({
+      x: side === 'right' ? r.right + 10 : r.left + r.width / 2,
+      top: r.top,
+      bottom: r.bottom,
+    })
+  }, [side])
   // Viewport fit: fixed positioning knows nothing about edges, so a centered
   // bubble near the right edge would clip and a long label under an anchor low
   // on the page would run off the bottom. Horizontally the bubble slides back
@@ -94,9 +109,19 @@ export function Tooltip({ label, side = 'right', delayMs = TOOLTIP_HOVER_DELAY_M
       if (placement === 'top' && !fitsAbove && fitsBelow) setPlacement('bottom')
     }
     fit()
-    window.addEventListener('resize', fit)
-    return () => { window.removeEventListener('resize', fit) }
-  }, [placement, pos, resolvedLabel, side])
+    // Capture-phase scroll catches nested transcript / sidebar scrollers
+    // (same pattern as useAnchoredPosition). Re-measure from the anchor so
+    // the bubble tracks; dismiss would also work but feels jumpy on trackpads.
+    const onScrollOrResize = () => {
+      measureFromAnchor()
+    }
+    window.addEventListener('resize', onScrollOrResize)
+    window.addEventListener('scroll', onScrollOrResize, true)
+    return () => {
+      window.removeEventListener('resize', onScrollOrResize)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+    }
+  }, [measureFromAnchor, placement, pos, resolvedLabel, side])
   const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Hover and focus are independent triggers: the bubble hides only after
   // BOTH clear (hovering away from a focused anchor must not drop it).
@@ -137,7 +162,10 @@ export function Tooltip({ label, side = 'right', delayMs = TOOLTIP_HOVER_DELAY_M
       if (dx * dx + dy * dy >= 36) holdOffHover.current = false
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') dismiss()
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        dismiss()
+      }
     }
     document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('pointermove', onPointerMove, { passive: true })
@@ -153,14 +181,9 @@ export function Tooltip({ label, side = 'right', delayMs = TOOLTIP_HOVER_DELAY_M
 
   const show = () => {
     if (disabled || holdOffHover.current) return
-    const el = anchor.current
     /* v8 ignore next -- the ref is attached by event time: events fire on the cloned anchor. */
-    if (el === null) return
-    const r = el.getBoundingClientRect()
-    // Every show starts from the requested side; the fit pass flips it only
-    // where this anchor's position demands it.
-    setPlacement(side)
-    setPos({ x: side === 'right' ? r.right + 10 : r.left + r.width / 2, top: r.top, bottom: r.bottom })
+    if (anchor.current === null) return
+    measureFromAnchor()
   }
   const showAfterHoverDelay = () => {
     if (holdOffHover.current) return
@@ -179,10 +202,13 @@ export function Tooltip({ label, side = 'right', delayMs = TOOLTIP_HOVER_DELAY_M
     if (!triggers.current.hover && !triggers.current.focus) setPos(null)
   }
 
+  const describedBy = pos !== null ? tooltipId : undefined
+
   return (
     <>
       {cloneElement(children, {
         ref: mergedRef,
+        'aria-describedby': describedBy ?? children.props['aria-describedby'],
         onMouseEnter: (e) => {
           children.props.onMouseEnter?.(e)
           triggers.current.hover = true
@@ -209,6 +235,7 @@ export function Tooltip({ label, side = 'right', delayMs = TOOLTIP_HOVER_DELAY_M
       })}
       {pos !== null && (
         <span
+          id={tooltipId}
           ref={bubble}
           className={css.bubble}
           data-side={placement}

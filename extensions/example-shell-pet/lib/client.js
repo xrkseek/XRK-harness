@@ -6,6 +6,8 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const React = require('react')
 
+    // header.utilities is data-slot-layout=row (host nowrap baseline), but
+    // controls still self-defend: flex:none / nowrap / max-width.
     function PetChip() {
       return React.createElement(
         'button',
@@ -14,8 +16,10 @@ window.__ModuleLoader__.load({
           'data-xrkh-shell-pet': '',
           title: 'XRK Plug sample pet',
           style: {
+            flex: 'none',
             height: 28,
             minWidth: 28,
+            maxWidth: 120,
             padding: '0 6px',
             borderRadius: 8,
             border: '1px solid var(--dsw-alias-border-l3, #ccc)',
@@ -23,6 +27,9 @@ window.__ModuleLoader__.load({
             color: 'var(--dsw-alias-label-primary, inherit)',
             fontSize: 14,
             lineHeight: 1,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
             cursor: 'default',
           },
         },

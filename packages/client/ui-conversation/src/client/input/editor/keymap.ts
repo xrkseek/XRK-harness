@@ -20,6 +20,10 @@ import {
   KEY_ESCAPE_COMMAND, KEY_SPACE_COMMAND, KEY_TAB_COMMAND, PASTE_COMMAND,
 } from 'lexical'
 import { mergeRegister } from '@lexical/utils'
+import {
+  createCompositionWatch,
+  isComposingKeyboardEvent,
+} from '@xrkseek/client-ui-primitives'
 import type { ArbitrateKey, ArbitrateOutcome } from '../../contract/draft-editor.ts'
 
 /** The bar-supplied behavior behind each intercepted gesture. */
@@ -40,13 +44,6 @@ export interface ComposerKeymapHandlers {
   pasteText(text: string): void
 }
 
-/** Composition state a keydown can trust (see the module doc's Safari note). */
-function isComposingEvent(event: KeyboardEvent, recentlyComposing: () => boolean): boolean {
-  // keyCode 229 is the legacy IME-composition signal engines emit without isComposing.
-  // oxlint-disable-next-line typescript/no-deprecated
-  return event.isComposing || event.keyCode === 229 || recentlyComposing()
-}
-
 /**
  * Register the composer keymap on one editor.
  * @param editor - the shell-owned editor.
@@ -54,30 +51,32 @@ function isComposingEvent(event: KeyboardEvent, recentlyComposing: () => boolean
  * @returns the unregister disposer.
  */
 export function registerComposerKeymap(editor: LexicalEditor, handlers: ComposerKeymapHandlers): () => void {
-  // Composition watch: true through composition and for one tick after
-  // compositionend (Safari's late closing keydown). The listener rides the
-  // root element and re-arms on root swaps.
-  let composing = false
-  let composingUntil = 0
+  // Shared IME watch (isComposing / keyCode 229 / Safari grace). Listeners ride
+  // the Lexical root and re-arm on root swaps; data-composer-composing also
+  // tracks editor.isComposing() for placeholder suppression.
   let rootElement: HTMLElement | null = null
   const syncComposition = (): void => {
-    rootElement?.toggleAttribute('data-composer-composing', composing || editor.isComposing())
+    rootElement?.toggleAttribute(
+      'data-composer-composing',
+      watch.isNativeComposing() || editor.isComposing(),
+    )
   }
-  const onCompositionStart = (): void => {
-    composing = true
-    syncComposition()
-  }
-  const onCompositionEnd = (): void => {
-    composing = false
-    composingUntil = Date.now() + 10
-    // The native event can precede the committed draft, including an empty
-    // cancellation. The callback also runs when no document text changed.
-    editor.update(() => {}, { onUpdate: syncComposition })
-  }
-  const recentlyComposing = (): boolean => composing || Date.now() < composingUntil
+  const watch = createCompositionWatch({
+    onChange: (native) => {
+      syncComposition()
+      if (native) return
+      // Native compositionend can precede the committed draft (including empty
+      // cancellation). Re-sync once Lexical finishes reconciling.
+      editor.update(() => {}, { onUpdate: syncComposition })
+    },
+  })
+
+  const composingOf = (event: KeyboardEvent | null): boolean => (
+    event !== null && isComposingKeyboardEvent(event, () => watch.recentlyComposing())
+  )
 
   const arrow = (key: ArbitrateKey) => (event: KeyboardEvent | null): boolean => {
-    const inComposition = event !== null && isComposingEvent(event, recentlyComposing)
+    const inComposition = composingOf(event)
     if (handlers.arbitrate(key, inComposition) !== 'pass') {
       event?.preventDefault()
       return true
@@ -87,17 +86,13 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
 
   return mergeRegister(
     editor.registerRootListener((root, prevRoot) => {
-      prevRoot?.removeEventListener('compositionstart', onCompositionStart)
-      prevRoot?.removeEventListener('compositionend', onCompositionEnd)
       prevRoot?.removeAttribute('data-composer-composing')
-      composing = false
-      composingUntil = 0
       rootElement = root
-      root?.addEventListener('compositionstart', onCompositionStart)
-      root?.addEventListener('compositionend', onCompositionEnd)
+      watch.bind(root)
       syncComposition()
     }),
     editor.registerUpdateListener(syncComposition),
+    () => { watch.dispose() },
     editor.registerCommand(KEY_ARROW_UP_COMMAND, arrow('up'), COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(KEY_ARROW_DOWN_COMMAND, arrow('down'), COMMAND_PRIORITY_CRITICAL),
     // Tab settles the highlighted completion and passes without one, keeping
@@ -113,14 +108,14 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       // Escape layering: an open overlay closes; claimed without an overlay
       // does NOT release (backspacing the token is the only exit gesture).
       handlers.dismissPopup()
-      if (handlers.arbitrate('escape', isComposingEvent(event, recentlyComposing)) === 'consumed') {
+      if (handlers.arbitrate('escape', composingOf(event)) === 'consumed') {
         event.preventDefault()
         return true
       }
       return false
     }, COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(KEY_SPACE_COMMAND, (event) => {
-      if (isComposingEvent(event, recentlyComposing)) return false
+      if (composingOf(event)) return false
       const consumed = handlers.space()
       if (consumed) {
         event.preventDefault() // claim token already carries the trailing separator
@@ -135,7 +130,7 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
         || (event.ctrlKey && event.metaKey) || (event.shiftKey && (event.ctrlKey || event.metaKey)))) return true
       // Plain Shift+Enter keeps its native line break, including during composition.
       if (event?.shiftKey === true) return false
-      if (event !== null && isComposingEvent(event, recentlyComposing)) {
+      if (composingOf(event)) {
         // The IME consumes this Enter (candidate pick); neither submit nor
         // break the line. No preventDefault: the browser owns the gesture.
         return true

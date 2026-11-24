@@ -1094,13 +1094,27 @@ function contextBreakdownOf(log: readonly SessionEvent[]): FixtureContextBreakdo
     const message = deriveEventMessage(event)
     if (message !== null) messageTokens += estimateFixtureContent(message.content) + ROLE_OVERHEAD
   }
+  // Slim request/header may omit tools; walk earlier headers so Overview
+  // does not report tools≈0 after the first persona/time delta.
+  let toolsHeader = header
+  if (header?.tools === undefined || header.tools.length === 0) {
+    for (let i = log.length - 1; i >= 0; i -= 1) {
+      const event = log[i]
+      if (event?.type !== 'request/header') continue
+      const prior = event.data.header
+      if (prior.tools !== undefined && prior.tools.length > 0) {
+        toolsHeader = prior
+        break
+      }
+    }
+  }
   return {
     systemTokens: header?.system === undefined
       ? 0
       : Math.ceil(header.system.length / CHARS_PER_TOKEN) + ROLE_OVERHEAD,
-    toolsTokens: header?.tools === undefined || header.tools.length === 0
+    toolsTokens: toolsHeader?.tools === undefined || toolsHeader.tools.length === 0
       ? 0
-      : Math.ceil(JSON.stringify(header.tools).length / CHARS_PER_TOKEN) + BLOCK_OVERHEAD,
+      : Math.ceil(JSON.stringify(toolsHeader.tools).length / CHARS_PER_TOKEN) + BLOCK_OVERHEAD,
     messageTokens,
   }
 }
@@ -2695,6 +2709,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         }
         return ok(request, { accepted: true as const })
       },
+      yieldWait: (request) => ok(request, { accepted: true as const, detached: false }),
       delete: (request) => {
         const id = request.payload.sessionId
         const at = sessions.findIndex(s => s.sessionId === id)
@@ -3548,6 +3563,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.attachment': return this.api.sessions.attachment(request)
       case 'session.updateQueue': return this.api.sessions.updateQueue(request)
       case 'session.cancel': return this.api.sessions.cancel(request)
+      case 'session.yieldWait': return this.api.sessions.yieldWait(request)
       case 'session.delete': return this.api.sessions.delete(request)
       case 'session.tools': return this.api.sessions.tools(request)
       case 'subagent.list': return this.api.subagents.list(request)

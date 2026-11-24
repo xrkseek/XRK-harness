@@ -10,7 +10,10 @@
  * dynamic-tool-updates). Schema-only tweaks still rewrite the header but do
  * not emit the inject.
  */
+import { createHash } from "node:crypto";
 import {
+  estimateSystemTokens,
+  estimateToolsTokens,
   foldRequestHeader,
   requestHeaderEquals,
   requestHeaderRouteEquals,
@@ -25,9 +28,20 @@ import {
   type RequestHeaderToolSchema,
   type SessionEvent,
 } from "@xrkseek/protocol";
+import { rememberSessionCache } from "./session-cache-bound.js";
 
 /** Last appended/folded header per session (Host process lifetime). */
 const lastHeaderBySession = new Map<string, RequestHeaderSnapshot>();
+
+function systemMeta(system: string): {
+  readonly systemTokens: number;
+  readonly systemHash: string;
+} {
+  return {
+    systemTokens: estimateSystemTokens(system),
+    systemHash: createHash("sha256").update(system).digest("hex").slice(0, 16),
+  };
+}
 
 /**
  * Drop cached header snapshot(s). Call on session delete and from tests.
@@ -136,7 +150,7 @@ export function maybeAppendRequestHeader(input: {
   if (prev === undefined) {
     coldEvents = readSessionEvents(input.store, input.sessionId);
     prev = foldRequestHeader(coldEvents);
-    if (prev) lastHeaderBySession.set(input.sessionId, prev);
+    if (prev) rememberSessionCache(lastHeaderBySession, input.sessionId, prev);
   }
 
   let slimSystemOnly = false;
@@ -165,15 +179,44 @@ export function maybeAppendRequestHeader(input: {
       : logHasTurnEnd(coldEvents ?? [])
         ? "resume"
         : "initial");
+  // Persist full system text only when the log has never recorded one for this
+  // Host view (initial / first after cold miss). Later deltas store tokens+hash
+  // so sessions.db is not 20%+ duplicated standing prompts.
+  const sys = snap.system?.trim() ? systemMeta(snap.system) : undefined;
+  const persistFullSystem =
+    Boolean(snap.system?.trim()) &&
+    (reason === "initial" || prev?.system === undefined);
+  const toolsTok =
+    !slimSystemOnly && snap.tools && snap.tools.length > 0
+      ? estimateToolsTokens(snap.tools)
+      : undefined;
   const header = slimSystemOnly
     ? {
         config: snap.config,
-        ...(snap.system?.trim() ? { system: snap.system } : {}),
+        ...(persistFullSystem && snap.system?.trim()
+          ? { system: snap.system }
+          : {}),
+        ...(sys
+          ? { systemTokens: sys.systemTokens, systemHash: sys.systemHash }
+          : {}),
         ...(snap.adapterDefaults
           ? { adapterDefaults: snap.adapterDefaults }
           : {}),
       }
-    : snap;
+    : {
+        config: snap.config,
+        ...(persistFullSystem && snap.system?.trim()
+          ? { system: snap.system }
+          : {}),
+        ...(sys
+          ? { systemTokens: sys.systemTokens, systemHash: sys.systemHash }
+          : {}),
+        ...(snap.tools && snap.tools.length > 0 ? { tools: snap.tools } : {}),
+        ...(toolsTok !== undefined ? { toolsTokens: toolsTok } : {}),
+        ...(snap.adapterDefaults
+          ? { adapterDefaults: snap.adapterDefaults }
+          : {}),
+      };
   input.store.append(input.sessionId, {
     type: "request/header",
     ts: input.now(),
@@ -181,7 +224,7 @@ export function maybeAppendRequestHeader(input: {
     reason,
     header,
   });
-  lastHeaderBySession.set(input.sessionId, {
+  rememberSessionCache(lastHeaderBySession, input.sessionId, {
     config: snap.config,
     ...(snap.system !== undefined
       ? { system: snap.system }

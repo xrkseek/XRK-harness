@@ -544,6 +544,17 @@ export {
   type WaitSessionDrainIdleOptions,
 } from "./wait-drain-idle.js";
 export {
+  WAIT_YIELD_ABORT_KIND,
+  createWaitYieldHub,
+  isWaitYieldAbort,
+  mergeWaitSignals,
+  shouldSoftYieldWait,
+  type WaitYieldActive,
+  type WaitYieldAttachment,
+  type WaitYieldHub,
+  type WaitYieldKind,
+} from "./wait-yield.js";
+export {
   FACE_AGENT_PRESETS,
   FACE_AGENT_PRESET_IDS,
   HOST_CLI_PRESET_IDS,

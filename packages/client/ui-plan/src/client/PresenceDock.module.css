@@ -13,7 +13,8 @@
   /* Shrink before covering headerActions when utilities also hosts toggles. */
   flex: 0 1 auto;
   align-self: center;
-  width: min(220px, 46vw);
+  /* Column ≠ viewport — prefer the published column width over 46vw. */
+  width: min(220px, var(--dsh-conversation-column-width, 46vw));
   max-width: 100%;
   min-width: 36px;
   /* Height 0 + absolute chip: must NOT overflow:hidden / contain:paint here —
@@ -42,7 +43,7 @@
   align-items: center;
   /* Pin chip geometry while the seat reservation eases (clip via .seat overflow).
      Animating dock width in lockstep used to reflow PresenceBall every frame. */
-  width: min(220px, 46vw);
+  width: min(220px, var(--dsh-conversation-column-width, 46vw));
   max-width: 100%;
   height: 48px;
   overflow: hidden;

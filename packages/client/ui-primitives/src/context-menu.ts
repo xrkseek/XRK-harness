@@ -112,7 +112,7 @@ const NON_TEXT_INPUT_TYPES = new Set([
  * Whether one element takes text input.
  * `isContentEditable` is missing in jsdom, so the attribute answers it too.
  */
-function isEditableElement(el: Element): boolean {
+export function isEditableElement(el: Element): boolean {
   if (el instanceof HTMLTextAreaElement) return !el.disabled && !el.readOnly;
   if (el instanceof HTMLInputElement) {
     return !el.disabled && !el.readOnly && !NON_TEXT_INPUT_TYPES.has(el.type);
@@ -123,8 +123,8 @@ function isEditableElement(el: Element): boolean {
   );
 }
 
-/** Walk up from the pointer to the first element that takes text. */
-function editableAncestor(node: EventTarget | null): HTMLElement | null {
+/** Walk up from the pointer / focus target to the first element that takes text. */
+export function editableAncestor(node: EventTarget | null): HTMLElement | null {
   let el =
     node instanceof HTMLElement
       ? node
@@ -136,6 +136,11 @@ function editableAncestor(node: EventTarget | null): HTMLElement | null {
     el = el.parentElement;
   }
   return null;
+}
+
+/** True when the event target (or an ancestor) is a text-entry control. */
+export function isEditableTarget(target: EventTarget | null): boolean {
+  return editableAncestor(target) !== null;
 }
 
 /** Anchor href under the pointer, if the click landed on (inside) a link. */

@@ -12,15 +12,20 @@
  * card; the in-menu strip with Retry remains the catalog-load surface.
  */
 import {
-  useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
-  type CSSProperties, type KeyboardEvent, type FocusEvent, type ReactNode,
+  useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
+  type KeyboardEvent, type FocusEvent, type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@xrkseek/xrk-api-remotes/client'
 import {
+  ANCHORED_MEASURE_STYLE,
+  ANCHORED_VIEWPORT_MARGIN,
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular,
-  IconWarningOutlineRegular, SHELL_KEYBOARD_ATTR, Toast,
+  IconWarningOutlineRegular, isComposingKeyboardEvent,
+  isTopEscapeLayer, popEscapeLayer, pushEscapeLayer,
+  SHELL_KEYBOARD_ATTR, Toast,
+  useAnchoredPosition,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
@@ -29,51 +34,6 @@ import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
 type Pane = 'root' | 'model' | 'effort'
-
-/** Flat margin used when clamping the portaled card into the layout viewport. */
-const MENU_VIEWPORT_MARGIN = 16
-
-/**
- * Unplaced portal card: hidden but laid out at a fixed origin so
- * offsetWidth / offsetHeight are real on the first place() pass (same
- * pattern as ui-primitives Menu portal mode).
- */
-const MENU_MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
-
-/**
- * Prefer right-aligning the card to the trigger (composer trailing seat), then
- * clamp into the viewport so a near-full-width card on a notched / narrow phone
- * cannot paint past the left edge. Active-phase conversation roots clip
- * overflow-x, so the menu must be portaled — absolute `right: 0` under the
- * trigger is cropped there even when hero (overflow visible) looked fine.
- */
-function placeModelMenu(
-  trigger: HTMLElement,
-  menu: HTMLElement,
-): CSSProperties {
-  const rect = trigger.getBoundingClientRect()
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  // Prefer measured size; fall back to the CSS card budget when the engine
-  // still reports 0×0 (jsdom, or the hidden measure frame before paint).
-  const mw = menu.offsetWidth > 0
-    ? menu.offsetWidth
-    : Math.min(280, Math.max(0, vw - MENU_VIEWPORT_MARGIN * 2))
-  const mh = menu.offsetHeight
-  let left = rect.right - mw
-  let top = mh > 0 ? rect.top - mh - 8 : rect.top - 8
-  left = Math.min(
-    Math.max(left, MENU_VIEWPORT_MARGIN),
-    Math.max(MENU_VIEWPORT_MARGIN, vw - mw - MENU_VIEWPORT_MARGIN),
-  )
-  if (mh > 0) {
-    top = Math.min(
-      Math.max(top, MENU_VIEWPORT_MARGIN),
-      Math.max(MENU_VIEWPORT_MARGIN, vh - mh - MENU_VIEWPORT_MARGIN),
-    )
-  }
-  return { left, top }
-}
 
 /** Prefer the Settings→Models CTA over raw Zod / Host dumps. */
 function formatModelsError(
@@ -175,10 +135,17 @@ export function ModelSelect(
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
-  // Portal placement: null while measuring / closed; concrete left/top once
-  // clamped against the viewport (active-phase overflow-x: clip would crop an
-  // in-place absolute card on narrow / notched phones).
-  const [menuPos, setMenuPos] = useState<CSSProperties | null>(null)
+  // Portaled card — shared clamp (centerCol overflow:hidden / active-phase clip).
+  const menuPos = useAnchoredPosition({
+    open,
+    anchorRef: triggerRef,
+    panelRef: menuRef,
+    side: 'top',
+    align: 'end',
+    gap: 8,
+    margin: ANCHORED_VIEWPORT_MARGIN,
+    fallbackWidth: 280,
+  })
   // Pane switches unmount the focused row and drop focus onto document.body,
   // outside the card — keyboard stops reaching the menu. Name the landing
   // target before each switch (DSH paneFocus).
@@ -273,6 +240,22 @@ export function ModelSelect(
     setPointerArmed(false)
   }, [search, pane, open])
 
+  // Own Escape while open so Settings / shell listeners registered earlier
+  // do not dismiss the outer panel on the same keystroke.
+  const escapeTokenRef = useRef<symbol | null>(null)
+  useEffect(() => {
+    if (!open) {
+      escapeTokenRef.current = null
+      return
+    }
+    const token = pushEscapeLayer()
+    escapeTokenRef.current = token
+    return () => {
+      popEscapeLayer(token)
+      if (escapeTokenRef.current === token) escapeTokenRef.current = null
+    }
+  }, [open])
+
   useEffect(() => {
     if (!open || pane !== 'model' || !scrollHighlightRef.current) return
     scrollHighlightRef.current = false
@@ -281,36 +264,6 @@ export function ModelSelect(
       row.scrollIntoView({ block: 'nearest' })
     }
   }, [highlight, open, pane, flatModels])
-
-  // Portal the card to document.body and clamp to the viewport while open —
-  // active conversation roots use overflow-x: clip, so an absolute menu under
-  // the trailing model chip paints past the left edge on narrow phones.
-  useLayoutEffect(() => {
-    if (!open) {
-      setMenuPos((prev) => (prev === null ? prev : null))
-      return
-    }
-    const place = (): void => {
-      const trigger = triggerRef.current
-      const menu = menuRef.current
-      if (trigger === null || menu === null) return
-      const next = placeModelMenu(trigger, menu)
-      setMenuPos((prev) => (
-        prev !== null
-        && prev.left === next.left
-        && prev.top === next.top
-          ? prev
-          : next
-      ))
-    }
-    place()
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
-    return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
-    }
-  }, [open, pane, search, modelCount, effortChoices.length, busy, state.status, state.error, state.failures.length])
 
   useEffect(() => {
     if (!open) return
@@ -456,6 +409,8 @@ export function ModelSelect(
 
   const onRootKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key === 'Escape' && open) {
+      const token = escapeTokenRef.current
+      if (token !== null && !isTopEscapeLayer(token)) return
       event.preventDefault()
       // Escape backs out of a drilled pane first, then closes.
       if (pane !== 'root') back(pane)
@@ -479,6 +434,7 @@ export function ModelSelect(
         return
       }
       if (event.key === 'Enter') {
+        if (isComposingKeyboardEvent(event)) return
         event.preventDefault()
         if (highlight === null) return
         const pick = flatModels[highlight]
@@ -566,7 +522,7 @@ export function ModelSelect(
         role="menu"
         aria-label={t('menu.aria')}
         aria-busy={state.status === 'loading' || busy}
-        style={menuPos ?? MENU_MEASURE_STYLE}
+        style={menuPos ?? ANCHORED_MEASURE_STYLE}
         onKeyDown={(event) => {
           onRootKeyDown(event)
           // Portaled nodes still bubble through the React tree into the seat

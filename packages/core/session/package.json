@@ -22,7 +22,8 @@
     "@xrkseek/attachment": "workspace:*",
     "@xrkseek/protocol": "workspace:*",
     "@xrkseek/runtime-invariants": "workspace:*",
-    "@xrkseek/session-format": "workspace:*"
+    "@xrkseek/session-format": "workspace:*",
+    "@xrkseek/spill": "workspace:*"
   },
   "license": "MIT",
   "repository": {

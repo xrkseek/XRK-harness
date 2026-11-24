@@ -137,6 +137,11 @@ export class Session implements SessionFace {
   /** Session-owned business Context engine over the contiguous raw window. */
   private readonly conversation: ConversationNodeAssembler
   private running = false
+  /**
+   * Soft-detach wait dock (`host/session-wait-yield`). Independent of
+   * {@link running} so Stop's optimistic `running:false` cannot clear it.
+   */
+  private waitYieldActive: ConversationSnapshot['waitYield'] = null
   private address: SubagentAddress | undefined
   private parentAvailable = false
   /**
@@ -529,6 +534,22 @@ export class Session implements SessionFace {
   async backgroundJob(jobId: string): Promise<RpcResult<{ accepted: true }>> {
     try {
       return (await this.api.jobs.background({ sessionId: this.sessionId, jobId: jobId as never })).result
+    } catch (error) {
+      return transportError(error)
+    }
+  }
+
+  /**
+   * Soft-detach wait-class tools without cancelling the turn or children
+   * (job.background posture). Opens the path for steer / 插队 after the wait
+   * settles.
+   */
+  async yieldWait(): Promise<RpcResult<{ accepted: true; detached: boolean }>> {
+    try {
+      const result = (await this.api.sessions.yieldWait({ sessionId: this.sessionId })).result
+      // Optimistic dock clear — host also publishes active:null after yield.
+      if (result.ok && result.value.detached) this.handleWaitYield(null)
+      return result
     } catch (error) {
       return transportError(error)
     }
@@ -981,6 +1002,20 @@ export class Session implements SessionFace {
   }
 
   /**
+   * Soft-detach wait dock from `host/session-wait-yield` (independent of running).
+   * @param active - live wait meta, or null to hide 「停止等待」.
+   */
+  handleWaitYield(active: ConversationSnapshot['waitYield']): void {
+    const same = this.waitYieldActive === null && active === null
+      || (this.waitYieldActive !== null && active !== null
+        && this.waitYieldActive.kind === active.kind
+        && this.waitYieldActive.label === active.label)
+    if (same) return
+    this.waitYieldActive = active
+    this.notifier.markDirty()
+  }
+
+  /**
    * Install or clear the catalog-discovered transport address. A changed
    * address rebuilds an already-open window through its new history route.
    * @param address - direct parent/child address, or undefined for ordinary transport.
@@ -1304,6 +1339,7 @@ export class Session implements SessionFace {
       pendingSubmissions: this.pendingSubmissions,
       queue: this.queueMirror.snapshot(),
       running: this.running,
+      waitYield: this.waitYieldActive,
       subagent: this.address === undefined
         ? null
         : { address: this.address, parentAvailable: this.parentAvailable },

@@ -63,6 +63,7 @@ describe("session_capability", () => {
     expect(text).toMatch(/^model:/m);
     expect(text).toMatch(/^modality: (multimodal|text-only)/m);
     expect(text).not.toMatch(/modality_brief:/);
+    expect(text).toMatch(/^tools: direct=\d+ deferred=\d+ expanded=\d+/m);
 
     const provider = createSessionCapabilityFragmentProvider(runtime);
     const frags = provider.produce({ sessionId });
@@ -97,7 +98,7 @@ describe("session_capability", () => {
     expect(xyText).toMatch(/kind=orchestrator|verbs in <session_posture>/);
   });
 
-  it("preamble includes inherited permission and weakened tool_surface", () => {
+  it("preamble omits permission/tool_surface (those live in session_capability)", () => {
     expect(roleCapsHint("researcher")).toBe("web,read-fs");
     const out = applySubagentSpawnPreamble({
       prompt: "find facts",
@@ -112,17 +113,15 @@ describe("session_capability", () => {
       permissionInherit: "workspace-write (path=allowlisted) · approval=ask",
       parentToolSurface: "harness",
     });
-    expect(out).toContain(
-      "permission: workspace-write (path=allowlisted) · approval=ask",
-    );
-    expect(out).toContain(
-      "tool_surface: badge=harness · role=researcher · caps=web,read-fs",
-    );
-    expect(out).toContain("FINAL assistant message");
+    expect(out).not.toContain("permission:");
+    expect(out).not.toContain("tool_surface:");
+    expect(out).toContain("one-shot");
+    expect(out).toContain("FINAL assistant text");
+    expect(out).toContain("find facts");
     expect(out).not.toContain("turn-start squad board");
   });
 
-  it("preamble injects 公文包 (briefcase) while cwd stays parent workspace", () => {
+  it("preamble omits 公文包 (briefcase lives in session_capability)", () => {
     const packHome = "/home/u/.xrk/agent-rosters/packs/global/mem_hw";
     const out = applySubagentSpawnPreamble({
       prompt: "grade homework/hw1.md",
@@ -146,13 +145,12 @@ describe("session_capability", () => {
       memberId: "mem_hw",
       inject: "minimal",
     });
-    expect(out).toMatch(/workspace: \/proj\/coding · same as the parent session/);
-    expect(out).toMatch(/公文包 \(briefcase\)/);
-    expect(out).toMatch(/pack_home: .*mem_hw/);
-    expect(out).toMatch(/skills_dir:/);
-    expect(out).toMatch(/skill tool/);
-    expect(out).not.toMatch(/skill: lit @/);
-    expect(out).toMatch(/member_id: mem_hw/);
+    // Same-checkout cwd already on <session_capability> — preamble stays quiet.
+    expect(out).not.toContain("same checkout as parent");
+    expect(out).not.toMatch(/公文包 \(briefcase\)/);
+    expect(out).not.toMatch(/pack_home:/);
+    expect(out).not.toMatch(/member_id:/);
+    expect(out).toContain("grade homework/hw1.md");
   });
 
   it("identity session on an agent-home still sees its 公文包 paths", async () => {

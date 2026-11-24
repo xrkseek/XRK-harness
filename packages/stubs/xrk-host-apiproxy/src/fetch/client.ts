@@ -22,6 +22,7 @@ import {
 } from '../api/host.schema.ts'
 import {
   sessionCancelValueSchema,
+  sessionYieldWaitValueSchema,
   sessionDeleteValueSchema,
   sessionToolsValueSchema,
   sessionAttachmentValueSchema,
@@ -231,6 +232,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'session.attachment': sessionAttachmentValueSchema,
   'session.updateQueue': sessionUpdateQueueValueSchema,
   'session.cancel': sessionCancelValueSchema,
+  'session.yieldWait': sessionYieldWaitValueSchema,
   'session.delete': sessionDeleteValueSchema,
   'session.tools': sessionToolsValueSchema,
   'subagent.list': subagentListValueSchema,

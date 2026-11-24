@@ -505,7 +505,12 @@ function UserStyleBubble({
         ) : null}
         {steer ? (
           <span className={css.pendingSteerBadge} role="status">
-            {t('message.pendingSteer')}
+            {/* Human cut-in → 「插队中」; handoff / seat / plugin → 「回传中」.
+                Session evidence: mid-turn subagent steer painted boss 插队
+                while source.kind was already handoff. */}
+            {isHumanOwnedUserMessage(source)
+              ? t('message.pendingSteer')
+              : t('message.pendingHandoff')}
           </span>
         ) : echo ? (
           // Claim→durable transcript echoes (and any mute reserveActions
@@ -585,16 +590,20 @@ function UserStyleBubble({
  * @param props - Pending message content and conversation translator.
  * @returns the pending steering bubble.
  */
-export function PendingSteeringBubble({ content, previewAttachments, renderMessageImages, renderMessageFiles, steer = false, onWithdraw, t }: {
+export function PendingSteeringBubble({ content, previewAttachments, renderMessageImages, renderMessageFiles, steer = false, source, onWithdraw, t }: {
   content: readonly unknown[]
   /** Local echo previews replacing the content-derived attachment sequence. */
   previewAttachments?: readonly PresentedAttachment[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
   renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   steer?: boolean
+  /** Face admit source — required for handoff peel / courier chrome / 回传中. */
+  source?: unknown
   onWithdraw?: (() => void) | undefined
   t: ChatViewSlotProps['t']
 }): ReactNode {
+  // Courier / seat steers are not human 插队 — hide withdraw (boss chrome).
+  const humanOwned = isHumanOwnedUserMessage(source)
   return (
     <UserStyleBubble
       content={content}
@@ -602,6 +611,7 @@ export function PendingSteeringBubble({ content, previewAttachments, renderMessa
       renderMessageImages={renderMessageImages}
       {...(renderMessageFiles === undefined ? {} : { renderMessageFiles })}
       steer={steer}
+      source={source}
       t={t}
       actions={text => (
         <MessageIconActions
@@ -609,7 +619,7 @@ export function PendingSteeringBubble({ content, previewAttachments, renderMessa
           clock="start"
           className={css.actions}
           t={t}
-          onWithdraw={onWithdraw}
+          {...(humanOwned && onWithdraw !== undefined ? { onWithdraw } : {})}
         />
       )}
     />

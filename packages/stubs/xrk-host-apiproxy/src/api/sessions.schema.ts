@@ -499,6 +499,17 @@ export const sessionCancelValueSchema = z.object({
   accepted: z.literal(true),
 }) satisfies z.ZodType<Wire<ResponseValue<'session.cancel'>>>
 
+/** session.yieldWait request payload. */
+export const sessionYieldWaitRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+}) satisfies z.ZodType<Wire<RequestPayload<'session.yieldWait'>>>
+
+/** session.yieldWait response value. */
+export const sessionYieldWaitValueSchema = z.object({
+  accepted: z.literal(true),
+  detached: z.boolean(),
+}) satisfies z.ZodType<Wire<ResponseValue<'session.yieldWait'>>>
+
 /** session.delete request payload. */
 export const sessionDeleteRequestSchema = z.object({
   sessionId: sessionIdSchema,

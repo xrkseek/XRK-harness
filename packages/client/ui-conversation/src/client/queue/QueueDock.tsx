@@ -13,7 +13,8 @@ import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachm
 import {
   FileTypeIcon, fileSizeText,
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
-  IconEditOutlineRegular, IconPaperclipOutlineRegular, IconQueueOutlineRegular, IconSendOutlineRegular, IconTrashOutlineRegular, Tooltip,
+  IconEditOutlineRegular, IconPaperclipOutlineRegular, IconQueueOutlineRegular, IconSendOutlineRegular, IconTrashOutlineRegular,
+  Tooltip, isComposingKeyboardEvent,
 } from '@xrkseek/client-ui-primitives'
 import type { QueueAction, QueueItemId, QueueRow } from '../contract/queue.ts'
 import { NS } from '../locales.ts'
@@ -442,7 +443,7 @@ function HostQueueRow({
       tabIndex={queueMutable && editing === null && busy === null ? 0 : undefined}
       onKeyDown={(event) => {
         if (editing !== null || busy !== null || !queueMutable || !running) return
-        if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+        if (event.key !== 'Enter' || isComposingKeyboardEvent(event.nativeEvent)) return
         if (event.target !== event.currentTarget) return
         event.preventDefault()
         void applyAction(row.id, { kind: 'steer' }, t('queue.steerFailed'))
@@ -503,7 +504,7 @@ function HostQueueRow({
                   cancelEdit()
                   return
                 }
-                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                if (event.key === 'Enter' && !isComposingKeyboardEvent(event.nativeEvent)) {
                   event.preventDefault()
                   void saveEdit()
                 }

@@ -5,7 +5,7 @@
 .slot {
   position: sticky;
   top: 0;
-  z-index: 6;
+  z-index: var(--ds-z-column-raised);
   height: 0;
   pointer-events: none;
 }
@@ -37,7 +37,7 @@
   /* Sit just inside the right width-handle strip (inner edge at
      content + --dsh-chat-width-handle-inset). `translateX(-100%)` parks the
      32px frame; the extra 14px slides ticks toward the handle glow and off
-     the transcript. The handle paints at z-index 8 so drag still wins the
+     the transcript. The handle paints at --ds-z-column-handle so drag still wins the
      overlap. Do not pin to the composer. Centre the frame in the band. */
   top: calc(var(--turn-rail-band) / 2);
   left: calc(

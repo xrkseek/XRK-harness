@@ -282,24 +282,19 @@ function resumeHint(
   events: readonly SessionEvent[],
   stop?: SubagentStopReason,
 ): string {
-  const idHint = "Reuse the same agent_id — do not spawn a duplicate worker.";
+  const idHint = "Reuse agent_id — do not spawn a duplicate.";
   if (stop === "takeover") {
-    return (
-      "Task is paused for a human. Open the child session in the UI, or " +
-      `send_message to resume as the model. list_agents shows status. ${idHint}`
-    );
+    return `Paused for human. Open child UI or send_message; list_agents for status. ${idHint}`;
   }
   if (outcome.kind === "max-tokens") {
     const rounds = autoContinueRounds(events);
-    const sent = rounds > 0
-      ? `The child already auto-continued ${rounds} time(s) inside this turn and still hit the output cap, so the turn stopped.`
-      : "The child hit the output cap and did not auto-continue (auto-continue off, or this truncation never entered continuation).";
+    const cap =
+      rounds > 0
+        ? `Hit output cap after ${rounds} auto-continue(s).`
+        : "Hit output cap (no auto-continue).";
     return (
-      `${sent} Incomplete tool calls on a max-tokens finish are discarded (not executed) — ` +
-      `if it was mid write_file/apply_patch, ask it to split the write. ` +
-      `If you still need the rest, send_message with a split-write instruction ` +
-      `(do not send bare 「继续」 — that retried the same giant call). ` +
-      `session_read / list_agents shows what it already wrote. ${idHint}`
+      `${cap} Incomplete tool calls on max-tokens are discarded — if mid write_file/apply_patch, ` +
+      `send_message with a split-write (not bare 「继续」). list_agents / session_read for progress. ${idHint}`
     );
   }
   if (
@@ -308,35 +303,21 @@ function resumeHint(
     outcome.kind === "interrupted" ||
     outcome.kind === "none"
   ) {
-    return (
-      "Child session and transcript are kept. send_message to resume, " +
-      `wait_agent if you need the next answer, or list_agents. ${idHint}`
-    );
+    return `Transcript kept. send_message / wait_agent / list_agents. ${idHint}`;
   }
   if (outcome.kind === "error" || outcome.kind === "blocked") {
     if (outcome.kind === "error" && outcome.code === "QUOTA") {
       return (
-        "Do not send another prompt down it — this route is out of quota, so the " +
-        "next turn would fail the same way. Either (a) set_agent_model to move this " +
-        "child onto another route, or pass `model` / `reasoning_effort` with " +
-        "followup_task / send_message so its next turn runs there, (b) continue from " +
-        "the partial answer above with followup_task, or (c) ask_user so the human " +
-        `decides which route to spend. ${idHint}`
+        "Quota exhausted — do not resend on this route. set_agent_model or pass model on " +
+        `followup_task/send_message, continue from the partial answer, or ask_user. ${idHint}`
       );
     }
     if (outcome.kind === "error" && outcome.code === "RATE_LIMIT") {
-      return (
-        "Rate limited, not dead: the route still works, so wait and resend the same " +
-        "prompt (send_message / followup_task). Usually no need to change model. " +
-        `${idHint}`
-      );
+      return `Rate limited — wait, then same prompt via send_message/followup_task. ${idHint}`;
     }
-    return (
-      "Inspect with session_read / list_agents, then send_message to recover " +
-      `or interrupt_agent when done. ${idHint}`
-    );
+    return `session_read / list_agents, then send_message or interrupt_agent. ${idHint}`;
   }
-  return "Follow up with send_message, interrupt_agent when done, or list_agents.";
+  return "send_message · interrupt_agent · list_agents.";
 }
 
 function assembleParentNotice(
@@ -371,21 +352,18 @@ function assembleParentNotice(
 }
 
 /**
- * Parent inbox notice when a human steers / queues into a continuable child
- * (UI composer or `subagent.prompt`). Tool-originated follow-ups skip this —
- * the parent already owns that text in its tool call.
+ * Parent-inbox body when a human steers / queues into a continuable child.
+ * Identity lives on `user/message.source` (老板) — no English shell / seat
+ * prefix; the transcript paints a normal speech bubble + 第 N 轮.
+ * Tool-originated follow-ups skip this — the parent already owns that text.
  */
 export function formatSubagentUserPromptNotice(
-  link: FaceSubagentLink,
+  _link: FaceSubagentLink,
   preview: string,
 ): string {
-  const label = link.label?.trim() || "subagent";
   const body = preview.trim();
-  const clipped =
-    body.length > 800 ? `${body.slice(0, 800).trimEnd()}…` : body;
-  const head =
-    `User message to background subagent \`${link.childSessionId}\` (${label}):`;
-  return clipped ? `${head}\n\n${clipped}` : head;
+  if (!body) return "";
+  return body.length > 800 ? `${body.slice(0, 800).trimEnd()}…` : body;
 }
 
 /**

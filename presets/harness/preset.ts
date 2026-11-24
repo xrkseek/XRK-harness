@@ -12,6 +12,7 @@ import {
   type SystemPromptAssembler,
 } from "@xrkseek/core-system-prompt";
 import {
+  applyStandingDeferredExposure,
   createReadTracker,
   createStdTools,
   createToolPipeline,
@@ -202,7 +203,6 @@ import {
   noteLearningLoopTurn,
   consumeLearningLoopNudge,
   learningLoopNudgeText,
-  SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
   type WorkspaceInjector,
 } from "@xrkseek/workspace";
@@ -1445,6 +1445,9 @@ export function createHarnessComposition(
       state: toolSearchState,
     }),
   );
+  // Thin standing wire: fat secondary schemas wait for tool_search (Face
+  // re-applies after binding session_* / team-admin / workspace_*).
+  applyStandingDeferredExposure(tools);
   const policyEngine = createPolicyEngineFromPlugins({
     ...(options.policy !== undefined ? { engine: options.policy } : {}),
     ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
@@ -1766,11 +1769,8 @@ export function createHarnessComposition(
     });
   }
   if (options.skillTools !== false) {
-    prompts.register({
-      id: "tool:skill",
-      order: 112,
-      content: () => SKILL_TOOL_GUIDANCE,
-    });
+    // skill_search / skill contracts live on tool descriptions + skill-catalog
+    // footer (not a second system lecture). Only propose_skill needs a tip.
     prompts.register({
       id: "tool:propose_skill",
       order: 112.5,
@@ -1846,9 +1846,7 @@ export function createHarnessComposition(
       "base",
       ...(curatedMemory ? ["curated-memory-policy", "curated-memory"] : []),
       ...(gitAttributionOn ? ["git:attribution"] : []),
-      ...(options.skillTools !== false
-        ? ["tool:skill", "tool:propose_skill"]
-        : []),
+      ...(options.skillTools !== false ? ["tool:propose_skill"] : []),
       "tool:fs-routing",
       "tool:shell-routing",
       "tool:jobs",

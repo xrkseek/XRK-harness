@@ -22,10 +22,7 @@
   width: 100%;
 }
 
-/* Slot list wrappers should not invent extra chrome. */
-.stack > :global([data-slot='settings.general.item']) {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* Column SlotOutlet (`data-slot-layout=column`) — fill the stack width. */
+.stack > :global([data-slot-layout='column']) {
   width: 100%;
 }

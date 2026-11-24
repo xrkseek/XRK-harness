@@ -9,7 +9,7 @@
   left: 0;
   right: 0;
   width: 100%;
-  z-index: 55;
+  z-index: var(--ds-z-desktop-chrome);
   display: flex;
   align-items: stretch;
   height: var(--xrk-desktop-chrome-height, 36px);

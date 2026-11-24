@@ -3,11 +3,14 @@
  * sidebar 干员 pane (CompanionBall on the workspace header).
  */
 import type { FaceRuntime } from "./context.js";
-import { appearanceLookWire } from "./agent-roster-store.js";
+import {
+  appearanceLookWire,
+  type AppearanceLookWire,
+} from "./agent-roster-store.js";
 import { dressingFromPresence } from "./presence-dressing.js";
 import type { FaceWorkspaceView } from "./workspace-registry.js";
 
-export type BoundMemberAppearance = ReturnType<typeof appearanceLookWire>;
+export type BoundMemberAppearance = AppearanceLookWire;
 
 export type WorkspaceViewWithMemberLook = FaceWorkspaceView & {
   readonly boundMemberAppearance?: BoundMemberAppearance;

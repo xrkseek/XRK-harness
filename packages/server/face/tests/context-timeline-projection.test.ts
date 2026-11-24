@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createMemorySessionStore,
+  estimateAssistantSurface,
   estimateMessageContent,
   estimateSystemTokens,
   estimateToolsTokens,
@@ -115,6 +116,64 @@ describe("contextTimeline projection", () => {
     );
   });
 
+  it("keeps standing tool tokens across slim system-only headers", () => {
+    const unit = createContextTimelineProjectionUnit();
+    let state = unit.init();
+    const tools = [
+      {
+        name: "read_file",
+        description: "Read a file from disk",
+        parameters: { type: "object", properties: {} },
+      },
+    ];
+    const toolsTokens = estimateToolsTokens(tools);
+
+    state = unit.apply(state, {
+      type: "turn/start",
+      ts: 1,
+      turnId: "t1",
+    });
+    state = unit.apply(state, {
+      type: "step/start",
+      ts: 2,
+      turnId: "t1",
+      stepId: "s1",
+    });
+    state = unit.apply(state, {
+      type: "request/header",
+      ts: 3,
+      turnId: "t1",
+      reason: "initial",
+      header: {
+        config: { provider: "deepseek", model: "deepseek-v4-flash" },
+        system: "You are helpful.",
+        tools,
+      },
+    });
+    expect(unit.wire!.view(state).current.tools).toBe(toolsTokens);
+
+    // Slim system-only delta (persona/time) — tools omitted on the wire.
+    state = unit.apply(state, {
+      type: "request/header",
+      ts: 4,
+      turnId: "t1",
+      reason: "change",
+      header: {
+        config: { provider: "deepseek", model: "deepseek-v4-flash" },
+        system: "You are helpful.\n# time\nnow",
+      },
+    });
+    const view = unit.wire!.view(state);
+    expect(view.current.tools).toBe(toolsTokens);
+    expect(view.toolList).toHaveLength(1);
+    expect(view.toolList[0]!.name).toBe("read_file");
+    expect(view.current.system).toBe(
+      estimateSystemTokens("You are helpful.\n# time\nnow"),
+    );
+    expect(view.requests).toHaveLength(2);
+    expect(view.requests[1]!.tools).toBe(toolsTokens);
+  });
+
   it("stamps provider prompt/output on the open request and emits inject events", () => {
     const unit = createContextTimelineProjectionUnit();
     let state = unit.init();
@@ -164,6 +223,144 @@ describe("contextTimeline projection", () => {
     expect(view.requests[0]!.total).toBeGreaterThan(0);
     expect(view.requests[0]!.prompt).toBe(18_100);
     expect(view.requests[0]!.output).toBe(12);
+    // DSH headlineOf + anchoredParts: total tracks provider; cats stay
+    // proportional (tools undercount must not inflate inject).
+    const req = view.requests[0]!;
+    const assistantTok = estimateAssistantSurface("ok");
+    expect(view.current.total).toBe(18_100 + assistantTok);
+    expect(
+      view.current.system +
+        view.current.tools +
+        view.current.user +
+        view.current.inject +
+        view.current.assistant +
+        view.current.tool,
+    ).toBe(view.current.total);
+    expect(view.current.total).toBeGreaterThan(req.total);
+  });
+
+  it("scales all cats so provider residual does not dump into inject", () => {
+    const unit = createContextTimelineProjectionUnit();
+    let state = unit.init();
+    const tools = [
+      {
+        name: "read_file",
+        description: "x".repeat(400),
+        parameters: { type: "object", properties: {} },
+      },
+    ];
+    const apply = (ev: Parameters<typeof unit.apply>[1]) => {
+      state = unit.apply(state, ev);
+    };
+    apply({ type: "turn/start", ts: 1, turnId: "t1" });
+    apply({ type: "step/start", ts: 2, turnId: "t1", stepId: "s1" });
+    apply({
+      type: "user/message",
+      ts: 3,
+      turnId: "t1",
+      content: "hi",
+      source: {
+        kind: "skill-catalog",
+        form: "catalog",
+        entries: [{ name: "a", description: "b" }],
+      },
+    });
+    apply({
+      type: "request/header",
+      ts: 4,
+      turnId: "t1",
+      reason: "initial",
+      header: {
+        config: { provider: "deepseek", model: "deepseek-v4-flash" },
+        system: "sys",
+        tools,
+      },
+    });
+    apply({
+      type: "assistant/chunk",
+      ts: 5,
+      turnId: "t1",
+      stepId: "s1",
+      text: "",
+      kind: "usage",
+      usage: {
+        // Far above chars/4 heuristic → residual used to inflate inject.
+        inputTokens: 8_000,
+        outputTokens: 1,
+        cacheReadTokens: 0,
+      },
+    });
+    const view = unit.wire!.view(state);
+    const req = view.requests[0]!;
+    expect(view.current.total).toBe(8_000);
+    expect(req.total).toBeLessThan(8_000);
+    // tools stay the dominant bar; inject must not eat the whole residual.
+    expect(view.current.tools).toBeGreaterThan(view.current.inject);
+    expect(view.current.inject / view.current.total).toBeLessThan(0.35);
+  });
+
+  it("preserves mid-turn growth on top of the last provider prompt", () => {
+    const unit = createContextTimelineProjectionUnit();
+    let state = unit.init();
+    const apply = (ev: Parameters<typeof unit.apply>[1]) => {
+      state = unit.apply(state, ev);
+    };
+
+    apply({ type: "turn/start", ts: 1, turnId: "t1" });
+    apply({ type: "step/start", ts: 2, turnId: "t1", stepId: "s1" });
+    apply({
+      type: "user/message",
+      ts: 3,
+      turnId: "t1",
+      content: "hello",
+    });
+    apply({
+      type: "request/header",
+      ts: 4,
+      turnId: "t1",
+      reason: "initial",
+      header: {
+        config: { provider: "deepseek", model: "deepseek-v4-flash" },
+        system: "sys",
+      },
+    });
+    // Stamp usage on a chunk before the assistant message so request.total
+    // matches the pre-assistant heuristic (true request-boundary case).
+    apply({
+      type: "assistant/chunk",
+      ts: 5,
+      turnId: "t1",
+      stepId: "s1",
+      text: "",
+      kind: "usage",
+      usage: {
+        inputTokens: 1_000,
+        outputTokens: 1,
+        cacheReadTokens: 0,
+      },
+    });
+    const atBoundary = unit.wire!.view(state);
+    expect(atBoundary.current.total).toBe(1_000);
+    expect(atBoundary.requests[0]!.prompt).toBe(1_000);
+
+    apply({
+      type: "assistant/message",
+      ts: 6,
+      turnId: "t1",
+      stepId: "s1",
+      content: "ok",
+    });
+    apply({
+      type: "user/message",
+      ts: 7,
+      turnId: "t1",
+      content: "follow-up that grows the window",
+    });
+    const mid = unit.wire!.view(state);
+    const growth =
+      estimateAssistantSurface("ok") +
+      estimateMessageContent("follow-up that grows the window");
+    expect(mid.current.total).toBe(1_000 + growth);
   });
 
   it("folds assistant, tool results, and inject sources into node cats", () => {
@@ -429,5 +626,42 @@ describe("contextHeaders projection", () => {
     expect(view.headers).toHaveLength(32);
     expect(view.headers[0]!.system).toBe("sys-8");
     expect(view.headers[31]!.system).toBe("sys-39");
+  });
+
+  it("carries standing tools onto slim system-only epochs", () => {
+    const unit = createContextHeadersProjectionUnit();
+    let state = unit.init();
+    state = unit.apply(state, {
+      type: "request/header",
+      ts: 1,
+      turnId: "t1",
+      reason: "initial",
+      header: {
+        config: { provider: "p", model: "m" },
+        system: "full",
+        tools: [
+          {
+            name: "bash",
+            description: "Run shell",
+            parameters: { type: "object" },
+          },
+        ],
+      },
+    });
+    state = unit.apply(state, {
+      type: "request/header",
+      ts: 2,
+      turnId: "t1",
+      reason: "change",
+      header: {
+        config: { provider: "p", model: "m" },
+        system: "slim-only",
+      },
+    });
+    const view = unit.wire!.view(state);
+    expect(view.headers).toHaveLength(2);
+    expect(view.headers[1]!.system).toBe("slim-only");
+    expect(view.headers[1]!.tools).toHaveLength(1);
+    expect(view.headers[1]!.tools[0]!.name).toBe("bash");
   });
 });

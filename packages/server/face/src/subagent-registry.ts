@@ -48,6 +48,9 @@ export interface FaceSubagentLink {
   readonly appearance?: {
     readonly shape: string;
     readonly color: string;
+    readonly bodyColor?: string;
+    readonly eyeColor?: string;
+    readonly size?: number;
     readonly kit?: string;
     readonly kitHat?: string;
     readonly kitGlasses?: string;
@@ -70,6 +73,15 @@ function freezeLink(link: FaceSubagentLink): FaceSubagentLink {
       ? {
           shape: link.appearance.shape,
           color: link.appearance.color,
+          ...(typeof link.appearance.bodyColor === "string" && link.appearance.bodyColor
+            ? { bodyColor: link.appearance.bodyColor }
+            : {}),
+          ...(typeof link.appearance.eyeColor === "string" && link.appearance.eyeColor
+            ? { eyeColor: link.appearance.eyeColor }
+            : {}),
+          ...(typeof link.appearance.size === "number"
+            ? { size: link.appearance.size }
+            : {}),
           ...(typeof link.appearance.kit === "string" && link.appearance.kit
             ? { kit: link.appearance.kit }
             : {}),

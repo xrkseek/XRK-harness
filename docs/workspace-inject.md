@@ -17,22 +17,22 @@
 
 Inject 按节顺序追加；同名正文 dedupe；**后出现的节更接近当轮任务**。Skills catalog 同样：home 低优先级，项目内高优先级。节渲染带 `> source: <path>` 溯源行（压缩后仍可辨来源）。
 
-**Audience**：只闸 **经理 ledger `XRK.md`**（`audience=user`；干员家 / 委派子会话不注）。产品站立、家约定、工作区约定、skill catalog **全席同注**。徽章 / 权限只管工具面，不管上下文。渐进披露：catalog 列名 → `skill` 拉正文。权威车道 `<instruction_authority>`；席位 / MCP / ask 看 `<seat_identity>` · `<session_capability>`（含 `mcp_mount`）。
+**Audience**：只闸 **经理 ledger `XRK.md`**（`audience=user`；干员家 / 委派子会话不注）。产品站立、家约定、工作区约定、skill catalog **全席同注**。徽章 / 权限只管工具面，不管上下文。渐进披露：catalog 仅名 → `skill_search` → `skill` 正文。权威车道 `<instruction_authority>`；席位 / MCP / ask 看 `<seat_identity>` · `<session_capability>`（含 `mcp_mount`）。
 
 **真源**：`packages/workspace/src/inject-sources.ts`（`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill 根列表）· `ecosystem-instructions.ts` · `workspace-anchor.ts`。
 
 ## 注入策略（Codex 对齐）
 
-与 Codex 相同的核心原则：**instructions 窄、skills 渐进披露**（catalog 列 name+一行 → `skill` 拉正文；**没有** `skill_search`——`tool_search` 只服务延迟工具）。Catalog 截断头序：**公文包**（干员/其子会话）→ **工作区 + 种子 `xrk-*`** → 其它全局；同名冲突公文包赢。
+与 Codex 相同的核心原则：**instructions 窄、skills 渐进披露**（站立 catalog **仅名** → `skill_search` 取 blurb → `skill` 拉正文；`tool_search` 只服务延迟工具）。Catalog 截断头序：**公文包**（干员/其子会话）→ **工作区 + 种子 `xrk-*`** → 其它全局；同名冲突公文包赢。
 
 | 种类 | 全局 `~/…` | 工作区 `{root}/…` |
 |------|------------|-------------------|
 | **产品站立** | **`~/.xrk/`**（AGENTS/SOUL/USER/IDENTITY/TOOLS …；全席） | `{workspace}/.xrk/` 同形 overlay |
-| **约定 Instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents` AGENTS/rules/context（**全席**） | **存在都尝试注入**（多智能体同仓）：`.codex/` · `CODEX.md` · `.claude/` · `.agents/` · `.cursor/rules/**` · `.github/*` · 根 `AGENTS.md`/`CLAUDE.md` · 与 `.xrk/` **并行**（内容去重；单文件 `xrk-inject: false` 跳过） |
+| **约定 Instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents` AGENTS/rules（**全席**） | **存在都尝试注入**（多智能体同仓）：`.codex/` · `CODEX.md` · `.claude/` · `.agents/` AGENTS+rules · `.cursor/rules/**`（经理席；子代理/`minimal` 跳过） · `.github/*` · 根 `AGENTS.md`/`CLAUDE.md` · 与 `.xrk/` **并行**（内容去重；单文件 `xrk-inject: false` 跳过）。**`.agents/context/**` 不站立注入**（按需 `skill` / AGENTS 指针，对齐 Codex 渐进披露） |
 | **经理 ledger `XRK.md`** | **`~/.xrk/XRK.md`**（站立种子 · fingerprint，同 AGENTS；仅 `audience=user`）· 遗留 **`~/XRK.md`** | **`{workspace}/.xrk/XRK.md`**（同 AGENTS overlay）· 遗留根 **`XRK.md`**；干员家 / 委派子会话不注 |
 | **`~/.cursor/**`** | **永不注入**（Cursor IDE 维护树） | — |
 | **`{root}/.cursor/rules/**`** | — | **注入**（单文件 `xrk-inject: false` 可跳过） |
-| **Skill catalog / `skill` 工具 / `skill.list` / `/skills`** | **始终含** `{XRK_HOME}/skills`（产品种子 **与** 用户安装）；其它 `~/…/skills` 默认关 | 候选同形；**截断/展示头序**：公文包 → 工作区+`xrk-*` → 全局。同名公文包赢。无 `skill_search` |
+| **Skill catalog / `skill_search` / `skill` / `skill.list` / `/skills`** | **始终含** `{XRK_HOME}/skills`（产品种子 **与** 用户安装）；其它 `~/…/skills` 默认关 | 候选同形；**截断/展示头序**：公文包 → 工作区+`xrk-*` → 全局。同名公文包赢。站立 catalog **仅名**；`skill_search` 取 blurb |
 
 跨项目人格写 **`~/.xrk/`**（或工作区 `.xrk/`）；业界约定写 **`~/.agents/`**（AGENTS/rules/context/skills）。不要放 **`~/.cursor/`**。
 
@@ -50,12 +50,35 @@ assistant / context / rules / recipes 默认：`{workspaceRoot}/.xrk`（**不强
 
 | 载荷 | `user/message.source` | 模型侧正文 |
 |------|----------------------|------------|
-| Skill catalog（name + description） | `skill-catalog` · `form: catalog` | `<available_skills>` … |
+| Skill catalog（**仅名**） | `skill-catalog` · `form: catalog` | `<available_skills>` 名列表 + 一行 how-to |
 | 多厂商约定 + `.xrk` 站立说明 | `agent-instructions` · `form: instructions` + `changes[]` | Markdown sections（`## path`） |
 
 每条 inject（及人类 prompt）有唯一 `messageId`。Face wire `data.id` 使用该 id — **不是**裸 `turnId` — 以便同 turn 同时展示 inject 行与人类行而不挤掉对话。
 
-Digest last-wins：未变 → 不新开行；已变 → 全量替换（catalog 上 `update: true`）。盘未变且会话已有 instructions **或** skill-catalog → `appendWorkspaceInjectsIfChanged` **整段跳过**（不重扫）。Skill **正文**仍经 `skill` 工具或 `/skill-name` 加载（见 [slash-recipes.md](./slash-recipes.md)）。
+Digest last-wins：未变 → 不新开行；已变 → **再追加**一行（catalog 上 `update: true`；`foldChat` 按时间序堆叠，**不**回写早期行）。盘未变且会话已有 instructions **或** skill-catalog → `appendWorkspaceInjectsIfChanged` **整段跳过**（不重扫）。Skill **正文**仍经 `skill` 工具或 `/skill-name` 加载（见 [slash-recipes.md](./slash-recipes.md)）。
+
+### 渐进披露省量（本机实测 · 产品种子）
+
+口径：soft-budget 文本密度（CJK≈1 tok/char，ASCII≈chars/4）；日期以仓内脚本复测为准。
+
+| 面 | 对照 | 站立可见 | 省下 |
+|----|------|----------|------|
+| **Skill catalog** | 17 个 `apps/cli/seeds/skills` | 仅名 ≈ **0.5 KB / ~130 tok** | 相对「名+description」≈ **5.4 KB / ~1.4k tok** → **约 90% 字节**；全文 SKILL.md 合计 ≈ **56 KB** 仍离线，仅 `skill` / slash 拉入 |
+| **`tools[]` wire** | 合成 7 Direct + 12 Deferred（浏览器/MCP 量级 schema）+ `tool_search` | 渐进 wire **8** 项 ≈ **4.2 KB / ~1.0k tok** | 相对全表上线 **20** 项 ≈ **22 KB / ~5.4k tok** → **约 81% 字节**；展开 2 个 Deferred 后 ≈ 7.3 KB（尾追加） |
+
+工具数字是「典型 Deferred schema」合成对照，不是某次 Host 实机 dump；MCP 挂得多时，全表路径会更胖，渐进收益更大。复测：`node .tmp/measure-progressive.mjs`（开发机；不入库）。
+
+### 与提供方 KV 前缀（别击穿）
+
+| 路径 | 会不会砸前缀 | 为什么 |
+|------|--------------|--------|
+| 站立 skill catalog | **否（设计上）** | 走 durable `user/message`，不进三层 **system**；digest 变了只在日志**尾部追加**，左侧对话前缀不动（见 `foldChat` 注释） |
+| `skill` / `skill_search` 结果 | **否** | 普通 `tool/result`，落在当前 turn 尾部 |
+| `tool_search` 浏览 `list` | **否** | 结果在 tool 消息；`tool_search` 的 **description 不含活目录**（防每步改 tools 声明） |
+| `tool_search` **expand** | **尾部 miss，不整段撞** | `stabilizeToolsForSeries`：幸存者保序 + **冻结**旧 `description`/`parameters`；新工具只 **append** 到 `tools[]` 尾 |
+| 压缩 / 换路由 | **会重基线** | `breakToolsBaseline` / `breakSeriesBaseline` — 预期行为，见 [session-optimize.md](./session-optimize.md) §5 |
+
+**不要做的事**：把 skill 正文或 Deferred 全 schema 塞回 system / 站立 catalog；在 `dynamicSchema` / `tool_search.description` 里塞活名册（会改 tools 前缀字节）。
 
 Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Trajectory 按 producer 列出。
 
@@ -70,7 +93,7 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 1. **产品站立** `~/.xrk/` AGENTS/SOUL/…（全席；`includeUserHome` 默认开）
 2. **家约定**（`HOME_CONVENTION_INJECT`；**全席**）：`~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents` AGENTS/rules/context
 3. **经理 ledger**（仅 `audience=user`）：站立 `~/.xrk/XRK.md`（+ 遗留 `~/XRK.md`）
-4. **工作区约定**（`WORKSPACE_CONVENTION_INJECT`；**存在都注**）：`.codex/AGENTS.md` · `CODEX.md` · `.claude/CLAUDE.md`+`rules/` · `.agents` AGENTS/rules/context · `.cursor/rules/**` · `.github/*`
+4. **工作区约定**（`WORKSPACE_CONVENTION_INJECT`；**存在都注**）：`.codex/AGENTS.md` · `CODEX.md` · `.claude/CLAUDE.md`+`rules/` · `.agents` AGENTS/rules（**不含** `context/`） · `.cursor/rules/**`（子代理/`minimal` 跳过） · `.github/*`
 5. `{workspace}/.xrk/`：`SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`；同档 **`XRK.md`**（仅 user）
 6. 工作区根 `AGENTS.md`（始终尝试；`xrk-inject: false` 跳过）；遗留根 `XRK.md`（仅 user，顺序在约定层）
 7. 工作区根 `CLAUDE.md`（仅 `@AGENTS.md` 单行时跳过）
@@ -168,22 +191,22 @@ Turn-scoped / recomputable ephemeral context uses **[context-fragments](./contex
 
 Sections append in order; duplicate bodies dedupe; **later sections are closer to the turn**. Skill catalog follows the same rule: home is lower priority than project trees. Each rendered section carries a `> source: <path>` provenance line.
 
-**Audience**: gates **manager ledger `XRK.md` only** (`audience=user`; not 干员家 / delegated children). Product standing, home/workspace convention, and skill catalog are the **same for every audience**. Badge/permission own the **tool surface**, not context. Progressive disclosure: catalog names → `skill` loads bodies. Authority: `<instruction_authority>`; seat / MCP / ask: `<seat_identity>` · `<session_capability>` (incl. `mcp_mount`).
+**Audience**: gates **manager ledger `XRK.md` only** (`audience=user`; not 干员家 / delegated children). Product standing, home/workspace convention, and skill catalog are the **same for every audience**. Badge/permission own the **tool surface**, not context. Progressive disclosure: catalog names → `skill_search` blurbs → `skill` bodies. Authority: `<instruction_authority>`; seat / MCP / ask: `<seat_identity>` · `<session_capability>` (incl. `mcp_mount`).
 
 **Source of truth**: `packages/workspace/src/inject-sources.ts` (`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill root lists) · `ecosystem-instructions.ts` · `workspace-anchor.ts`.
 
 ## Inject policy (Codex-aligned)
 
-Same core principle as Codex: **narrow instructions, progressive skill disclosure** (catalog = name+blurb → `skill` loads body; **no** `skill_search` — `tool_search` is for deferred tools only). Catalog truncate head: **公文包** (干员 / their children) → **workspace + seed `xrk-*`** → other globals; briefcase wins name clashes.
+Same core principle as Codex: **narrow instructions, progressive skill disclosure** (standing catalog = **names only** → `skill_search` for blurbs → `skill` loads body; `tool_search` is for deferred tools only). Catalog truncate head: **公文包** (干员 / their children) → **workspace + seed `xrk-*`** → other globals; briefcase wins name clashes.
 
 | Kind | Global `~/…` | Workspace `{root}/…` |
 |------|--------------|----------------------|
 | **Product standing** | **`~/.xrk/`** (AGENTS/SOUL/USER/IDENTITY/TOOLS …; every audience) | Same shape under `{workspace}/.xrk/` |
-| **Convention instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents` AGENTS/rules/context (**every audience**) | **All present vendors attempted** (multi-agent same workspace): `.codex/` · `CODEX.md` · `.claude/` · `.agents/` · `.cursor/rules/**` · `.github/*` · root `AGENTS.md`/`CLAUDE.md` **alongside** `.xrk/` (content-deduped; per-file `xrk-inject: false` skips) |
+| **Convention instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents` AGENTS/rules (**every audience**) | **All present vendors attempted** (multi-agent same workspace): `.codex/` · `CODEX.md` · `.claude/` · `.agents/` AGENTS+rules · `.cursor/rules/**` (manager seats; skipped for `subagent`/`minimal`) · `.github/*` · root `AGENTS.md`/`CLAUDE.md` **alongside** `.xrk/` (content-deduped; per-file `xrk-inject: false` skips). **`.agents/context/**` is not standing-injected** (on-demand via `skill` / AGENTS pointers — Codex progressive disclosure) |
 | **Manager ledger `XRK.md`** | **`~/.xrk/XRK.md`** (standing seed · fingerprint, same as AGENTS; `audience=user` only) · legacy **`~/XRK.md`** | **`{workspace}/.xrk/XRK.md`** (same overlay shape as AGENTS) · legacy root **`XRK.md`**; not 干员家 / delegated children |
 | **`~/.cursor/**`** | **Never injected** (Cursor IDE maintainer tree) | — |
 | **`{root}/.cursor/rules/**`** | — | **Injected** (per-file opt-out via `xrk-inject: false`) |
-| **Skill catalog / `skill` tool / `skill.list` / `/skills`** | **Always includes** `{XRK_HOME}/skills` (seeds + installs); other `~/…/skills` off by default | Shared roots; **truncate/display head**: briefcase → workspace+`xrk-*` → globals. Briefcase wins clashes. No `skill_search` |
+| **Skill catalog / `skill_search` / `skill` / `skill.list` / `/skills`** | **Always includes** `{XRK_HOME}/skills` (seeds + installs); other `~/…/skills` off by default | Shared roots; **truncate/display head**: briefcase → workspace+`xrk-*` → globals. Briefcase wins clashes. Standing catalog = **names only**; `skill_search` returns blurbs |
 
 Put cross-project persona under **`~/.xrk/`** (or workspace `.xrk/`); industry convention under **`~/.agents/`** (AGENTS/rules/context/skills). Not **`~/.cursor/`**.
 
@@ -201,12 +224,35 @@ At each turn start (after `turn/start`, before the human `user/message`), preset
 
 | Payload | `user/message.source` | Model-facing body |
 |---------|----------------------|-------------------|
-| Skill catalog (name + description) | `skill-catalog` · `form: catalog` | `<available_skills>` … |
+| Skill catalog (**names only**) | `skill-catalog` · `form: catalog` | `<available_skills>` name list + one how-to line |
 | Multi-vendor conventions + `.xrk` standing text | `agent-instructions` · `form: instructions` + `changes[]` | Markdown sections (`## path`) |
 
 Each inject (and the human prompt) has a unique `messageId`. Face wire `data.id` uses that id — **not** a bare `turnId` — so inject rows and the human row can show in the same turn without crowding the dialogue.
 
-Digest last-wins: unchanged → no new row; changed → full replace (`update: true` on catalog). When disk is unchanged and the session already has instructions **or** a skill-catalog, `appendWorkspaceInjectsIfChanged` **skips entirely** (no rescan). Skill **bodies** still load via the `skill` tool or `/skill-name` ([slash-recipes.md](./slash-recipes.md)).
+Digest last-wins: unchanged → no new row; changed → **append** another row (`update: true` on catalog; `foldChat` stacks by time and **does not** rewrite earlier rows). When disk is unchanged and the session already has instructions **or** a skill-catalog, `appendWorkspaceInjectsIfChanged` **skips entirely** (no rescan). Skill **bodies** still load via the `skill` tool or `/skill-name` ([slash-recipes.md](./slash-recipes.md)).
+
+### Progressive disclosure savings (measured · product seeds)
+
+Density: soft-budget text estimate (CJK ≈ 1 tok/char, ASCII ≈ chars/4). Re-measure locally when seeds change.
+
+| Surface | Baseline | Standing visible | Saved |
+|---------|----------|------------------|-------|
+| **Skill catalog** | 17 `apps/cli/seeds/skills` | names only ≈ **0.5 KB / ~130 tok** | vs name+description ≈ **5.4 KB / ~1.4k tok** → **~90% bytes**; full SKILL.md bodies ≈ **56 KB** stay offline until `skill` / slash |
+| **`tools[]` wire** | synthetic 7 Direct + 12 Deferred (browser/MCP-sized schemas) + `tool_search` | progressive wire **8** ≈ **4.2 KB / ~1.0k tok** | vs full dump **20** ≈ **22 KB / ~5.4k tok** → **~81% bytes**; after expanding 2 Deferred ≈ 7.3 KB (tail append) |
+
+Tool figures are synthetic schema sizes for typical deferred surfaces, not a live Host dump; more MCP tools make the full-dump path fatter and progressive savings larger. Re-run: `node .tmp/measure-progressive.mjs` (dev machine; not checked in).
+
+### Provider KV prefix (do not bust it)
+
+| Path | Busts prefix? | Why |
+|------|---------------|-----|
+| Standing skill catalog | **No (by design)** | Durable `user/message`, not three-layer **system**; digest changes **append** at the log tail; left conversation prefix stays put (`foldChat`) |
+| `skill` / `skill_search` results | **No** | Normal `tool/result` at the current turn tail |
+| `tool_search` browse `list` | **No** | Lives in the tool message; `tool_search` **description has no live catalog** |
+| `tool_search` **expand** | **Tail miss only** | `stabilizeToolsForSeries`: survivors keep order + **frozen** prior `description`/`parameters`; newcomers **append** to `tools[]` |
+| Compaction / route change | **Re-baselines** | `breakToolsBaseline` / `breakSeriesBaseline` — expected; see [session-optimize.md](./session-optimize.md) §5 |
+
+**Do not:** put skill bodies or full Deferred schemas back into system / standing catalog; stuff live rosters into `dynamicSchema` / `tool_search.description` (rewrites the tools prefix).
 
 Face chat renders non-`user` sources as folded **context inject** rows; Trajectory lists them by producer.
 
@@ -221,7 +267,7 @@ Low → high priority (later rows closer to the turn). Skill **bodies** remain a
 1. **Product standing** `~/.xrk/` AGENTS/SOUL/… (every audience; `includeUserHome` default on)
 2. **Home convention** (`HOME_CONVENTION_INJECT`; **every audience**): `~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents` AGENTS/rules/context
 3. **Manager ledger** (`audience=user` only): standing `~/.xrk/XRK.md` (+ legacy `~/XRK.md`)
-4. **Workspace convention** (`WORKSPACE_CONVENTION_INJECT`; **all present**): `.codex/AGENTS.md` · `CODEX.md` · `.claude/CLAUDE.md`+`rules/` · `.agents` AGENTS/rules/context · `.cursor/rules/**` · `.github/*`
+4. **Workspace convention** (`WORKSPACE_CONVENTION_INJECT`; **all present**): `.codex/AGENTS.md` · `CODEX.md` · `.claude/CLAUDE.md`+`rules/` · `.agents` AGENTS/rules (**not** `context/`) · `.cursor/rules/**` (skipped for `subagent`/`minimal`) · `.github/*`
 5. `{workspace}/.xrk/`: `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`; plus **`XRK.md`** (user only)
 6. Workspace-root `AGENTS.md` (always attempted; `xrk-inject: false` skips); legacy root `XRK.md` (user only, earlier with ledger)
 7. Workspace-root `CLAUDE.md` (skipped when it is only a single `@AGENTS.md` line)

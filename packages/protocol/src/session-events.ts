@@ -678,10 +678,20 @@ export interface RequestHeaderEvent extends SessionEventBase {
   readonly reason: RequestHeaderReason;
   readonly header: {
     readonly config: LlmRequestConfig;
-    /** Assembled system prompt for this request (optional; Face estimate). */
+    /**
+     * Assembled system prompt. Prefer writing this only on the first header
+     * after session start / compaction (series baseline hydrate). Later
+     * changes should store {@link systemTokens} + {@link systemHash} only.
+     */
     readonly system?: string;
+    /** Soft-budget token price of `system` (Face meter; avoids re-walking text). */
+    readonly systemTokens?: number;
+    /** Short fingerprint of `system` for change detection without full body. */
+    readonly systemHash?: string;
     /** Standing tool schemas for this request (optional; Face estimate). */
     readonly tools?: readonly RequestHeaderToolSchema[];
+    /** Soft-budget token price of `tools` (Face meter). */
+    readonly toolsTokens?: number;
     readonly adapterDefaults?: {
       readonly reasoningEffort?: boolean;
       readonly maxTokens?: boolean;

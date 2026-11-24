@@ -512,8 +512,14 @@ export function parseMemberAppearance(
       : {};
   const shape = isMemberShape(base.shape) ? base.shape : fallback.shape;
   const color = isMemberColor(base.color) ? base.color : fallback.color;
-  const bodyColor = parseHexColor(base.bodyColor ?? fallback.bodyColor);
-  const eyeColor = parseHexColor(base.eyeColor ?? fallback.eyeColor);
+  // Explicit empty / invalid hex clears a prior custom colour (follow palette).
+  // Falling through to fallback locked body/eye once a custom hex was saved.
+  const bodyColor = Object.prototype.hasOwnProperty.call(base, "bodyColor")
+    ? parseHexColor(base.bodyColor)
+    : parseHexColor(fallback.bodyColor);
+  const eyeColor = Object.prototype.hasOwnProperty.call(base, "eyeColor")
+    ? parseHexColor(base.eyeColor)
+    : parseHexColor(fallback.eyeColor);
   const size = parseMemberBallSize(base.size) ?? fallback.size;
   const kitRaw = Object.prototype.hasOwnProperty.call(base, "kit")
     ? base.kit
@@ -548,10 +554,8 @@ export function parseMemberAppearance(
   };
 }
 
-export function appearanceLookWire(
-  look: MemberAppearance,
-  stickers: readonly PresenceSticker[] = [],
-): {
+/** Wire look Face puts on `companionBall` / `parentCompanionBall` / workspace rows. */
+export type AppearanceLookWire = {
   readonly shape: string;
   readonly color: string;
   readonly bodyColor?: string;
@@ -564,7 +568,12 @@ export function appearanceLookWire(
   readonly overlayHat?: string;
   readonly overlayGlasses?: string;
   readonly overlayHeld?: string;
-} {
+};
+
+export function appearanceLookWire(
+  look: MemberAppearance,
+  stickers: readonly PresenceSticker[] = [],
+): AppearanceLookWire {
   const split = splitLegacyKit(look.kit);
   const kitHat = look.kitHat ?? split.hat;
   const kitGlasses = look.kitGlasses ?? split.glasses;
@@ -785,13 +794,32 @@ export function rosterPublicFields(row: ListedRosterMember) {
   };
 }
 
+/**
+ * Roster lines for inject surfaces.
+ *
+ * - `full` — team_list / inspect (briefs · tools · ready hints).
+ * - `spawn-ids` — turn-start collab board: id · name · role · inject only;
+ *   briefs stay behind `team_list` (same progressive-disclosure contract as
+ *   deferred tools / session_inspect). Spawn still works from member_id.
+ */
 export function formatRosterCatalog(
   members: readonly ListedRosterMember[],
+  options?: { readonly density?: "full" | "spawn-ids" },
 ): string {
   if (members.length === 0) return "(no Agent Team members yet)";
+  const density = options?.density ?? "full";
   return members
     .map((row) => {
       const pub = rosterPublicFields(row);
+      const shown = displayMemberName(pub.name, pub.nickname);
+      if (density === "spawn-ids") {
+        const ready = pub.ready ? "" : " · not-ready";
+        return (
+          `- ${pub.id} [${pub.scope}] ${shown} · ${pub.role} · inject=${pub.inject}` +
+          ready +
+          (pub.catalog ? " · catalog" : "")
+        );
+      }
       const tools =
         pub.tools?.mode === "allow"
           ? ` tools=${pub.tools.names.join(",")}`
@@ -805,7 +833,6 @@ export function formatRosterCatalog(
             ? " · not-ready → team_list(envPrep) → team_ready"
             : " · not-ready";
       const kind = pub.kind === "advanced" ? " · advanced" : "";
-      const shown = displayMemberName(pub.name, pub.nickname);
       return `- ${pub.id} [${pub.scope}] ${shown} · ${pub.role} · inject=${pub.inject} · ${pub.brief}${tools}${kind}${ready}${pub.catalog ? " · catalog · no-export" : ""}`;
     })
     .join("\n")

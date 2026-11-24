@@ -8,6 +8,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
+import {
+  isTopEscapeLayer,
+  popEscapeLayer,
+  pushEscapeLayer,
+} from './escape-layer.ts'
 import { IconCloseOutlineRegular } from './icons/index.tsx'
 import { useShellFrameOverlay } from './shell-frame.ts'
 import css from './Modal.module.css'
@@ -144,6 +149,8 @@ export function Modal({
     const dialog = dialogRef.current
     // Whoever opened the dialog is where focus belongs when it closes again.
     const restoreTo = document.activeElement as HTMLElement | null
+    // Innermost open Modal owns Escape — not registration order.
+    const escapeToken = pushEscapeLayer()
 
     // Move focus in before anything else, so a screen reader announces the
     // dialog rather than leaving the user on the page behind it. A dialog with
@@ -164,6 +171,8 @@ export function Modal({
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Nested Modal: outer listener is registered first; skip unless top.
+        if (!isTopEscapeLayer(escapeToken)) return
         // stopImmediatePropagation: sibling document keydown listeners
         // (SettingsPanel, …) must not also close on this same Escape (B-4).
         e.preventDefault()
@@ -201,6 +210,7 @@ export function Modal({
     document.addEventListener('keydown', onKeyDown)
     dialog?.addEventListener('focusin', onFocusIn)
     return () => {
+      popEscapeLayer(escapeToken)
       document.removeEventListener('keydown', onKeyDown)
       dialog?.removeEventListener('focusin', onFocusIn)
       // Only restore if the trigger still exists: a dialog can be torn down by

@@ -1152,6 +1152,27 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         typeof systemRaw === "string" && systemRaw.length > 0
           ? systemRaw
           : undefined;
+      const systemTokensRaw = (headerRaw as { systemTokens?: unknown })
+        .systemTokens;
+      const systemTokens =
+        typeof systemTokensRaw === "number" &&
+        Number.isFinite(systemTokensRaw) &&
+        systemTokensRaw >= 0
+          ? Math.floor(systemTokensRaw)
+          : undefined;
+      const systemHashRaw = (headerRaw as { systemHash?: unknown }).systemHash;
+      const systemHash =
+        typeof systemHashRaw === "string" && systemHashRaw.length > 0
+          ? systemHashRaw
+          : undefined;
+      const toolsTokensRaw = (headerRaw as { toolsTokens?: unknown })
+        .toolsTokens;
+      const toolsTokens =
+        typeof toolsTokensRaw === "number" &&
+        Number.isFinite(toolsTokensRaw) &&
+        toolsTokensRaw >= 0
+          ? Math.floor(toolsTokensRaw)
+          : undefined;
       const toolsRaw = (headerRaw as { tools?: unknown }).tools;
       let tools:
         | {
@@ -1210,7 +1231,10 @@ export function parseSessionEvent(value: unknown): SessionEvent {
             ...(contextWindow !== undefined ? { contextWindow } : {}),
           },
           ...(system !== undefined ? { system } : {}),
+          ...(systemTokens !== undefined ? { systemTokens } : {}),
+          ...(systemHash !== undefined ? { systemHash } : {}),
           ...(tools !== undefined ? { tools } : {}),
+          ...(toolsTokens !== undefined ? { toolsTokens } : {}),
           ...(adapterDefaults ? { adapterDefaults } : {}),
         },
       };

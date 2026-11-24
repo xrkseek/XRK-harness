@@ -85,6 +85,32 @@ describe('presence-look-cache', () => {
     })
   })
 
+  it('warmCompanionLookFromPaint clears prior sticker overlays via empty live fields', () => {
+    warmCompanionLookFromPaint(
+      'a',
+      {
+        shape: 'blob',
+        color: 'cream',
+        overlayHat: 'data:image/png;base64,old',
+        bodyColor: '#ff88aa',
+      },
+      {
+        shape: 'teardrop',
+        color: 'rose',
+        kitHat: 'bow',
+        overlayHat: '',
+        bodyColor: '',
+      },
+    )
+    expect(readPresenceLookCache('a')).toEqual({
+      shape: 'teardrop',
+      color: 'rose',
+      kitHat: 'bow',
+      overlayHat: '',
+      bodyColor: '',
+    })
+  })
+
   it('warmCompanionLookFromPaint can seed from live-only shape+color', () => {
     warmCompanionLookFromPaint('b', undefined, {
       shape: 'petal',

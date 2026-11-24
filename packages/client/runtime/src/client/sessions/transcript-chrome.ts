@@ -95,11 +95,13 @@ export function projectTranscriptChrome(input: {
   if (kind === 'session-reference' || form === 'recall') {
     return { voice: 'runtime', lane: 'recall' }
   }
-  // First-class handoff, or legacy subagent courier bags — never bare `form:notice`
+  // First-class handoff / courier bags — never bare `form:notice`
   // (goals / other plugins also use notice and stay runtime×brief).
+  // Includes legacy `plugin:subagent` and parent mirror leftovers.
   if (
     kind === 'handoff'
     || (kind === 'plugin' && plugin === 'subagent' && (form === 'notice' || form === null))
+    || (kind === 'plugin' && plugin === 'subagent-mirror')
   ) {
     return { voice: 'courier', lane: 'handoff' }
   }

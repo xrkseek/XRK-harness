@@ -475,6 +475,7 @@ export function bindWorkspaceOrchestrateTools(
           timeoutMs,
           signal,
           {
+            yieldSessionId: sessionId,
             shouldBreak: () =>
               breakMutualPeerSyncWait({
                 runtime,
@@ -502,6 +503,25 @@ export function bindWorkspaceOrchestrateTools(
             wait: false,
             mutualWait: true,
             notice: formatMutualPeerWaitAsyncNotice(targetId),
+          }),
+        };
+      }
+      if ("yielded" in waited) {
+        promoteFailedSyncPeerWait({
+          runtime,
+          peerSessionId: targetId,
+          waiterSessionId: sessionId,
+        });
+        return {
+          content: JSON.stringify({
+            workspaceId,
+            sessionId: targetId,
+            ok: true,
+            wait: false,
+            yielded: true,
+            notice:
+              `wait detached (peer ${targetId} kept running; ` +
+              `reply arrives as [会话协作] handoff)`,
           }),
         };
       }

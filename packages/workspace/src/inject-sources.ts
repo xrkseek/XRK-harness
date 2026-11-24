@@ -6,8 +6,11 @@
  * - **Workspace convention vendors are additive**: if `.agents` / `.claude` /
  *   `.cursor/rules` / `.codex` / root `AGENTS.md` exist, **each is attempted**
  *   (content-deduped) so multi-agent tools can share one repo.
+ * - **`.agents/context/**`**: not standing-injected (Codex progressive disclosure —
+ *   load via `skill` / AGENTS pointers; dumping the folder was a context disaster).
  * - **Home `~/.cursor/**`**: never injected (Cursor IDE maintainer tree).
- * - **Workspace `{root}/.cursor/rules/**`**: injected when present (`xrk-inject: false` opts out per file).
+ * - **Workspace `{root}/.cursor/rules/**`**: injected for manager/user seats when
+ *   present (`xrk-inject: false` opts out); skipped for `subagent` / `minimal`.
  * - **Skills catalog**: workspace trees only by default; home trees via `skill` tool on demand.
  */
 
@@ -19,7 +22,7 @@ export interface ConventionInjectProfile {
   readonly codexRootMd: boolean;
   /** `{base}/.claude/CLAUDE.md` + `.claude/rules/**` */
   readonly claude: boolean;
-  /** `{base}/.agents/AGENTS.md` + rules + context */
+  /** `{base}/.agents/AGENTS.md` + rules (not `context/` — that is skill-on-demand) */
   readonly agents: boolean;
   /** `{base}/.cursor/rules/**` — **never** on home; workspace only. */
   readonly cursorRules: boolean;

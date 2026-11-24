@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 // The search render intent on the web side: the pure searchCardModel derivation
 // over resultView, and the conversation render sites that consume it — the chat
 // tool row (GenericToolCard's fallback body and SearchRow, both composing the
@@ -423,7 +423,7 @@ describe('DetailsPanel Output section (search)', () => {
       nodes: [], turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [],
       pending: [], pendingSubmissions: [], queue: [], running: false, composerPhase: 'active', removed: false,
       openState: 'open', openError: null, hasMore: false, loadingOlder: false,
-      promptError: null, blank: false, subagent: null, lastAgentError: null, ...over,
+      promptError: null, blank: false, subagent: null, lastAgentError: null, waitYield: null, ...over,
     }
   }
 

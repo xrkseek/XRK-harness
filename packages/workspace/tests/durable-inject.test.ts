@@ -146,7 +146,7 @@ describe("durable workspace inject", () => {
     expect(payload!.content.slice(0, truncAt).trimEnd().length).toBeLessThanOrEqual(400);
     expect(payload!.content).toContain("[skill catalog truncated]");
     // a truncated catalog must still tell the model how to find the missing skills
-    expect(payload!.content).toContain("skills/*/SKILL.md");
+    expect(payload!.content).toContain("skill_search");
     expect(payload!.source.entries.length).toBeLessThan(skills.length);
   });
 

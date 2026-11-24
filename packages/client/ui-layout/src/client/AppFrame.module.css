@@ -99,7 +99,7 @@
   position: absolute;
   top: 11px;
   left: 88px;
-  z-index: 15;
+  z-index: var(--ds-z-chrome-leading);
   display: flex;
   align-items: center;
   -webkit-app-region: no-drag;
@@ -117,11 +117,11 @@
 }
 
 .centerCol {
-  /* Above shell.overlay (z 20): community pets (大肥鱼) float in overlay and
-     otherwise steal Send / Cancel-edit hits on the sticky composer. Below
-     phone drawers/sheets (28+) so those still cover chat when open. */
+  /* Above shell.overlay: community pets float in overlay and otherwise steal
+     Send / Cancel-edit hits on the sticky composer. Below phone drawers/sheets
+     so those still cover chat when open. */
   position: relative;
-  z-index: 21;
+  z-index: var(--ds-z-chrome-center);
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -160,7 +160,7 @@
   width: 8px;
   margin-left: -4px;
   cursor: col-resize;
-  z-index: 2;
+  z-index: var(--ds-z-chrome-handle);
   touch-action: none;
   /* Rides the same curve as the tracks so the pill stays on the moving
      border during collapse/expand; paused while dragging (frame rule). */
@@ -215,12 +215,12 @@
   border-color: var(--dsw-alias-border-l3);
 }
 
-/* Floats above columns except centerCol (z 21): pets stay visible in the
-   side margins / details gap without covering the composer dock. */
+/* Floats above columns except centerCol: pets stay visible in the side
+   margins / details gap without covering the composer dock. */
 .overlayLayer {
   position: absolute;
   inset: 0;
-  z-index: 20;
+  z-index: var(--ds-z-chrome-overlay);
   pointer-events: none;
 }
 
@@ -235,7 +235,7 @@
   top: 0;
   bottom: 0;
   left: 0;
-  z-index: 32;
+  z-index: var(--ds-z-chrome-phone-drawer);
   width: var(--phone-drawer-width, 280px);
   max-width: calc(100% - 48px);
   padding-top: env(safe-area-inset-top, 0px);
@@ -274,7 +274,7 @@
 .frame[data-phone] .detailsCol {
   position: absolute;
   inset: 0;
-  z-index: 28;
+  z-index: var(--ds-z-chrome-phone-sheet);
   width: auto;
   /* Prefer Flutter-injected --ds-safe-* (thin shell); env() alone is often 0
      in Android WebView, or doubles when Overview header also pads safe-area. */
@@ -328,7 +328,7 @@
 .phoneScrim {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: var(--ds-z-chrome-phone-scrim);
   margin: 0;
   padding: 0;
   border: 0;
@@ -363,7 +363,7 @@
      when env(safe-area) is 0 in Android WebView. */
   top: max(8px, env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px));
   left: max(6px, env(safe-area-inset-left, 0px), var(--ds-safe-left, 0px));
-  z-index: 24;
+  z-index: var(--ds-z-chrome-phone-fab);
   display: inline-flex;
   align-items: center;
   gap: 4px;

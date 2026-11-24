@@ -80,6 +80,25 @@ export { FACE_WS_PATHS, faceMethodFromPath, isFaceWsPath };
 
 type FaceDownlinkFrame = ReturnType<typeof serverRequestFrame>;
 
+/** Soft-detach wait dock rows still live when a host stream opens. */
+function writeHostWaitYieldBaseline(
+  runtime: FaceRuntime,
+  send: (frame: FaceDownlinkFrame) => void,
+): void {
+  for (const row of runtime.waitYield.snapshotLive()) {
+    send(
+      serverRequestFrame(newRpcId(), {
+        type: "host/session-wait-yield",
+        sessionId: row.sessionId,
+        active: {
+          kind: row.active.kind,
+          ...(row.active.label !== undefined ? { label: row.active.label } : {}),
+        },
+      }),
+    );
+  }
+}
+
 /** Initial mux snapshot (sessions · queue · projections · pending UI). */
 function writeMuxBaseline(
   runtime: FaceRuntime,
@@ -195,6 +214,7 @@ function tryHandleFaceEventSse(
 
   const isMux = url.pathname.endsWith("mux");
   if (isMux) writeMuxBaseline(runtime, send);
+  else writeHostWaitYieldBaseline(runtime, send);
   const off = isMux
     ? runtime.bus.subscribeMux((rpcId, frame) => {
         send(serverRequestFrame(rpcId, frame));
@@ -419,6 +439,9 @@ export function attachFaceUpgrades(
   hostWss.on("connection", (ws: WebSocket) => {
     const queue = createWsSendQueue(ws);
     const stopKeepalive = armWsAppKeepalive(ws, appKeepaliveMs);
+    writeHostWaitYieldBaseline(runtime, (frame) => {
+      queue.sendJson(frame);
+    });
     const off = runtime.bus.subscribeHost((rpcId, frame) => {
       queue.sendJson(serverRequestFrame(rpcId, frame));
     });

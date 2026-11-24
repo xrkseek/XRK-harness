@@ -12,6 +12,7 @@
  * an exact identity match so predecessor folds never seed live cells.
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { SessionListHints } from "@xrkseek/core-session";
 import type {
@@ -220,29 +221,49 @@ export function createFaceListProjectionCache(
     }
   }
 
+  const buildPayload = (): CacheFileV2 => ({
+    version: 2,
+    sessions: Object.fromEntries(
+      [...sessions.entries()].map(([id, row]) => [
+        id,
+        {
+          asOfSeq: row.asOfSeq,
+          identity: row.identity,
+          checkpoint: row.checkpoint,
+          ...(row.historyCheckpoint !== undefined
+            ? { historyCheckpoint: row.historyCheckpoint }
+            : {}),
+        },
+      ]),
+    ),
+  });
+
   /**
    * Persist dirty rows. I/O failures keep the in-memory column + dirty flag
    * so eviction can still serve cold `session.list` in-process and a later
    * flush can retry — never clear live cells without a remember.
+   *
+   * Debounced path uses async writeFile + rename so a multi-MB cache does not
+   * block the event loop; explicit {@link FaceListProjectionCache.flush} stays
+   * sync for close / tests that need a deterministic on-disk snapshot.
    */
-  const flush = (): void => {
+  const flushAsync = async (): Promise<void> => {
     if (!filePath || !dirty) return;
-    const payload: CacheFileV2 = {
-      version: 2,
-      sessions: Object.fromEntries(
-        [...sessions.entries()].map(([id, row]) => [
-          id,
-          {
-            asOfSeq: row.asOfSeq,
-            identity: row.identity,
-            checkpoint: row.checkpoint,
-            ...(row.historyCheckpoint !== undefined
-              ? { historyCheckpoint: row.historyCheckpoint }
-              : {}),
-          },
-        ]),
-      ),
-    };
+    const payload = buildPayload();
+    try {
+      await mkdir(path.dirname(filePath), { recursive: true });
+      const tmp = `${filePath}.${process.pid}.tmp`;
+      await writeFile(tmp, `${JSON.stringify(payload)}\n`, "utf8");
+      await rename(tmp, filePath);
+      dirty = false;
+    } catch {
+      /* cold column stays in memory until a later successful flush */
+    }
+  };
+
+  const flushSync = (): void => {
+    if (!filePath || !dirty) return;
+    const payload = buildPayload();
     try {
       mkdirSync(path.dirname(filePath), { recursive: true });
       const tmp = `${filePath}.${process.pid}.tmp`;
@@ -255,16 +276,16 @@ export function createFaceListProjectionCache(
   };
 
   // Cache writes used to run synchronously inside `remember`, i.e. on the open
-  // RPC's tail — one full JSON rewrite of every session per open. Debounce it;
-  // a crash only loses the last few hundred ms and cold list falls back to
+  // RPC's tail — one full JSON rewrite of every session per open. Debounce 5s;
+  // a crash only loses the last few seconds and cold list falls back to
   // `listHints` (never wrong, just slower).
   let flushTimer: ReturnType<typeof setTimeout> | undefined;
   const scheduleFlush = (): void => {
     if (flushTimer !== undefined) return;
     flushTimer = setTimeout(() => {
       flushTimer = undefined;
-      flush();
-    }, 500);
+      void flushAsync();
+    }, 5_000);
     (flushTimer as { unref?: () => void }).unref?.();
   };
   const flushNow = (): void => {
@@ -272,7 +293,8 @@ export function createFaceListProjectionCache(
       clearTimeout(flushTimer);
       flushTimer = undefined;
     }
-    flush();
+    // Prefer a sync snapshot when callers ask explicitly (shutdown / tests).
+    flushSync();
   };
 
   /** Drop a corrupt/unusable row so cold list falls back to listHints. */

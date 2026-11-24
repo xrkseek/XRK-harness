@@ -9,11 +9,21 @@ import { dispatchFaceMethod } from "../src/dispatch.js";
 import type { FaceDrain } from "../src/context.js";
 import { resolveSessionCwd } from "../src/session-cwd.js";
 
-function stubAgent(admits: Array<{ delivery: string; content: unknown }> = []): AgentHandle {
+function stubAgent(
+  admits: Array<{
+    delivery: string;
+    content: unknown;
+    source?: unknown;
+  }> = [],
+): AgentHandle {
   return {
     admit(content, options) {
       const delivery = options?.delivery ?? "queue";
-      admits.push({ delivery, content });
+      admits.push({
+        delivery,
+        content,
+        ...(options?.source !== undefined ? { source: options.source } : {}),
+      });
       return {
         admitId: options?.admitId ?? "admit_stub",
         sessionId: "stub",
@@ -162,9 +172,13 @@ describe("Face subagent", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(parentAdmits.map((a) => a.delivery)).toEqual(["steer", "steer"]);
-    expect(String(parentAdmits[0]?.content)).toContain("User message to background subagent");
-    expect(String(parentAdmits[0]?.content)).toContain("go");
-    expect(String(parentAdmits[1]?.content)).toContain("插话");
+    // Mirror is body-only Boss speech (no English "User message to background…" shell).
+    expect(String(parentAdmits[0]?.content)).toBe("go");
+    expect(String(parentAdmits[0]?.content)).not.toContain(
+      "User message to background",
+    );
+    expect(String(parentAdmits[1]?.content)).toBe("插话");
+    expect(parentAdmits[0]?.source).toMatchObject({ kind: "user" });
     // Client beginSubmission id must land in admitRpcMap (not Face unary rpcId),
     // or local steer echoes stay unmatched ("发送中" + copy-only).
     expect([...runtime.admitRpcMap.values()]).toContain("client-echo-steer");

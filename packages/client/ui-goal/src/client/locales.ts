@@ -14,6 +14,11 @@ export const zh = {
   'action.resume': '恢复目标',
   'action.edit': '编辑目标',
   'action.clear': '清除目标',
+  'action.clearConfirmTitle': '清除目标？',
+  'action.clearConfirmDesc': '会结束当前目标追踪，无法撤销。',
+  'action.clearConfirm': '清除',
+  'dialog.cancel': '取消',
+  'dialog.close': '关闭',
 } satisfies Record<string, string>
 
 /** The goal namespace key union. */
@@ -33,6 +38,11 @@ export const en = {
   'action.resume': 'Resume goal',
   'action.edit': 'Edit goal',
   'action.clear': 'Clear goal',
+  'action.clearConfirmTitle': 'Clear goal?',
+  'action.clearConfirmDesc': 'Ends tracking for this goal. This cannot be undone.',
+  'action.clearConfirm': 'Clear',
+  'dialog.cancel': 'Cancel',
+  'dialog.close': 'Close',
 } satisfies Record<GoalKey, string>
 
 /** Japanese dictionary, checked complete against the zh key set. */
@@ -49,6 +59,11 @@ export const ja = {
   'action.resume': '目標を再開',
   'action.edit': '目標を編集',
   'action.clear': 'ゴールをクリア',
+  'action.clearConfirmTitle': 'ゴールをクリアしますか？',
+  'action.clearConfirmDesc': 'この目標の追跡を終了します。元に戻せません。',
+  'action.clearConfirm': 'クリア',
+  'dialog.cancel': 'キャンセル',
+  'dialog.close': '閉じる',
 } as const satisfies Record<GoalKey, string>
 
 
