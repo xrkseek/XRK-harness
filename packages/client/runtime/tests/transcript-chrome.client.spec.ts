@@ -2,7 +2,28 @@ import { describe, expect, it } from 'vitest'
 import {
   isHumanOwnedUserMessage,
   projectTranscriptChrome,
+  speechFamilyKey,
 } from '../src/client/sessions/transcript-chrome.ts'
+
+describe('speechFamilyKey', () => {
+  it('partitions job-completion by jobId (aligned with kernel steerSpeechFamilyKey)', () => {
+    expect(speechFamilyKey({
+      kind: 'plugin', plugin: 'job-completion', form: 'notice', jobId: 'bash-62',
+    })).toBe('plugin:job-completion::bash-62')
+    expect(speechFamilyKey({
+      kind: 'plugin', plugin: 'job-completion', form: 'notice', jobId: 'bash-64',
+    })).toBe('plugin:job-completion::bash-64')
+  })
+
+  it('partitions ask-user by questionRpcId and parent-ask by child author', () => {
+    expect(speechFamilyKey({
+      kind: 'plugin', plugin: 'ask-user', form: 'notice', questionRpcId: 'q1',
+    })).toBe('plugin:ask-user::q1')
+    expect(speechFamilyKey({
+      kind: 'plugin', plugin: 'parent-ask', form: 'notice', childSessionId: 'sess_child',
+    })).toBe('plugin:parent-ask:sess_child')
+  })
+})
 
 describe('projectTranscriptChrome', () => {
   it('maps operator open / cutin', () => {

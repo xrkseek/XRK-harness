@@ -91,7 +91,9 @@
      a card opened against a screen edge would hang into a landscape notch;
      the pair is what the fixed menu has to give back. */
   max-width: min(480px, calc(100vw - 32px - var(--ds-safe-h)));
-  max-height: min(520px, calc(100dvh - var(--ds-safe-v) - 140px));
+  /* Design ceiling only — JobListAction also clamps to space *below* the
+     header chip so a tall sheet never covers the collapse trigger. */
+  max-height: min(360px, calc(100dvh - var(--ds-safe-v) - 160px));
   margin: 0;
   padding: 6px;
   overflow: hidden;
@@ -106,9 +108,9 @@
   box-shadow: var(--dsw-shadow-lv3);
 }
 
-/* Open output: taller sheet; rows stay in .menuList, TerminalBlock in .outputSlot. */
+/* Open output: slightly taller; rows stay in .menuList, TerminalBlock in .outputSlot. */
 .menu[data-output-open] {
-  max-height: min(72dvh, calc(100dvh - var(--ds-safe-v) - 96px));
+  max-height: min(48dvh, calc(100dvh - var(--ds-safe-v) - 120px));
 }
 
 .menuList {
@@ -126,7 +128,7 @@
 
 .menu[data-output-open] .menuList {
   flex: 0 1 auto;
-  max-height: min(28vh, 220px);
+  max-height: min(18vh, 140px);
 }
 
 .outputSlot {
@@ -304,7 +306,7 @@
 
   .menu {
     width: min(420px, calc(100vw - 32px - var(--ds-safe-h)));
-    max-height: min(48dvh, calc(100dvh - var(--ds-safe-v) - 96px));
+    max-height: min(36dvh, calc(100dvh - var(--ds-safe-v) - 96px));
   }
 
   .row {
@@ -372,7 +374,7 @@
   border-radius: 8px;
   background: var(--dsw-alias-bg-base);
   /* No overflow here — TerminalBlock is the sole output scrollport. */
-  --dsl-terminal-output-max-height: min(28vh, 260px);
+  --dsl-terminal-output-max-height: min(22vh, 180px);
 }
 
 /* Highlight the row whose output is open (detached panel below). */

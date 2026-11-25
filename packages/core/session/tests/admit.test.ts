@@ -165,6 +165,77 @@ describe("newSession / admit", () => {
     ).toEqual([handoff.admitId]);
   });
 
+  it("does not coalesce two ask-user late answers (each questionRpcId is its own card)", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const a = admitPrompt(store, s.id, "late answer A", {
+      delivery: "steer",
+      source: {
+        kind: "plugin",
+        plugin: "ask-user",
+        form: "notice",
+        questionRpcId: "q_a",
+      },
+    });
+    const b = admitPrompt(store, s.id, "late answer B", {
+      delivery: "steer",
+      source: {
+        kind: "plugin",
+        plugin: "ask-user",
+        form: "notice",
+        questionRpcId: "q_b",
+      },
+    });
+    const batch = promoteAdmitsForTurn(store, s.id);
+    expect(batch.receipts.map((r) => r.admitId)).toEqual([a.admitId]);
+    expect(
+      listPendingAdmits(store.get(s.id).events).map((p) => p.admitId),
+    ).toEqual([b.admitId]);
+  });
+
+  it("does not coalesce two job-completion steers (each jobId is its own card)", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const a = admitPrompt(store, s.id, "background job bash-62 finished", {
+      delivery: "steer",
+      source: {
+        kind: "plugin",
+        plugin: "job-completion",
+        form: "notice",
+        jobId: "bash-62",
+        summary: "bash-62 [completed]",
+      },
+    });
+    const b = admitPrompt(store, s.id, "background job bash-64 finished", {
+      delivery: "steer",
+      source: {
+        kind: "plugin",
+        plugin: "job-completion",
+        form: "notice",
+        jobId: "bash-64",
+        summary: "bash-64 [completed]",
+      },
+    });
+    const batch = promoteAdmitsForTurn(store, s.id);
+    expect(batch.content).toBe("background job bash-62 finished");
+    expect(batch.receipts.map((r) => r.admitId)).toEqual([a.admitId]);
+    expect(promotedUserMessageSource(batch.receipts)).toMatchObject({
+      kind: "plugin",
+      jobId: "bash-62",
+    });
+    expect(
+      listPendingAdmits(store.get(s.id).events).map((p) => p.admitId),
+    ).toEqual([b.admitId]);
+
+    const second = promoteAdmitsForTurn(store, s.id);
+    expect(second.content).toBe("background job bash-64 finished");
+    expect(second.receipts.map((r) => r.admitId)).toEqual([b.admitId]);
+    expect(promotedUserMessageSource(second.receipts)).toMatchObject({
+      kind: "plugin",
+      jobId: "bash-64",
+    });
+  });
+
   it("coalesces two handoffs from the same child; leaves a different family", () => {
     const store = createMemorySessionStore();
     const s = newSession(store);

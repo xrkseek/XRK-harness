@@ -256,6 +256,20 @@
   color: var(--dsw-alias-state-business-primary);
 }
 
+/* agent-home awaiting env prep / team_ready — next to title like pinBadge. */
+.notReadyBadge {
+  flex: none;
+  max-width: 6em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.02em;
+  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-error-primary));
+  user-select: none;
+}
+
 /* Compact channel mark for reserved ws_im — not a card or promo chip. */
 .imBadge {
   flex: none;

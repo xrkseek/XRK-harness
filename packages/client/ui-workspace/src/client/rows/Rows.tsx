@@ -160,6 +160,7 @@ function sameGroupHeader(a: GroupNode, b: GroupNode): boolean {
     && a.cwd === b.cwd && a.createdAt === b.createdAt && a.pinned === b.pinned
     && a.sessionCount === b.sessionCount && a.expanded === b.expanded
     && a.containsCurrent === b.containsCurrent
+    && a.memberReady === b.memberReady
     && sameCompanionLook(a.companionLook, b.companionLook)
 }
 
@@ -313,6 +314,11 @@ export const ProjectRowItem = memo(function ProjectRowItem(
             <IconPinOutlineRegular />
           </span>
         )}
+        {row.memberReady === false && (
+          <span className={css.notReadyBadge} title={t('actions.newSession.notReady')}>
+            {t('agent.notReady')}
+          </span>
+        )}
       </span>
       <span className={css.rowActions}>
         {actions !== undefined && (
@@ -361,8 +367,16 @@ export const ProjectRowItem = memo(function ProjectRowItem(
           <button
             type="button"
             className={css.iconButton}
-            aria-label={t('actions.newSession.aria', { name: label })}
-            onClick={(e) => { e.stopPropagation(); onCreate() }}
+            aria-label={row.memberReady === false
+              ? t('actions.newSession.notReady')
+              : t('actions.newSession.aria', { name: label })}
+            title={row.memberReady === false ? t('actions.newSession.notReady') : undefined}
+            disabled={row.memberReady === false}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (row.memberReady === false) return
+              onCreate()
+            }}
           >
             <IconPlusOutlineRegular />
           </button>

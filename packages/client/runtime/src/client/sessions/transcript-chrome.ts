@@ -59,17 +59,22 @@ export function isHumanOwnedUserMessage(source: unknown): boolean {
  * Coalesce / cover key aligned with kernel `steerSpeechFamilyKey`.
  * Boss steers share one key; handoff / seat / plugin stay separate so a stamped
  * boss durable must not retire a pending handoff 「插队中」 via text/media cover.
+ *
+ * Plugin notices with per-item ids (`jobId` / `noticeId` / `questionRpcId` /
+ * `childSessionId`) keep their own key — must match the kernel or a durable
+ * job-62 cover would swallow a still-pending job-64 「回传中」 row.
  */
 export function speechFamilyKey(source: unknown): string {
   const record = asRecord(source)
   const kind = record === null ? null : readString(record, 'kind')
   if (kind === null || kind === 'user') return 'boss'
+  // Mirror protocol messageAuthorSessionId: seat/handoff → fromSessionId;
+  // plugin → peerSessionId then childSessionId.
   const author = record === null
     ? ''
-    : (readString(record, 'fromSessionId')
-      ?? readString(record, 'peerSessionId')
-      ?? readString(record, 'childSessionId')
-      ?? '')
+    : kind === 'plugin'
+      ? (readString(record, 'peerSessionId') ?? readString(record, 'childSessionId') ?? '')
+      : (readString(record, 'fromSessionId') ?? '')
   if (kind === 'handoff') return `handoff:${author}`
   if (kind === 'seat') {
     const channel = readString(record!, 'channel')
@@ -78,7 +83,15 @@ export function speechFamilyKey(source: unknown): string {
   }
   if (kind === 'plugin') {
     const pluginId = readString(record!, 'pluginId') ?? readString(record!, 'plugin') ?? ''
-    return `plugin:${pluginId}:${author}`
+    // Same order as kernel steerSpeechFamilyKey — job completions / late asks
+    // must not share one cover key or a durable sibling retires the wrong row.
+    const itemId = readString(record!, 'jobId')
+      ?? readString(record!, 'noticeId')
+      ?? readString(record!, 'questionRpcId')
+      ?? ''
+    return itemId
+      ? `plugin:${pluginId}:${author}:${itemId}`
+      : `plugin:${pluginId}:${author}`
   }
   if (kind === 'auto-continue') return 'auto-continue'
   return `other:${kind}:${author}`

@@ -112,6 +112,17 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.tileBadgeWarn {
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-state-error-primary));
+}
+
+.tile[data-not-ready] {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .initial {
   width: 40px;
   height: 40px;

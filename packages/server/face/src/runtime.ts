@@ -1077,8 +1077,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     onResolved(sessionId, questionRpcId, outcome) {
       bus.publishMux(questionResolvedFrame(sessionId, questionRpcId, outcome));
     },
-    onLateAnswer(sessionId, _questionRpcId, qs, answer) {
+    onLateAnswer(sessionId, questionRpcId, qs, answer) {
       // Second settlement: tool already returned pending; steer the late reply.
+      // Stamp questionRpcId so concurrent late asks do not coalesce into one
+      // chip (steerSpeechFamilyKey partitions on questionRpcId).
       const text = formatLateQuestionSteer(qs, answer);
       void options
         .resolveAgent(sessionId)
@@ -1089,6 +1091,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               kind: "plugin",
               plugin: "ask-user",
               form: "notice",
+              questionRpcId,
             },
           });
           options.drain.wake(sessionId);

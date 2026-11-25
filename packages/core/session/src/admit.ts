@@ -76,6 +76,10 @@ export function promotedUserMessageSource(
 /**
  * Coalesce key for pending steers. Same-step boss steers may merge; handoff /
  * seat / plugin must not smash into a boss row (wrong chrome + Face rpc stamp).
+ *
+ * Plugin notices that carry a per-item id (`jobId` / `noticeId`) stay in their
+ * own family — otherwise two `job-completion` steers merge into one
+ * `user/message` (one chip, one summary, lost sibling jobId).
  */
 export function steerSpeechFamilyKey(
   source: UserMessageSource | undefined,
@@ -86,12 +90,28 @@ export function steerSpeechFamilyKey(
   if (role === "handoff") return `handoff:${author}`;
   if (role === "delegator" || role === "peer") return `seat:${role}:${author}`;
   if (source?.kind === "plugin") {
-    const bag = source as { readonly plugin?: string; readonly pluginId?: unknown };
+    const bag = source as {
+      readonly plugin?: string
+      readonly pluginId?: unknown
+      readonly jobId?: unknown
+      readonly noticeId?: unknown
+      readonly questionRpcId?: unknown
+    };
     const pluginId =
       typeof bag.pluginId === "string" && bag.pluginId.length > 0
         ? bag.pluginId
         : (bag.plugin ?? "");
-    return `plugin:${pluginId}:${author}`;
+    // Per-notice ids beyond author. parent-ask already partitions via
+    // messageAuthorSessionId(childSessionId); job-completion / ask-user need
+    // jobId / questionRpcId or same-plugin steers smash into one card.
+    const itemId =
+      (typeof bag.jobId === "string" && bag.jobId)
+      || (typeof bag.noticeId === "string" && bag.noticeId)
+      || (typeof bag.questionRpcId === "string" && bag.questionRpcId)
+      || "";
+    return itemId
+      ? `plugin:${pluginId}:${author}:${itemId}`
+      : `plugin:${pluginId}:${author}`;
   }
   if (source?.kind === "auto-continue") return "auto-continue";
   return `other:${role}:${author}`;

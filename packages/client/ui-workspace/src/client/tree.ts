@@ -90,6 +90,11 @@ export interface GroupNode {
   sessions: readonly SessionNode[]
   /** agent-home rows carry the bound 干员 look; project groups omit this. */
   companionLook?: GroupCompanionLook
+  /**
+   * agent-home only: false when the bound roster member is not ready
+   * (advanced pack awaiting env prep). Undefined for project / unknown.
+   */
+  memberReady?: boolean
 }
 
 /** One flat search row combining list metadata with an optional content match. */
@@ -390,6 +395,8 @@ export function deriveGroups(
   archiveMode: ArchiveViewMode = 'hidden',
   pinnedSessionIds: readonly SessionId[] = [],
   pinnedWorkspaceIds: readonly WorkspaceId[] = [],
+  /** Optional roster ready map keyed by member id (agent-home badge / gate). */
+  memberReadyById?: ReadonlyMap<string, boolean>,
 ): GroupNode[] {
   const archived = new Set(archivedSessionIds)
   const pinned = new Set(pinnedSessionIds)
@@ -402,9 +409,13 @@ export function deriveGroups(
         ?? UNGROUPED_KEY
   const groups: GroupNode[] = []
   const lookByWorkspace = new Map<string, GroupCompanionLook>()
+  const memberByWorkspace = new Map<string, string>()
   for (const workspace of workspaces) {
     if (workspace.boundMemberAppearance) {
       lookByWorkspace.set(workspace.workspaceId, workspace.boundMemberAppearance)
+    }
+    if (typeof workspace.boundMemberId === 'string' && workspace.boundMemberId.trim()) {
+      memberByWorkspace.set(workspace.workspaceId, workspace.boundMemberId.trim())
     }
   }
   for (const g of groupByWorkspace(
@@ -420,6 +431,12 @@ export function deriveGroups(
     const companionLook = g.workspaceId !== undefined
       ? lookByWorkspace.get(g.workspaceId)
       : undefined
+    const memberId = g.workspaceId !== undefined
+      ? memberByWorkspace.get(g.workspaceId)
+      : undefined
+    const memberReady = memberId !== undefined && memberReadyById !== undefined
+      ? memberReadyById.get(memberId)
+      : undefined
     groups.push({
       key: g.key,
       workspaceId: g.workspaceId,
@@ -434,6 +451,7 @@ export function deriveGroups(
         ? ordered.map(session => sessionNode(session, descendants, pinned, archived))
         : [],
       ...(companionLook ? { companionLook } : {}),
+      ...(memberReady !== undefined ? { memberReady } : {}),
     })
   }
   return groups

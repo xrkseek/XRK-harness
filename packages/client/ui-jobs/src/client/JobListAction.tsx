@@ -1,8 +1,10 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -57,6 +59,28 @@ function jobListMargin(): number {
   return isPhoneLayout() ? 16 : 12
 }
 
+const JOB_LIST_GAP = 5
+/** Design ceiling without output — keep the header chip reachable. */
+const JOB_LIST_CAP_PX = 360
+/** Slightly taller when a TerminalBlock is open; still below half the viewport. */
+const JOB_LIST_OUTPUT_CAP_PX = 420
+
+/**
+ * Cap the portaled sheet to the space *below* the trigger so
+ * `useAnchoredPosition`'s top-edge clamp never covers the collapse chip
+ * (tall menus used to force scrolling the chat to re-reach the trigger).
+ */
+function jobListMaxHeightPx(trigger: HTMLElement, outputOpen: boolean): number {
+  const margin = jobListMargin()
+  const rect = trigger.getBoundingClientRect()
+  const below = window.innerHeight - rect.bottom - JOB_LIST_GAP - margin
+  const designCap = Math.min(
+    outputOpen ? JOB_LIST_OUTPUT_CAP_PX : JOB_LIST_CAP_PX,
+    window.innerHeight * (outputOpen ? 0.48 : 0.42),
+  )
+  return Math.max(140, Math.min(designCap, below))
+}
+
 /**
  * Session-header chip for **settled** jobs of this session. Live jobs render
  * in the composer `JobInputDock` instead, so an open turn does not grow two
@@ -71,6 +95,7 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
   const [open, setOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<string | undefined>(undefined)
+  const [menuMaxHeight, setMenuMaxHeight] = useState<number | undefined>(undefined)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -78,6 +103,7 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
   const rows = useMemo(() => orderedJobs(jobs), [jobs])
   const settledRows = useMemo(() => rows.filter((job) => !isLiveJob(job)), [rows])
   const now = useJobClock(false)
+  const outputOpen = expandedId !== undefined
 
   // Phone: keep clear of notches; desktop: clear of Overview details inset.
   const fixedPos = useAnchoredPosition({
@@ -86,12 +112,31 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
     panelRef: menuRef,
     side: 'bottom',
     align: 'end',
-    gap: 5,
+    gap: JOB_LIST_GAP,
     margin: 12,
     fallbackWidth: 420,
     getMargin: jobListMargin,
     getRightInset: jobListRightInset,
   })
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuMaxHeight(undefined)
+      return
+    }
+    const fit = (): void => {
+      const trigger = triggerRef.current
+      if (trigger === null) return
+      setMenuMaxHeight(jobListMaxHeightPx(trigger, outputOpen))
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    window.addEventListener('scroll', fit, true)
+    return () => {
+      window.removeEventListener('resize', fit)
+      window.removeEventListener('scroll', fit, true)
+    }
+  }, [open, outputOpen])
 
   useDismissOnOutsidePointer(rootRef, open, setOpen, menuRef)
 
@@ -156,12 +201,17 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
     ? undefined
     : settledRows.find((job) => job.id === expandedId)
 
+  const menuStyle: CSSProperties = {
+    ...(fixedPos ?? ANCHORED_MEASURE_STYLE),
+    ...(menuMaxHeight === undefined ? {} : { maxHeight: menuMaxHeight }),
+  }
+
   const menu = open
     ? (
       <div
         ref={menuRef}
         className={css.menu}
-        style={fixedPos ?? ANCHORED_MEASURE_STYLE}
+        style={menuStyle}
         data-job-list-portal=""
         data-output-open={expandedJob !== undefined ? '' : undefined}
       >

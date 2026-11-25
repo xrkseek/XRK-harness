@@ -36,6 +36,8 @@ function MemberTile({
   disabled,
   alreadyAdded,
   alreadyLabel,
+  notReady,
+  notReadyLabel,
   originLabel,
   presenceOn,
   onSelect,
@@ -47,21 +49,27 @@ function MemberTile({
   disabled: boolean
   alreadyAdded: boolean
   alreadyLabel: string
+  notReady: boolean
+  notReadyLabel: string
   originLabel: string
   presenceOn: boolean
   onSelect: () => void
 }) {
   const look = appearanceOf(member, stickers)
+  const blocked = alreadyAdded || notReady
   return (
     <button
       type="button"
       className={css.tile}
       data-selected={selected ? '' : undefined}
       data-added={alreadyAdded ? '' : undefined}
-      disabled={disabled || alreadyAdded}
+      data-not-ready={notReady ? '' : undefined}
+      disabled={disabled || blocked}
       onClick={onSelect}
       aria-label={displayName}
-      title={`${displayName} · ${originLabel}`}
+      title={notReady
+        ? `${displayName} · ${notReadyLabel}`
+        : `${displayName} · ${originLabel}`}
     >
       {presenceOn
         ? (
@@ -90,7 +98,11 @@ function MemberTile({
         )}
       <span className={css.tileName}>{displayName}</span>
       <span className={css.tileOrigin}>{originLabel}</span>
-      {alreadyAdded ? <span className={css.tileBadge}>{alreadyLabel}</span> : null}
+      {alreadyAdded
+        ? <span className={css.tileBadge}>{alreadyLabel}</span>
+        : notReady
+          ? <span className={css.tileBadgeWarn}>{notReadyLabel}</span>
+          : null}
     </button>
   )
 }
@@ -158,19 +170,26 @@ export function AddAgentPanel({
     [members],
   )
   const selectable = useMemo(
-    () => homeCandidates.filter(row => !boundMemberIds.has(row.id)),
+    () => homeCandidates.filter(row =>
+      !boundMemberIds.has(row.id) && row.ready !== false),
     [homeCandidates, boundMemberIds],
   )
   const selected = selectedId
     ? homeCandidates.find(row => row.id === selectedId)
     : undefined
+  const selectedNotReady = selected?.ready === false
   const canAdd = selected !== undefined
     && !boundMemberIds.has(selected.id)
     && !isOfficeSeatMemberId(selected.id)
+    && !selectedNotReady
     && !busy
 
   const confirmAdd = () => {
     if (sessionId === undefined || selected === undefined || !canAdd) return
+    if (selected.ready === false) {
+      setError(t('agent.notReadyHint'))
+      return
+    }
     setBusy(true)
     setError(null)
     void upsertTeamMember(sessionId, {
@@ -244,15 +263,26 @@ export function AddAgentPanel({
                   disabled={busy}
                   alreadyAdded={boundMemberIds.has(member.id)}
                   alreadyLabel={t('agent.alreadyAdded')}
+                  notReady={member.ready === false}
+                  notReadyLabel={t('agent.notReady')}
                   originLabel={originOf(member)}
                   presenceOn={presenceOn}
-                  onSelect={() => { setSelectedId(member.id) }}
+                  onSelect={() => {
+                    setSelectedId(member.id)
+                    if (member.ready === false) setError(t('agent.notReadyHint'))
+                    else setError(null)
+                  }}
                 />
               ))}
             </div>
           )}
           {selectable.length === 0 && homeCandidates.length > 0 ? (
-            <p className={css.hint}>{t('agent.pickAllAdded')}</p>
+            <p className={css.hint}>
+              {homeCandidates.some(row =>
+                !boundMemberIds.has(row.id) && row.ready === false)
+                ? t('agent.notReadyHint')
+                : t('agent.pickAllAdded')}
+            </p>
           ) : null}
           {error !== null ? <div className={css.error} role="alert">{error}</div> : null}
         </div>

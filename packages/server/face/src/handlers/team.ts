@@ -410,6 +410,15 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
   const mintHome = args.mintHome === true;
   const existingHome = runtime.workspaces.findAgentHomeByMember(member.id);
   if (mintHome) {
+    if (member.ready === false) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid-payload",
+          message: `member ${member.id} is not ready (team_ready after env prep)`,
+        },
+      };
+    }
     const home = await mintAgentHomeForMember(runtime, member, canvasId);
     return {
       ok: true,

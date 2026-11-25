@@ -739,8 +739,31 @@ export function TeamRoster({
     if (sessionId === undefined) return
     void file.arrayBuffer().then((buf) => {
       const bytes = new Uint8Array(buf)
+      const lower = file.name.toLowerCase()
+      const looksZip =
+        lower.endsWith('.zip')
+        || (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b)
       const parsed = parseMemberImportBytes(bytes, file.name)
       if (!parsed.ok) {
+        // Browser store-only unzip rejects deflated product/export zips
+        // (WeChat re-saves, Explorer, etc.). Host reads store + deflate —
+        // fall through instead of the misleading「非产品 zip」dead end.
+        if (
+          looksZip
+          && (parsed.reason === 'deflate' || parsed.reason === 'bad')
+          && importTeamPack !== undefined
+        ) {
+          const packScope = scope
+          void run(async () => {
+            const saved = await importTeamPack(sessionId, {
+              scope: packScope,
+              zipBase64: bytesToBase64(bytes),
+            })
+            setSelectedId(saved.id)
+            setExportHint(t('team.importPackOk'))
+          })
+          return
+        }
         setError(
           parsed.reason === 'deflate'
             ? t('team.importDeflate')

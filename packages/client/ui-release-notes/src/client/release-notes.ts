@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.16',
+    date: '2026-11-25',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '多个后台任务完成回传各一张卡（jobId 分族）；ask-user 迟到答同理。',
+        en: 'Each finished background job keeps its own chip (jobId families); ask-user late answers likewise.',
+      },
+      {
+        zh: 'deflate 干员 zip 回落 Host 导入；未就绪干员禁开家 / 新建会话并提示标记就绪。',
+        en: 'Deflated member zips fall through to Host import; not-ready agents cannot mint home / new session.',
+      },
+      {
+        zh: '后台任务面板限高，收起不必再滚到会话顶。',
+        en: 'Background job sheet height is capped so collapse stays reachable without scrolling chat up.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.16。完整清单见 docs/releases/v0.8.16.md。',
+        en: 'Desktop / npm / phone align to 0.8.16. Full list: docs/releases/v0.8.16.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.15',
     date: '2026-11-25',
     title: {

@@ -18,7 +18,7 @@ import clsx from 'clsx'
 import {
   Button, IconCloseFillRegular, IconPersonalizationOutlineRegular,
   IconProjectAddOutlineRegular, IconSearchOutlineRegular, IconUsersOutlineRegular,
-  Menu, Modal, Tooltip,
+  IconWarningOutlineRegular, Menu, Modal, Toast, Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import {
   WorkspaceArchiveActiveError,
@@ -354,6 +354,10 @@ type SessionTreeProps = Pick<
   ungroupedOrderKey?: string
   /** When false, omit the empty-tree copy (干员 pane uses its own empty banner). */
   showEmpty?: boolean
+  /** Roster ready map (member id → ready) for agent-home badge / new-session gate. */
+  memberReadyById?: ReadonlyMap<string, boolean>
+  /** Toast when the user tries to create a session on a not-ready agent-home. */
+  onNotReadyCreate?: () => void
 }
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
@@ -367,6 +371,8 @@ function SessionTree({
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   home, t,
   includeUngrouped = true,
+  memberReadyById,
+  onNotReadyCreate,
   excludeFromUngrouped,
   ungroupedOrderKey = UNGROUPED_KEY,
   showEmpty = true,
@@ -469,14 +475,14 @@ function SessionTree({
       ...(excludeFromUngrouped !== undefined
         ? { excludeFromUngrouped }
         : {}),
-    }, archiveMode, pinnedSessionIds, pinnedWorkspaceIds)
+    }, archiveMode, pinnedSessionIds, pinnedWorkspaceIds, memberReadyById)
     return includeUngrouped
       ? derived
       : derived.filter(group => group.key !== UNGROUPED_KEY)
   }, [
     list, orderedWorkspaces, archivedSessionIds, archiveMode, pinnedSessionIds,
     pinnedWorkspaceIds, expandedGroups, sessionOrderByAccount, includeUngrouped,
-    excludeFromUngrouped, ungroupedOrderKey,
+    excludeFromUngrouped, ungroupedOrderKey, memberReadyById,
   ])
   /**
    * Relative-time clock for the rows: one read per derivation change instead of
@@ -667,10 +673,13 @@ function SessionTree({
                   setGroupExpanded(group.key, !group.expanded)
                 }}
                 onCreate={() => {
-                  if (group.workspaceId !== undefined) {
-                    setGroupExpanded(group.key, true)
-                    startSession(group.workspaceId)
+                  if (group.workspaceId === undefined) return
+                  if (group.memberReady === false) {
+                    onNotReadyCreate?.()
+                    return
                   }
+                  setGroupExpanded(group.key, true)
+                  startSession(group.workspaceId)
                 }}
                 drag={workspaceDragProps}
                 actions={group.workspaceId === undefined
@@ -1063,6 +1072,35 @@ export function WorkspaceBrowser({
     () => workspaces.filter(row => row.kind === 'agent-home' && Boolean(row.boundMemberId)),
     [workspaces],
   )
+  const [memberReadyById, setMemberReadyById] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map(),
+  )
+  const [notReadyToast, setNotReadyToast] = useState<{ seq: number; text: string } | null>(null)
+  const notReadyToastSeq = useRef(0)
+  const showNotReadyToast = useCallback(() => {
+    notReadyToastSeq.current += 1
+    setNotReadyToast({ seq: notReadyToastSeq.current, text: t('actions.newSession.notReady') })
+  }, [t])
+  // Refresh ready flags for agent-home rows (badge + new-session gate).
+  useEffect(() => {
+    if (!listTeam || currentSessionId === undefined || agentWorkspacesAll.length === 0) {
+      setMemberReadyById(new Map())
+      return
+    }
+    let cancelled = false
+    void listTeam(currentSessionId).then(
+      (rows) => {
+        if (cancelled) return
+        const next = new Map<string, boolean>()
+        for (const row of rows) next.set(row.id, row.ready !== false)
+        setMemberReadyById(next)
+      },
+      () => {
+        if (!cancelled) setMemberReadyById(new Map())
+      },
+    )
+    return () => { cancelled = true }
+  }, [listTeam, currentSessionId, agentWorkspacesAll])
   const agentWorkspaces = useMemo(() => {
     if (normalizedAgentQuery === '') return agentWorkspacesAll
     return agentWorkspacesAll.filter((row) => {
@@ -1607,6 +1645,8 @@ export function WorkspaceBrowser({
             excludeFromUngrouped={agentExcludeFromUngrouped}
             ungroupedOrderKey={AGENT_UNGROUPED_ORDER_KEY}
             showEmpty={false}
+            memberReadyById={memberReadyById}
+            onNotReadyCreate={showNotReadyToast}
           />
         )
   )
@@ -2110,6 +2150,14 @@ export function WorkspaceBrowser({
           <span className={css.forkLabel}>{t('fork.pending')}</span>
         </div>
       )}
+      {notReadyToast !== null ? (
+        <Toast
+          key={notReadyToast.seq}
+          text={notReadyToast.text}
+          icon={<IconWarningOutlineRegular size={16} />}
+          onDone={() => { setNotReadyToast(null) }}
+        />
+      ) : null}
     </div>
   )
 }
