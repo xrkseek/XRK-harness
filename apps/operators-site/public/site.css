@@ -199,20 +199,45 @@
   }
 
   .member-list { gap: 8px; }
+  /* Avatar + copy on row 1; download actions full-width on row 2.
+     Dual mirror/GitHub buttons in a side column crushed copy to ~50px. */
   .member {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "ball copy"
+      "actions actions";
     gap: 8px 10px;
     padding: 10px 12px;
     border-radius: 12px;
     box-shadow: none;
+    align-items: start;
+  }
+  .member > .stage { grid-area: ball; align-self: center; }
+  .member-copy { grid-area: copy; }
+  .member-actions {
+    grid-area: actions;
+    align-self: stretch;
+    width: 100%;
+  }
+  .member-actions > .btn {
+    width: 100%;
+  }
+  .dl-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .dl-actions .btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
   }
   .member .stage.md {
     width: 40px;
     height: 40px;
   }
   .member .brief { -webkit-line-clamp: 2; }
-  .member-actions { align-self: center; }
   .chip-file { display: none; }
+  /* Keep kind + size only; skill tags eat vertical space on phone. */
+  .member .meta .chip:nth-child(n + 3) { display: none; }
   .meta { margin-top: 6px; }
 }
 
