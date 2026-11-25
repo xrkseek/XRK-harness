@@ -47,6 +47,7 @@ apps/operators-site/public/
 ```
 
 `catalog.json` 只读静态 `members`（**不再** live fetch AGT）。  
+高级包 zip 放在独立仓 **[xrkseek/XRK-operator-packs](https://github.com/xrkseek/XRK-operator-packs)** 的 **Releases**（仓内仅 README；资产名为 ASCII，`catalog.json` 里 `downloadUrl` 指向它们）。  
 旧 Worker `/api/harness/operators*` 已退役 → **410**。  
 `scripts/_sync-agt-harness-download-core.py` / `_prune-agt-harness-download.py` 已退役（exit 2）。
 
