@@ -43,6 +43,8 @@ const I18N = {
     empty: "还没有公开包。上架后会出现在这里；天幕里是预置干员。",
     mit: "MIT",
     download: "下载",
+    downloadGithub: "GitHub 直连",
+    downloadProxy: "镜像加速",
     advanced: "高级包",
     thin: "瘦卡",
     noUrl: "暂无链接",
@@ -69,6 +71,8 @@ const I18N = {
     empty: "No public packs yet. They show up after publish; seeded operators fill the sky.",
     mit: "MIT",
     download: "Download",
+    downloadGithub: "GitHub",
+    downloadProxy: "Mirror",
     advanced: "Advanced",
     thin: "Thin card",
     noUrl: "No link",
@@ -76,6 +80,9 @@ const I18N = {
     documentTitle: "XRK Operators",
   },
 };
+
+/** Same default as apps/site Worker (`GITHUB_PROXY_PREFIX`). */
+const DEFAULT_GITHUB_PROXY = "https://ghfast.top/";
 
 /** Layout slots for the constellation (percent of constellation box). */
 const SKY_SLOTS = [
@@ -316,11 +323,52 @@ function kindChip(kind) {
   return kind === "thin" ? L.thin : L.advanced;
 }
 
+/** China-ish visitors: UTC+8 — same rule as download Worker client flip. */
+function preferGithubProxy() {
+  try {
+    return new Date().getTimezoneOffset() === -480;
+  } catch {
+    return false;
+  }
+}
+
+function githubProxyPrefix() {
+  const raw = String(catalog.sites?.githubProxy || DEFAULT_GITHUB_PROXY).trim();
+  if (!raw) return DEFAULT_GITHUB_PROXY;
+  return raw.endsWith("/") ? raw : `${raw}/`;
+}
+
+function isGithubReleaseUrl(url) {
+  return /^https:\/\/github\.com\//i.test(String(url || ""));
+}
+
+/**
+ * GitHub Release assets: mirror + GitHub pair (download-site design).
+ * Same-origin / Pages samples: single download button.
+ */
+function downloadActionHtml(href, downloadName) {
+  const L = t();
+  if (!href) {
+    return `<span class="btn" aria-disabled="true">${escapeHtml(L.noUrl)}</span>`;
+  }
+  if (!isGithubReleaseUrl(href)) {
+    return `<a class="btn" href="${escapeHtml(href)}" download="${escapeHtml(downloadName)}" rel="noopener">${escapeHtml(L.download)}</a>`;
+  }
+  const mirror = `${githubProxyPrefix()}${href}`;
+  const preferProxy = preferGithubProxy();
+  const primaryHref = preferProxy ? mirror : href;
+  const primaryLabel = preferProxy ? L.downloadProxy : L.download;
+  const secondaryHidden = preferProxy ? "" : " hidden";
+  return `<span class="dl-actions" data-dl-pair data-proxy-label="${escapeHtml(L.downloadProxy)}" data-github-label="${escapeHtml(L.downloadGithub)}" data-plain-label="${escapeHtml(L.download)}">
+    <a class="btn" data-dl-primary data-dl-github="${escapeHtml(href)}" data-dl-proxy="${escapeHtml(mirror)}" href="${escapeHtml(primaryHref)}" rel="noopener">${escapeHtml(primaryLabel)}</a>
+    <a class="btn btn-outline" data-dl-secondary data-dl-github="${escapeHtml(href)}" href="${escapeHtml(href)}" rel="noopener"${secondaryHidden}>${escapeHtml(L.downloadGithub)}</a>
+  </span>`;
+}
+
 function renderList(filter = "") {
   const root = document.getElementById("member-list");
   const empty = document.getElementById("empty");
   if (!root) return;
-  const L = t();
   const q = filter.trim().toLowerCase();
   const rows = members.filter((m) => {
     if (!q) return true;
@@ -351,9 +399,7 @@ function renderList(filter = "") {
       .filter(Boolean)
       .join("");
     const downloadName = file || href.split("/").pop() || "operator.json";
-    const action = href
-      ? `<a class="btn" href="${escapeHtml(href)}" download="${escapeHtml(downloadName)}" rel="noopener">${escapeHtml(L.download)}</a>`
-      : `<span class="btn" aria-disabled="true">${escapeHtml(L.noUrl)}</span>`;
+    const action = downloadActionHtml(href, downloadName);
     article.innerHTML = `
       <span class="stage md"><span class="mount" data-ball data-shape="${escapeHtml(shape)}" data-color="${escapeHtml(color)}"></span></span>
       <div class="member-copy">

@@ -153,6 +153,13 @@
   white-space: nowrap;
 }
 .member-actions { display: flex; align-items: center; }
+.dl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
 
 .empty {
   margin: 0;

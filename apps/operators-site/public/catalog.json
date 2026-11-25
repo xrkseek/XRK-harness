@@ -4,7 +4,8 @@
     "download": "https://xrk.indevs.in/",
     "operators": "/",
     "packsRepo": "https://github.com/xrkseek/XRK-operator-packs",
-    "packsRelease": "https://github.com/xrkseek/XRK-operator-packs/releases/tag/v1"
+    "packsRelease": "https://github.com/xrkseek/XRK-operator-packs/releases/tag/v1",
+    "githubProxy": "https://ghfast.top/"
   },
   "members": [
     {
