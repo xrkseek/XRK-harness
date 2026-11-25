@@ -2,17 +2,31 @@ import type { ContentBlock } from '@xrkseek/xrk-llm/types'
 import type { MuxFrame, RpcId } from '@xrkseek/xrk-api-remotes/client'
 import type { SessionEvent } from '@xrkseek/xrk-session/types'
 import type { QueuedMessage } from './conversation.ts'
+import { speechFamilyKey } from './transcript-chrome.ts'
 
 const QUEUE_PREVIEW_CHARS = 200
 
-function isModelOnlyText(block: ContentBlock): boolean {
-  return block.type === 'text' && (block as { modelOnly?: unknown }).modelOnly === true
+/** Mirror protocol `looksLikeAttachmentHandleCaption` — keep queue prose clean. */
+function looksLikeAttachmentHandleCaption(text: string): boolean {
+  const t = text.trim()
+  return (
+    /^\[文件附件 .+（sha256:[a-f0-9]+/u.test(t)
+    || /^\[图\d+\s+sha256:[a-f0-9]+/u.test(t)
+    || /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+/u.test(t)
+    || /^\[image omitted because this model accepts text only;/u.test(t)
+  )
+}
+
+function isHiddenQueueText(block: ContentBlock): boolean {
+  if (block.type !== 'text') return true
+  if ((block as { modelOnly?: unknown }).modelOnly === true) return true
+  return looksLikeAttachmentHandleCaption(block.text)
 }
 
 function previewOf(content: readonly ContentBlock[]): string {
   const flat = content
     .map(block => {
-      if (block.type === 'text') return isModelOnlyText(block) ? '' : block.text
+      if (block.type === 'text') return isHiddenQueueText(block) ? '' : block.text
       return `[${block.type}]`
     })
     .filter(part => part.length > 0)
@@ -23,9 +37,24 @@ function previewOf(content: readonly ContentBlock[]): string {
 
 function textOf(content: readonly ContentBlock[]): string {
   return content
-    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text' && !isModelOnlyText(block))
+    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => (
+      block.type === 'text' && !isHiddenQueueText(block)
+    ))
     .map(block => block.text)
     .join('')
+}
+
+/**
+ * Align local echo prose with Host queue text without blanking a typed body.
+ * Image/file admits can briefly project empty `text` while blocks still carry
+ * reader prose; overwriting the echo left 「插队中」 image-only until promote.
+ * Non-empty Host text still wins (edit rewrite / re-list).
+ */
+export function preferQueueText(local: string, host: string): string {
+  if (host === local) return local
+  if (host.trim() === '') return local
+  if (local.trim() === '') return host
+  return host
 }
 
 type QueueUserMessageData = {
@@ -33,6 +62,7 @@ type QueueUserMessageData = {
   readonly source?: { readonly kind?: unknown; readonly rpcId?: unknown }
   readonly rpcId?: unknown
   readonly rpcIds?: unknown
+  readonly content?: readonly ContentBlock[]
 }
 
 /**
@@ -182,10 +212,17 @@ export class SessionQueueMirror {
     const data = event.data as QueueUserMessageData
     const echoIds = echoRpcIdsFromUserMessage(data)
     const echoSet = new Set(echoIds)
-    // One durable user/message retires one steering occurrence. Without an
-    // rpcId stamp, match by messageId but only once — two steers can share a
-    // fixture/body id, and wiping both left the second 插队 bubble missing.
+    const durableContent = Array.isArray(data.content) ? data.content : []
+    const durableText = textOf(durableContent)
+    const durableMedia = attachmentIdsOf(durableContent)
+    const durableFamily = speechFamilyKey(data.source)
+    // One durable user/message retires matching steering rows. Prefer rpcId
+    // (admitId ≠ fresh messageId after promote). Rows that never got a source
+    // rpcId still matched only by messageId before — that left a ghost 「插队中」
+    // when Host listed the admit without rpcId while the durable already
+    // painted (image+text steer → follow-up text was the common path).
     let retiredByMessageId = false
+    let retiredByCover = false
     const next = this.current.filter((item) => {
       if (item.placement !== 'steering') return true
       if (item.rpcId !== undefined && echoSet.has(item.rpcId)) return false
@@ -193,10 +230,40 @@ export class SessionQueueMirror {
         retiredByMessageId = true
         return false
       }
+      // Durable already carries client echo ids, but this mirror row never got
+      // source.rpcId (admit→queue race). messageId cannot match (fresh umsg_*).
+      // Retire one covered row (reader text or every attachment id) so ChatView
+      // does not keep a ghost 「插队中」 — image-only admits have empty `text`.
+      // Same speech family only: a boss durable must not swallow a handoff row
+      // via substring / shared media after family-partitioned promote.
+      if (echoSet.size > 0 && item.rpcId === undefined && !retiredByCover) {
+        if (speechFamilyKey(item.source) !== durableFamily) return true
+        const textHit = item.text.length > 0
+          && durableText.length > 0
+          && (item.text === durableText || durableText.includes(item.text))
+        const itemMedia = attachmentIdsOf(item.content)
+        // Sets use `size`, not `length` — the latter left image-only ghosts forever.
+        const mediaHit = itemMedia.size > 0
+          && [...itemMedia].every(id => durableMedia.has(id))
+        if (textHit || mediaHit) {
+          retiredByCover = true
+          return false
+        }
+      }
       return true
     })
     if (next.length === this.current.length) return false
     this.current = next
     return true
   }
+}
+
+function attachmentIdsOf(content: readonly ContentBlock[]): ReadonlySet<string> {
+  const ids = new Set<string>()
+  for (const block of content) {
+    if (block.type !== 'image' && block.type !== 'file') continue
+    const id = block.attachment?.attachmentId
+    if (typeof id === 'string' && id.length > 0) ids.add(id)
+  }
+  return ids
 }

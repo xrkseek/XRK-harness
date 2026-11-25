@@ -31,7 +31,7 @@ import type { SessionRemotes } from './remotes.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import type { ProjectionsBaseline } from './projection-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
-import { SessionQueueMirror, echoRpcIdsFromUserMessage } from './queue-mirror.ts'
+import { SessionQueueMirror, echoRpcIdsFromUserMessage, preferQueueText } from './queue-mirror.ts'
 import { isTokenDelta } from './assistant-timing.ts'
 import { exclusiveBeforeSeqForWireSeq as mapExclusiveBeforeSeq } from './exclusive-before-seq.ts'
 
@@ -1408,8 +1408,10 @@ export class Session implements SessionFace {
       // Host `context` rows are not a client echo surface — treat as queued.
       const placement: PendingSubmission['placement'] =
         row.placement === 'steering' ? 'steering' : 'queued'
-      // Host queue text is authoritative after edit rewrite / re-list.
-      const text = row.text
+      // Host queue text wins when non-empty (edit rewrite). Empty Host text
+      // must not blank a typed echo — image+text steers briefly project that
+      // and painted 「插队中」 as image-only.
+      const text = preferQueueText(echo.text, row.text)
       if (echo.placement === 'transcript') {
         // Idle first-send / pause follow-ups stay in chat when Host briefly
         // lists them — they never set dockAligned. A docked echo that a false

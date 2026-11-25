@@ -257,6 +257,139 @@ describe('queue snapshot intake', () => {
     expect(session.getSnapshot().queue).toEqual([])
   })
 
+  it('retires an rpcId-less steering row when stamped durable text covers it', async () => {
+    const session = makeSession()
+    await session.open()
+    // Admit listed without source.rpcId (queue race) while a sibling steer
+    // already stamped the durable row — messageId cannot match umsg_*.
+    session.handleMuxEnvelope(rid('env-ghost'), {
+      type: 'session/queue',
+      sessionId: SID,
+      items: [{
+        id: iid('admit-ghost'),
+        placement: 'steering',
+        message: createUserMessage({
+          content: text('9974我还没更新'),
+          source: { kind: 'user' },
+        }),
+      }],
+    })
+    expect(session.getSnapshot().queue.map(row => row.id)).toEqual(['admit-ghost'])
+    expect(session.getSnapshot().queue[0]?.rpcId).toBeUndefined()
+
+    session.handleMuxEnvelope(rid('env-stamped'), {
+      type: 'session/event',
+      sessionId: SID,
+      event: {
+        seq: 0,
+        time: 1_700_000_000_000,
+        type: 'user/message',
+        surfaceOp: 'append',
+        data: {
+          id: 'umsg_fresh',
+          role: 'user',
+          content: text('9974我还没更新'),
+          source: { kind: 'user', rpcId: 'rpc-other-steer' },
+        },
+      },
+    })
+
+    expect(session.getSnapshot().queue).toEqual([])
+  })
+
+  it('retires an rpcId-less image-only steering row when durable media covers it', async () => {
+    const session = makeSession()
+    await session.open()
+    const attachment = {
+      attachmentId: 'sha256:ghostimg',
+      mediaType: 'image/png' as const,
+      bytes: 12,
+      width: 8,
+      height: 8,
+    }
+    session.handleMuxEnvelope(rid('env-img-ghost'), {
+      type: 'session/queue',
+      sessionId: SID,
+      items: [{
+        id: iid('admit-img-ghost'),
+        placement: 'steering',
+        message: createUserMessage({
+          content: [{ type: 'image', attachment } as never],
+          source: { kind: 'user' },
+        }),
+      }],
+    })
+    expect(session.getSnapshot().queue[0]?.text).toBe('')
+    expect(session.getSnapshot().queue[0]?.rpcId).toBeUndefined()
+
+    session.handleMuxEnvelope(rid('env-img-stamped'), {
+      type: 'session/event',
+      sessionId: SID,
+      event: {
+        seq: 0,
+        time: 1_700_000_000_000,
+        type: 'user/message',
+        surfaceOp: 'append',
+        data: {
+          id: 'umsg_img',
+          role: 'user',
+          content: [
+            { type: 'image', attachment },
+            { type: 'text', text: '看图' },
+          ],
+          source: { kind: 'user', rpcId: 'rpc-sibling' },
+        },
+      },
+    })
+
+    expect(session.getSnapshot().queue).toEqual([])
+  })
+
+  it('does not retire a handoff steer when a boss durable only substring-covers it', async () => {
+    const session = makeSession()
+    await session.open()
+    const handoffSource = {
+      kind: 'handoff' as const,
+      form: 'notice' as const,
+      via: 'subagent' as const,
+      fromSessionId: 'sess_child',
+      label: '发版员',
+    }
+    session.handleMuxEnvelope(rid('env-handoff-pending'), {
+      type: 'session/queue',
+      sessionId: SID,
+      items: [{
+        id: iid('admit-handoff'),
+        placement: 'steering',
+        message: createUserMessage({
+          content: text('done'),
+          source: handoffSource,
+        }),
+      }],
+    })
+    expect(session.getSnapshot().queue.map(row => row.id)).toEqual(['admit-handoff'])
+
+    // Boss durable stamped with rpc; body happens to contain handoff prose.
+    session.handleMuxEnvelope(rid('env-boss-stamped'), {
+      type: 'session/event',
+      sessionId: SID,
+      event: {
+        seq: 0,
+        time: 1_700_000_000_000,
+        type: 'user/message',
+        surfaceOp: 'append',
+        data: {
+          id: 'umsg_boss',
+          role: 'user',
+          content: text('please confirm when done'),
+          source: { kind: 'user', rpcId: 'rpc-boss' },
+        },
+      },
+    })
+
+    expect(session.getSnapshot().queue.map(row => row.id)).toEqual(['admit-handoff'])
+  })
+
   it('retires every coalesced steer row from rpcId plus rpcIds', async () => {
     const session = makeSession()
     await session.open()

@@ -23,6 +23,7 @@ import {
   formatAttachmentSummary,
   isNativeOpenUnavailableError,
   normalizeAttachmentId,
+  speechFamilyKey,
   triggerBrowserOrShellDownload,
 } from '@xrkseek/client-runtime/client'
 import type { FileAttachmentRef, ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
@@ -386,16 +387,80 @@ function observedRpcIds(
   return observed
 }
 
+/** Stamped durable cover keyed by speech family (boss ≠ handoff). */
+type StampedDurableCover = {
+  readonly family: string
+  readonly text: string
+  readonly media: ReadonlySet<string>
+}
+
+/**
+ * Reader text + media on durable rows that already carry a client echo rpcId.
+ * Used to drop rpcId-less Host 「插队中」 ghosts after promote (admitId ≠ umsg).
+ * Rows without an echo stamp (fixtures / reused MessageId) are excluded so a
+ * later pending occurrence with the same body can still paint. Cover is
+ * family-scoped so a boss durable cannot hide a pending handoff by substring.
+ */
+function stampedDurableCovers(
+  order: readonly string[],
+  nodes: ChatSnapshot['nodes'],
+): readonly StampedDurableCover[] {
+  const covers: StampedDurableCover[] = []
+  for (const key of order) {
+    const node = nodes.get(key)
+    if (node === undefined || (node.kind !== 'user' && node.kind !== 'steering')) continue
+    const data = node.data as Parameters<typeof messageEchoIds>[0] & {
+      readonly content?: readonly unknown[]
+      readonly source?: unknown
+    }
+    if (messageEchoIds(data).length === 0) continue
+    covers.push({
+      family: speechFamilyKey(data.source),
+      text: humanBubbleText(data),
+      media: new Set(attachmentIdsOfContent(data.content ?? [])),
+    })
+  }
+  return covers
+}
+
+/** Skip model-only handles / captions — same reader rule as MessageItem. */
+function isHiddenBubbleText(block: {
+  readonly type?: string
+  readonly text?: string
+  readonly modelOnly?: boolean
+}): boolean {
+  if (block.type !== 'text' || typeof block.text !== 'string') return true
+  if (block.modelOnly === true) return true
+  const t = block.text.trim()
+  return (
+    /^\[文件附件 .+（sha256:[a-f0-9]+/u.test(t)
+    || /^\[图\d+\s+sha256:[a-f0-9]+/u.test(t)
+    || /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+/u.test(t)
+    || /^\[image omitted because this model accepts text only;/u.test(t)
+  )
+}
+
 function humanBubbleText(data: { readonly content?: readonly unknown[] }): string {
   const parts: string[] = []
   for (const block of data.content ?? []) {
-    if (block !== null && typeof block === 'object' && 'type' in block
-      && (block as { type: string }).type === 'text'
-      && typeof (block as { text?: unknown }).text === 'string') {
-      parts.push((block as { text: string }).text)
-    }
+    if (block === null || typeof block !== 'object') continue
+    const row = block as { type?: string; text?: string; modelOnly?: boolean }
+    if (isHiddenBubbleText(row) || typeof row.text !== 'string') continue
+    parts.push(row.text)
   }
   return parts.join('')
+}
+
+function attachmentIdsOfContent(content: readonly unknown[]): readonly string[] {
+  const ids: string[] = []
+  for (const block of content) {
+    if (block === null || typeof block !== 'object') continue
+    const row = block as { type?: unknown; attachment?: { attachmentId?: unknown } }
+    if (row.type !== 'image' && row.type !== 'file') continue
+    const id = row.attachment?.attachmentId
+    if (typeof id === 'string' && id.length > 0) ids.push(id)
+  }
+  return ids
 }
 
 /** Inbox can stamp the opener as `steering` when inject already started a step. */
@@ -470,6 +535,43 @@ type PendingChatInput =
 
 function pendingWithdrawId(input: PendingChatInput): QueuedMessage['id'] | undefined {
   return input.kind === 'steer' ? input.item.id : input.itemId
+}
+
+/**
+ * Align local echo prose with Host queue text without blanking a typed body.
+ * Same rule as runtime `preferQueueText` — image+text steers must keep prose
+ * while Host `text` is briefly empty.
+ */
+function preferPendingText(local: string, host: string): string {
+  if (host === local) return local
+  if (host.trim() === '') return local
+  if (local.trim() === '') return host
+  return host
+}
+
+function hostContentHasMedia(content: readonly unknown[]): boolean {
+  for (const block of content) {
+    if (block === null || typeof block !== 'object' || !('type' in block)) continue
+    const type = (block as { type?: unknown }).type
+    if (type === 'image' || type === 'file') return true
+  }
+  return false
+}
+
+/** Append reader prose when Host blocks are media-only but the echo kept text. */
+function withPendingReaderText(
+  content: readonly unknown[],
+  text: string,
+): readonly unknown[] {
+  if (text.trim() === '') return content
+  for (const block of content) {
+    if (block === null || typeof block !== 'object') continue
+    const row = block as { type?: unknown; text?: unknown; modelOnly?: unknown }
+    if (row.type === 'text' && typeof row.text === 'string' && row.modelOnly !== true && row.text.trim() !== '') {
+      return content
+    }
+  }
+  return [...content, { type: 'text', text }]
 }
 
 function pendingInputContent(input: PendingChatInput): readonly unknown[] {
@@ -802,21 +904,26 @@ export function ChatView({
   // set (queued follow-ups paint in QueueDock), `localIds` keeps every
   // non-queued address, and `previews` keeps every live echo addressable so a
   // Host steering row can borrow its blob previews after its echo retired.
-  // Splitting these used to cost two extra filter passes.
-  const echoBook = useMemo(() => {
+  //
+  // Do **not** memoize on `order` / `nodeStore`: the store identity never
+  // changes and order arrays are reused across content-only upserts, so a memo
+  // keyed on them kept a stale `observed` set — durable already painted while
+  // the echo / Host row still showed 「插队中」(假插队 until refresh).
+  const observedDurable = observedRpcIds(order, nodeStore)
+  const stampedCovers = stampedDurableCovers(order, nodeStore)
+  const echoBook = (() => {
     const local = new Map<string, PendingSubmission>()
     const localIds = new Set<string>()
     const previews = new Map<string, PendingSubmission>()
     if (pendingSubmissions.length === 0) return { local, localIds, previews }
-    const observed = observedRpcIds(order, nodeStore)
     for (const submission of pendingSubmissions) {
       if (submission.placement === 'queued') continue
       localIds.add(submission.requestId)
       previews.set(submission.requestId, submission)
-      if (!observed.has(submission.requestId)) local.set(submission.requestId, submission)
+      if (!observedDurable.has(submission.requestId)) local.set(submission.requestId, submission)
     }
     return { local, localIds, previews }
-  }, [pendingSubmissions, order, nodeStore])
+  })()
   // A Host steering row outlives its echo: the durable node lands, the echo
   // retires a frame later, and the row is still mirrored meanwhile. Pending
   // bubbles must never resolve a durable ref there — before `user/message`
@@ -824,7 +931,7 @@ export function ChatView({
   // failed thumbnail until the row leaves. So hold the echo's blob previews for
   // exactly the rows the Host is mirroring; they are dropped with the row.
   const previewMemory = useRef(new Map<string, PendingSubmission>())
-  const steeringPreviews = useMemo(() => {
+  const steeringPreviews = (() => {
     const memory = previewMemory.current
     const live = new Set<string>()
     for (const item of pendingSteering) {
@@ -836,34 +943,65 @@ export function ChatView({
     }
     for (const key of [...memory.keys()]) if (!live.has(key)) memory.delete(key)
     return memory
-  }, [pendingSteering, echoBook])
+  })()
   // Merge Host next-step with local echoes by rpcId so one bubble stays mounted
   // through admit→claim→durable (prefer echo; steer echoes keep 「插队中」).
-  // Purity matters here: `echoBook` is cached across renders, so consumption is
-  // recorded in a local `consumed` set instead of deleting from the shared map.
-  const pendingInputs = useMemo((): readonly PendingChatInput[] => {
+  const pendingInputs = ((): readonly PendingChatInput[] => {
     const { local, localIds } = echoBook
     if (local.size === 0 && localIds.size === 0 && pendingSteering.length === 0) {
       return NO_PENDING_INPUTS
     }
-    const observed = observedRpcIds(order, nodeStore)
     const consumed = new Set<string>()
     const pending: PendingChatInput[] = []
     for (const item of pendingSteering) {
       const rpcId = item.rpcId
-      if (rpcId !== undefined && observed.has(rpcId)) continue
+      if (rpcId !== undefined && observedDurable.has(rpcId)) continue
       if (rpcId === undefined) {
+        // Stamped durable already owns this body; rpcId-less Host row is a
+        // ghost 「插队中」 (promote remints messageId so acceptDurable id-match
+        // misses). Unstamped durables keep the later-same-text pending path.
+        // Coalesced steers stamp one row whose text contains each admit body.
+        // Image-only admits have empty `text` — cover by attachment id instead.
+        // Same speech family only (boss durable must not hide a handoff row).
+        const family = speechFamilyKey(item.source)
+        const textCovered = item.text !== ''
+          && stampedCovers.some((cover) => (
+            cover.family === family
+            && cover.text !== ''
+            && (cover.text === item.text || cover.text.includes(item.text))
+          ))
+        const mediaIds = attachmentIdsOfContent(item.content)
+        const mediaCovered = mediaIds.length > 0
+          && stampedCovers.some((cover) => (
+            cover.family === family
+            && mediaIds.every((id) => cover.media.has(id))
+          ))
+        if (textCovered || mediaCovered) continue
         pending.push({ kind: 'steer', item })
         continue
       }
       const submission = local.get(rpcId)
       if (submission !== undefined) {
         consumed.add(rpcId)
-        // Prefer Host queue text when the mirror already advanced (edit rewrite /
-        // steer republish) but the local echo patch has not landed yet.
-        const aligned = submission.text === item.text
-          ? submission
-          : { ...submission, text: item.text }
+        // Prefer Host text when non-empty (edit rewrite). Never blank a typed
+        // echo — that painted image+text 「插队中」 as image-only.
+        const text = preferPendingText(submission.text, item.text)
+        const aligned = text === submission.text ? submission : { ...submission, text }
+        // Multimedia Host rows keep block identity (image/file + handle). Paint
+        // them as steer with echo blob previews so coalesce groups flatMap full
+        // content instead of text-only echoes.
+        if (hostContentHasMedia(item.content)) {
+          pending.push({
+            kind: 'steer',
+            item: {
+              ...item,
+              text,
+              content: withPendingReaderText(item.content, text) as QueuedMessage['content'],
+            },
+            submission: aligned,
+          })
+          continue
+        }
         pending.push({ kind: 'echo', submission: aligned, itemId: item.id })
         continue
       }
@@ -880,11 +1018,11 @@ export function ChatView({
       // Retire only when this submission's rpcId is on a durable row. Text /
       // time equality wrongly hides the echo once an inject user/message
       // lands before the human durable bubble.
-      if (observed.has(rpcId)) continue
+      if (observedDurable.has(rpcId)) continue
       pending.push({ kind: 'echo', submission })
     }
     return pending
-  }, [pendingSteering, echoBook, steeringPreviews, order, nodeStore])
+  })()
   // 插队中 follows Host `running` (same latch as Stop). Draining tools after
   // cancel must not keep follow-ups painted as 插队.
   const agentLive = running
@@ -1723,12 +1861,12 @@ export function ChatView({
       input.kind === 'echo' ? input.submission.requestId : String(input.item.id)
     )).join('+')
     const content = live.flatMap(pendingInputContent)
-    const preview = live.find((input) => (
-      input.kind === 'echo' && input.submission.attachments.length > 0
-    ))
-    const previewAttachments = preview !== undefined && preview.kind === 'echo'
-      ? previewAttachmentsOf(preview.submission.attachments)
-      : undefined
+    const previewSubmission = live
+      .map((input) => input.submission)
+      .find((submission) => submission !== undefined && submission.attachments.length > 0)
+    const previewAttachments = previewSubmission === undefined
+      ? undefined
+      : previewAttachmentsOf(previewSubmission.attachments)
     const pendingSource = live.map(pendingInputSource).find((s) => s !== undefined)
     columnRows.push(
       <div key={key} className={css.flowItem} data-chat-round={nextSendRound}>
@@ -1778,7 +1916,7 @@ export function ChatView({
             steer
             {...(input.item.source === undefined ? {} : { source: input.item.source })}
             onWithdraw={onWithdraw}
-            {...(input.submission === undefined
+            {...(input.submission === undefined || input.submission.attachments.length === 0
               ? {}
               : { previewAttachments: previewAttachmentsOf(input.submission.attachments) })}
             renderMessageImages={renderMessageImages}
@@ -1788,15 +1926,16 @@ export function ChatView({
         )
       })
     }
+    // Text-only send batches flatMap into one bubble. If any row carries media,
+    // paint separately — a single previewAttachments hoist would put every
+    // image above every caption (same bug durable coalesce used to hit).
+    if (group.items.some((input) => (
+      hostContentHasMedia(pendingInputContent(input))
+      || (input.submission?.attachments.length ?? 0) > 0
+    ))) {
+      return group.items.flatMap((input) => renderSteerGroup({ chrome: group.chrome, items: [input] }))
+    }
     const content = group.items.flatMap(pendingInputContent)
-    const preview = group.items.find((input) => input.kind === 'echo' || input.submission !== undefined)
-    const previewAttachments = preview === undefined
-      ? undefined
-      : preview.kind === 'echo'
-        ? previewAttachmentsOf(preview.submission.attachments)
-        : preview.submission === undefined
-          ? undefined
-          : previewAttachmentsOf(preview.submission.attachments)
     const groupSource = group.items.map(pendingInputSource).find((s) => s !== undefined)
     const key = group.items.map((input) => (
       input.kind === 'echo' ? input.submission.requestId : input.item.id
@@ -1807,7 +1946,6 @@ export function ChatView({
         content={content}
         steer
         {...(groupSource === undefined ? {} : { source: groupSource })}
-        {...(previewAttachments === undefined ? {} : { previewAttachments })}
         renderMessageImages={renderMessageImages}
         renderMessageFiles={renderMessageFiles}
         t={t}

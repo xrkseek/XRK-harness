@@ -257,7 +257,14 @@ export function durableSteerPending(
   return live
 }
 
-/** Merge consecutive send-state rows; keep mid-turn steers as one bubble each. */
+/**
+ * Merge consecutive send-state rows; keep mid-turn steers as one bubble each.
+ *
+ * Host still coalesces same-step steers into one durable `user/message` via
+ * `mergeMessageContents`. Pending stays per-admit so each row keeps its own
+ * withdraw target and echo blob previews (flat-mapping media steers into one
+ * bubble would hoist every image above every caption).
+ */
 export function groupPendingByChrome<T>(
   items: readonly T[],
   chromeOf: (item: T) => PendingInputChrome,

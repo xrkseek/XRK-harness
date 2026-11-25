@@ -11,6 +11,8 @@ import {
   isHumanUserMessageSource,
   isPromptDelivery,
   mergeMessageContents,
+  messageAuthorSessionId,
+  messageSpeechRole,
 } from "@xrkseek/protocol";
 import type { SessionRecord, SessionStore } from "./index.js";
 
@@ -70,6 +72,31 @@ export function promotedUserMessageSource(
   }
   return receipts[0]?.source;
 }
+
+/**
+ * Coalesce key for pending steers. Same-step boss steers may merge; handoff /
+ * seat / plugin must not smash into a boss row (wrong chrome + Face rpc stamp).
+ */
+export function steerSpeechFamilyKey(
+  source: UserMessageSource | undefined,
+): string {
+  const role = messageSpeechRole(source);
+  if (role === "boss") return "boss";
+  const author = messageAuthorSessionId(source) ?? "";
+  if (role === "handoff") return `handoff:${author}`;
+  if (role === "delegator" || role === "peer") return `seat:${role}:${author}`;
+  if (source?.kind === "plugin") {
+    const bag = source as { readonly plugin?: string; readonly pluginId?: unknown };
+    const pluginId =
+      typeof bag.pluginId === "string" && bag.pluginId.length > 0
+        ? bag.pluginId
+        : (bag.plugin ?? "");
+    return `plugin:${pluginId}:${author}`;
+  }
+  if (source?.kind === "auto-continue") return "auto-continue";
+  return `other:${role}:${author}`;
+}
+
 
 function newAdmitId(): string {
   return `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -216,38 +243,20 @@ export function sessionHasPendingSteer(
 }
 
 /**
- * `prompt/promoted` rows after the latest admit-speech `user/message` — crash
- * window between promote and the Face-stamped user row (`beforeUserMessage`
- * await). Seat / handoff / plugin steers close the window the same as human
- * speech; durable injects (skill-catalog / …) do not. Content is still on the
- * matching `prompt/admitted`; not model-visible yet.
+ * `prompt/promoted` rows not yet closed by a later same-family admit-speech
+ * `user/message` — crash window between promote and the Face-stamped user row
+ * (`beforeUserMessage` await).
+ *
+ * Close is **per speech family** (`steerSpeechFamilyKey`): a boss
+ * `user/message` must not retire a dangling handoff promote (family partition
+ * leaves the other family for the next resolve). Seat / handoff / plugin speech
+ * closes its own family; durable injects (skill-catalog / …) never close.
+ * Content is still on the matching `prompt/admitted`; not model-visible yet.
  */
 export function listDanglingPromotedAdmits(
   events: readonly SessionEvent[],
   sessionId = "",
 ): readonly AdmitReceipt[] {
-  let lastSpeech = -1;
-  for (let i = 0; i < events.length; i++) {
-    const ev = events[i];
-    if (
-      ev !== undefined
-      && ev.type === "user/message"
-      && isAdmitSpeechUserMessageSource(ev.source)
-    ) {
-      lastSpeech = i;
-    }
-  }
-  const promotedIds: string[] = [];
-  const seen = new Set<string>();
-  for (let i = lastSpeech + 1; i < events.length; i++) {
-    const ev = events[i];
-    if (ev?.type !== "prompt/promoted") continue;
-    if (seen.has(ev.admitId)) continue;
-    seen.add(ev.admitId);
-    promotedIds.push(ev.admitId);
-  }
-  if (promotedIds.length === 0) return [];
-
   const byAdmit = new Map<string, AdmitReceipt>();
   for (const ev of events) {
     if (ev.type !== "prompt/admitted") continue;
@@ -262,10 +271,42 @@ export function listDanglingPromotedAdmits(
       ...(ev.source !== undefined ? { source: ev.source } : {}),
     });
   }
+
+  const promotes: { index: number; admitId: string }[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    if (ev?.type !== "prompt/promoted") continue;
+    if (seen.has(ev.admitId)) continue;
+    seen.add(ev.admitId);
+    promotes.push({ index: i, admitId: ev.admitId });
+  }
+  if (promotes.length === 0) return [];
+
+  const speech: { index: number; family: string }[] = [];
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    if (
+      ev !== undefined
+      && ev.type === "user/message"
+      && isAdmitSpeechUserMessageSource(ev.source)
+    ) {
+      speech.push({
+        index: i,
+        family: steerSpeechFamilyKey(ev.source),
+      });
+    }
+  }
+
   const out: AdmitReceipt[] = [];
-  for (const id of promotedIds) {
-    const row = byAdmit.get(id);
-    if (row !== undefined) out.push(row);
+  for (const p of promotes) {
+    const row = byAdmit.get(p.admitId);
+    if (row === undefined) continue;
+    const family = steerSpeechFamilyKey(row.source);
+    const closed = speech.some(
+      (s) => s.index > p.index && s.family === family,
+    );
+    if (!closed) out.push(row);
   }
   return out;
 }
@@ -328,6 +369,21 @@ export function withdrawAdmit(
  * Prefers oldest **steer**, else oldest **queue** (docs/session-delivery.md).
  * Does not append user/message — caller passes content into continueTurn/runTurn.
  */
+function appendPromote(
+  store: SessionStore,
+  sessionId: string,
+  next: AdmitReceipt,
+  options?: { readonly now?: () => number },
+): AdmitReceipt {
+  const now = options?.now ?? Date.now;
+  store.append(sessionId, {
+    type: "prompt/promoted",
+    ts: now(),
+    admitId: next.admitId,
+  });
+  return next;
+}
+
 export function promoteNextAdmit(
   store: SessionStore,
   sessionId: string,
@@ -338,13 +394,7 @@ export function promoteNextAdmit(
   const next =
     pending.find((p) => p.delivery === "steer") ?? pending[0];
   if (!next) throw new NoPendingAdmitError();
-  const now = options?.now ?? Date.now;
-  store.append(sessionId, {
-    type: "prompt/promoted",
-    ts: now(),
-    admitId: next.admitId,
-  });
-  return next;
+  return appendPromote(store, sessionId, next, options);
 }
 
 export interface PromoteForTurnResult {
@@ -365,14 +415,14 @@ export interface PromoteForTurnResult {
  * Promote admits for a single continueTurn / drain step.
  *
  * - **queue**: promote exactly one (unchanged §3).
- * - **steer**: promote **all** currently pending steers (FIFO among steers),
+ * - **steer**: promote pending steers of the **oldest speech family** (FIFO),
  *   merge contents — one turn, one maxSteps budget (session-delivery §3).
- *   Queues stay pending.
+ *   Other families and queues stay pending.
  */
 export function promoteAdmitsForTurn(
   store: SessionStore,
   sessionId: string,
-  options?: { readonly now?: () => number },
+  options?: { readonly now?: () => number; readonly familyKey?: string },
 ): PromoteForTurnResult {
   const pending = listPendingAdmits(readSessionEvents(store, sessionId), sessionId);
   if (!pending.length) throw new NoPendingAdmitError();
@@ -389,12 +439,19 @@ export function promoteAdmitsForTurn(
     };
   }
 
+  // Only coalesce steers that share a speech family. Boss+boss merges; a
+  // pending handoff/seat beside boss stays for the next step (avoids smashed
+  // chrome and Face human-rpc stamp loss when non-human source wins).
+  const oldestSteer = pending.find((p) => p.delivery === "steer")!;
+  const family = options?.familyKey ?? steerSpeechFamilyKey(oldestSteer.source);
   const receipts: AdmitReceipt[] = [];
   for (;;) {
     const still = listPendingAdmits(readSessionEvents(store, sessionId), sessionId);
-    const nextSteer = still.find((p) => p.delivery === "steer");
+    const nextSteer = still.find(
+      (p) => p.delivery === "steer" && steerSpeechFamilyKey(p.source) === family,
+    );
     if (!nextSteer) break;
-    receipts.push(promoteNextAdmit(store, sessionId, options));
+    receipts.push(appendPromote(store, sessionId, nextSteer, options));
   }
 
   const content = mergeMessageContents(receipts.map((r) => r.content));
@@ -415,10 +472,16 @@ export function promoteAdmitsForTurn(
 export function promotePendingSteers(
   store: SessionStore,
   sessionId: string,
-  options?: { readonly now?: () => number },
+  options?: { readonly now?: () => number; readonly familyKey?: string },
 ): PromoteForTurnResult | undefined {
   const pending = listPendingAdmits(readSessionEvents(store, sessionId), sessionId);
-  if (!pending.some((p) => p.delivery === "steer")) return undefined;
+  const steers = pending.filter((p) => p.delivery === "steer");
+  if (steers.length === 0) return undefined;
+  if (options?.familyKey !== undefined) {
+    if (!steers.some((p) => steerSpeechFamilyKey(p.source) === options.familyKey)) {
+      return undefined;
+    }
+  }
   return promoteAdmitsForTurn(store, sessionId, options);
 }
 
@@ -445,12 +508,18 @@ export function danglingPromotesForTurn(
     };
   }
   const steers = receipts.filter((p) => p.delivery === "steer");
-  const content = mergeMessageContents(steers.map((r) => r.content));
+  // Crash windows may leave mixed-family dangling promotes; recover the oldest
+  // family only so a later resolve can finish the rest without smashing chrome.
+  const family = steerSpeechFamilyKey(steers[0]?.source);
+  const sameFamily = steers.filter(
+    (r) => steerSpeechFamilyKey(r.source) === family,
+  );
+  const content = mergeMessageContents(sameFamily.map((r) => r.content));
   return {
     content,
     text: flattenText(content),
     delivery: "steer",
-    receipts: steers,
+    receipts: sameFamily,
     steerBatch: true,
   };
 }
@@ -476,7 +545,13 @@ export function resolveAdmitsForTurn(
     return dangling;
   }
   if (dangling !== undefined && dangling.steerBatch) {
-    const more = promotePendingSteers(store, sessionId, options);
+    // Only pull more pending steers of the same speech family as the dangling
+    // batch — never attach a boss steer onto a recovering handoff row.
+    const family = steerSpeechFamilyKey(dangling.receipts[0]?.source);
+    const more = promotePendingSteers(store, sessionId, {
+      ...options,
+      familyKey: family,
+    });
     if (more === undefined) return dangling;
     const receipts = [...dangling.receipts, ...more.receipts];
     const content = mergeMessageContents(receipts.map((r) => r.content));

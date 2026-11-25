@@ -161,6 +161,66 @@ describe('MessageItem arms', () => {
     expect(view.queryByText('附加内容块')).toBeNull()
   })
 
+  it('keeps image↔text pairing for coalesced mixed-media steers', () => {
+    const img = (id: string) => ({
+      attachmentId: `sha256:${id}`,
+      mediaType: 'image/png' as const,
+      bytes: 12,
+      width: 8,
+      height: 8,
+      name: `${id}.png`,
+    })
+    const view = render(
+      <UserMessageNodeView
+        {...({
+          node: {
+            key: 'coalesce-media',
+            kind: 'steering',
+            id: '9',
+            target: 'chat',
+            anchorSeq: 9,
+            location: { kind: 'session' },
+            visibility: 'visible',
+            data: {
+              kind: 'steering',
+              messageId: 'umsg_merged' as never,
+              seq: 9,
+              time: 9_000,
+              // Host mergeMessageContents order: admit A then admit B.
+              content: [
+                { type: 'image', attachment: img('aaa') },
+                { type: 'text', text: '看图一' },
+                { type: 'image', attachment: img('bbb') },
+                { type: 'text', text: '看图二' },
+              ],
+              source: { kind: 'user', rpcId: 'rpc-a' as never },
+            },
+          },
+          t,
+          useSession: idleUseSession,
+          withdrawSteer: () => {},
+          renderMessageImages: ({ images }: { images: readonly { attachment?: { name?: string } }[] }) => (
+            <span data-test-image={images[0]?.attachment?.name ?? 'img'} />
+          ),
+          renderMessageFiles: () => null,
+        } as ChatNodeViewProps<'steering'>)}
+      />,
+    )
+    const stack = view.container.querySelector('[class*="userStack"]')
+    expect(stack).not.toBeNull()
+    const order = [...stack!.children]
+      .flatMap((node) => {
+        if (node.getAttribute('data-message-attachments') !== null) {
+          return [...node.querySelectorAll('[data-test-image]')].map((el) => el.getAttribute('data-test-image'))
+        }
+        if (node.getAttribute('data-message-bubble') !== null) {
+          return [node.textContent?.trim() ?? '']
+        }
+        return []
+      })
+    expect(order).toEqual(['aaa.png', '看图一', 'bbb.png', '看图二'])
+  })
+
   it('falls back to an inline file card when renderMessageFiles returns null', () => {
     const file = {
       attachmentId: 'sha256:' + 'c'.repeat(64),

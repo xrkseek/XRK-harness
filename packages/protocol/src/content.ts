@@ -479,10 +479,30 @@ export function contentHasFile(content: MessageContent): boolean {
   return content.some(isFileBlock);
 }
 
+function lastReaderTextIndex(blocks: readonly ContentBlock[]): number | undefined {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i]!;
+    if (isTextBlock(block) && !isModelOnlyText(block)) return i;
+  }
+  return undefined;
+}
+
+function firstReaderTextIndex(blocks: readonly ContentBlock[]): number | undefined {
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]!;
+    if (isTextBlock(block) && !isModelOnlyText(block)) return i;
+  }
+  return undefined;
+}
+
 /**
  * Merge several admits for one steer batch.
  * Strings join with blank lines; block arrays concatenate in order.
  * Mixing string + blocks promotes everything to blocks.
+ *
+ * Block batches keep the same `\n\n` admit boundary as the string path so two
+ * image+text steers do not smash reader prose in {@link flattenText}
+ * (`helloworld`) and the shell can still split segments per admit.
  */
 export function mergeMessageContents(
   parts: readonly MessageContent[],
@@ -495,11 +515,32 @@ export function mergeMessageContents(
   }
   const blocks: ContentBlock[] = [];
   for (const part of parts) {
-    if (typeof part === "string") {
-      if (part.length > 0) blocks.push({ type: "text", text: part });
-      continue;
+    const chunk: ContentBlock[] =
+      typeof part === "string"
+        ? part.length > 0
+          ? [{ type: "text", text: part }]
+          : []
+        : [...part];
+    if (chunk.length === 0) continue;
+    if (blocks.length > 0) {
+      const prevIdx = lastReaderTextIndex(blocks);
+      const nextIdx = firstReaderTextIndex(chunk);
+      if (prevIdx !== undefined && nextIdx !== undefined) {
+        const prev = blocks[prevIdx] as TextBlock;
+        const next = chunk[nextIdx] as TextBlock;
+        // Adjacent reader texts across admits fuse like the string join.
+        if (prevIdx === blocks.length - 1 && nextIdx === 0) {
+          blocks[prevIdx] = { type: "text", text: `${prev.text}\n\n${next.text}` };
+          blocks.push(...chunk.slice(1));
+          continue;
+        }
+        // Media between admits: blank line for the model only — reader UI
+        // already separates runs by attachment / text order, so a visible
+        // `\n\n` pad on the earlier caption would look like a leaky bubble.
+        blocks.push({ type: "text", text: "\n\n", modelOnly: true });
+      }
     }
-    blocks.push(...part);
+    blocks.push(...chunk);
   }
   return blocks;
 }

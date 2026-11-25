@@ -56,6 +56,35 @@ export function isHumanOwnedUserMessage(source: unknown): boolean {
 }
 
 /**
+ * Coalesce / cover key aligned with kernel `steerSpeechFamilyKey`.
+ * Boss steers share one key; handoff / seat / plugin stay separate so a stamped
+ * boss durable must not retire a pending handoff 「插队中」 via text/media cover.
+ */
+export function speechFamilyKey(source: unknown): string {
+  const record = asRecord(source)
+  const kind = record === null ? null : readString(record, 'kind')
+  if (kind === null || kind === 'user') return 'boss'
+  const author = record === null
+    ? ''
+    : (readString(record, 'fromSessionId')
+      ?? readString(record, 'peerSessionId')
+      ?? readString(record, 'childSessionId')
+      ?? '')
+  if (kind === 'handoff') return `handoff:${author}`
+  if (kind === 'seat') {
+    const channel = readString(record!, 'channel')
+    const role = channel === 'peer' ? 'peer' : 'delegator'
+    return `seat:${role}:${author}`
+  }
+  if (kind === 'plugin') {
+    const pluginId = readString(record!, 'pluginId') ?? readString(record!, 'plugin') ?? ''
+    return `plugin:${pluginId}:${author}`
+  }
+  if (kind === 'auto-continue') return 'auto-continue'
+  return `other:${kind}:${author}`
+}
+
+/**
  * Project durable `user/message.source` (and kind of row) onto Voice × Lane.
  *
  * Aligns with protocol {@link messageSpeechRole}:

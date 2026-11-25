@@ -21,8 +21,8 @@
 | `admit(message)` | 记账进 inbox（模型不可见） |
 | `continueTurn()` / drain `wake`·`resume` | 执行面：`promoteAdmitsForTurn` + `runTurn` |
 | `listPendingAdmits` / `promoteNextAdmit` | 单条：FIFO，steer 优先 |
-| `promotePendingSteers` | **`runTurn` 工具步边界**：只 promote pending steer |
-| `promoteAdmitsForTurn` | **turn 入口**：全部 pending steer 合并，否则一条 queue |
+| `promotePendingSteers` | **`runTurn` 工具步边界**：只 promote 最老 speech family 的 pending steer |
+| `promoteAdmitsForTurn` | **turn 入口**：合并最老 speech family 的 pending steer（老板 / 回传 / seat / …），否则一条 queue |
 
 未传 `delivery` 时，**协议层**默认 **queue**（`prompt/admitted` 与 `admit()` 的 `effectiveDelivery`：非 `steer` 即 `queue`）；`session.prompt` 同理。
 
@@ -39,10 +39,11 @@
 
 ### steer
 
-1. **`runTurn` 工具步边界**：上一步 tool settle 之后、下一次 `chat()` 之前，`promotePendingSteers` 认领全部 pending steer（不碰 queue）。壳标「发送中」仅 inbox 未认领期间可撤回。  
-2. **`promoteAdmitsForTurn`**（`continueTurn` / drain 入口）：若本 turn 没有工具步可插入（例如纯文本回合已结束），仍在下一 turn 入口一次 promote 全部 pending steer（FIFO among steers），正文用 `\n\n` 合并进 **一条** `user/message` → **一次** `runTurn`。中间夹杂的 queue **仍留 pending**（排队等的是整轮 轮次 / drain idle）。Face 在该行写入首条 echo 的 `rpcId` 与其余 `rpcIds`；壳队列与本地回显按这组 id 一次卸掉。已有插队未落地时，composer Enter 继续 `steer`。跨 turn 的 queue 仍 FIFO 一条对人。  
-3. 认领后的 `user/message` 进入同一 Host turn 的下一次模型请求；排队不走这条路径。  
-4. Abort / soft interrupt 语义见 [session-latch.md](./session-latch.md)；steer ≠ `cancel`。
+1. **`runTurn` 工具步边界**：上一步 tool settle 之后、下一次 `chat()` 之前，`promotePendingSteers` 认领最老 speech family 的 pending steer（不碰 queue 与其它 family）。壳标「发送中」仅 inbox 未认领期间可撤回。  
+2. **`promoteAdmitsForTurn`**（`continueTurn` / drain 入口）：若本 turn 没有工具步可插入（例如纯文本回合已结束），仍在下一 turn 入口 promote 最老 speech family 的 pending steer（family 内 FIFO），正文用 `\n\n` 合并进 **一条** `user/message` → **一次** `runTurn`。其它 family 与夹杂的 queue **仍留 pending**（排队等的是整轮 轮次 / drain idle；老板旁的回传等下一次 promote）。Face 只在人类行写入 `rpcId` / `rpcIds`。已有插队未落地时，composer Enter 继续 `steer`。跨 turn 的 queue 仍 FIFO 一条对人。  
+3. **崩溃窗口**：悬挂的 `prompt/promoted` 只被**同 family** 的后续 admit-speech `user/message` 关闭——老板发言不得清掉悬挂的回传 promote。  
+4. 认领后的 `user/message` 进入同一 Host turn 的下一次模型请求；排队不走这条路径。  
+5. Abort / soft interrupt 语义见 [session-latch.md](./session-latch.md)；steer ≠ `cancel`。
 
 `promoteNextAdmit` 仍是「只 promote 一条」（优先最老 steer）——底层/测试用；产品热路径用 `promoteAdmitsForTurn`。
 
@@ -94,7 +95,7 @@ These are first-class product semantics, not a UI copy difference or an alias of
 | `continueTurn()` / drain `wake`·`resume` | Execution: `promoteAdmitsForTurn` + `runTurn` |
 | `listPendingAdmits` / `promoteNextAdmit` | Single item: FIFO, steers first |
 | `promotePendingSteers` | **`runTurn` tool-step boundary**: pending steers only |
-| `promoteAdmitsForTurn` | **Turn entry**: merge all pending steers, else one queue item |
+| `promoteAdmitsForTurn` | **Turn entry**: merge pending steers of the oldest speech family (boss / handoff / seat / …), else one queue item |
 
 At the **protocol layer** an omitted `delivery` defaults to **queue** (`prompt/admitted` and `admit()`’s `effectiveDelivery`: anything that is not `steer` becomes `queue`); `session.prompt` behaves the same.
 
@@ -111,10 +112,11 @@ The **model tool layer defaults to `steer` since v0.6.2**: `send_message` and `t
 
 ### steer
 
-1. **`runTurn` tool-step boundary**: after the previous tool step settles and before the next `chat()`, `promotePendingSteers` claims every pending steer (queues stay). The shell “Sending…” badge is withdrawable only while the admit is still in the inbox.  
-2. **`promoteAdmitsForTurn`** (`continueTurn` / drain entry): if this turn had no later tool step (a text-only turn already ended), still promote all pending steers at the next turn entry (FIFO among steers), merge bodies with `\n\n` into **one** `user/message` → **one** `runTurn`. Interleaved queue items **stay pending** (queue waits for the user 轮次 / drain idle). Face stamps the first echo as `rpcId` and the rest as `rpcIds`. While a steer is already pending, composer Enter stays `steer`.  
-3. After claim, the `user/message` is the same Host turn’s next model request; queue does not take this path.  
-4. Abort / soft-interrupt semantics: see [session-latch.md](./session-latch.md); steer ≠ `cancel`.
+1. **`runTurn` tool-step boundary**: after the previous tool step settles and before the next `chat()`, `promotePendingSteers` claims pending steers of the oldest speech family (queues and other families stay). The shell “Sending…” badge is withdrawable only while the admit is still in the inbox.  
+2. **`promoteAdmitsForTurn`** (`continueTurn` / drain entry): if this turn had no later tool step (a text-only turn already ended), promote the oldest speech family’s pending steers at the next turn entry (FIFO within that family), merge bodies with `\n\n` into **one** `user/message` → **one** `runTurn`. Other families and interleaved queue items **stay pending** (queue waits for the user 轮次 / drain idle; a handoff beside a boss steer waits for the next promote). Face stamps human echoes as `rpcId` / `rpcIds` on the human row only. While a steer is already pending, composer Enter stays `steer`.  
+3. **Crash window**: a dangling `prompt/promoted` closes only when a later same-family admit-speech `user/message` lands — boss speech must not retire a dangling handoff promote.
+4. After claim, the `user/message` is the same Host turn’s next model request; queue does not take this path.  
+5. Abort / soft-interrupt semantics: see [session-latch.md](./session-latch.md); steer ≠ `cancel`.
 
 `promoteNextAdmit` remains “promote one” (oldest steer first) — for internals/tests; the product hot path uses `promoteAdmitsForTurn`.
 

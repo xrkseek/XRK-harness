@@ -144,6 +144,7 @@ export { contextForm, contextProvenance, sessionRecallLabels } from './sessions/
 export {
   projectTranscriptChrome,
   isHumanOwnedUserMessage,
+  speechFamilyKey,
 } from './sessions/transcript-chrome.ts'
 export { displayFailureMessage } from './sessions/failure-display.ts'
 export type {

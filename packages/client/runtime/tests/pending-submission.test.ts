@@ -311,6 +311,26 @@ describe('beginSubmission', () => {
     expect(onRetire).not.toHaveBeenCalled()
   })
 
+  it('keeps local steer prose when Host queue text is briefly empty', () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    session.handleRunning(true)
+    const handle = session.beginSubmission({
+      mode: 'steer', text: '看这张图', attachments: [],
+    })
+    session.handleMuxEnvelope(RpcId('img-empty'), queueFrame(SID, [{
+      id: 'steer-img',
+      rpcId: handle.requestId,
+      body: '',
+      placement: 'steering',
+    }]))
+    expect(session.getSnapshot().pendingSubmissions[0]).toMatchObject({
+      requestId: handle.requestId,
+      placement: 'steering',
+      text: '看这张图',
+    })
+  })
+
   it('restores dock after false FIFO handoff when Host re-lists the same rpcId', () => {
     // Queue edit rewrite used to publish empty session/queue frames between
     // withdraw and re-admit; that looked like FIFO claim → transcript「假发送」.
@@ -537,14 +557,19 @@ describe('beginSubmission', () => {
 
 function queueFrame(
   sessionId: SessionId,
-  items: readonly { id: string; rpcId: string; body: string }[],
+  items: readonly {
+    id: string
+    rpcId: string
+    body: string
+    placement?: 'queued' | 'steering'
+  }[],
 ): MuxFrame {
   return {
     type: 'session/queue',
     sessionId,
     items: items.map(item => ({
       id: item.id as never,
-      placement: 'queued' as const,
+      placement: item.placement ?? 'queued',
       message: createUserMessage({
         content: [{ type: 'text', text: item.body }],
         source: { kind: 'user', rpcId: item.rpcId as never },

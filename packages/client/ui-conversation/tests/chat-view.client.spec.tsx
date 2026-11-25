@@ -591,6 +591,166 @@ describe('ChatView', () => {
     expect(view.container.querySelectorAll('[data-pending-steering]')).toHaveLength(1)
   })
 
+  it('drops an rpcId-less Host 插队 ghost once a stamped durable owns the same text', () => {
+    const pending = {
+      id: 'admit-ghost' as never,
+      messageId: 'admit-ghost' as never,
+      placement: 'steering' as const,
+      content: [{ type: 'text' as const, text: '9974我还没更新' }],
+      preview: '9974我还没更新',
+      text: '9974我还没更新',
+      // No rpcId — promote reminted umsg_* so id-match cannot retire this row.
+    }
+    const h = makeHarness({
+      nodes: [
+        assistant(1, 'working'),
+        {
+          kind: 'steering',
+          messageId: 'umsg_fresh' as never,
+          seq: 2, time: 2_000,
+          content: [{ type: 'text', text: '9974我还没更新' }],
+          source: { kind: 'user', rpcId: 'rpc-real' as RpcId },
+        },
+      ],
+      queue: [pending],
+      running: true,
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getAllByText('9974我还没更新')).toHaveLength(1)
+    // Durable mid-turn steer still shows 插队中; the Host ghost must not.
+    expect(view.container.querySelectorAll('[data-pending-steering]')).toHaveLength(1)
+  })
+
+  it('drops an rpcId-less image-only Host ghost once stamped durable owns the attachment', () => {
+    const attachment = {
+      attachmentId: 'sha256:ghostimg',
+      mediaType: 'image/png' as const,
+      bytes: 12,
+      width: 8,
+      height: 8,
+      name: 'ghost.png',
+    }
+    const pending = {
+      id: 'admit-img-ghost' as never,
+      messageId: 'admit-img-ghost' as never,
+      placement: 'steering' as const,
+      content: [{ type: 'image' as const, attachment }],
+      preview: '[image]',
+      text: '',
+    }
+    const h = makeHarness({
+      nodes: [
+        assistant(1, 'working'),
+        {
+          kind: 'steering',
+          messageId: 'umsg_img' as never,
+          seq: 2, time: 2_000,
+          content: [
+            { type: 'image', attachment },
+            { type: 'text', text: '看图' },
+          ],
+          source: { kind: 'user', rpcId: 'rpc-sibling' as RpcId },
+        },
+      ],
+      queue: [pending],
+      running: true,
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('看图')).toBeTruthy()
+    // Durable owns the attachment; the empty-text Host ghost must not linger.
+    expect(view.container.querySelectorAll('[data-pending-steering]')).toHaveLength(1)
+  })
+
+  it('keeps a handoff Host 插队 when a stamped boss durable only substring-covers it', () => {
+    const handoffSource = {
+      kind: 'handoff' as const,
+      form: 'notice' as const,
+      via: 'subagent' as const,
+      fromSessionId: 'sess_child',
+      label: '发版员',
+    }
+    const pending = {
+      id: 'admit-handoff' as never,
+      messageId: 'admit-handoff' as never,
+      placement: 'steering' as const,
+      content: [{ type: 'text' as const, text: 'done' }],
+      preview: 'done',
+      text: 'done',
+      source: handoffSource,
+    }
+    const h = makeHarness({
+      nodes: [
+        assistant(1, 'working'),
+        {
+          kind: 'steering',
+          messageId: 'umsg_boss' as never,
+          seq: 2, time: 2_000,
+          content: [{ type: 'text', text: 'please confirm when done' }],
+          source: { kind: 'user', rpcId: 'rpc-boss' as RpcId },
+        },
+      ],
+      queue: [pending],
+      running: true,
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    // Boss durable must not swallow the rpcId-less handoff pending row.
+    expect(view.getByText('done')).toBeTruthy()
+    expect(view.container.querySelectorAll('[data-pending-steering]')).toHaveLength(2)
+  })
+
+  it('keeps image+text steer prose when Host queue text is briefly empty', () => {
+    const h = makeHarness({
+      nodes: [assistant(1, 'working')],
+      pendingSubmissions: [{
+        requestId: 'rpc-img-steer' as RpcId,
+        placement: 'steering',
+        time: 1_500,
+        text: '看这张图',
+        attachments: [{
+          type: 'image',
+          value: {
+            previewUrl: 'blob:img-steer',
+            name: 'shot.png',
+            mediaType: 'image/png',
+            width: 8,
+            height: 8,
+          },
+        }],
+      }],
+      queue: [{
+        id: 'steer-img' as never,
+        messageId: 'steer-img-msg' as never,
+        placement: 'steering' as const,
+        rpcId: 'rpc-img-steer' as RpcId,
+        // Host briefly projects empty text while content is image-only —
+        // overwrite used to paint 「插队中」 image-only until promote.
+        content: [{
+          type: 'image' as const,
+          attachment: {
+            attachmentId: 'sha256:img',
+            mediaType: 'image/png',
+            bytes: 12,
+            width: 8,
+            height: 8,
+          },
+        }],
+        preview: '[image]',
+        text: '',
+      }],
+      running: true,
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const bubble = view.getByText('看这张图').closest('[data-pending-steering]')
+    expect(bubble).not.toBeNull()
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
+    // Host empty text used to blank the echo; prose must stay on the bubble.
+    expect(view.queryByText('看这张图')).toBeTruthy()
+  })
+
   it('labels mid-turn human rows as 插话 and keeps the opener as 第 N 轮', () => {
     const h = makeHarness({
       nodes: [

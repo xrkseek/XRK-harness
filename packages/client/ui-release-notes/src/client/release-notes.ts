@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.8.15',
+    date: '2026-11-25',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '插队同族合并：老板可合并；回传 / seat 与老板分开，避免气泡与 echo 错绑。',
+        en: 'Same-family steer coalesce: boss may merge; handoff / seat stay apart so chrome and echoes do not smash.',
+      },
+      {
+        zh: '图文插队按文档顺序交错；空 Host 文案时保留本地说明；纯图假「插队中」已堵。',
+        en: 'Multimedia steers keep document order; empty Host text keeps local prose; image-only ghost 「插队中」 closed.',
+      },
+      {
+        zh: '老板 durable 不再误消回传 pending；崩溃窗口异族 dangling 不再丢正文。',
+        en: 'Boss durables no longer retire handoff pendings; crash recovery keeps other-family dangling promotes.',
+      },
+      {
+        zh: 'Desktop / npm / 手机对齐 0.8.15。完整清单见 docs/releases/v0.8.15.md。',
+        en: 'Desktop / npm / phone align to 0.8.15. Full list: docs/releases/v0.8.15.md.',
+      },
+    ],
+  },
+  {
     version: '0.8.14',
     date: '2026-11-24',
     title: {

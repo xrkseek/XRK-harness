@@ -11,6 +11,7 @@ import {
   newSession,
   promoteNextAdmit,
   promoteAdmitsForTurn,
+  promotedUserMessageSource,
   promotePendingSteers,
   resolveAdmitsForTurn,
   sessionHasInboxWork,
@@ -137,6 +138,104 @@ describe("newSession / admit", () => {
     expect(
       listPendingAdmits(store.get(s.id).events).map((p) => p.content),
     ).toEqual(["q1", "q2"]);
+  });
+
+  it("does not coalesce boss steer with handoff (keeps families separate)", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const boss = admitPrompt(store, s.id, "boss cut-in", { delivery: "steer" });
+    const handoff = admitPrompt(store, s.id, "child report", {
+      delivery: "steer",
+      source: {
+        kind: "handoff",
+        form: "notice",
+        via: "subagent",
+        fromSessionId: "sess_child",
+        label: "发版员",
+      },
+    });
+    const batch = promoteAdmitsForTurn(store, s.id);
+    expect(batch.steerBatch).toBe(true);
+    expect(batch.content).toBe("boss cut-in");
+    expect(batch.receipts.map((r) => r.admitId)).toEqual([boss.admitId]);
+    // Boss/human admits omit source; Face treats undefined as human for rpc stamp.
+    expect(promotedUserMessageSource(batch.receipts)).toBeUndefined();
+    expect(
+      listPendingAdmits(store.get(s.id).events).map((p) => p.admitId),
+    ).toEqual([handoff.admitId]);
+  });
+
+  it("coalesces two handoffs from the same child; leaves a different family", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const handoffSource = {
+      kind: "handoff" as const,
+      form: "notice" as const,
+      via: "subagent" as const,
+      fromSessionId: "sess_child",
+      label: "发版员",
+    };
+    const a = admitPrompt(store, s.id, "part A", { delivery: "steer", source: handoffSource });
+    const b = admitPrompt(store, s.id, "part B", { delivery: "steer", source: handoffSource });
+    admitPrompt(store, s.id, "boss later", { delivery: "steer" });
+    const batch = promoteAdmitsForTurn(store, s.id);
+    expect(batch.content).toBe("part A\n\npart B");
+    expect(batch.receipts.map((r) => r.admitId)).toEqual([a.admitId, b.admitId]);
+    expect(promotedUserMessageSource(batch.receipts)).toMatchObject({ kind: "handoff" });
+    expect(
+      listPendingAdmits(store.get(s.id).events).map((p) => p.content),
+    ).toEqual(["boss later"]);
+  });
+
+  it("dangling close is per speech family (boss speech leaves handoff dangling)", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const handoffSource = {
+      kind: "handoff" as const,
+      form: "notice" as const,
+      via: "subagent" as const,
+      fromSessionId: "sess_child",
+      label: "发版员",
+    };
+    const boss = admitPrompt(store, s.id, "boss cut-in", { delivery: "steer" });
+    const handoff = admitPrompt(store, s.id, "child report", {
+      delivery: "steer",
+      source: handoffSource,
+    });
+    // Crash window that promoted both families before any user/message.
+    store.append(s.id, {
+      type: "prompt/promoted",
+      ts: Date.now(),
+      admitId: boss.admitId,
+    });
+    store.append(s.id, {
+      type: "prompt/promoted",
+      ts: Date.now(),
+      admitId: handoff.admitId,
+    });
+
+    const first = resolveAdmitsForTurn(store, s.id);
+    expect(first.content).toBe("boss cut-in");
+    expect(first.receipts.map((r) => r.admitId)).toEqual([boss.admitId]);
+
+    store.append(s.id, {
+      type: "user/message",
+      ts: Date.now(),
+      turnId: "t-boss",
+      content: "boss cut-in",
+      source: { kind: "user" },
+    });
+    // Boss speech must not retire the handoff promote (family partition).
+    expect(
+      listDanglingPromotedAdmits(store.get(s.id).events, s.id).map((p) => p.admitId),
+    ).toEqual([handoff.admitId]);
+
+    const second = resolveAdmitsForTurn(store, s.id);
+    expect(second.content).toBe("child report");
+    expect(second.receipts.map((r) => r.admitId)).toEqual([handoff.admitId]);
+    expect(promotedUserMessageSource(second.receipts)).toMatchObject({
+      kind: "handoff",
+    });
   });
 
   it("promoteAdmitsForTurn promotes one queue when no steers", () => {

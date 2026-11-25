@@ -34,6 +34,7 @@ export {
   promoteAdmitsForTurn,
   promotePendingSteers,
   promotedUserMessageSource,
+  steerSpeechFamilyKey,
   type AdmitReceipt,
   type AdmitPromptOptions,
   type PromoteForTurnResult,

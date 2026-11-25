@@ -142,6 +142,94 @@ function contentParts(content: readonly unknown[]): {
   return { text: texts.join('\n\n'), segments, attachments, rest }
 }
 
+/**
+ * One visual run inside a user / steering bubble. Document order matters:
+ * coalesced image+text steers must keep each image beside its prose — hoisting
+ * every attachment above every text smashed mixed-media batches into
+ * 「all images, then all captions」.
+ */
+type SurfaceRun =
+  | { readonly kind: 'attachments'; readonly attachments: readonly PresentedAttachment[] }
+  | { readonly kind: 'text'; readonly text: string }
+
+function attachmentFromBlock(block: unknown): PresentedAttachment | undefined {
+  if (block === null || typeof block !== 'object') return undefined
+  const b = block as { type?: string; attachment?: unknown }
+  if (b.type === 'image' && b.attachment !== undefined) {
+    return { type: 'image', image: { attachment: (b as UserImage).attachment } }
+  }
+  if (b.type === 'file' && isFileAttachment(b.attachment)) {
+    return { type: 'file', file: b.attachment }
+  }
+  return undefined
+}
+
+/** Walk content in prompt order into attachment / text runs. */
+function surfaceRunsFromContent(content: readonly unknown[]): {
+  readonly runs: readonly SurfaceRun[]
+  readonly text: string
+  readonly rest: unknown[]
+} {
+  const runs: SurfaceRun[] = []
+  const rest: unknown[] = []
+  const texts: string[] = []
+  let batch: PresentedAttachment[] = []
+  const flushBatch = (): void => {
+    if (batch.length === 0) return
+    runs.push({ kind: 'attachments', attachments: batch })
+    batch = []
+  }
+  for (const block of content) {
+    if (typeof block === 'object' && block !== null) {
+      const row = block as { type?: string; text?: string; modelOnly?: boolean }
+      if (row.type === 'text' && typeof row.text === 'string') {
+        if (isHiddenUserText(row)) continue
+        flushBatch()
+        if (row.text.length > 0) {
+          texts.push(row.text)
+          runs.push({ kind: 'text', text: row.text })
+        }
+        continue
+      }
+      const attachment = attachmentFromBlock(block)
+      if (attachment !== undefined) {
+        batch.push(attachment)
+        continue
+      }
+    }
+    flushBatch()
+    rest.push(block)
+  }
+  flushBatch()
+  return { runs, text: texts.join('\n\n'), rest }
+}
+
+/**
+ * Echo path: local blob previews then reader text. Durable / Host content uses
+ * document order so mixed-media coalesce keeps image↔text pairing.
+ */
+function surfaceRunsForBubble(
+  content: readonly unknown[],
+  previewAttachments: readonly PresentedAttachment[] | undefined,
+): {
+  readonly runs: readonly SurfaceRun[]
+  readonly text: string
+  readonly rest: unknown[]
+} {
+  // Empty preview list must not force the echo path — that dropped Host
+  // image/file blocks when a submission existed without attachments.
+  if (previewAttachments !== undefined && previewAttachments.length > 0) {
+    const parts = contentParts(content)
+    const runs: SurfaceRun[] = []
+    runs.push({ kind: 'attachments', attachments: previewAttachments })
+    for (const segment of parts.segments) {
+      runs.push({ kind: 'text', text: segment })
+    }
+    return { runs, text: parts.text, rest: parts.rest }
+  }
+  return surfaceRunsFromContent(content)
+}
+
 function retrySeconds(milliseconds: number): number {
   return Math.max(1, Math.ceil(milliseconds / 1_000))
 }
@@ -465,19 +553,40 @@ function UserStyleBubble({
     speechSeatTitlesSnapshot,
     speechSeatTitlesSnapshot,
   )
-  const { text, segments, attachments: contentAttachments, rest } = contentParts(content)
-  const attachments = previewAttachments ?? contentAttachments
-  const compactImages = attachments.length > 1
+  const { runs: baseRuns, text, rest } = surfaceRunsForBubble(content, previewAttachments)
   const truncated = (total: number): string => t('json.truncated', { total })
-  const rawBodies = segments.length > 0 ? segments : (text !== '' || rest.length > 0 ? [text] : [])
+  const rawBodies = baseRuns.flatMap((run) => run.kind === 'text' ? [run.text] : [])
   const isHandoff = source !== null
     && typeof source === 'object'
     && 'kind' in source
     && (source as { kind?: unknown }).kind === 'handoff'
   const handoffSplit = isHandoff ? handoffBodiesFromSegments(rawBodies) : null
-  const bodies = handoffSplit !== null ? handoffSplit.bodies : rawBodies
   const handoffDetail = handoffSplit?.detail ?? null
-  const showBubble = bodies.length > 0 || rest.length > 0
+  // Handoff may rewrite text bodies; rebuild runs so attachment order stays put.
+  const runs: readonly SurfaceRun[] = handoffSplit === null
+    ? baseRuns
+    : (() => {
+      const next: SurfaceRun[] = []
+      let bodyAt = 0
+      for (const run of baseRuns) {
+        if (run.kind !== 'text') {
+          next.push(run)
+          continue
+        }
+        const body = handoffSplit.bodies[bodyAt]
+        bodyAt += 1
+        if (body !== undefined && body.length > 0) next.push({ kind: 'text', text: body })
+      }
+      return next
+    })()
+  const showSurface = runs.length > 0 || rest.length > 0
+  const totalImages = runs.reduce(
+    (n, run) => n + (run.kind === 'attachments'
+      ? run.attachments.filter((item) => item.type === 'image').length
+      : 0),
+    0,
+  )
+  const compactImages = totalImages > 1
   // Source overrides surface defaults (subagent notice → courier×handoff).
   // Voice×Lane stamps only — DressingAvatarSvg mounts later; no bubble dialect.
   const chrome = projectTranscriptChrome({
@@ -485,6 +594,8 @@ function UserStyleBubble({
     source,
   })
   const identity = speechIdentityLabel(source, t, titles)
+  let textRunIndex = 0
+  const textRunCount = runs.reduce((n, run) => n + (run.kind === 'text' ? 1 : 0), 0)
   return (
     <div
       className={css.userRow}
@@ -520,49 +631,63 @@ function UserStyleBubble({
             {t('message.pendingSend')}
           </span>
         ) : null}
-        {attachments.length > 0 && (
-          <div className={css.attachmentRow} data-message-attachments>
-            {attachments.map((attachment, index) => attachment.type === 'image'
-              ? (
-                <Fragment key={`image:${index}`}>
-                  {renderMessageImages({
-                    images: [attachment.image],
-                    align: 'end',
-                    compact: compactImages,
-                  })}
-                </Fragment>
-              )
-              : (
-                <Fragment key={`file:${index}`}>
-                  {renderMessageFiles?.({
-                    files: [{ attachment: attachment.file }],
-                    align: 'end',
-                  }) ?? (
-                    <span className={css.fileCard} title={attachment.file.name}>
-                      <FileTypeIcon path={attachment.file.name} className={css.fileIcon} />
-                      <span className={css.fileContent}>
-                        <span className={css.fileName}>{attachment.file.name}</span>
-                        <span className={css.fileMeta}>
-                          {[fileExtension(attachment.file.name).toUpperCase().slice(0, 8), fileSizeText(attachment.file.bytes)]
-                            .filter(Boolean).join(' ')}
+        {showSurface && runs.map((run, index) => {
+          if (run.kind === 'attachments') {
+            return (
+              <div key={`att:${index}`} className={css.attachmentRow} data-message-attachments>
+                {run.attachments.map((attachment, attachmentIndex) => attachment.type === 'image'
+                  ? (
+                    <Fragment key={`image:${attachmentIndex}`}>
+                      {renderMessageImages({
+                        images: [attachment.image],
+                        align: 'end',
+                        compact: compactImages,
+                      })}
+                    </Fragment>
+                  )
+                  : (
+                    <Fragment key={`file:${attachmentIndex}`}>
+                      {renderMessageFiles?.({
+                        files: [{ attachment: attachment.file }],
+                        align: 'end',
+                      }) ?? (
+                        <span className={css.fileCard} title={attachment.file.name}>
+                          <FileTypeIcon path={attachment.file.name} className={css.fileIcon} />
+                          <span className={css.fileContent}>
+                            <span className={css.fileName}>{attachment.file.name}</span>
+                            <span className={css.fileMeta}>
+                              {[fileExtension(attachment.file.name).toUpperCase().slice(0, 8), fileSizeText(attachment.file.bytes)]
+                                .filter(Boolean).join(' ')}
+                            </span>
+                          </span>
                         </span>
-                      </span>
-                    </span>
-                  )}
-                </Fragment>
-              ))}
+                      )}
+                    </Fragment>
+                  ))}
+              </div>
+            )
+          }
+          const bodyIndex = textRunIndex
+          textRunIndex += 1
+          const isLastText = bodyIndex === textRunCount - 1
+          return (
+            <div key={`text:${index}`} className={css.bubble} data-message-bubble="">
+              {projectUserText(run.text, bodyIndex === 0 ? referenceLabels : [])}
+              {isLastText
+                ? rest.map((block, i) => (
+                  <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />
+                ))
+                : null}
+            </div>
+          )
+        })}
+        {showSurface && runs.length === 0 && rest.length > 0 ? (
+          <div className={css.bubble} data-message-bubble="">
+            {rest.map((block, i) => (
+              <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />
+            ))}
           </div>
-        )}
-        {showBubble && bodies.map((body, index) => (
-          <div key={index} className={css.bubble} data-message-bubble="">
-            {projectUserText(body, index === 0 ? referenceLabels : [])}
-            {index === bodies.length - 1
-              ? rest.map((block, i) => (
-                <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />
-              ))
-              : null}
-          </div>
-        ))}
+        ) : null}
         {handoffDetail !== null ? (
           <details className={css.speechDetail}>
             <summary>{t('message.speech.detail')}</summary>
@@ -649,13 +774,15 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
     [submission.text],
   )
   const previewAttachments = useMemo<readonly PresentedAttachment[]>(
-    () => previewAttachmentsOf(submission.attachments),
+    () => submission.attachments.length === 0
+      ? []
+      : previewAttachmentsOf(submission.attachments),
     [submission.attachments],
   )
   return (
     <UserStyleBubble
       content={content}
-      previewAttachments={previewAttachments}
+      {...(previewAttachments.length === 0 ? {} : { previewAttachments })}
       renderMessageImages={renderMessageImages}
       {...(renderMessageFiles === undefined ? {} : { renderMessageFiles })}
       steer={steer}
